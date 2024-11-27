@@ -36,9 +36,11 @@ export function Services() {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {services.map((service, index) => (
-            <div 
+            <Link 
               key={index}
-              className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow"
+              href="/services"
+              className="block bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-all 
+                hover:-translate-y-1 duration-300 cursor-pointer"
             >
               <div className="text-4xl mb-4">{service.icon}</div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">
@@ -47,7 +49,7 @@ export function Services() {
               <p className="text-gray-600">
                 {service.description}
               </p>
-            </div>
+            </Link>
           ))}
         </div>
 
