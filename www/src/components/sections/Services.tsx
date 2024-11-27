@@ -1,48 +1,66 @@
-import { Bot, TrendingUp, LineChart, Shield } from 'lucide-react';
-
-const services = [
-  {
-    icon: <Bot className="w-12 h-12 text-blue-900" />,
-    title: 'Process Automation',
-    description: 'Streamline operations and reduce manual tasks with intelligent automation solutions.'
-  },
-  {
-    icon: <TrendingUp className="w-12 h-12 text-blue-900" />,
-    title: 'Growth Optimization',
-    description: 'Leverage AI to identify and capitalize on growth opportunities in your market.'
-  },
-  {
-    icon: <LineChart className="w-12 h-12 text-blue-900" />,
-    title: 'Data Analytics',
-    description: 'Transform raw data into actionable insights with advanced AI analytics.'
-  },
-  {
-    icon: <Shield className="w-12 h-12 text-blue-900" />,
-    title: 'AI Integration',
-    description: 'Seamlessly integrate AI solutions into your existing business processes.'
-  }
-];
+import Link from 'next/link';
 
 export function Services() {
+  const services = [
+    {
+      title: "Smart Work Tools",
+      description: "Let AI handle the boring tasks so your team can focus on what matters most.",
+      icon: "⚡",
+    },
+    {
+      title: "Better Decisions",
+      description: "Turn your business data into clear answers that help you make smart choices.",
+      icon: "📊",
+    },
+    {
+      title: "Happy Customers",
+      description: "Give your customers better service with AI tools that work 24/7.",
+      icon: "🤝",
+    },
+    {
+      title: "Stay Ahead",
+      description: "Use the latest AI tools to make your business stand out from others.",
+      icon: "🚀",
+    },
+  ];
+
   return (
-    <section id="services" className="py-20 bg-white">
-      <div className="container mx-auto px-6">
+    <section id="services" className="py-24 bg-gray-50">
+      <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-blue-900 mb-4">Our Services</h2>
-          <p className="text-xl text-gray-600">Comprehensive AI solutions tailored to your needs</p>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">How We Help</h2>
+          <p className="text-xl text-gray-600">
+            We make businesses work better using AI tools
+          </p>
         </div>
-        
+
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {services.map((service, index) => (
             <div 
               key={index}
-              className="p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow"
+              className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow"
             >
-              <div className="mb-4">{service.icon}</div>
-              <h3 className="text-xl font-bold text-blue-900 mb-2">{service.title}</h3>
-              <p className="text-gray-600">{service.description}</p>
+              <div className="text-4xl mb-4">{service.icon}</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                {service.title}
+              </h3>
+              <p className="text-gray-600">
+                {service.description}
+              </p>
             </div>
           ))}
+        </div>
+
+        <div className="text-center mt-12">
+          <Link 
+            href="/services" 
+            className="inline-flex items-center text-[#0066FF] hover:text-blue-700 font-semibold"
+          >
+            See all our services
+            <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>

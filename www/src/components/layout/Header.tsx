@@ -14,12 +14,12 @@ export function Header() {
         <div className="flex items-center justify-between">
           <Logo />
           <nav className="hidden md:flex items-center gap-16">
-            <a 
-              href="#services" 
+            <Link 
+              href="/services" 
               className="text-2xl text-gray-700 hover:text-gray-900 transition-colors"
             >
               Services
-            </a>
+            </Link>
             <Link 
               href="/contact" 
               className="text-2xl px-6 py-2 bg-[#0A2E4D] text-white rounded-md 
