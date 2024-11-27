@@ -102,6 +102,11 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
+"@netlify/plugin-nextjs@^5.8.1":
+  version "5.8.1"
+  resolved "https://registry.yarnpkg.com/@netlify/plugin-nextjs/-/plugin-nextjs-5.8.1.tgz#9da15bb4a13c5644e9b58b968c7da51939206ee4"
+  integrity sha512-WB1N0FslhWZ1yAVYTcB6CcFrFOUSQ0O2LfavYZrbAypeNxu2I+oO+cgmhfDgZ8Eoq1g4EMeoIGMkNoZ4ogZTsg==
+
 "@next/env@14.2.18":
   version "14.2.18"
   resolved "https://registry.yarnpkg.com/@next/env/-/env-14.2.18.tgz#ccbcf906f0123a37cff6edc1effd524d635fd395"
@@ -2338,6 +2343,7 @@ streamsearch@^1.1.0:
   integrity sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==
 
 "string-width-cjs@npm:string-width@^4.2.0", string-width@^4.1.0:
+  name string-width-cjs
   version "4.2.3"
   resolved "https://registry.yarnpkg.com/string-width/-/string-width-4.2.3.tgz#269c7117d27b05ad2e536830a8ec895ef9c6d010"
   integrity sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==
