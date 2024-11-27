@@ -28,8 +28,8 @@ export function Services() {
     <section id="services" className="py-24 bg-gray-50">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">How We Help</h2>
-          <p className="text-xl text-gray-600">
+          <h2 className="text-4xl font-bold text-gray-900 mb-4 animate-fadeInUp">How We Help</h2>
+          <p className="text-xl text-gray-600 animate-fadeInUp delay-1">
             We make businesses work better using AI tools
           </p>
         </div>
@@ -39,8 +39,8 @@ export function Services() {
             <Link 
               key={index}
               href="/services"
-              className="block bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-all 
-                hover:-translate-y-1 duration-300 cursor-pointer"
+              className={`block bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-all 
+                hover:-translate-y-1 duration-300 cursor-pointer animate-fadeInUp delay-${index}`}
             >
               <div className="text-4xl mb-4">{service.icon}</div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">
@@ -56,7 +56,8 @@ export function Services() {
         <div className="text-center mt-12">
           <Link 
             href="/services" 
-            className="inline-flex items-center text-[#0066FF] hover:text-blue-700 font-semibold"
+            className="inline-flex items-center text-[#0066FF] hover:text-blue-700 font-semibold
+              animate-fadeInUp delay-3"
           >
             See all our services
             <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

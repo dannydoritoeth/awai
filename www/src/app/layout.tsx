@@ -10,7 +10,11 @@ export const metadata: Metadata = {
   title: 'Accelerate with AI',
   description: 'We help businesses leverage AI to grow and save costs through intelligent automation solutions.',
   icons: {
-    icon: '/images/accelerate-ai-icon.svg',
+    icon: [
+      { url: '/assets/logos/awai-icon-white.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/assets/logos/awai-icon-white.svg',
+    apple: '/assets/logos/awai-icon-white.svg',
   },
 };
 
