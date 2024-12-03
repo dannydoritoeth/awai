@@ -327,9 +327,20 @@ class PipedriveIntegration {
     }
 
     async storeVectors(vectors) {
-        console.log(`Upserting ${vectors.length} vectors to Pinecone...`);
-        await this.pineconeService.upsertBatch(vectors);
-        console.log('Upsert to Pinecone complete');
+        if (vectors.length === 0) return;
+
+        console.log(`Storing ${vectors.length} vectors in Pinecone...`);
+        
+        // Get the customerId from the first vector's metadata since all vectors in a batch are from the same customer
+        const namespace = vectors[0].metadata.customerId.toString();
+        
+        try {
+            await this.pineconeService.upsertBatch(vectors, namespace);
+            console.log(`Successfully stored vectors in namespace: ${namespace}`);
+        } catch (error) {
+            console.error('Error storing vectors in Pinecone:', error);
+            throw error;
+        }
     }
 
     async updateSyncStatus(syncId, recordCount, integrationId) {

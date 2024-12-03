@@ -24,17 +24,17 @@ class PineconeService {
         }
     }
 
-    async upsertBatch(dealVectors, batchSize = 100) {
+    async upsertBatch(vectors, namespace, batchSize = 100) {
         if (!this.index) await this.initialize();
         
-        for (let i = 0; i < dealVectors.length; i += batchSize) {
-            const batch = dealVectors.slice(i, i + batchSize).map(({ id, vector, metadata }) => ({
-                id: `deal_${id}`,
+        for (let i = 0; i < vectors.length; i += batchSize) {
+            const batch = vectors.slice(i, i + batchSize).map(({ id, vector, metadata }) => ({
+                id,
                 values: vector,
                 metadata
             }));
             
-            await this.index.upsert(batch);
+            await this.index.upsert(batch, { namespace });
         }
     }
 }
