@@ -14,16 +14,18 @@ class PipedriveIntegration {
             
             syncId = await this.createSyncRecord(integration.id);
             
-            // Process deals, leads, activities, people, and notes
-            const [deals, leads, activities, people, notes] = await Promise.all([
+            // Process all entity types
+            const [deals, leads, activities, people, notes, organizations] = await Promise.all([
                 this.fetchDeals(integration),
                 this.fetchLeads(integration),
                 this.fetchActivities(integration),
                 this.fetchPeople(integration),
-                this.fetchNotes(integration)
+                this.fetchNotes(integration),
+                this.fetchOrganizations(integration)
             ]);
             
-            if (deals.length === 0 && leads.length === 0 && activities.length === 0 && people.length === 0 && notes.length === 0) {
+            if (deals.length === 0 && leads.length === 0 && activities.length === 0 && 
+                people.length === 0 && notes.length === 0 && organizations.length === 0) {
                 console.log('No data found to process');
                 return;
             }
@@ -34,11 +36,27 @@ class PipedriveIntegration {
             const activityVectors = await this.createActivityVectors(activities, integration);
             const peopleVectors = await this.createPeopleVectors(people, integration);
             const noteVectors = await this.createNoteVectors(notes, integration);
+            const organizationVectors = await this.createOrganizationVectors(organizations, integration);
             
-            await this.storeVectors([...dealVectors, ...leadVectors, ...activityVectors, ...peopleVectors, ...noteVectors]);
-            await this.updateSyncStatus(syncId, deals.length + leads.length + activities.length + people.length + notes.length, integration.id);
+            await this.storeVectors([
+                ...dealVectors, 
+                ...leadVectors, 
+                ...activityVectors, 
+                ...peopleVectors, 
+                ...noteVectors,
+                ...organizationVectors
+            ]);
 
-            console.log(`Successfully processed ${deals.length} deals, ${leads.length} leads, ${activities.length} activities, ${people.length} people, and ${notes.length} notes for customer ${integration.customer_id}`);
+            const totalCount = deals.length + leads.length + activities.length + 
+                             people.length + notes.length + organizations.length;
+            await this.updateSyncStatus(syncId, totalCount, integration.id);
+
+            console.log(
+                `Successfully processed ${deals.length} deals, ${leads.length} leads, ` +
+                `${activities.length} activities, ${people.length} people, ` +
+                `${notes.length} notes, and ${organizations.length} organizations ` +
+                `for customer ${integration.customer_id}`
+            );
         } catch (error) {
             console.error(`Error processing Pipedrive integration for customer ${integration.customer_id}:`, error);
             await this.updateSyncError(syncId, error.message);
@@ -94,6 +112,14 @@ class PipedriveIntegration {
         const notes = await client.getAllNotes();
         console.log(`Found ${notes.length} notes to process`);
         return notes;
+    }
+
+    async fetchOrganizations(integration) {
+        const client = new PipedriveClient(integration.connection_settings);
+        console.log('Fetching organizations from Pipedrive...');
+        const organizations = await client.getAllOrganizations();
+        console.log(`Found ${organizations.length} organizations to process`);
+        return organizations;
     }
 
     async createDealVectors(deals, integration) {
@@ -382,6 +408,74 @@ class PipedriveIntegration {
             note.pinned_to_deal_flag ? 'Pinned to Deal' : null,
             note.pinned_to_organization_flag ? 'Pinned to Organization' : null,
             note.pinned_to_person_flag ? 'Pinned to Person' : null
+        ];
+
+        return parts.filter(part => part).join('\n');
+    }
+
+    async createOrganizationVectors(organizations, integration) {
+        if (organizations.length === 0) return [];
+
+        console.log('Creating organization texts for embedding...');
+        const organizationTexts = organizations.map(org => this.createOrganizationText(org));
+        
+        console.log('Getting organization embeddings from OpenAI...');
+        const embeddings = await this.embeddingService.createBatchEmbeddings(organizationTexts);
+        console.log(`Created ${embeddings.length} organization embeddings`);
+        
+        console.log('Creating organization vectors for Pinecone...');
+        return organizations.map((org, index) => ({
+            id: `organization_${org.id}`,
+            vector: embeddings[index],
+            metadata: {
+                type: 'organization',
+                customerId: integration.customer_id,
+                customerName: integration.customer_name,
+                organizationId: org.id,
+                name: org.name || '',
+                address: org.address || '',
+                addressCountry: org.address_country || '',
+                addressLocality: org.address_locality || '',
+                addressSublocality: org.address_sublocality || '',
+                addressPostalCode: org.address_postal_code || '',
+                ownerId: org.owner_id?.toString() || '',
+                activeFlag: !!org.active_flag,
+                categoryId: org.category_id?.toString() || '',
+                visibleTo: org.visible_to || '',
+                email: Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : (org.email || ''),
+                phone: Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : (org.phone || ''),
+                webDomain: org.web_domain || '',
+                addTime: org.add_time || '',
+                updateTime: org.update_time || '',
+                labels: Array.isArray(org.labels) ? org.labels.join(', ') : '',
+                openDealsCount: org.open_deals_count?.toString() || '0',
+                wonDealsCount: org.won_deals_count?.toString() || '0',
+                lostDealsCount: org.lost_deals_count?.toString() || '0',
+                lastActivityDate: org.last_activity_date || '',
+                nextActivityDate: org.next_activity_date || '',
+                countryCode: org.cc_email || '',
+                pictureId: org.picture_id?.toString() || ''
+            }
+        }));
+    }
+
+    createOrganizationText(org) {
+        const parts = [
+            `Name: ${org.name || ''}`,
+            org.address ? `Address: ${[
+                org.address,
+                org.address_sublocality,
+                org.address_locality,
+                org.address_postal_code,
+                org.address_country
+            ].filter(Boolean).join(', ')}` : null,
+            org.email ? `Email: ${Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : org.email}` : null,
+            org.phone ? `Phone: ${Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : org.phone}` : null,
+            org.web_domain ? `Website: ${org.web_domain}` : null,
+            Array.isArray(org.labels) && org.labels.length > 0 ? `Labels: ${org.labels.join(', ')}` : null,
+            `Deals: ${org.open_deals_count || 0} open, ${org.won_deals_count || 0} won, ${org.lost_deals_count || 0} lost`,
+            org.last_activity_date ? `Last Activity: ${org.last_activity_date}` : null,
+            org.next_activity_date ? `Next Activity: ${org.next_activity_date}` : null
         ];
 
         return parts.filter(part => part).join('\n');
