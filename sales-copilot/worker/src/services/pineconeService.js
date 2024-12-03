@@ -40,6 +40,38 @@ class PineconeService {
             console.log(`Upserted batch of ${batch.length} vectors to namespace: ${namespace}`);
         }
     }
+
+    async deleteAll(namespace) {
+        try {
+            if (!this.index || this.currentNamespace !== namespace) {
+                await this.initialize(namespace);
+                this.currentNamespace = namespace;
+            }
+
+            // Delete all vectors in the namespace
+            await this.index.deleteAll();
+            console.log(`Deleted all vectors in namespace: ${namespace}`);
+        } catch (error) {
+            console.error(`Error deleting all vectors in namespace ${namespace}:`, error);
+            throw error;
+        }
+    }
+
+    async delete(namespace, ids) {
+        try {
+            if (!this.index || this.currentNamespace !== namespace) {
+                await this.initialize(namespace);
+                this.currentNamespace = namespace;
+            }
+
+            // Delete specific vectors by ID
+            await this.index.deleteMany(ids);
+            console.log(`Deleted ${ids.length} vectors in namespace: ${namespace}`);
+        } catch (error) {
+            console.error(`Error deleting vectors in namespace ${namespace}:`, error);
+            throw error;
+        }
+    }
 }
 
 module.exports = PineconeService; 
