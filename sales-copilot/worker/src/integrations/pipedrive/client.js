@@ -85,6 +85,47 @@ class PipedriveClient {
         const response = await this.v2Client.get('/dealFields');
         return response.data.data;
     }
+
+    async getAllLeads(startDate = null) {
+        let leads = [];
+        let more_items = true;
+        let start = 0;
+        let page = 1;
+
+        while (more_items) {
+            const params = {
+                limit: 100,
+                start,
+                ...(startDate && { filter_by_date: true, start_date: startDate })
+            };
+
+            console.log(`Fetching leads page ${page}...`);
+            
+            try {
+                const response = await this.v1Client.get('/leads', { params });
+                console.log('Response status:', response.status);
+
+                const pageLeads = response.data.data || [];
+                console.log(`Found ${pageLeads.length} leads on page ${page}`);
+
+                if (response.data.success === false) {
+                    console.error('Pipedrive API error:', response.data);
+                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                }
+
+                leads = leads.concat(pageLeads);
+                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
+                start += 100;
+                page++;
+            } catch (error) {
+                console.error('Error fetching leads:', error.response?.data || error.message);
+                throw error;
+            }
+        }
+
+        console.log(`Total leads found: ${leads.length}`);
+        return leads;
+    }
 }
 
 module.exports = PipedriveClient; 
