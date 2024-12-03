@@ -8,6 +8,9 @@ class PipedriveClient {
 
         this.v1Client = axios.create({
             baseURL: 'https://api.pipedrive.com/v1',
+            headers: {
+                'Accept': 'application/json'
+            },
             params: {
                 api_token: connectionSettings.api_token
             }
@@ -15,8 +18,9 @@ class PipedriveClient {
 
         this.v2Client = axios.create({
             baseURL: 'https://api.pipedrive.com/v2',
-            params: {
-                api_token: connectionSettings.api_token
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${connectionSettings.api_token}`
             }
         });
     }
@@ -24,25 +28,38 @@ class PipedriveClient {
     async getAllDeals(startDate = null) {
         let deals = [];
         let more_items = true;
-        let cursor = null;
+        let start = 0;
         let page = 1;
 
         while (more_items) {
             const params = {
                 limit: 100,
-                ...(startDate && { filter_by_date: true, start_date: startDate }),
-                ...(cursor && { cursor })
+                start,
+                ...(startDate && { filter_by_date: true, start_date: startDate })
             };
 
             console.log(`Fetching deals page ${page}...`);
-            const response = await this.v2Client.get('/deals', { params });
-            const pageDeals = response.data.data || [];
-            console.log(`Found ${pageDeals.length} deals on page ${page}`);
+            
+            try {
+                const response = await this.v1Client.get('/deals', { params });
+                console.log('Response status:', response.status);
 
-            deals = deals.concat(pageDeals);
-            more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-            cursor = response.data.additional_data?.pagination?.next_cursor;
-            page++;
+                const pageDeals = response.data.data || [];
+                console.log(`Found ${pageDeals.length} deals on page ${page}`);
+
+                if (response.data.success === false) {
+                    console.error('Pipedrive API error:', response.data);
+                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                }
+
+                deals = deals.concat(pageDeals);
+                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
+                start += 100;
+                page++;
+            } catch (error) {
+                console.error('Error fetching deals:', error.response?.data || error.message);
+                throw error;
+            }
         }
 
         console.log(`Total deals found: ${deals.length}`);
