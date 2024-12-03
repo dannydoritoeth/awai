@@ -72,6 +72,53 @@ class PineconeService {
             throw error;
         }
     }
+
+    async deleteByType(namespace, type) {
+        try {
+            if (!this.index || this.currentNamespace !== namespace) {
+                await this.initialize(namespace);
+                this.currentNamespace = namespace;
+            }
+
+            // First, fetch all IDs of the specified type
+            const response = await this.index.fetch({
+                filter: { type }
+            });
+
+            if (response && Object.keys(response.vectors).length > 0) {
+                const ids = Object.keys(response.vectors);
+                await this.index.deleteMany(ids);
+                console.log(`Deleted ${ids.length} vectors of type '${type}' in namespace: ${namespace}`);
+            } else {
+                console.log(`No vectors found of type '${type}' in namespace: ${namespace}`);
+            }
+        } catch (error) {
+            console.error(`Error deleting vectors of type '${type}' in namespace ${namespace}:`, error);
+            throw error;
+        }
+    }
+
+    async deleteByCustomerId(customerId) {
+        const namespace = customerId.toString();
+        try {
+            await this.deleteAll(namespace);
+            console.log(`Deleted all vectors for customer ${customerId}`);
+        } catch (error) {
+            console.error(`Error deleting vectors for customer ${customerId}:`, error);
+            throw error;
+        }
+    }
+
+    async deleteByTypeAndCustomerId(customerId, type) {
+        const namespace = customerId.toString();
+        try {
+            await this.deleteByType(namespace, type);
+            console.log(`Deleted all vectors of type '${type}' for customer ${customerId}`);
+        } catch (error) {
+            console.error(`Error deleting vectors of type '${type}' for customer ${customerId}:`, error);
+            throw error;
+        }
+    }
 }
 
 module.exports = PineconeService; 
