@@ -9,15 +9,14 @@ class PineconeService {
         this.pinecone = new Pinecone({
             apiKey: apiKey
         });
-        // this.index = null;
-        // this.dimension = 3072;
     }
 
-    async initialize() {
+    async initialize(namespace) {
         try {
-            this.index = this.pinecone.index('sales-copilot');
+            const indexName = 'sales-copilot';
+            this.index = this.pinecone.index(indexName).namespace(namespace);
             // Test the connection
-            await this.index.describeIndexStats();
+            await this.pinecone.index(indexName).describeIndexStats();
         } catch (error) {
             console.error('Pinecone initialization error:', error);
             throw error;
@@ -25,7 +24,10 @@ class PineconeService {
     }
 
     async upsertBatch(vectors, namespace, batchSize = 100) {
-        if (!this.index) await this.initialize();
+        if (!this.index || this.currentNamespace !== namespace) {
+            await this.initialize(namespace);
+            this.currentNamespace = namespace;
+        }
         
         for (let i = 0; i < vectors.length; i += batchSize) {
             const batch = vectors.slice(i, i + batchSize).map(({ id, vector, metadata }) => ({
@@ -34,7 +36,8 @@ class PineconeService {
                 metadata
             }));
             
-            await this.index.upsert(batch, { namespace });
+            await this.index.upsert(batch);
+            console.log(`Upserted batch of ${batch.length} vectors to namespace: ${namespace}`);
         }
     }
 }
