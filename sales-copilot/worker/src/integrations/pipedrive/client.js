@@ -126,6 +126,47 @@ class PipedriveClient {
         console.log(`Total leads found: ${leads.length}`);
         return leads;
     }
+
+    async getAllActivities(startDate = null) {
+        let activities = [];
+        let more_items = true;
+        let start = 0;
+        let page = 1;
+
+        while (more_items) {
+            const params = {
+                limit: 100,
+                start,
+                ...(startDate && { filter_by_date: true, start_date: startDate })
+            };
+
+            console.log(`Fetching activities page ${page}...`);
+            
+            try {
+                const response = await this.v1Client.get('/activities', { params });
+                console.log('Response status:', response.status);
+
+                const pageActivities = response.data.data || [];
+                console.log(`Found ${pageActivities.length} activities on page ${page}`);
+
+                if (response.data.success === false) {
+                    console.error('Pipedrive API error:', response.data);
+                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                }
+
+                activities = activities.concat(pageActivities);
+                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
+                start += 100;
+                page++;
+            } catch (error) {
+                console.error('Error fetching activities:', error.response?.data || error.message);
+                throw error;
+            }
+        }
+
+        console.log(`Total activities found: ${activities.length}`);
+        return activities;
+    }
 }
 
 module.exports = PipedriveClient; 
