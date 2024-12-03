@@ -134,7 +134,7 @@ class PipedriveIntegration {
         
         console.log('Creating deal vectors for Pinecone...');
         return deals.map((deal, index) => ({
-            id: `deal_${deal.id}`,
+            id: `${deal.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'deal',
