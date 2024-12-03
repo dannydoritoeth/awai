@@ -44,7 +44,10 @@ class Worker {
     }
 
     async processPipedriveIntegration(integration) {
+        let syncId = null;
         try {
+            console.log(`Processing integration for customer ${integration.customer_id} (${integration.customer_name})`);
+            
             const syncHistoryResult = await dbHelper.query(`
                 INSERT INTO sync_history 
                 (customer_integration_id, status, sync_type)
@@ -52,22 +55,33 @@ class Worker {
                 RETURNING id
             `, [integration.id]);
 
-            const syncId = syncHistoryResult.rows[0].id;
+            syncId = syncHistoryResult.rows[0].id;
 
             const client = new PipedriveClient(
-                integration.credentials.access_token
+                integration.connection_settings
             );
 
             // Get all deals
+            console.log('Fetching deals from Pipedrive...');
             const deals = await client.getAllDeals();
+            console.log(`Found ${deals.length} deals to process`);
             
+            if (deals.length === 0) {
+                console.log('No deals found to process');
+                return;
+            }
+
             // Create deal texts for embedding
+            console.log('Creating deal texts for embedding...');
             const dealTexts = deals.map(deal => this.embeddingService.createDealText(deal));
             
             // Get embeddings in batches
+            console.log('Getting embeddings from OpenAI...');
             const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
+            console.log(`Created ${embeddings.length} embeddings`);
             
             // Create vectors with embeddings
+            console.log('Creating vectors for Pinecone...');
             const dealVectors = deals.map((deal, index) => ({
                 id: deal.id,
                 vector: embeddings[index],
@@ -84,7 +98,9 @@ class Worker {
                 }
             }));
 
+            console.log(`Upserting ${dealVectors.length} vectors to Pinecone...`);
             await this.pineconeService.upsertBatch(dealVectors);
+            console.log('Upsert to Pinecone complete');
 
             // Update sync history
             await dbHelper.query(`
@@ -95,16 +111,28 @@ class Worker {
                 WHERE id = $2
             `, [deals.length, syncId]);
 
+            // Update last sync time
+            await dbHelper.query(`
+                UPDATE customer_integrations
+                SET last_sync_at = CURRENT_TIMESTAMP,
+                    last_full_sync = CURRENT_TIMESTAMP
+                WHERE id = $1
+            `, [integration.id]);
+
+            console.log(`Successfully processed ${deals.length} deals for customer ${integration.customer_id}`);
+
         } catch (error) {
             console.error(`Error processing Pipedrive integration for customer ${integration.customer_id}:`, error);
             
-            await dbHelper.query(`
-                UPDATE sync_history
-                SET status = 'failed',
-                    completed_at = CURRENT_TIMESTAMP,
-                    error_message = $1
-                WHERE id = $2
-            `, [error.message, syncId]);
+            if (syncId) {
+                await dbHelper.query(`
+                    UPDATE sync_history
+                    SET status = 'failed',
+                        completed_at = CURRENT_TIMESTAMP,
+                        error_message = $1
+                    WHERE id = $2
+                `, [error.message, syncId]);
+            }
         }
     }
 }

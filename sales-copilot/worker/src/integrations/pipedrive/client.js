@@ -1,18 +1,22 @@
 const axios = require('axios');
 
 class PipedriveClient {
-    constructor(apiKey) {
+    constructor(connectionSettings) {
+        if (!connectionSettings?.api_token) {
+            throw new Error('API token is required in connection settings');
+        }
+
         this.v1Client = axios.create({
             baseURL: 'https://api.pipedrive.com/v1',
             params: {
-                api_token: apiKey
+                api_token: connectionSettings.api_token
             }
         });
 
         this.v2Client = axios.create({
             baseURL: 'https://api.pipedrive.com/v2',
             params: {
-                api_token: apiKey
+                api_token: connectionSettings.api_token
             }
         });
     }
@@ -21,6 +25,7 @@ class PipedriveClient {
         let deals = [];
         let more_items = true;
         let cursor = null;
+        let page = 1;
 
         while (more_items) {
             const params = {
@@ -29,13 +34,18 @@ class PipedriveClient {
                 ...(cursor && { cursor })
             };
 
+            console.log(`Fetching deals page ${page}...`);
             const response = await this.v2Client.get('/deals', { params });
+            const pageDeals = response.data.data || [];
+            console.log(`Found ${pageDeals.length} deals on page ${page}`);
 
-            deals = deals.concat(response.data.data || []);
+            deals = deals.concat(pageDeals);
             more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
             cursor = response.data.additional_data?.pagination?.next_cursor;
+            page++;
         }
 
+        console.log(`Total deals found: ${deals.length}`);
         return deals;
     }
 
