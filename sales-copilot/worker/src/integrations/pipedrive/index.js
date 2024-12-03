@@ -14,15 +14,16 @@ class PipedriveIntegration {
             
             syncId = await this.createSyncRecord(integration.id);
             
-            // Process deals, leads, activities, and people
-            const [deals, leads, activities, people] = await Promise.all([
+            // Process deals, leads, activities, people, and notes
+            const [deals, leads, activities, people, notes] = await Promise.all([
                 this.fetchDeals(integration),
                 this.fetchLeads(integration),
                 this.fetchActivities(integration),
-                this.fetchPeople(integration)
+                this.fetchPeople(integration),
+                this.fetchNotes(integration)
             ]);
             
-            if (deals.length === 0 && leads.length === 0 && activities.length === 0 && people.length === 0) {
+            if (deals.length === 0 && leads.length === 0 && activities.length === 0 && people.length === 0 && notes.length === 0) {
                 console.log('No data found to process');
                 return;
             }
@@ -32,11 +33,12 @@ class PipedriveIntegration {
             const leadVectors = await this.createLeadVectors(leads, integration);
             const activityVectors = await this.createActivityVectors(activities, integration);
             const peopleVectors = await this.createPeopleVectors(people, integration);
+            const noteVectors = await this.createNoteVectors(notes, integration);
             
-            await this.storeVectors([...dealVectors, ...leadVectors, ...activityVectors, ...peopleVectors]);
-            await this.updateSyncStatus(syncId, deals.length + leads.length + activities.length + people.length, integration.id);
+            await this.storeVectors([...dealVectors, ...leadVectors, ...activityVectors, ...peopleVectors, ...noteVectors]);
+            await this.updateSyncStatus(syncId, deals.length + leads.length + activities.length + people.length + notes.length, integration.id);
 
-            console.log(`Successfully processed ${deals.length} deals, ${leads.length} leads, ${activities.length} activities, and ${people.length} people for customer ${integration.customer_id}`);
+            console.log(`Successfully processed ${deals.length} deals, ${leads.length} leads, ${activities.length} activities, ${people.length} people, and ${notes.length} notes for customer ${integration.customer_id}`);
         } catch (error) {
             console.error(`Error processing Pipedrive integration for customer ${integration.customer_id}:`, error);
             await this.updateSyncError(syncId, error.message);
@@ -84,6 +86,14 @@ class PipedriveIntegration {
         const people = await client.getAllPeople();
         console.log(`Found ${people.length} people to process`);
         return people;
+    }
+
+    async fetchNotes(integration) {
+        const client = new PipedriveClient(integration.connection_settings);
+        console.log('Fetching notes from Pipedrive...');
+        const notes = await client.getAllNotes();
+        console.log(`Found ${notes.length} notes to process`);
+        return notes;
     }
 
     async createDealVectors(deals, integration) {
@@ -323,6 +333,58 @@ class PipedriveIntegration {
                 WHERE id = $2
             `, [errorMessage, syncId]);
         }
+    }
+
+    async createNoteVectors(notes, integration) {
+        if (notes.length === 0) return [];
+
+        console.log('Creating note texts for embedding...');
+        const noteTexts = notes.map(note => this.createNoteText(note));
+        
+        console.log('Getting note embeddings from OpenAI...');
+        const embeddings = await this.embeddingService.createBatchEmbeddings(noteTexts);
+        console.log(`Created ${embeddings.length} note embeddings`);
+        
+        console.log('Creating note vectors for Pinecone...');
+        return notes.map((note, index) => ({
+            id: `note_${note.id}`,
+            vector: embeddings[index],
+            metadata: {
+                type: 'note',
+                customerId: integration.customer_id,
+                customerName: integration.customer_name,
+                noteId: note.id,
+                content: note.content || '',
+                addTime: note.add_time || '',
+                updateTime: note.update_time || '',
+                activeFlag: !!note.active_flag,
+                dealId: note.deal_id?.toString() || '',
+                personId: note.person_id?.toString() || '',
+                organizationId: note.org_id?.toString() || '',
+                userId: note.user_id?.toString() || '',
+                leadId: note.lead_id?.toString() || '',
+                lastUpdateUserId: note.last_update_user_id?.toString() || '',
+                pinned: !!note.pinned_to_deal_flag || !!note.pinned_to_organization_flag || !!note.pinned_to_person_flag,
+                pinnedToDeal: !!note.pinned_to_deal_flag,
+                pinnedToOrganization: !!note.pinned_to_organization_flag,
+                pinnedToPerson: !!note.pinned_to_person_flag
+            }
+        }));
+    }
+
+    createNoteText(note) {
+        const parts = [
+            note.content ? `Content: ${note.content}` : null,
+            note.deal_id ? `Deal ID: ${note.deal_id}` : null,
+            note.person_id ? `Person ID: ${note.person_id}` : null,
+            note.org_id ? `Organization ID: ${note.org_id}` : null,
+            note.lead_id ? `Lead ID: ${note.lead_id}` : null,
+            note.pinned_to_deal_flag ? 'Pinned to Deal' : null,
+            note.pinned_to_organization_flag ? 'Pinned to Organization' : null,
+            note.pinned_to_person_flag ? 'Pinned to Person' : null
+        ];
+
+        return parts.filter(part => part).join('\n');
     }
 }
 

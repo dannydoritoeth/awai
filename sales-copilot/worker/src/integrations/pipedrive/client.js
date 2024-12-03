@@ -208,6 +208,47 @@ class PipedriveClient {
         console.log(`Total people found: ${people.length}`);
         return people;
     }
+
+    async getAllNotes(startDate = null) {
+        let notes = [];
+        let more_items = true;
+        let start = 0;
+        let page = 1;
+
+        while (more_items) {
+            const params = {
+                limit: 100,
+                start,
+                ...(startDate && { filter_by_date: true, start_date: startDate })
+            };
+
+            console.log(`Fetching notes page ${page}...`);
+            
+            try {
+                const response = await this.v1Client.get('/notes', { params });
+                console.log('Response status:', response.status);
+
+                const pageNotes = response.data.data || [];
+                console.log(`Found ${pageNotes.length} notes on page ${page}`);
+
+                if (response.data.success === false) {
+                    console.error('Pipedrive API error:', response.data);
+                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                }
+
+                notes = notes.concat(pageNotes);
+                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
+                start += 100;
+                page++;
+            } catch (error) {
+                console.error('Error fetching notes:', error.response?.data || error.message);
+                throw error;
+            }
+        }
+
+        console.log(`Total notes found: ${notes.length}`);
+        return notes;
+    }
 }
 
 module.exports = PipedriveClient; 
