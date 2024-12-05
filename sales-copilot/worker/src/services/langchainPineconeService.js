@@ -23,10 +23,47 @@ class LangchainPineconeService {
         });
 
         // Convert our vectors to LangChain documents
-        const docs = vectors.map(vector => new Document({
-            pageContent: this.createTextFromMetadata(vector.metadata),
-            metadata: vector.metadata
-        }));
+        // Use the original text that was used to create the embeddings
+        const docs = vectors.map(vector => {
+            // Get the original text that was used to create the embedding
+            let pageContent;
+            try {
+                // Parse the raw data to get the original object
+                const originalData = JSON.parse(vector.metadata.rawData);
+                
+                // Recreate the text based on the entity type
+                switch (vector.metadata.type) {
+                    case 'deal':
+                        pageContent = this.createDealText(originalData);
+                        break;
+                    case 'person':
+                        pageContent = this.createPersonText(originalData);
+                        break;
+                    case 'organization':
+                        pageContent = this.createOrganizationText(originalData);
+                        break;
+                    case 'note':
+                        pageContent = this.createNoteText(originalData);
+                        break;
+                    case 'activity':
+                        pageContent = this.createActivityText(originalData);
+                        break;
+                    case 'lead':
+                        pageContent = this.createLeadText(originalData);
+                        break;
+                    default:
+                        pageContent = this.createTextFromMetadata(vector.metadata);
+                }
+            } catch (error) {
+                console.warn('Error recreating original text, falling back to metadata:', error);
+                pageContent = this.createTextFromMetadata(vector.metadata);
+            }
+
+            return new Document({
+                pageContent,
+                metadata: vector.metadata
+            });
+        });
 
         console.log('Sample document:', {
             pageContent: docs[0].pageContent.substring(0, 100) + '...',
@@ -50,58 +87,183 @@ class LangchainPineconeService {
         return vectorStore;
     }
 
-    createTextFromMetadata(metadata) {
-        const parts = [];
-        
-        // Common fields
-        if (metadata.type) parts.push(`Type: ${metadata.type}`);
-        if (metadata.source) parts.push(`Source: ${metadata.source}`);
-        
-        // Type-specific fields
-        switch (metadata.type) {
-            case 'deal':
-                if (metadata.title) parts.push(`Title: ${metadata.title}`);
-                if (metadata.value) parts.push(`Value: ${metadata.value} ${metadata.currency || ''}`);
-                if (metadata.status) parts.push(`Status: ${metadata.status}`);
-                if (metadata.organizationName) parts.push(`Organization: ${metadata.organizationName}`);
-                if (metadata.personName) parts.push(`Person: ${metadata.personName}`);
-                break;
-                
-            case 'person':
-                if (metadata.name) parts.push(`Name: ${metadata.name}`);
-                if (metadata.email) parts.push(`Email: ${metadata.email}`);
-                if (metadata.phone) parts.push(`Phone: ${metadata.phone}`);
-                if (metadata.organizationName) parts.push(`Organization: ${metadata.organizationName}`);
-                break;
-                
-            case 'organization':
-                if (metadata.name) parts.push(`Name: ${metadata.name}`);
-                if (metadata.address) parts.push(`Address: ${metadata.address}`);
-                if (metadata.email) parts.push(`Email: ${metadata.email}`);
-                if (metadata.phone) parts.push(`Phone: ${metadata.phone}`);
-                break;
-                
-            case 'note':
-                if (metadata.content) parts.push(`Content: ${metadata.content}`);
-                break;
-                
-            case 'activity':
-                if (metadata.subject) parts.push(`Subject: ${metadata.subject}`);
-                if (metadata.type) parts.push(`Activity Type: ${metadata.type}`);
-                if (metadata.dueDate) parts.push(`Due: ${metadata.dueDate} ${metadata.dueTime || ''}`);
-                if (metadata.note) parts.push(`Note: ${metadata.note}`);
-                break;
-                
-            case 'lead':
-                if (metadata.title) parts.push(`Title: ${metadata.title}`);
-                if (metadata.value) parts.push(`Value: ${metadata.value} ${metadata.currency || ''}`);
-                if (metadata.status) parts.push(`Status: ${metadata.status}`);
-                if (metadata.personName) parts.push(`Person: ${metadata.personName}`);
-                if (metadata.organizationName) parts.push(`Organization: ${metadata.organizationName}`);
-                break;
-        }
+    // Text creation functions copied from PipedriveIntegration
+    createDealText(deal) {
+        const parts = [
+            // Common fields
+            `Type: deal`,
+            `Source: pipedrive`,
+            `Customer ID: ${deal.customer_id}`,
+            `Customer Name: ${deal.customer_name}`,
 
-        return parts.join('\n');
+            // Deal specific fields
+            `Deal ID: ${deal.id}`,
+            `Title: ${deal.title || ''}`,
+            `Value: ${deal.value || 0} ${deal.currency || ''}`,
+            `Status: ${deal.status || ''}`,
+            `Stage: ${deal.stage_id || ''}`,
+            
+            // Relationships
+            `Organization ID: ${deal.org_id?.value || deal.org_id || ''}`,
+            `Organization Name: ${deal.org_name || ''}`,
+            `Person ID: ${deal.person_id?.value || deal.person_id || ''}`,
+            `Person Name: ${deal.person_name || ''}`,
+            `Owner ID: ${deal.owner_id?.value || deal.owner_id || ''}`,
+            
+            // Dates
+            `Expected Close Date: ${deal.expected_close_date || ''}`,
+            `Add Time: ${deal.add_time || ''}`,
+            `Update Time: ${deal.update_time || ''}`,
+            `Close Time: ${deal.close_time || ''}`,
+            
+            // Additional fields
+            `Lost Reason: ${deal.lost_reason || ''}`,
+            `Visible To: ${deal.visible_to || ''}`,
+            `Active: ${deal.active ? 'Yes' : 'No'}`
+        ];
+
+        return parts
+            .filter(part => part && !part.endsWith(': ') && !part.endsWith(': Unknown'))
+            .join('\n');
+    }
+
+    createPersonText(person) {
+        const parts = [
+            `Name: ${person.name || ''}`,
+            person.title ? `Title: ${person.title}` : null,
+            person.org_name ? `Organization: ${person.org_name}` : null,
+            person.email ? `Email: ${this.formatEmails(person.email)}` : null,
+            person.phone ? `Phone: ${this.formatPhones(person.phone)}` : null,
+            Array.isArray(person.labels) && person.labels.length > 0 ? `Labels: ${person.labels.join(', ')}` : null,
+            `Deals: ${person.open_deals_count || 0} open, ${person.won_deals_count || 0} won, ${person.lost_deals_count || 0} lost`,
+            person.last_activity_date ? `Last Activity: ${person.last_activity_date}` : null,
+            person.next_activity_date ? `Next Activity: ${person.next_activity_date}` : null
+        ];
+        return parts.filter(part => part).join('\n');
+    }
+
+    createOrganizationText(org) {
+        const parts = [
+            `Name: ${org.name || ''}`,
+            org.address ? `Address: ${[
+                org.address,
+                org.address_sublocality,
+                org.address_locality,
+                org.address_postal_code,
+                org.address_country
+            ].filter(Boolean).join(', ')}` : null,
+            org.email ? `Email: ${Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : org.email}` : null,
+            org.phone ? `Phone: ${Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : org.phone}` : null,
+            org.web_domain ? `Website: ${org.web_domain}` : null,
+            Array.isArray(org.labels) && org.labels.length > 0 ? `Labels: ${org.labels.join(', ')}` : null,
+            `Deals: ${org.open_deals_count || 0} open, ${org.won_deals_count || 0} won, ${org.lost_deals_count || 0} lost`,
+            org.last_activity_date ? `Last Activity: ${org.last_activity_date}` : null,
+            org.next_activity_date ? `Next Activity: ${org.next_activity_date}` : null
+        ];
+        return parts.filter(part => part).join('\n');
+    }
+
+    createNoteText(note) {
+        const parts = [
+            note.content ? `Content: ${note.content}` : null,
+            note.deal_id ? `Deal ID: ${note.deal_id}` : null,
+            note.person_id ? `Person ID: ${note.person_id}` : null,
+            note.org_id ? `Organization ID: ${note.org_id}` : null,
+            note.lead_id ? `Lead ID: ${note.lead_id}` : null,
+            note.pinned_to_deal_flag ? 'Pinned to Deal' : null,
+            note.pinned_to_organization_flag ? 'Pinned to Organization' : null,
+            note.pinned_to_person_flag ? 'Pinned to Person' : null
+        ];
+        return parts.filter(part => part).join('\n');
+    }
+
+    createActivityText(activity) {
+        const parts = [
+            `Subject: ${activity.subject || ''}`,
+            `Type: ${activity.type || ''}`,
+            `Due: ${activity.due_date || ''} ${activity.due_time || ''}`,
+            `Status: ${activity.done ? 'Done' : 'Active'}`,
+            activity.note ? `Note: ${activity.note}` : null,
+            activity.public_description ? `Description: ${activity.public_description}` : null,
+            activity.location ? `Location: ${activity.location}` : null
+        ];
+        return parts.filter(part => part).join('\n');
+    }
+
+    createLeadText(lead) {
+        const parts = [
+            // Common fields
+            `Type: lead`,
+            `Source: ${lead.source_name || 'Unknown'}`,
+            `Customer ID: ${lead.customer_id}`,
+            `Customer Name: ${lead.customer_name}`,
+
+            // Lead specific fields
+            `Title: ${lead.title || ''}`,
+            `Lead ID: ${lead.id}`,
+            `Value: ${lead.value?.amount || 0} ${lead.value?.currency || ''}`,
+            `Status: ${lead.status || 'Unknown'}`,
+            
+            // Relationships
+            `Organization ID: ${lead.organization_id?.value || lead.organization_id || ''}`,
+            `Organization Name: ${lead.organization_name || 'Unknown'}`,
+            `Person ID: ${lead.person_id?.value || lead.person_id || ''}`,
+            `Person Name: ${lead.person_name || 'Unknown'}`,
+            `Owner ID: ${lead.owner_id?.value || lead.owner_id || ''}`,
+            
+            // Dates
+            `Expected Close Date: ${lead.expected_close_date || ''}`,
+            `Add Time: ${lead.add_time || ''}`,
+            `Update Time: ${lead.update_time || ''}`,
+            
+            // Additional fields
+            `Labels: ${Array.isArray(lead.label_ids) ? lead.label_ids.join(', ') : ''}`,
+            `Notes: ${lead.note || ''}`,
+            `Visible To: ${lead.visible_to || ''}`,
+            `Is Archived: ${lead.is_archived ? 'Yes' : 'No'}`,
+            `Origin: ${lead.origin || ''}`,
+            `Channel: ${lead.channel || ''}`,
+            `Was Seen: ${lead.was_seen ? 'Yes' : 'No'}`,
+            `CC Email: ${lead.cc_email || ''}`
+        ];
+
+        return parts
+            .filter(part => part && !part.endsWith(': ') && !part.endsWith(': Unknown') && !part.endsWith(': 0 '))
+            .join('\n');
+    }
+
+    formatEmails(emails) {
+        if (!emails) return '';
+        if (Array.isArray(emails)) {
+            return emails.map(e => e.value).join(', ');
+        }
+        return emails;
+    }
+
+    formatPhones(phones) {
+        if (!phones) return '';
+        if (Array.isArray(phones)) {
+            return phones.map(p => p.value).join(', ');
+        }
+        return phones;
+    }
+
+    // Fallback text creation from metadata
+    createTextFromMetadata(metadata) {
+        return Object.entries(metadata)
+            .filter(([key, value]) => {
+                if (key === 'rawData') return false;
+                if (value === undefined || value === null || value === '') return false;
+                return true;
+            })
+            .map(([key, value]) => {
+                const label = key
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/^./, str => str.toUpperCase())
+                    .trim();
+                return `${label}: ${value}`;
+            })
+            .join('\n');
     }
 }
 
