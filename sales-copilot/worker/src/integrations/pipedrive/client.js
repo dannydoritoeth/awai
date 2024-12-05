@@ -133,17 +133,16 @@ class PipedriveClient {
             
             try {
                 const response = await this.makeRequest('/leads', params);
-                console.log('Response status:', response.status);
-
                 const pageLeads = response.data.data || [];
                 console.log(`Found ${pageLeads.length} leads on page ${page}`);
 
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                leads = leads.concat(pageLeads);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
                 }
 
-                leads = leads.concat(pageLeads);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -153,7 +152,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total leads found: ${leads.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            leads = leads.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${leads.length} leads`);
+        }
+
         return leads;
     }
 
@@ -173,18 +177,17 @@ class PipedriveClient {
             console.log(`Fetching activities page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/activities', { params });
-                console.log('Response status:', response.status);
-
+                const response = await this.makeRequest('/activities', params);
                 const pageActivities = response.data.data || [];
                 console.log(`Found ${pageActivities.length} activities on page ${page}`);
 
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                activities = activities.concat(pageActivities);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
                 }
 
-                activities = activities.concat(pageActivities);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -194,7 +197,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total activities found: ${activities.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            activities = activities.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${activities.length} activities`);
+        }
+
         return activities;
     }
 
@@ -214,18 +222,17 @@ class PipedriveClient {
             console.log(`Fetching people page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/persons', { params });
-                console.log('Response status:', response.status);
-
+                const response = await this.makeRequest('/persons', params);
                 const pagePeople = response.data.data || [];
                 console.log(`Found ${pagePeople.length} people on page ${page}`);
 
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                people = people.concat(pagePeople);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
                 }
 
-                people = people.concat(pagePeople);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -235,7 +242,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total people found: ${people.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            people = people.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${people.length} people`);
+        }
+
         return people;
     }
 
@@ -255,18 +267,17 @@ class PipedriveClient {
             console.log(`Fetching notes page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/notes', { params });
-                console.log('Response status:', response.status);
-
+                const response = await this.makeRequest('/notes', params);
                 const pageNotes = response.data.data || [];
                 console.log(`Found ${pageNotes.length} notes on page ${page}`);
 
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                notes = notes.concat(pageNotes);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
                 }
 
-                notes = notes.concat(pageNotes);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -276,7 +287,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total notes found: ${notes.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            notes = notes.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${notes.length} notes`);
+        }
+
         return notes;
     }
 
@@ -296,18 +312,17 @@ class PipedriveClient {
             console.log(`Fetching organizations page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/organizations', { params });
-                console.log('Response status:', response.status);
-
+                const response = await this.makeRequest('/organizations', params);
                 const pageOrganizations = response.data.data || [];
                 console.log(`Found ${pageOrganizations.length} organizations on page ${page}`);
 
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
+                organizations = organizations.concat(pageOrganizations);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
                 }
 
-                organizations = organizations.concat(pageOrganizations);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -317,7 +332,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total organizations found: ${organizations.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            organizations = organizations.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${organizations.length} organizations`);
+        }
+
         return organizations;
     }
 }
