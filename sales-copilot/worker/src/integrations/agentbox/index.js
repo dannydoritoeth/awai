@@ -1,6 +1,30 @@
 const AgentboxClient = require('./client');
 const dbHelper = require('../../services/dbHelper');
 
+// Helper function to clean metadata values
+function cleanMetadata(metadata) {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(metadata)) {
+        if (value === null || value === undefined) {
+            continue;
+        }
+        if (Array.isArray(value)) {
+            cleaned[key] = value.join(', ');
+            continue;
+        }
+        if (typeof value === 'boolean') {
+            cleaned[key] = value;
+            continue;
+        }
+        if (typeof value === 'number') {
+            cleaned[key] = value.toString();
+            continue;
+        }
+        cleaned[key] = value;
+    }
+    return cleaned;
+}
+
 class AgentboxIntegration {
     constructor(pineconeService, embeddingService) {
         this.pineconeService = pineconeService;
@@ -100,12 +124,12 @@ class AgentboxIntegration {
         return contacts.map((contact, index) => ({
             id: `agentbox_contact_${contact.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'contact',
                 source: 'agentbox',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                contactId: contact.id,
+                contactId: contact.id.toString(),
                 firstName: contact.firstName || '',
                 lastName: contact.lastName || '',
                 email: contact.email || '',
@@ -120,7 +144,7 @@ class AgentboxIntegration {
                 source: contact.source || '',
                 firstCreated: contact.firstCreated || '',
                 lastModified: contact.lastModified || ''
-            }
+            })
         }));
     }
 
@@ -138,33 +162,33 @@ class AgentboxIntegration {
         return listings.map((listing, index) => ({
             id: `agentbox_listing_${listing.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'listing',
                 source: 'agentbox',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                listingId: listing.id,
-                propertyId: listing.property?.id,
-                listingType: listing.type,
-                status: listing.status,
-                marketingStatus: listing.marketingStatus,
-                displayPrice: listing.displayPrice,
-                headline: listing.mainHeadline,
-                propertyType: listing.property?.type,
-                propertyCategory: listing.property?.category,
-                bedrooms: listing.property?.bedrooms,
-                bathrooms: listing.property?.bathrooms,
-                parking: listing.property?.totalParking,
-                suburb: listing.property?.address?.suburb,
-                state: listing.property?.address?.state,
-                postcode: listing.property?.address?.postcode,
-                region: listing.property?.address?.region,
-                streetAddress: listing.property?.address?.streetAddress,
-                latitude: listing.property?.location?.lat,
-                longitude: listing.property?.location?.long,
-                firstCreated: listing.firstCreated,
-                lastModified: listing.lastModified
-            }
+                listingId: listing.id.toString(),
+                propertyId: listing.property?.id ? listing.property.id.toString() : '',
+                listingType: listing.type || '',
+                status: listing.status || '',
+                marketingStatus: listing.marketingStatus || '',
+                displayPrice: listing.displayPrice || '',
+                headline: listing.mainHeadline || '',
+                propertyType: listing.property?.type || '',
+                propertyCategory: listing.property?.category || '',
+                bedrooms: listing.property?.bedrooms ? listing.property.bedrooms.toString() : '',
+                bathrooms: listing.property?.bathrooms ? listing.property.bathrooms.toString() : '',
+                parking: listing.property?.totalParking ? listing.property.totalParking.toString() : '',
+                suburb: listing.property?.address?.suburb || '',
+                state: listing.property?.address?.state || '',
+                postcode: listing.property?.address?.postcode || '',
+                region: listing.property?.address?.region || '',
+                streetAddress: listing.property?.address?.streetAddress || '',
+                latitude: listing.property?.location?.lat || '',
+                longitude: listing.property?.location?.long || '',
+                firstCreated: listing.firstCreated || '',
+                lastModified: listing.lastModified || ''
+            })
         }));
     }
 
@@ -182,12 +206,12 @@ class AgentboxIntegration {
         return staffMembers.map((staff, index) => ({
             id: `agentbox_staff_${staff.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'staff',
                 source: 'agentbox',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                staffId: staff.id,
+                staffId: staff.id.toString(),
                 firstName: staff.firstName || '',
                 lastName: staff.lastName || '',
                 email: staff.email || '',
@@ -196,12 +220,12 @@ class AgentboxIntegration {
                 status: staff.status || '',
                 role: staff.role || '',
                 jobTitle: staff.jobTitle || '',
-                officeId: staff.officeId || '',
+                officeId: staff.officeId ? staff.officeId.toString() : '',
                 officeName: staff.officeName || '',
                 firstCreated: staff.firstCreated || '',
                 lastModified: staff.lastModified || '',
-                hideMobileOnWeb: staff.hideMobileOnWeb || false
-            }
+                hideMobileOnWeb: !!staff.hideMobileOnWeb
+            })
         }));
     }
 

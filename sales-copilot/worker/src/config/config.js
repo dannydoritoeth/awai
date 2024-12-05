@@ -22,6 +22,10 @@ const config = {
     agentbox: {
         baseUrl: process.env.AGENTBOX_API_URL || 'https://api.agentboxcrm.com.au',
         version: process.env.AGENTBOX_API_VERSION || '2'
+    },
+    worker: {
+        testMode: process.env.WORKER_TEST_MODE === 'true',
+        testRecordLimit: parseInt(process.env.WORKER_TEST_RECORD_LIMIT) || 5
     }
 };
 

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('../../config/config');
 
 class AgentboxClient {
     constructor(connectionSettings) {
@@ -14,13 +15,16 @@ class AgentboxClient {
                 'X-API-Key': connectionSettings.apiKey
             }
         });
+
+        this.testMode = config.worker.testMode;
+        this.testRecordLimit = config.worker.testRecordLimit;
     }
 
     async getAllContacts() {
         let contacts = [];
         let currentPage = 1;
         let lastPage = 1;
-        const limit = 20;
+        const limit = this.testMode ? this.testRecordLimit : 20;
 
         do {
             console.log(`Fetching contacts page ${currentPage}...`);
@@ -45,6 +49,12 @@ class AgentboxClient {
                 console.log(`Found ${pageContacts.length} contacts on page ${currentPage}`);
 
                 contacts = contacts.concat(pageContacts);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
+                }
+
                 lastPage = parseInt(response.data.response.last);
                 currentPage++;
 
@@ -53,6 +63,12 @@ class AgentboxClient {
                 throw error;
             }
         } while (currentPage <= lastPage);
+
+        // In test mode, limit the total records
+        if (this.testMode) {
+            contacts = contacts.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${contacts.length} contacts`);
+        }
 
         console.log(`Total contacts found: ${contacts.length}`);
         return contacts;

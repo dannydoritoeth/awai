@@ -1,6 +1,34 @@
 const PipedriveClient = require('./client');
 const dbHelper = require('../../services/dbHelper');
 
+// Helper function to clean metadata values
+function cleanMetadata(metadata) {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(metadata)) {
+        if (value === null || value === undefined) {
+            continue; // Skip null/undefined values
+        }
+        // Convert arrays to comma-separated strings if they exist
+        if (Array.isArray(value)) {
+            cleaned[key] = value.join(', ');
+            continue;
+        }
+        // Keep boolean values as is
+        if (typeof value === 'boolean') {
+            cleaned[key] = value;
+            continue;
+        }
+        // Convert numbers to strings
+        if (typeof value === 'number') {
+            cleaned[key] = value.toString();
+            continue;
+        }
+        // Keep string values as is
+        cleaned[key] = value;
+    }
+    return cleaned;
+}
+
 class PipedriveIntegration {
     constructor(pineconeService, embeddingService) {
         this.pineconeService = pineconeService;
@@ -122,31 +150,28 @@ class PipedriveIntegration {
     async createDealVectors(deals, integration) {
         if (deals.length === 0) return [];
 
-        console.log('Creating deal texts for embedding...');
         const dealTexts = deals.map(deal => this.createDealText(deal));
-        
-        console.log('Getting deal embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
         
         return deals.map((deal, index) => ({
             id: `pipedrive_deal_${deal.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'deal',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                dealId: parseInt(deal.id),
+                dealId: deal.id.toString(),
                 title: deal.title || '',
-                value: parseFloat(deal.value) || 0,
+                value: (deal.value || 0).toString(),
                 currency: deal.currency || '',
                 status: deal.status || '',
-                stageId: deal.stage_id ? parseInt(deal.stage_id) : null,
-                organizationId: deal.org_id ? parseInt(deal.org_id) : null,
+                stageId: deal.stage_id ? deal.stage_id.toString() : '',
+                organizationId: deal.org_id ? deal.org_id.toString() : '',
                 organizationName: deal.org_name || '',
-                personId: deal.person_id ? parseInt(deal.person_id) : null,
+                personId: deal.person_id ? deal.person_id.toString() : '',
                 personName: deal.person_name || '',
-                ownerId: deal.owner_id ? parseInt(deal.owner_id) : null,
+                ownerId: deal.owner_id ? deal.owner_id.toString() : '',
                 expectedCloseDate: deal.expected_close_date || '',
                 addTime: deal.add_time || '',
                 updateTime: deal.update_time || '',
@@ -154,7 +179,7 @@ class PipedriveIntegration {
                 lostReason: deal.lost_reason || '',
                 visibleTo: deal.visible_to || '',
                 activeFlag: !!deal.active
-            }
+            })
         }));
     }
 
@@ -187,18 +212,18 @@ class PipedriveIntegration {
         return leads.map((lead, index) => ({
             id: `pipedrive_lead_${lead.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'lead',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                leadId: parseInt(lead.id),
+                leadId: lead.id.toString(),
                 title: lead.title || '',
-                value: lead.value?.amount ? parseFloat(lead.value.amount) : 0,
+                value: lead.value?.amount ? lead.value.amount.toString() : '0',
                 currency: lead.value?.currency || '',
-                ownerId: lead.owner_id ? parseInt(lead.owner_id) : null,
-                personId: lead.person_id ? parseInt(lead.person_id) : null,
-                organizationId: lead.organization_id ? parseInt(lead.organization_id) : null,
+                ownerId: lead.owner_id ? lead.owner_id.toString() : '',
+                personId: lead.person_id ? lead.person_id.toString() : '',
+                organizationId: lead.organization_id ? lead.organization_id.toString() : '',
                 personName: lead.person_name || '',
                 organizationName: lead.organization_name || '',
                 expectedCloseDate: lead.expected_close_date || '',
@@ -207,8 +232,8 @@ class PipedriveIntegration {
                 status: lead.status || '',
                 source: lead.source_name || '',
                 notes: lead.note || '',
-                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.map(id => parseInt(id)) : []
-            }
+                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.join(', ') : ''
+            })
         }));
     }
 
@@ -235,30 +260,30 @@ class PipedriveIntegration {
         return activities.map((activity, index) => ({
             id: `pipedrive_activity_${activity.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'activity',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                activityId: parseInt(activity.id),
+                activityId: activity.id.toString(),
                 subject: activity.subject || '',
                 type: activity.type || '',
                 dueDate: activity.due_date || '',
                 dueTime: activity.due_time || '',
                 duration: activity.duration || '',
-                dealId: activity.deal_id ? parseInt(activity.deal_id) : null,
-                personId: activity.person_id ? parseInt(activity.person_id) : null,
-                organizationId: activity.org_id ? parseInt(activity.org_id) : null,
+                dealId: activity.deal_id ? activity.deal_id.toString() : '',
+                personId: activity.person_id ? activity.person_id.toString() : '',
+                organizationId: activity.org_id ? activity.org_id.toString() : '',
                 note: activity.note || '',
                 publicDescription: activity.public_description || '',
                 location: activity.location || '',
                 done: !!activity.done,
                 markedAsDoneTime: activity.marked_as_done_time || '',
                 activeFlag: !!activity.active_flag,
-                userId: activity.user_id ? parseInt(activity.user_id) : null,
+                userId: activity.user_id ? activity.user_id.toString() : '',
                 addTime: activity.add_time || '',
                 updateTime: activity.update_time || ''
-            }
+            })
         }));
     }
 
@@ -279,43 +304,38 @@ class PipedriveIntegration {
     async createPeopleVectors(people, integration) {
         if (people.length === 0) return [];
 
-        console.log('Creating people texts for embedding...');
         const peopleTexts = people.map(person => this.createPersonText(person));
-        
-        console.log('Getting people embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(peopleTexts);
-        console.log(`Created ${embeddings.length} people embeddings`);
         
-        console.log('Creating people vectors for Pinecone...');
         return people.map((person, index) => ({
             id: `pipedrive_person_${person.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'person',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                personId: parseInt(person.id),
+                personId: person.id.toString(),
                 name: person.name || '',
                 firstName: person.first_name || '',
                 lastName: person.last_name || '',
                 email: Array.isArray(person.email) ? person.email.map(e => e.value).join(', ') : person.email || '',
                 phone: Array.isArray(person.phone) ? person.phone.map(p => p.value).join(', ') : person.phone || '',
-                organizationId: person.org_id ? parseInt(person.org_id) : null,
+                organizationId: person.org_id ? person.org_id.toString() : '',
                 organizationName: person.org_name || '',
                 title: person.title || '',
                 visibleTo: person.visible_to || '',
-                ownerId: person.owner_id ? parseInt(person.owner_id) : null,
+                ownerId: person.owner_id ? person.owner_id.toString() : '',
                 labels: Array.isArray(person.labels) ? person.labels.join(', ') : '',
-                openDealsCount: parseInt(person.open_deals_count || '0'),
-                wonDealsCount: parseInt(person.won_deals_count || '0'),
-                lostDealsCount: parseInt(person.lost_deals_count || '0'),
+                openDealsCount: (person.open_deals_count || '0').toString(),
+                wonDealsCount: (person.won_deals_count || '0').toString(),
+                lostDealsCount: (person.lost_deals_count || '0').toString(),
                 lastActivityDate: person.last_activity_date || '',
                 nextActivityDate: person.next_activity_date || '',
                 addTime: person.add_time || '',
                 updateTime: person.update_time || '',
                 activeFlag: !!person.active_flag
-            }
+            })
         }));
     }
 
@@ -406,25 +426,25 @@ class PipedriveIntegration {
         return notes.map((note, index) => ({
             id: `pipedrive_note_${note.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'note',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                noteId: parseInt(note.id),
+                noteId: note.id.toString(),
                 content: note.content || '',
-                dealId: note.deal_id ? parseInt(note.deal_id) : null,
-                personId: note.person_id ? parseInt(note.person_id) : null,
-                organizationId: note.org_id ? parseInt(note.org_id) : null,
-                userId: note.user_id ? parseInt(note.user_id) : null,
+                dealId: note.deal_id ? note.deal_id.toString() : '',
+                personId: note.person_id ? note.person_id.toString() : '',
+                organizationId: note.org_id ? note.org_id.toString() : '',
+                userId: note.user_id ? note.user_id.toString() : '',
                 addTime: note.add_time || '',
                 updateTime: note.update_time || '',
                 activeFlag: !!note.active_flag,
                 pinnedToDeal: !!note.pinned_to_deal_flag,
                 pinnedToOrganization: !!note.pinned_to_organization_flag,
                 pinnedToPerson: !!note.pinned_to_person_flag,
-                lastUpdateUserId: note.last_update_user_id ? parseInt(note.last_update_user_id) : null
-            }
+                lastUpdateUserId: note.last_update_user_id ? note.last_update_user_id.toString() : ''
+            })
         }));
     }
 
@@ -452,18 +472,18 @@ class PipedriveIntegration {
         return organizations.map((org, index) => ({
             id: `pipedrive_organization_${org.id}`,
             vector: embeddings[index],
-            metadata: {
+            metadata: cleanMetadata({
                 type: 'organization',
                 source: 'pipedrive',
-                customerId: integration.customer_id,
+                customerId: integration.customer_id.toString(),
                 customerName: integration.customer_name,
-                organizationId: parseInt(org.id),
+                organizationId: org.id.toString(),
                 name: org.name || '',
                 address: org.address || '',
                 addressCountry: org.address_country || '',
                 addressLocality: org.address_locality || '',
                 addressPostalCode: org.address_postal_code || '',
-                ownerId: org.owner_id ? parseInt(org.owner_id) : null,
+                ownerId: org.owner_id ? org.owner_id.toString() : '',
                 activeFlag: !!org.active_flag,
                 visibleTo: org.visible_to || '',
                 email: Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : org.email || '',
@@ -472,12 +492,12 @@ class PipedriveIntegration {
                 addTime: org.add_time || '',
                 updateTime: org.update_time || '',
                 labels: Array.isArray(org.labels) ? org.labels.join(', ') : '',
-                openDealsCount: parseInt(org.open_deals_count || '0'),
-                wonDealsCount: parseInt(org.won_deals_count || '0'),
-                lostDealsCount: parseInt(org.lost_deals_count || '0'),
+                openDealsCount: (org.open_deals_count || '0').toString(),
+                wonDealsCount: (org.won_deals_count || '0').toString(),
+                lostDealsCount: (org.lost_deals_count || '0').toString(),
                 lastActivityDate: org.last_activity_date || '',
                 nextActivityDate: org.next_activity_date || ''
-            }
+            })
         }));
     }
 

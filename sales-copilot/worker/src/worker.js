@@ -4,6 +4,25 @@ const AgentboxIntegration = require('./integrations/agentbox');
 const PineconeService = require('./services/pineconeService');
 const EmbeddingService = require('./services/embeddingService');
 const dbHelper = require('./services/dbHelper');
+const argv = require('yargs')
+    .option('test-mode', {
+        alias: 't',
+        type: 'boolean',
+        description: 'Run in test mode with limited records'
+    })
+    .option('limit', {
+        alias: 'l',
+        type: 'number',
+        default: 5,
+        description: 'Number of records to process in test mode'
+    })
+    .argv;
+
+// Override config with command line args
+if (argv.testMode) {
+    config.worker.testMode = true;
+    config.worker.testRecordLimit = argv.limit;
+}
 
 class Worker {
     constructor() {

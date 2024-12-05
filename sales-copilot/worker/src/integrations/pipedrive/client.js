@@ -1,5 +1,6 @@
 const axios = require('axios');
 const rateLimiter = require('../../services/rateLimiterService');
+const config = require('../../config/config');
 
 class PipedriveClient {
     constructor(connectionSettings) {
@@ -18,12 +19,20 @@ class PipedriveClient {
                 api_token: connectionSettings.api_token
             }
         });
+
+        this.testMode = config.worker.testMode;
+        this.testRecordLimit = config.worker.testRecordLimit;
     }
 
     async makeRequest(endpoint, params = {}) {
         try {
             // Check rate limit before making request
             await rateLimiter.checkRateLimit(this.companyId);
+
+            // Add test mode limit if enabled
+            if (this.testMode) {
+                params.limit = Math.min(params.limit || 100, this.testRecordLimit);
+            }
 
             const response = await this.v1Client.get(endpoint, { params });
 
@@ -50,7 +59,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
@@ -63,6 +72,12 @@ class PipedriveClient {
                 console.log(`Found ${pageDeals.length} deals on page ${page}`);
 
                 deals = deals.concat(pageDeals);
+
+                // In test mode, break after first page
+                if (this.testMode) {
+                    break;
+                }
+
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
                 start += 100;
                 page++;
@@ -72,7 +87,12 @@ class PipedriveClient {
             }
         }
 
-        console.log(`Total deals found: ${deals.length}`);
+        // In test mode, limit the total records
+        if (this.testMode) {
+            deals = deals.slice(0, this.testRecordLimit);
+            console.log(`Test mode: Limited to ${deals.length} deals`);
+        }
+
         return deals;
     }
 
@@ -104,7 +124,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
@@ -112,7 +132,7 @@ class PipedriveClient {
             console.log(`Fetching leads page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/leads', { params });
+                const response = await this.makeRequest('/leads', params);
                 console.log('Response status:', response.status);
 
                 const pageLeads = response.data.data || [];
@@ -145,7 +165,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
@@ -186,7 +206,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
@@ -227,7 +247,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
@@ -268,7 +288,7 @@ class PipedriveClient {
 
         while (more_items) {
             const params = {
-                limit: 100,
+                limit: this.testMode ? this.testRecordLimit : 100,
                 start,
                 ...(startDate && { filter_by_date: true, start_date: startDate })
             };
