@@ -121,62 +121,93 @@ class PipedriveIntegration {
 
     async createDealVectors(deals, integration) {
         if (deals.length === 0) return [];
-        
+
         console.log('Creating deal texts for embedding...');
-        const dealTexts = deals.map(deal => this.embeddingService.createDealText(deal));
+        const dealTexts = deals.map(deal => this.createDealText(deal));
         
         console.log('Getting deal embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
-        console.log(`Created ${embeddings.length} deal embeddings`);
         
-        console.log('Creating deal vectors for Pinecone...');
         return deals.map((deal, index) => ({
-            id: `${deal.id}`,
+            id: `pipedrive_deal_${deal.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'deal',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                dealId: deal.id,
-                dealTitle: deal.title || '',
-                dealStatus: deal.status || '',
-                dealValue: deal.value || 0,
-                dealCurrency: deal.currency || '',
-                dealStage: deal.stage_id?.toString() || '',
-                lastUpdated: deal.update_time || ''
+                dealId: parseInt(deal.id),
+                title: deal.title || '',
+                value: parseFloat(deal.value) || 0,
+                currency: deal.currency || '',
+                status: deal.status || '',
+                stageId: deal.stage_id ? parseInt(deal.stage_id) : null,
+                organizationId: deal.org_id ? parseInt(deal.org_id) : null,
+                organizationName: deal.org_name || '',
+                personId: deal.person_id ? parseInt(deal.person_id) : null,
+                personName: deal.person_name || '',
+                ownerId: deal.owner_id ? parseInt(deal.owner_id) : null,
+                expectedCloseDate: deal.expected_close_date || '',
+                addTime: deal.add_time || '',
+                updateTime: deal.update_time || '',
+                closeTime: deal.close_time || '',
+                lostReason: deal.lost_reason || '',
+                visibleTo: deal.visible_to || '',
+                activeFlag: !!deal.active
             }
         }));
+    }
+
+    createDealText(deal) {
+        const parts = [
+            `Title: ${deal.title}`,
+            `Value: ${deal.value} ${deal.currency}`,
+            `Status: ${deal.status}`,
+            `Stage: ${deal.stage_id}`,
+            `Organization: ${deal.org_name}`,
+            `Person: ${deal.person_name}`,
+            `Expected Close Date: ${deal.expected_close_date}`,
+            `Add Time: ${deal.add_time}`,
+            `Update Time: ${deal.update_time}`,
+            `Close Time: ${deal.close_time}`,
+            `Lost Reason: ${deal.lost_reason}`,
+            `Visible To: ${deal.visible_to}`,
+            `Active: ${deal.active}`
+        ];
+
+        return parts.filter(part => part).join('\n');
     }
 
     async createLeadVectors(leads, integration) {
         if (leads.length === 0) return [];
 
-        console.log('Creating lead texts for embedding...');
         const leadTexts = leads.map(lead => this.createLeadText(lead));
-        
-        console.log('Getting lead embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(leadTexts);
-        console.log(`Created ${embeddings.length} lead embeddings`);
         
-        console.log('Creating lead vectors for Pinecone...');
         return leads.map((lead, index) => ({
-            id: `lead_${lead.id}`,
+            id: `pipedrive_lead_${lead.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'lead',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                leadId: lead.id,
-                leadTitle: lead.title || '',
-                leadValue: lead.value?.amount || 0,
-                leadCurrency: lead.value?.currency || '',
+                leadId: parseInt(lead.id),
+                title: lead.title || '',
+                value: lead.value?.amount ? parseFloat(lead.value.amount) : 0,
+                currency: lead.value?.currency || '',
+                ownerId: lead.owner_id ? parseInt(lead.owner_id) : null,
+                personId: lead.person_id ? parseInt(lead.person_id) : null,
+                organizationId: lead.organization_id ? parseInt(lead.organization_id) : null,
                 personName: lead.person_name || '',
                 organizationName: lead.organization_name || '',
                 expectedCloseDate: lead.expected_close_date || '',
-                lastUpdated: lead.update_time || '',
-                source: lead.source_name || '',
+                addTime: lead.add_time || '',
+                updateTime: lead.update_time || '',
                 status: lead.status || '',
-                ownerId: lead.owner_id?.toString() || ''
+                source: lead.source_name || '',
+                notes: lead.note || '',
+                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.map(id => parseInt(id)) : []
             }
         }));
     }
@@ -198,39 +229,35 @@ class PipedriveIntegration {
     async createActivityVectors(activities, integration) {
         if (activities.length === 0) return [];
 
-        console.log('Creating activity texts for embedding...');
         const activityTexts = activities.map(activity => this.createActivityText(activity));
-        
-        console.log('Getting activity embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(activityTexts);
-        console.log(`Created ${embeddings.length} activity embeddings`);
         
-        console.log('Creating activity vectors for Pinecone...');
         return activities.map((activity, index) => ({
-            id: `activity_${activity.id}`,
+            id: `pipedrive_activity_${activity.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'activity',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                activityId: activity.id,
+                activityId: parseInt(activity.id),
                 subject: activity.subject || '',
                 type: activity.type || '',
                 dueDate: activity.due_date || '',
                 dueTime: activity.due_time || '',
                 duration: activity.duration || '',
-                dealId: activity.deal_id?.toString() || '',
-                leadId: activity.lead_id?.toString() || '',
-                personId: activity.person_id?.toString() || '',
-                organizationId: activity.org_id?.toString() || '',
+                dealId: activity.deal_id ? parseInt(activity.deal_id) : null,
+                personId: activity.person_id ? parseInt(activity.person_id) : null,
+                organizationId: activity.org_id ? parseInt(activity.org_id) : null,
                 note: activity.note || '',
                 publicDescription: activity.public_description || '',
                 location: activity.location || '',
                 done: !!activity.done,
-                marked_as_done_time: activity.marked_as_done_time || '',
-                active_flag: !!activity.active_flag,
-                updateTime: activity.update_time || '',
-                addTime: activity.add_time || ''
+                markedAsDoneTime: activity.marked_as_done_time || '',
+                activeFlag: !!activity.active_flag,
+                userId: activity.user_id ? parseInt(activity.user_id) : null,
+                addTime: activity.add_time || '',
+                updateTime: activity.update_time || ''
             }
         }));
     }
@@ -261,32 +288,33 @@ class PipedriveIntegration {
         
         console.log('Creating people vectors for Pinecone...');
         return people.map((person, index) => ({
-            id: `person_${person.id}`,
+            id: `pipedrive_person_${person.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'person',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                personId: person.id,
+                personId: parseInt(person.id),
                 name: person.name || '',
                 firstName: person.first_name || '',
                 lastName: person.last_name || '',
-                email: this.formatEmails(person.email) || '',
-                phone: this.formatPhones(person.phone) || '',
-                organizationId: person.org_id?.toString() || '',
+                email: Array.isArray(person.email) ? person.email.map(e => e.value).join(', ') : person.email || '',
+                phone: Array.isArray(person.phone) ? person.phone.map(p => p.value).join(', ') : person.phone || '',
+                organizationId: person.org_id ? parseInt(person.org_id) : null,
                 organizationName: person.org_name || '',
                 title: person.title || '',
                 visibleTo: person.visible_to || '',
-                ownerId: person.owner_id?.toString() || '',
+                ownerId: person.owner_id ? parseInt(person.owner_id) : null,
+                labels: Array.isArray(person.labels) ? person.labels.join(', ') : '',
+                openDealsCount: parseInt(person.open_deals_count || '0'),
+                wonDealsCount: parseInt(person.won_deals_count || '0'),
+                lostDealsCount: parseInt(person.lost_deals_count || '0'),
+                lastActivityDate: person.last_activity_date || '',
+                nextActivityDate: person.next_activity_date || '',
                 addTime: person.add_time || '',
                 updateTime: person.update_time || '',
-                activeFlag: !!person.active_flag,
-                labels: Array.isArray(person.labels) ? person.labels.join(', ') : '',
-                openDealsCount: person.open_deals_count?.toString() || '0',
-                wonDealsCount: person.won_deals_count?.toString() || '0',
-                lostDealsCount: person.lost_deals_count?.toString() || '0',
-                lastActivityDate: person.last_activity_date || '',
-                nextActivityDate: person.next_activity_date || ''
+                activeFlag: !!person.active_flag
             }
         }));
     }
@@ -372,36 +400,30 @@ class PipedriveIntegration {
     async createNoteVectors(notes, integration) {
         if (notes.length === 0) return [];
 
-        console.log('Creating note texts for embedding...');
         const noteTexts = notes.map(note => this.createNoteText(note));
-        
-        console.log('Getting note embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(noteTexts);
-        console.log(`Created ${embeddings.length} note embeddings`);
         
-        console.log('Creating note vectors for Pinecone...');
         return notes.map((note, index) => ({
-            id: `note_${note.id}`,
+            id: `pipedrive_note_${note.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'note',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                noteId: note.id,
+                noteId: parseInt(note.id),
                 content: note.content || '',
+                dealId: note.deal_id ? parseInt(note.deal_id) : null,
+                personId: note.person_id ? parseInt(note.person_id) : null,
+                organizationId: note.org_id ? parseInt(note.org_id) : null,
+                userId: note.user_id ? parseInt(note.user_id) : null,
                 addTime: note.add_time || '',
                 updateTime: note.update_time || '',
                 activeFlag: !!note.active_flag,
-                dealId: note.deal_id?.toString() || '',
-                personId: note.person_id?.toString() || '',
-                organizationId: note.org_id?.toString() || '',
-                userId: note.user_id?.toString() || '',
-                leadId: note.lead_id?.toString() || '',
-                lastUpdateUserId: note.last_update_user_id?.toString() || '',
-                pinned: !!note.pinned_to_deal_flag || !!note.pinned_to_organization_flag || !!note.pinned_to_person_flag,
                 pinnedToDeal: !!note.pinned_to_deal_flag,
                 pinnedToOrganization: !!note.pinned_to_organization_flag,
-                pinnedToPerson: !!note.pinned_to_person_flag
+                pinnedToPerson: !!note.pinned_to_person_flag,
+                lastUpdateUserId: note.last_update_user_id ? parseInt(note.last_update_user_id) : null
             }
         }));
     }
@@ -424,45 +446,37 @@ class PipedriveIntegration {
     async createOrganizationVectors(organizations, integration) {
         if (organizations.length === 0) return [];
 
-        console.log('Creating organization texts for embedding...');
         const organizationTexts = organizations.map(org => this.createOrganizationText(org));
-        
-        console.log('Getting organization embeddings from OpenAI...');
         const embeddings = await this.embeddingService.createBatchEmbeddings(organizationTexts);
-        console.log(`Created ${embeddings.length} organization embeddings`);
         
-        console.log('Creating organization vectors for Pinecone...');
         return organizations.map((org, index) => ({
-            id: `organization_${org.id}`,
+            id: `pipedrive_organization_${org.id}`,
             vector: embeddings[index],
             metadata: {
                 type: 'organization',
+                source: 'pipedrive',
                 customerId: integration.customer_id,
                 customerName: integration.customer_name,
-                organizationId: org.id,
+                organizationId: parseInt(org.id),
                 name: org.name || '',
                 address: org.address || '',
                 addressCountry: org.address_country || '',
                 addressLocality: org.address_locality || '',
-                addressSublocality: org.address_sublocality || '',
                 addressPostalCode: org.address_postal_code || '',
-                ownerId: org.owner_id?.toString() || '',
+                ownerId: org.owner_id ? parseInt(org.owner_id) : null,
                 activeFlag: !!org.active_flag,
-                categoryId: org.category_id?.toString() || '',
                 visibleTo: org.visible_to || '',
-                email: Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : (org.email || ''),
-                phone: Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : (org.phone || ''),
+                email: Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : org.email || '',
+                phone: Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : org.phone || '',
                 webDomain: org.web_domain || '',
                 addTime: org.add_time || '',
                 updateTime: org.update_time || '',
                 labels: Array.isArray(org.labels) ? org.labels.join(', ') : '',
-                openDealsCount: org.open_deals_count?.toString() || '0',
-                wonDealsCount: org.won_deals_count?.toString() || '0',
-                lostDealsCount: org.lost_deals_count?.toString() || '0',
+                openDealsCount: parseInt(org.open_deals_count || '0'),
+                wonDealsCount: parseInt(org.won_deals_count || '0'),
+                lostDealsCount: parseInt(org.lost_deals_count || '0'),
                 lastActivityDate: org.last_activity_date || '',
-                nextActivityDate: org.next_activity_date || '',
-                countryCode: org.cc_email || '',
-                pictureId: org.picture_id?.toString() || ''
+                nextActivityDate: org.next_activity_date || ''
             }
         }));
     }
