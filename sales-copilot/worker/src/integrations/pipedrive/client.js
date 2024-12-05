@@ -1,4 +1,5 @@
 const axios = require('axios');
+const rateLimiter = require('../../services/rateLimiterService');
 
 class PipedriveClient {
     constructor(connectionSettings) {
@@ -6,6 +7,8 @@ class PipedriveClient {
             throw new Error('API token is required in connection settings');
         }
 
+        this.companyId = connectionSettings.company_id;
+        
         this.v1Client = axios.create({
             baseURL: 'https://api.pipedrive.com/v1',
             headers: {
@@ -15,14 +18,28 @@ class PipedriveClient {
                 api_token: connectionSettings.api_token
             }
         });
+    }
 
-        this.v2Client = axios.create({
-            baseURL: 'https://api.pipedrive.com/v2',
-            headers: {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${connectionSettings.api_token}`
+    async makeRequest(endpoint, params = {}) {
+        try {
+            // Check rate limit before making request
+            await rateLimiter.checkRateLimit(this.companyId);
+
+            const response = await this.v1Client.get(endpoint, { params });
+
+            if (response.data.success === false) {
+                throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
             }
-        });
+
+            return response;
+        } catch (error) {
+            if (error.response?.status === 429) {
+                // If we hit the rate limit, wait 1 second and try again
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return this.makeRequest(endpoint, params);
+            }
+            throw error;
+        }
     }
 
     async getAllDeals(startDate = null) {
@@ -41,16 +58,9 @@ class PipedriveClient {
             console.log(`Fetching deals page ${page}...`);
             
             try {
-                const response = await this.v1Client.get('/deals', { params });
-                console.log('Response status:', response.status);
-
+                const response = await this.makeRequest('/deals', params);
                 const pageDeals = response.data.data || [];
                 console.log(`Found ${pageDeals.length} deals on page ${page}`);
-
-                if (response.data.success === false) {
-                    console.error('Pipedrive API error:', response.data);
-                    throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
-                }
 
                 deals = deals.concat(pageDeals);
                 more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;

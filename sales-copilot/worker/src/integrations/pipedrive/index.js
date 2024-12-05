@@ -14,47 +14,44 @@ class PipedriveIntegration {
             
             syncId = await this.createSyncRecord(integration.id);
             
-            // Process all entity types
-            const [deals, leads, activities, people, notes, organizations] = await Promise.all([
-                this.fetchDeals(integration),
-                this.fetchLeads(integration),
-                this.fetchActivities(integration),
-                this.fetchPeople(integration),
-                this.fetchNotes(integration),
-                this.fetchOrganizations(integration)
-            ]);
-            
-            if (deals.length === 0 && leads.length === 0 && activities.length === 0 && 
-                people.length === 0 && notes.length === 0 && organizations.length === 0) {
-                console.log('No data found to process');
-                return;
-            }
-
-            // Create and store vectors for all types
+            // Process each entity type sequentially
+            const deals = await this.fetchDeals(integration);
             const dealVectors = await this.createDealVectors(deals, integration);
+            await this.storeVectors(dealVectors);
+            console.log(`Processed ${deals.length} deals`);
+
+            const leads = await this.fetchLeads(integration);
             const leadVectors = await this.createLeadVectors(leads, integration);
+            await this.storeVectors(leadVectors);
+            console.log(`Processed ${leads.length} leads`);
+
+            const activities = await this.fetchActivities(integration);
             const activityVectors = await this.createActivityVectors(activities, integration);
+            await this.storeVectors(activityVectors);
+            console.log(`Processed ${activities.length} activities`);
+
+            const people = await this.fetchPeople(integration);
             const peopleVectors = await this.createPeopleVectors(people, integration);
+            await this.storeVectors(peopleVectors);
+            console.log(`Processed ${people.length} people`);
+
+            const notes = await this.fetchNotes(integration);
             const noteVectors = await this.createNoteVectors(notes, integration);
+            await this.storeVectors(noteVectors);
+            console.log(`Processed ${notes.length} notes`);
+
+            const organizations = await this.fetchOrganizations(integration);
             const organizationVectors = await this.createOrganizationVectors(organizations, integration);
-            
-            await this.storeVectors([
-                ...dealVectors, 
-                ...leadVectors, 
-                ...activityVectors, 
-                ...peopleVectors, 
-                ...noteVectors,
-                ...organizationVectors
-            ]);
+            await this.storeVectors(organizationVectors);
+            console.log(`Processed ${organizations.length} organizations`);
 
             const totalCount = deals.length + leads.length + activities.length + 
                              people.length + notes.length + organizations.length;
+
             await this.updateSyncStatus(syncId, totalCount, integration.id);
 
             console.log(
-                `Successfully processed ${deals.length} deals, ${leads.length} leads, ` +
-                `${activities.length} activities, ${people.length} people, ` +
-                `${notes.length} notes, and ${organizations.length} organizations ` +
+                `Successfully processed ${totalCount} total records ` +
                 `for customer ${integration.customer_id}`
             );
         } catch (error) {
