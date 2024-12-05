@@ -1,5 +1,41 @@
--- Create enum for supported integration types
-CREATE TYPE integration_type AS ENUM ('pipedrive');
+-- Drop existing enum dependencies first
+DROP TABLE IF EXISTS customer_integrations CASCADE;
+DROP TABLE IF EXISTS integrations CASCADE;
+DROP TYPE IF EXISTS integration_type CASCADE;
+
+-- Recreate the enum with both types
+CREATE TYPE integration_type AS ENUM ('pipedrive', 'agentbox');
+
+-- Recreate the integrations table
+CREATE TABLE integrations (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type integration_type NOT NULL,
+    auth_type auth_type NOT NULL,
+    config JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Recreate the customer_integrations table
+CREATE TABLE customer_integrations (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES customers(id),
+    integration_id INTEGER REFERENCES integrations(id),
+    credentials JSONB NOT NULL,
+    auth_status VARCHAR(50) DEFAULT 'pending',
+    access_token_expires_at TIMESTAMP WITH TIME ZONE,
+    refresh_token_expires_at TIMESTAMP WITH TIME ZONE,
+    connection_settings JSONB,
+    is_active BOOLEAN DEFAULT true,
+    metadata JSONB,
+    last_sync_at TIMESTAMP WITH TIME ZONE,
+    last_full_sync TIMESTAMP,
+    force_full_sync BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(customer_id, integration_id)
+);
 
 -- Create enum for auth types
 CREATE TYPE auth_type AS ENUM ('oauth2', 'api_key');
@@ -12,37 +48,6 @@ CREATE TABLE customers (
     status VARCHAR(50) DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table to store integration configurations
-CREATE TABLE integrations (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    type integration_type NOT NULL,
-    auth_type auth_type NOT NULL,
-    config JSONB NOT NULL,  -- Contains OAuth client_id, client_secret, redirect_uri, scopes
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table to store customer-specific integration credentials
-CREATE TABLE customer_integrations (
-    id SERIAL PRIMARY KEY,
-    customer_id INTEGER REFERENCES customers(id),
-    integration_id INTEGER REFERENCES integrations(id),
-    credentials JSONB NOT NULL,  -- Stores encrypted credentials: access_token, refresh_token, etc
-    auth_status VARCHAR(50) DEFAULT 'pending',
-    access_token_expires_at TIMESTAMP WITH TIME ZONE,
-    refresh_token_expires_at TIMESTAMP WITH TIME ZONE,
-    connection_settings JSONB,  -- Integration-specific settings (e.g., company_domain for Pipedrive)
-    is_active BOOLEAN DEFAULT true,
-    metadata JSONB,  -- Additional integration-specific settings
-    last_sync_at TIMESTAMP WITH TIME ZONE,
-    last_full_sync TIMESTAMP,
-    force_full_sync BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(customer_id, integration_id)
 );
 
 -- Table to track sync status and history

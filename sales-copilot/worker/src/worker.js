@@ -1,5 +1,6 @@
 const config = require('./config/config');
 const PipedriveIntegration = require('./integrations/pipedrive');
+const AgentboxIntegration = require('./integrations/agentbox');
 const PineconeService = require('./services/pineconeService');
 const EmbeddingService = require('./services/embeddingService');
 const dbHelper = require('./services/dbHelper');
@@ -14,7 +15,8 @@ class Worker {
         const embeddingService = new EmbeddingService(config.openai.apiKey);
 
         this.integrations = {
-            pipedrive: new PipedriveIntegration(pineconeService, embeddingService)
+            pipedrive: new PipedriveIntegration(pineconeService, embeddingService),
+            agentbox: new AgentboxIntegration(pineconeService, embeddingService)
         };
     }
 
