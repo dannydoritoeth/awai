@@ -14,22 +14,35 @@ class AgentboxIntegration {
             
             syncId = await this.createSyncRecord(integration.id);
             
-            // Process contacts
-            const contacts = await this.fetchContacts(integration);
+            // Process all entity types
+            const [contacts, listings, staff] = await Promise.all([
+                this.fetchContacts(integration),
+                this.fetchListings(integration),
+                this.fetchStaff(integration)
+            ]);
             
-            if (contacts.length === 0) {
+            if (contacts.length === 0 && listings.length === 0 && staff.length === 0) {
                 console.log('No data found to process');
                 return;
             }
 
-            // Create and store vectors for contacts
+            // Create and store vectors for all types
             const contactVectors = await this.createContactVectors(contacts, integration);
-            await this.storeVectors(contactVectors);
+            const listingVectors = await this.createListingVectors(listings, integration);
+            const staffVectors = await this.createStaffVectors(staff, integration);
+            
+            await this.storeVectors([
+                ...contactVectors, 
+                ...listingVectors,
+                ...staffVectors
+            ]);
 
-            await this.updateSyncStatus(syncId, contacts.length, integration.id);
+            const totalCount = contacts.length + listings.length + staff.length;
+            await this.updateSyncStatus(syncId, totalCount, integration.id);
 
             console.log(
-                `Successfully processed ${contacts.length} contacts ` +
+                `Successfully processed ${contacts.length} contacts, ` +
+                `${listings.length} listings, and ${staff.length} staff members ` +
                 `for customer ${integration.customer_id}`
             );
         } catch (error) {
@@ -55,6 +68,22 @@ class AgentboxIntegration {
         const contacts = await client.getAllContacts();
         console.log(`Found ${contacts.length} contacts to process`);
         return contacts;
+    }
+
+    async fetchListings(integration) {
+        const client = new AgentboxClient(integration.connection_settings);
+        console.log('Fetching listings from Agentbox...');
+        const listings = await client.getAllListings();
+        console.log(`Found ${listings.length} listings to process`);
+        return listings;
+    }
+
+    async fetchStaff(integration) {
+        const client = new AgentboxClient(integration.connection_settings);
+        console.log('Fetching staff from Agentbox...');
+        const staff = await client.getAllStaff();
+        console.log(`Found ${staff.length} staff members to process`);
+        return staff;
     }
 
     async createContactVectors(contacts, integration) {
@@ -95,6 +124,87 @@ class AgentboxIntegration {
         }));
     }
 
+    async createListingVectors(listings, integration) {
+        if (listings.length === 0) return [];
+
+        console.log('Creating listing texts for embedding...');
+        const listingTexts = listings.map(listing => this.createListingText(listing));
+        
+        console.log('Getting listing embeddings from OpenAI...');
+        const embeddings = await this.embeddingService.createBatchEmbeddings(listingTexts);
+        console.log(`Created ${embeddings.length} listing embeddings`);
+        
+        console.log('Creating listing vectors for Pinecone...');
+        return listings.map((listing, index) => ({
+            id: `agentbox_listing_${listing.id}`,
+            vector: embeddings[index],
+            metadata: {
+                type: 'listing',
+                source: 'agentbox',
+                customerId: integration.customer_id,
+                customerName: integration.customer_name,
+                listingId: listing.id,
+                propertyId: listing.property?.id,
+                listingType: listing.type,
+                status: listing.status,
+                marketingStatus: listing.marketingStatus,
+                displayPrice: listing.displayPrice,
+                headline: listing.mainHeadline,
+                propertyType: listing.property?.type,
+                propertyCategory: listing.property?.category,
+                bedrooms: listing.property?.bedrooms,
+                bathrooms: listing.property?.bathrooms,
+                parking: listing.property?.totalParking,
+                suburb: listing.property?.address?.suburb,
+                state: listing.property?.address?.state,
+                postcode: listing.property?.address?.postcode,
+                region: listing.property?.address?.region,
+                streetAddress: listing.property?.address?.streetAddress,
+                latitude: listing.property?.location?.lat,
+                longitude: listing.property?.location?.long,
+                firstCreated: listing.firstCreated,
+                lastModified: listing.lastModified
+            }
+        }));
+    }
+
+    async createStaffVectors(staffMembers, integration) {
+        if (staffMembers.length === 0) return [];
+
+        console.log('Creating staff texts for embedding...');
+        const staffTexts = staffMembers.map(staff => this.createStaffText(staff));
+        
+        console.log('Getting staff embeddings from OpenAI...');
+        const embeddings = await this.embeddingService.createBatchEmbeddings(staffTexts);
+        console.log(`Created ${embeddings.length} staff embeddings`);
+        
+        console.log('Creating staff vectors for Pinecone...');
+        return staffMembers.map((staff, index) => ({
+            id: `agentbox_staff_${staff.id}`,
+            vector: embeddings[index],
+            metadata: {
+                type: 'staff',
+                source: 'agentbox',
+                customerId: integration.customer_id,
+                customerName: integration.customer_name,
+                staffId: staff.id,
+                firstName: staff.firstName || '',
+                lastName: staff.lastName || '',
+                email: staff.email || '',
+                mobile: staff.mobile || '',
+                phone: staff.phone || '',
+                status: staff.status || '',
+                role: staff.role || '',
+                jobTitle: staff.jobTitle || '',
+                officeId: staff.officeId || '',
+                officeName: staff.officeName || '',
+                firstCreated: staff.firstCreated || '',
+                lastModified: staff.lastModified || '',
+                hideMobileOnWeb: staff.hideMobileOnWeb || false
+            }
+        }));
+    }
+
     createContactText(contact) {
         const parts = [
             `Name: ${[contact.firstName, contact.lastName].filter(Boolean).join(' ')}`,
@@ -108,6 +218,44 @@ class AgentboxIntegration {
             `Status: ${contact.status}`,
             `Type: ${contact.type}`,
             `Source: ${contact.source}`
+        ];
+
+        return parts.filter(part => part).join('\n');
+    }
+
+    createListingText(listing) {
+        const parts = [
+            `Headline: ${listing.mainHeadline}`,
+            `Type: ${listing.type}`,
+            `Status: ${listing.status}`,
+            `Price: ${listing.displayPrice}`,
+            listing.property?.type ? `Property Type: ${listing.property.type}` : null,
+            listing.property?.category ? `Category: ${listing.property.category}` : null,
+            listing.property?.bedrooms ? `Bedrooms: ${listing.property.bedrooms}` : null,
+            listing.property?.bathrooms ? `Bathrooms: ${listing.property.bathrooms}` : null,
+            listing.property?.totalParking ? `Parking: ${listing.property.totalParking}` : null,
+            listing.property?.address ? `Address: ${[
+                listing.property.address.streetAddress,
+                listing.property.address.suburb,
+                listing.property.address.state,
+                listing.property.address.postcode
+            ].filter(Boolean).join(', ')}` : null,
+            listing.property?.address?.region ? `Region: ${listing.property.address.region}` : null
+        ];
+
+        return parts.filter(part => part).join('\n');
+    }
+
+    createStaffText(staff) {
+        const parts = [
+            `Name: ${[staff.firstName, staff.lastName].filter(Boolean).join(' ')}`,
+            staff.jobTitle ? `Job Title: ${staff.jobTitle}` : null,
+            staff.role ? `Role: ${staff.role}` : null,
+            staff.email ? `Email: ${staff.email}` : null,
+            staff.mobile ? `Mobile: ${staff.mobile}` : null,
+            staff.phone ? `Phone: ${staff.phone}` : null,
+            staff.officeName ? `Office: ${staff.officeName}` : null,
+            `Status: ${staff.status}`,
         ];
 
         return parts.filter(part => part).join('\n');
