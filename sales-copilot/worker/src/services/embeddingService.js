@@ -14,46 +14,27 @@ class EmbeddingService {
             const response = await this.openai.embeddings.create({
                 model: this.model,
                 input: text,
-                encoding_format: "float",
+                encoding_format: "float"
             });
-
             return response.data[0].embedding;
         } catch (error) {
             console.error('Error creating embedding:', error);
-            throw new Error('Failed to create embedding');
+            throw error;
         }
     }
 
-    async createBatchEmbeddings(texts, batchSize = 10) {
-        const embeddings = [];
-        
-        for (let i = 0; i < texts.length; i += batchSize) {
-            const batch = texts.slice(i, i + batchSize);
+    async createBatchEmbeddings(texts) {
+        try {
             const response = await this.openai.embeddings.create({
                 model: this.model,
-                input: batch,
-                encoding_format: "float",
+                input: texts,
+                encoding_format: "float"
             });
-            
-            embeddings.push(...response.data.map(item => item.embedding));
+            return response.data.map(item => item.embedding);
+        } catch (error) {
+            console.error('Error creating batch embeddings:', error);
+            throw error;
         }
-        
-        return embeddings;
-    }
-
-    // Helper to create deal text for embedding
-    createDealText(deal) {
-        const parts = [
-            `Title: ${deal.title}`,
-            `Status: ${deal.status}`,
-            `Value: ${deal.value} ${deal.currency}`,
-            `Stage: ${deal.stage_id}`,
-        ];
-
-        if (deal.notes) parts.push(`Notes: ${deal.notes}`);
-        if (deal.description) parts.push(`Description: ${deal.description}`);
-        
-        return parts.join('\n');
     }
 }
 

@@ -1,30 +1,31 @@
-class RateLimiterService {
-    constructor() {
-        this.requestTimestamps = new Map(); // Track request timestamps by company
+class RateLimiter {
+    constructor(tokensPerSecond = 10) {
+        this.tokensPerSecond = tokensPerSecond;
+        this.tokens = tokensPerSecond;
+        this.lastRefill = Date.now();
     }
 
-    async checkRateLimit(companyId) {
-        const now = Date.now();
-        const timestamps = this.requestTimestamps.get(companyId) || [];
+    async waitForToken() {
+        this.refillTokens();
         
-        // Remove timestamps older than 1 second
-        const recentTimestamps = timestamps.filter(time => now - time < 1000);
-        
-        // Professional plan limit is 100 requests per second
-        if (recentTimestamps.length >= 80) { // Using 80 to be safe
-            const waitTime = 1000 - (now - recentTimestamps[0]);
-            if (waitTime > 0) {
-                console.log(`Rate limit reached, waiting ${waitTime}ms...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
+        if (this.tokens < 1) {
+            const waitTime = (1000 / this.tokensPerSecond) * (1 - this.tokens);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            this.refillTokens();
         }
+        
+        this.tokens -= 1;
+    }
 
-        // Add current timestamp and update list
-        recentTimestamps.push(now);
-        this.requestTimestamps.set(companyId, recentTimestamps);
-
-        return true;
+    refillTokens() {
+        const now = Date.now();
+        const timePassed = now - this.lastRefill;
+        this.tokens = Math.min(
+            this.tokensPerSecond,
+            this.tokens + (timePassed / 1000) * this.tokensPerSecond
+        );
+        this.lastRefill = now;
     }
 }
 
-module.exports = new RateLimiterService(); 
+module.exports = new RateLimiter(); 

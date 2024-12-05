@@ -1,4 +1,5 @@
 const { Pinecone } = require('@pinecone-database/pinecone');
+const config = require('../config/config');
 
 class PineconeService {
     constructor(apiKey) {
@@ -7,18 +8,23 @@ class PineconeService {
         }
 
         this.pinecone = new Pinecone({
-            apiKey: apiKey
+            apiKey
         });
+
+        this.indexName = config.pinecone.indexName;
+        console.log('Initialized standard Pinecone client');
     }
 
     async initialize(namespace) {
         try {
-            const indexName = 'sales-copilot';
-            this.index = this.pinecone.index(indexName).namespace(namespace);
-            // Test the connection
-            await this.pinecone.index(indexName).describeIndexStats();
+            this.index = this.pinecone.Index(this.indexName).namespace(namespace);
+            console.log(`Initialized index: ${this.indexName}, namespace: ${namespace}`);
         } catch (error) {
-            console.error('Pinecone initialization error:', error);
+            console.error('Pinecone initialization error:', {
+                error: error.message,
+                indexName: this.indexName,
+                namespace
+            });
             throw error;
         }
     }
@@ -30,12 +36,7 @@ class PineconeService {
         }
         
         for (let i = 0; i < vectors.length; i += batchSize) {
-            const batch = vectors.slice(i, i + batchSize).map(({ id, vector, metadata }) => ({
-                id,
-                values: vector,
-                metadata
-            }));
-            
+            const batch = vectors.slice(i, i + batchSize);
             await this.index.upsert(batch);
             console.log(`Upserted batch of ${batch.length} vectors to namespace: ${namespace}`);
         }

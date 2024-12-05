@@ -6,8 +6,8 @@ const config = {
         apiKey: process.env.PINECONE_API_KEY,
         environment: process.env.PINECONE_ENVIRONMENT,
         indexName: process.env.PINECONE_INDEX_NAME,
-        host: process.env.PINECONE_HOST,
-        dimension: 3072,
+        projectId: process.env.PINECONE_PROJECT_ID,
+        host: process.env.PINECONE_HOST
     },
     openai: {
         apiKey: process.env.OPENAI_API_KEY,
@@ -18,33 +18,21 @@ const config = {
         database: process.env.DB_NAME,
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
-    },
-    agentbox: {
-        baseUrl: process.env.AGENTBOX_API_URL || 'https://api.agentboxcrm.com.au',
-        version: process.env.AGENTBOX_API_VERSION || '2'
-    },
-    worker: {
-        testMode: process.env.WORKER_TEST_MODE === 'true',
-        testRecordLimit: parseInt(process.env.WORKER_TEST_RECORD_LIMIT) || 5
     }
 };
 
-// Add debug logging
-console.log('Pinecone Config:', {
-    apiKey: config.pinecone.apiKey ? 'present' : 'missing',
+// Add debug logging for Pinecone config
+console.log('Pinecone Configuration:', {
     environment: config.pinecone.environment,
-    indexName: config.pinecone.indexName
+    indexName: config.pinecone.indexName,
+    projectId: config.pinecone.projectId,
+    hasApiKey: !!config.pinecone.apiKey
 });
 
-// Validate required configuration
-const requiredEnvVars = {
-    'PINECONE_API_KEY': config.pinecone.apiKey,
-    'OPENAI_API_KEY': config.openai.apiKey,
-};
-
-for (const [key, value] of Object.entries(requiredEnvVars)) {
+// Validate required environment variables
+for (const [key, value] of Object.entries(config.pinecone)) {
     if (!value) {
-        throw new Error(`Missing required environment variable: ${key}`);
+        throw new Error(`Missing required Pinecone environment variable: ${key}`);
     }
 }
 

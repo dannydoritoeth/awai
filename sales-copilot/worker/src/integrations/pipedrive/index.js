@@ -1,5 +1,8 @@
 const PipedriveClient = require('./client');
 const dbHelper = require('../../services/dbHelper');
+const { Document } = require("@langchain/core/documents");
+const LangchainPineconeService = require('../../services/langchainPineconeService');
+const LangchainEmbeddingAdapter = require('../../services/langchainEmbeddingAdapter');
 
 // Helper function to clean metadata values
 function cleanMetadata(metadata) {
@@ -30,9 +33,19 @@ function cleanMetadata(metadata) {
 }
 
 class PipedriveIntegration {
-    constructor(pineconeService, embeddingService) {
-        this.pineconeService = pineconeService;
+    constructor(embeddingService, pineconeService, testMode = false, testLimit = 3) {
         this.embeddingService = embeddingService;
+        this.pineconeService = pineconeService;
+        this.testMode = testMode;
+        this.testLimit = testLimit;
+        
+        // Create adapter for LangChain
+        const embeddingAdapter = new LangchainEmbeddingAdapter(embeddingService);
+        
+        this.langchainPinecone = new LangchainPineconeService(
+            process.env.PINECONE_API_KEY,
+            embeddingAdapter
+        );
     }
 
     async process(integration) {
@@ -100,7 +113,7 @@ class PipedriveIntegration {
     }
 
     async fetchDeals(integration) {
-        const client = new PipedriveClient(integration.connection_settings);
+        const client = new PipedriveClient(integration.connection_settings, this.testMode, this.testLimit);
         console.log('Fetching deals from Pipedrive...');
         const deals = await client.getAllDeals();
         console.log(`Found ${deals.length} deals to process`);
@@ -153,10 +166,8 @@ class PipedriveIntegration {
         const dealTexts = deals.map(deal => this.createDealText(deal));
         const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
         
-        return deals.map((deal, index) => ({
-            id: `pipedrive_deal_${deal.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return deals.map((deal, index) => {
+            const metadata = {
                 type: 'deal',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -178,12 +189,27 @@ class PipedriveIntegration {
                 closeTime: deal.close_time || '',
                 lostReason: deal.lost_reason || '',
                 visibleTo: deal.visible_to || '',
-                activeFlag: !!deal.active
-            })
-        }));
+                activeFlag: !!deal.active,
+                rawData: JSON.stringify(deal)
+            };
+
+            // Create a LangChain Document
+            const doc = new Document({
+                pageContent: this.createDealText(deal),
+                metadata
+            });
+
+            // Return in Pinecone format
+            return {
+                id: `pipedrive_deal_${deal.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createDealText(deal) {
+        console.log('Creating deal text for:', deal.title);
         const parts = [
             `Title: ${deal.title}`,
             `Value: ${deal.value} ${deal.currency}`,
@@ -200,7 +226,9 @@ class PipedriveIntegration {
             `Active: ${deal.active}`
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated deal text:', text);
+        return text;
     }
 
     async createLeadVectors(leads, integration) {
@@ -209,10 +237,8 @@ class PipedriveIntegration {
         const leadTexts = leads.map(lead => this.createLeadText(lead));
         const embeddings = await this.embeddingService.createBatchEmbeddings(leadTexts);
         
-        return leads.map((lead, index) => ({
-            id: `pipedrive_lead_${lead.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return leads.map((lead, index) => {
+            const metadata = {
                 type: 'lead',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -232,12 +258,25 @@ class PipedriveIntegration {
                 status: lead.status || '',
                 source: lead.source_name || '',
                 notes: lead.note || '',
-                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.join(', ') : ''
-            })
-        }));
+                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.join(', ') : '',
+                rawData: JSON.stringify(lead)
+            };
+
+            const doc = new Document({
+                pageContent: this.createLeadText(lead),
+                metadata
+            });
+
+            return {
+                id: `pipedrive_lead_${lead.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createLeadText(lead) {
+        console.log('Creating lead text for:', lead.title);
         const parts = [
             `Title: ${lead.title}`,
             `Person: ${lead.person_name || 'Unknown'}`,
@@ -248,7 +287,9 @@ class PipedriveIntegration {
             `Notes: ${lead.note || ''}`,
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated lead text:', text);
+        return text;
     }
 
     async createActivityVectors(activities, integration) {
@@ -257,10 +298,8 @@ class PipedriveIntegration {
         const activityTexts = activities.map(activity => this.createActivityText(activity));
         const embeddings = await this.embeddingService.createBatchEmbeddings(activityTexts);
         
-        return activities.map((activity, index) => ({
-            id: `pipedrive_activity_${activity.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return activities.map((activity, index) => {
+            const metadata = {
                 type: 'activity',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -282,12 +321,25 @@ class PipedriveIntegration {
                 activeFlag: !!activity.active_flag,
                 userId: typeof activity.user_id === 'object' ? activity.user_id?.value?.toString() || '' : activity.user_id?.toString() || '',
                 addTime: activity.add_time || '',
-                updateTime: activity.update_time || ''
-            })
-        }));
+                updateTime: activity.update_time || '',
+                rawData: JSON.stringify(activity)
+            };
+
+            const doc = new Document({
+                pageContent: this.createActivityText(activity),
+                metadata
+            });
+
+            return {
+                id: `pipedrive_activity_${activity.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createActivityText(activity) {
+        console.log('Creating activity text for:', activity.subject);
         const parts = [
             `Subject: ${activity.subject || ''}`,
             `Type: ${activity.type || ''}`,
@@ -298,7 +350,9 @@ class PipedriveIntegration {
             activity.location ? `Location: ${activity.location}` : null
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated activity text:', text);
+        return text;
     }
 
     async createPeopleVectors(people, integration) {
@@ -307,10 +361,8 @@ class PipedriveIntegration {
         const peopleTexts = people.map(person => this.createPersonText(person));
         const embeddings = await this.embeddingService.createBatchEmbeddings(peopleTexts);
         
-        return people.map((person, index) => ({
-            id: `pipedrive_person_${person.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return people.map((person, index) => {
+            const metadata = {
                 type: 'person',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -334,12 +386,25 @@ class PipedriveIntegration {
                 nextActivityDate: person.next_activity_date || '',
                 addTime: person.add_time || '',
                 updateTime: person.update_time || '',
-                activeFlag: !!person.active_flag
-            })
-        }));
+                activeFlag: !!person.active_flag,
+                rawData: JSON.stringify(person)
+            };
+
+            const doc = new Document({
+                pageContent: this.createPersonText(person),
+                metadata
+            });
+
+            return {
+                id: `pipedrive_person_${person.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createPersonText(person) {
+        console.log('Creating person text for:', person.name); // Add debug logging
         const parts = [
             `Name: ${person.name || ''}`,
             person.title ? `Title: ${person.title}` : null,
@@ -352,7 +417,9 @@ class PipedriveIntegration {
             person.next_activity_date ? `Next Activity: ${person.next_activity_date}` : null
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated text:', text); // Add debug logging
+        return text;
     }
 
     formatEmails(emails) {
@@ -371,17 +438,35 @@ class PipedriveIntegration {
         return phones;
     }
 
-    async storeVectors(vectors) {
+    async storeVectors(vectors, useLangChain = true) {
         if (vectors.length === 0) return;
 
-        console.log(`Storing ${vectors.length} vectors in Pinecone...`);
+        console.log(`\n=== Starting Vector Storage ===`);
+        console.log(`Total vectors to store: ${vectors.length}`);
+        console.log(`Using LangChain: ${useLangChain}`);
+        console.log(`First vector sample:`, {
+            id: vectors[0].id,
+            metadata: {
+                type: vectors[0].metadata.type,
+                source: vectors[0].metadata.source,
+                customerId: vectors[0].metadata.customerId
+            },
+            vectorLength: vectors[0].values.length
+        });
         
-        // Get the customerId from the first vector's metadata since all vectors in a batch are from the same customer
         const namespace = vectors[0].metadata.customerId.toString();
+        console.log(`Using namespace: ${namespace}`);
         
         try {
-            await this.pineconeService.upsertBatch(vectors, namespace);
-            console.log(`Successfully stored vectors in namespace: ${namespace}`);
+            if (useLangChain) {
+                console.log('Using LangChain Pinecone Service for storage');
+                await this.langchainPinecone.addDocuments(vectors, namespace);
+            } else {
+                console.log('Using standard Pinecone Service for storage');
+                await this.pineconeService.upsertBatch(vectors, namespace);
+            }
+            console.log(`Successfully stored ${vectors.length} vectors in namespace: ${namespace}`);
+            console.log(`=== Vector Storage Complete ===\n`);
         } catch (error) {
             console.error('Error storing vectors in Pinecone:', error);
             throw error;
@@ -423,10 +508,8 @@ class PipedriveIntegration {
         const noteTexts = notes.map(note => this.createNoteText(note));
         const embeddings = await this.embeddingService.createBatchEmbeddings(noteTexts);
         
-        return notes.map((note, index) => ({
-            id: `pipedrive_note_${note.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return notes.map((note, index) => {
+            const metadata = {
                 type: 'note',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -443,12 +526,25 @@ class PipedriveIntegration {
                 pinnedToDeal: !!note.pinned_to_deal_flag,
                 pinnedToOrganization: !!note.pinned_to_organization_flag,
                 pinnedToPerson: !!note.pinned_to_person_flag,
-                lastUpdateUserId: typeof note.last_update_user_id === 'object' ? note.last_update_user_id?.value?.toString() || '' : note.last_update_user_id?.toString() || ''
-            })
-        }));
+                lastUpdateUserId: typeof note.last_update_user_id === 'object' ? note.last_update_user_id?.value?.toString() || '' : note.last_update_user_id?.toString() || '',
+                rawData: JSON.stringify(note)
+            };
+
+            const doc = new Document({
+                pageContent: this.createNoteText(note),
+                metadata
+            });
+
+            return {
+                id: `pipedrive_note_${note.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createNoteText(note) {
+        console.log('Creating note text for note:', note.id);
         const parts = [
             note.content ? `Content: ${note.content}` : null,
             note.deal_id ? `Deal ID: ${note.deal_id}` : null,
@@ -460,7 +556,9 @@ class PipedriveIntegration {
             note.pinned_to_person_flag ? 'Pinned to Person' : null
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated note text:', text);
+        return text;
     }
 
     async createOrganizationVectors(organizations, integration) {
@@ -469,10 +567,8 @@ class PipedriveIntegration {
         const organizationTexts = organizations.map(org => this.createOrganizationText(org));
         const embeddings = await this.embeddingService.createBatchEmbeddings(organizationTexts);
         
-        return organizations.map((org, index) => ({
-            id: `pipedrive_organization_${org.id}`,
-            vector: embeddings[index],
-            metadata: cleanMetadata({
+        return organizations.map((org, index) => {
+            const metadata = {
                 type: 'organization',
                 source: 'pipedrive',
                 customerId: integration.customer_id.toString(),
@@ -496,12 +592,25 @@ class PipedriveIntegration {
                 wonDealsCount: (org.won_deals_count || '0').toString(),
                 lostDealsCount: (org.lost_deals_count || '0').toString(),
                 lastActivityDate: org.last_activity_date || '',
-                nextActivityDate: org.next_activity_date || ''
-            })
-        }));
+                nextActivityDate: org.next_activity_date || '',
+                rawData: JSON.stringify(org)
+            };
+
+            const doc = new Document({
+                pageContent: this.createOrganizationText(org),
+                metadata
+            });
+
+            return {
+                id: `pipedrive_organization_${org.id}`,
+                values: embeddings[index],
+                metadata: doc.metadata
+            };
+        });
     }
 
     createOrganizationText(org) {
+        console.log('Creating organization text for:', org.name);
         const parts = [
             `Name: ${org.name || ''}`,
             org.address ? `Address: ${[
@@ -520,7 +629,9 @@ class PipedriveIntegration {
             org.next_activity_date ? `Next Activity: ${org.next_activity_date}` : null
         ];
 
-        return parts.filter(part => part).join('\n');
+        const text = parts.filter(part => part).join('\n');
+        console.log('Generated organization text:', text);
+        return text;
     }
 }
 

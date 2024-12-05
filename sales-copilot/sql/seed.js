@@ -73,7 +73,8 @@ async function seedDatabase() {
             JSON.stringify({
                 company_domain: process.env.PIPEDRIVE_TEST_COMPANY_DOMAIN,
                 user_id: process.env.PIPEDRIVE_TEST_USER_ID,
-                company_id: process.env.PIPEDRIVE_TEST_COMPANY_ID
+                company_id: process.env.PIPEDRIVE_TEST_COMPANY_ID,
+                api_token: process.env.PIPEDRIVE_TEST_ACCESS_TOKEN
             }),
             true
         ]);

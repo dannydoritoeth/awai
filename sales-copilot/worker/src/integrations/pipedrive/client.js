@@ -3,342 +3,121 @@ const rateLimiter = require('../../services/rateLimiterService');
 const config = require('../../config/config');
 
 class PipedriveClient {
-    constructor(connectionSettings) {
-        if (!connectionSettings?.api_token) {
-            throw new Error('API token is required in connection settings');
+    constructor(settings, testMode = false, testLimit = 3) {
+        if (!settings || !settings.company_domain) {
+            throw new Error('Invalid Pipedrive settings');
         }
 
-        this.companyId = connectionSettings.company_id;
-        
-        this.v1Client = axios.create({
-            baseURL: 'https://api.pipedrive.com/v1',
-            headers: {
-                'Accept': 'application/json'
-            },
-            params: {
-                api_token: connectionSettings.api_token
-            }
-        });
+        this.companyDomain = settings.company_domain;
+        this.baseUrl = `https://${this.companyDomain}.pipedrive.com/api/v1`;
+        this.apiToken = settings.api_token || settings.access_token;
+        this.testMode = testMode;
+        this.testLimit = testLimit;
 
-        this.testMode = config.worker.testMode;
-        this.testRecordLimit = config.worker.testRecordLimit;
+        if (!this.apiToken) {
+            throw new Error('No API token found in settings');
+        }
     }
 
-    async makeRequest(endpoint, params = {}) {
+    async getAllDeals() {
         try {
-            // Check rate limit before making request
-            await rateLimiter.checkRateLimit(this.companyId);
-
-            // Add test mode limit if enabled
-            if (this.testMode) {
-                params.limit = Math.min(params.limit || 100, this.testRecordLimit);
-            }
-
-            const response = await this.v1Client.get(endpoint, { params });
-
-            if (response.data.success === false) {
-                throw new Error(`Pipedrive API error: ${response.data.error || 'Unknown error'}`);
-            }
-
-            return response;
+            console.log('Fetching deals from Pipedrive...');
+            // In test mode, limit the number of records
+            const limit = this.testMode ? this.testLimit : 100;
+            const deals = await this._get('/deals', { limit });
+            console.log(`Found ${deals.length} deals`);
+            return deals;
         } catch (error) {
-            if (error.response?.status === 429) {
-                // If we hit the rate limit, wait 1 second and try again
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                return this.makeRequest(endpoint, params);
-            }
+            console.error('Error fetching deals:', error);
             throw error;
         }
     }
 
-    async getAllDeals(startDate = null) {
-        let deals = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
+    async getAllLeads() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const leads = await this._get('/leads', { limit });
+            return leads;
+        } catch (error) {
+            console.error('Error fetching leads:', error);
+            throw error;
+        }
+    }
 
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
+    async getAllActivities() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const activities = await this._get('/activities', { limit });
+            return activities;
+        } catch (error) {
+            console.error('Error fetching activities:', error);
+            throw error;
+        }
+    }
 
-            console.log(`Fetching deals page ${page}...`);
+    async getAllPeople() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const people = await this._get('/persons', { limit });
+            return people;
+        } catch (error) {
+            console.error('Error fetching people:', error);
+            throw error;
+        }
+    }
+
+    async getAllNotes() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const notes = await this._get('/notes', { limit });
+            return notes;
+        } catch (error) {
+            console.error('Error fetching notes:', error);
+            throw error;
+        }
+    }
+
+    async getAllOrganizations() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const organizations = await this._get('/organizations', { limit });
+            return organizations;
+        } catch (error) {
+            console.error('Error fetching organizations:', error);
+            throw error;
+        }
+    }
+
+    async _get(endpoint, params = {}) {
+        try {
+            await rateLimiter.waitForToken();
             
-            try {
-                const response = await this.makeRequest('/deals', params);
-                const pageDeals = response.data.data || [];
-                console.log(`Found ${pageDeals.length} deals on page ${page}`);
+            console.log(`Making request to: ${this.baseUrl}${endpoint}`);
+            console.log('With params:', { ...params, api_token: '[REDACTED]' });
 
-                deals = deals.concat(pageDeals);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
+            const response = await axios.get(`${this.baseUrl}${endpoint}`, {
+                params: {
+                    ...params,
+                    api_token: this.apiToken
                 }
+            });
 
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching deals:', error.response?.data || error.message);
-                throw error;
+            if (response.data && response.data.success && Array.isArray(response.data.data)) {
+                return response.data.data;
             }
-        }
 
-        // In test mode, limit the total records
-        if (this.testMode) {
-            deals = deals.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${deals.length} deals`);
-        }
-
-        return deals;
-    }
-
-    async getDealById(dealId) {
-        const response = await this.v2Client.get(`/deals/${dealId}`);
-        return response.data.data;
-    }
-
-    async getDealActivities(dealId) {
-        const response = await this.v1Client.get(`/deals/${dealId}/activities`);
-        return response.data.data;
-    }
-
-    async getDealNotes(dealId) {
-        const response = await this.v1Client.get(`/deals/${dealId}/notes`);
-        return response.data.data;
-    }
-
-    async getDealFields() {
-        const response = await this.v2Client.get('/dealFields');
-        return response.data.data;
-    }
-
-    async getAllLeads(startDate = null) {
-        let leads = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
-
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
-
-            console.log(`Fetching leads page ${page}...`);
-            
-            try {
-                const response = await this.makeRequest('/leads', params);
-                const pageLeads = response.data.data || [];
-                console.log(`Found ${pageLeads.length} leads on page ${page}`);
-
-                leads = leads.concat(pageLeads);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
-                }
-
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching leads:', error.response?.data || error.message);
-                throw error;
+            console.error('Invalid response from Pipedrive:', response.data);
+            throw new Error('Invalid response from Pipedrive');
+        } catch (error) {
+            if (error.response) {
+                console.error('Pipedrive API error:', {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    data: error.response.data
+                });
             }
+            throw error;
         }
-
-        // In test mode, limit the total records
-        if (this.testMode) {
-            leads = leads.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${leads.length} leads`);
-        }
-
-        return leads;
-    }
-
-    async getAllActivities(startDate = null) {
-        let activities = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
-
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
-
-            console.log(`Fetching activities page ${page}...`);
-            
-            try {
-                const response = await this.makeRequest('/activities', params);
-                const pageActivities = response.data.data || [];
-                console.log(`Found ${pageActivities.length} activities on page ${page}`);
-
-                activities = activities.concat(pageActivities);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
-                }
-
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching activities:', error.response?.data || error.message);
-                throw error;
-            }
-        }
-
-        // In test mode, limit the total records
-        if (this.testMode) {
-            activities = activities.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${activities.length} activities`);
-        }
-
-        return activities;
-    }
-
-    async getAllPeople(startDate = null) {
-        let people = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
-
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
-
-            console.log(`Fetching people page ${page}...`);
-            
-            try {
-                const response = await this.makeRequest('/persons', params);
-                const pagePeople = response.data.data || [];
-                console.log(`Found ${pagePeople.length} people on page ${page}`);
-
-                people = people.concat(pagePeople);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
-                }
-
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching people:', error.response?.data || error.message);
-                throw error;
-            }
-        }
-
-        // In test mode, limit the total records
-        if (this.testMode) {
-            people = people.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${people.length} people`);
-        }
-
-        return people;
-    }
-
-    async getAllNotes(startDate = null) {
-        let notes = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
-
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
-
-            console.log(`Fetching notes page ${page}...`);
-            
-            try {
-                const response = await this.makeRequest('/notes', params);
-                const pageNotes = response.data.data || [];
-                console.log(`Found ${pageNotes.length} notes on page ${page}`);
-
-                notes = notes.concat(pageNotes);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
-                }
-
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching notes:', error.response?.data || error.message);
-                throw error;
-            }
-        }
-
-        // In test mode, limit the total records
-        if (this.testMode) {
-            notes = notes.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${notes.length} notes`);
-        }
-
-        return notes;
-    }
-
-    async getAllOrganizations(startDate = null) {
-        let organizations = [];
-        let more_items = true;
-        let start = 0;
-        let page = 1;
-
-        while (more_items) {
-            const params = {
-                limit: this.testMode ? this.testRecordLimit : 100,
-                start,
-                ...(startDate && { filter_by_date: true, start_date: startDate })
-            };
-
-            console.log(`Fetching organizations page ${page}...`);
-            
-            try {
-                const response = await this.makeRequest('/organizations', params);
-                const pageOrganizations = response.data.data || [];
-                console.log(`Found ${pageOrganizations.length} organizations on page ${page}`);
-
-                organizations = organizations.concat(pageOrganizations);
-
-                // In test mode, break after first page
-                if (this.testMode) {
-                    break;
-                }
-
-                more_items = response.data.additional_data?.pagination?.more_items_in_collection || false;
-                start += 100;
-                page++;
-            } catch (error) {
-                console.error('Error fetching organizations:', error.response?.data || error.message);
-                throw error;
-            }
-        }
-
-        // In test mode, limit the total records
-        if (this.testMode) {
-            organizations = organizations.slice(0, this.testRecordLimit);
-            console.log(`Test mode: Limited to ${organizations.length} organizations`);
-        }
-
-        return organizations;
     }
 }
 
