@@ -1,7 +1,7 @@
 const PipedriveClient = require('./client');
 const dbHelper = require('../../services/dbHelper');
 const { Document } = require("@langchain/core/documents");
-const LangchainPineconeService = require('../../services/langchainPineconeService');
+const { LangchainPineconeService, LOG_LEVELS } = require('../../services/langchainPineconeService');
 const LangchainEmbeddingAdapter = require('../../services/langchainEmbeddingAdapter');
 
 // Helper function to clean metadata values
@@ -33,70 +33,67 @@ function cleanMetadata(metadata) {
 }
 
 class PipedriveIntegration {
-    constructor(embeddingService, pineconeService, testMode = false, testLimit = 3) {
+    constructor(embeddingService, pineconeService, testMode = false, testLimit = 3, logLevel = LOG_LEVELS.INFO) {
         this.embeddingService = embeddingService;
         this.pineconeService = pineconeService;
         this.testMode = testMode;
         this.testLimit = testLimit;
+        this.logLevel = logLevel;
         
-        // Create adapter for LangChain
         const embeddingAdapter = new LangchainEmbeddingAdapter(embeddingService);
-        
         this.langchainPinecone = new LangchainPineconeService(
             process.env.PINECONE_API_KEY,
-            embeddingAdapter
+            embeddingAdapter,
+            logLevel
         );
+    }
+
+    log(level, message, data = null) {
+        if (level <= this.logLevel) {
+            switch (level) {
+                case LOG_LEVELS.ERROR:
+                    console.error(message, data || '');
+                    break;
+                case LOG_LEVELS.INFO:
+                    console.log(message, data ? `(${JSON.stringify(data)})` : '');
+                    break;
+                case LOG_LEVELS.DEBUG:
+                    console.log('DEBUG:', message, data || '');
+                    break;
+            }
+        }
     }
 
     async process(integration) {
         let syncId = null;
         try {
-            console.log(`Processing Pipedrive integration for customer ${integration.customer_id} (${integration.customer_name})`);
+            this.log(LOG_LEVELS.INFO, `Processing Pipedrive integration`, {
+                customerId: integration.customer_id,
+                customerName: integration.customer_name
+            });
             
             syncId = await this.createSyncRecord(integration.id);
             
-            // Process each entity type sequentially
-            const deals = await this.fetchDeals(integration);
-            const dealVectors = await this.createDealVectors(deals, integration);
-            await this.storeVectors(dealVectors);
-            console.log(`Processed ${deals.length} deals`);
+            // Process each entity type
+            const entityTypes = [
+                { name: 'deals', fetch: this.fetchDeals.bind(this), create: this.createDealVectors.bind(this) },
+                { name: 'leads', fetch: this.fetchLeads.bind(this), create: this.createLeadVectors.bind(this) },
+                // ... other entity types
+            ];
 
-            const leads = await this.fetchLeads(integration);
-            const leadVectors = await this.createLeadVectors(leads, integration);
-            await this.storeVectors(leadVectors);
-            console.log(`Processed ${leads.length} leads`);
-
-            const activities = await this.fetchActivities(integration);
-            const activityVectors = await this.createActivityVectors(activities, integration);
-            await this.storeVectors(activityVectors);
-            console.log(`Processed ${activities.length} activities`);
-
-            const people = await this.fetchPeople(integration);
-            const peopleVectors = await this.createPeopleVectors(people, integration);
-            await this.storeVectors(peopleVectors);
-            console.log(`Processed ${people.length} people`);
-
-            const notes = await this.fetchNotes(integration);
-            const noteVectors = await this.createNoteVectors(notes, integration);
-            await this.storeVectors(noteVectors);
-            console.log(`Processed ${notes.length} notes`);
-
-            const organizations = await this.fetchOrganizations(integration);
-            const organizationVectors = await this.createOrganizationVectors(organizations, integration);
-            await this.storeVectors(organizationVectors);
-            console.log(`Processed ${organizations.length} organizations`);
-
-            const totalCount = deals.length + leads.length + activities.length + 
-                             people.length + notes.length + organizations.length;
+            let totalCount = 0;
+            for (const entityType of entityTypes) {
+                const items = await entityType.fetch(integration);
+                const vectors = await entityType.create(items, integration);
+                await this.storeVectors(vectors);
+                totalCount += items.length;
+                this.log(LOG_LEVELS.INFO, `Processed ${items.length} ${entityType.name}`);
+            }
 
             await this.updateSyncStatus(syncId, totalCount, integration.id);
-
-            console.log(
-                `Successfully processed ${totalCount} total records ` +
-                `for customer ${integration.customer_id}`
-            );
+            this.log(LOG_LEVELS.INFO, `Successfully processed ${totalCount} total records`);
         } catch (error) {
-            console.error(`Error processing Pipedrive integration for customer ${integration.customer_id}:`, error);
+            this.log(LOG_LEVELS.ERROR, `Processing failed`, { error });
             await this.updateSyncError(syncId, error.message);
             throw error;
         }
@@ -114,59 +111,78 @@ class PipedriveIntegration {
 
     async fetchDeals(integration) {
         const client = new PipedriveClient(integration.connection_settings, this.testMode, this.testLimit);
-        console.log('Fetching deals from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching deals from Pipedrive...');
         const deals = await client.getAllDeals();
-        console.log(`Found ${deals.length} deals to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${deals.length} deals to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample deal:', deals[0]);
+        }
         return deals;
     }
 
     async fetchLeads(integration) {
         const client = new PipedriveClient(integration.connection_settings);
-        console.log('Fetching leads from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching leads from Pipedrive...');
         const leads = await client.getAllLeads();
-        console.log(`Found ${leads.length} leads to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${leads.length} leads to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample lead:', leads[0]);
+        }
         return leads;
     }
 
     async fetchActivities(integration) {
         const client = new PipedriveClient(integration.connection_settings);
-        console.log('Fetching activities from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching activities from Pipedrive...');
         const activities = await client.getAllActivities();
-        console.log(`Found ${activities.length} activities to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${activities.length} activities to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample activity:', activities[0]);
+        }
         return activities;
     }
 
     async fetchPeople(integration) {
         const client = new PipedriveClient(integration.connection_settings);
-        console.log('Fetching people from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching people from Pipedrive...');
         const people = await client.getAllPeople();
-        console.log(`Found ${people.length} people to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${people.length} people to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample person:', people[0]);
+        }
         return people;
     }
 
     async fetchNotes(integration) {
         const client = new PipedriveClient(integration.connection_settings);
-        console.log('Fetching notes from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching notes from Pipedrive...');
         const notes = await client.getAllNotes();
-        console.log(`Found ${notes.length} notes to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${notes.length} notes to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample note:', notes[0]);
+        }
         return notes;
     }
 
     async fetchOrganizations(integration) {
         const client = new PipedriveClient(integration.connection_settings);
-        console.log('Fetching organizations from Pipedrive...');
+        this.log(LOG_LEVELS.INFO, 'Fetching organizations from Pipedrive...');
         const organizations = await client.getAllOrganizations();
-        console.log(`Found ${organizations.length} organizations to process`);
+        this.log(LOG_LEVELS.INFO, `Found ${organizations.length} organizations to process`);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample organization:', organizations[0]);
+        }
         return organizations;
     }
 
     async createDealVectors(deals, integration) {
         if (deals.length === 0) return [];
 
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${deals.length} deals`);
         const dealTexts = deals.map(deal => this.createDealText(deal));
         const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
         
-        return deals.map((deal, index) => {
+        const vectors = deals.map((deal, index) => {
             const metadata = {
                 type: 'deal',
                 source: 'pipedrive',
@@ -193,23 +209,33 @@ class PipedriveIntegration {
                 rawData: JSON.stringify(deal)
             };
 
-            // Create a LangChain Document
             const doc = new Document({
                 pageContent: this.createDealText(deal),
                 metadata
             });
 
-            // Return in Pinecone format
             return {
                 id: `pipedrive_deal_${deal.id}`,
                 values: embeddings[index],
                 metadata: doc.metadata
             };
         });
+
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample vector:', {
+                id: vectors[0].id,
+                metadataKeys: Object.keys(vectors[0].metadata)
+            });
+        }
+
+        return vectors;
     }
 
     createDealText(deal) {
-        console.log('Creating deal text for:', deal.title);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating deal text for:', deal.title);
+        }
+
         const parts = [
             `Title: ${deal.title}`,
             `Value: ${deal.value} ${deal.currency}`,
@@ -227,17 +253,22 @@ class PipedriveIntegration {
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated deal text:', text);
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated deal text:', text);
+        }
+        
         return text;
     }
 
     async createLeadVectors(leads, integration) {
         if (leads.length === 0) return [];
 
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${leads.length} leads`);
         const leadTexts = leads.map(lead => this.createLeadText(lead));
         const embeddings = await this.embeddingService.createBatchEmbeddings(leadTexts);
         
-        return leads.map((lead, index) => {
+        const vectors = leads.map((lead, index) => {
             const metadata = {
                 type: 'lead',
                 source: 'pipedrive',
@@ -273,10 +304,22 @@ class PipedriveIntegration {
                 metadata: doc.metadata
             };
         });
+
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Sample vector:', {
+                id: vectors[0].id,
+                metadataKeys: Object.keys(vectors[0].metadata)
+            });
+        }
+
+        return vectors;
     }
 
     createLeadText(lead) {
-        console.log('Creating lead text for:', lead.title);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating lead text for:', lead.title);
+        }
+
         const parts = [
             `Title: ${lead.title}`,
             `Person: ${lead.person_name || 'Unknown'}`,
@@ -284,11 +327,15 @@ class PipedriveIntegration {
             `Value: ${lead.value?.amount || 0} ${lead.value?.currency || ''}`,
             `Source: ${lead.source_name || 'Unknown'}`,
             `Status: ${lead.status || 'Unknown'}`,
-            `Notes: ${lead.note || ''}`,
+            `Notes: ${lead.note || ''}`
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated lead text:', text);
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated lead text:', text);
+        }
+        
         return text;
     }
 
@@ -339,7 +386,10 @@ class PipedriveIntegration {
     }
 
     createActivityText(activity) {
-        console.log('Creating activity text for:', activity.subject);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating activity text for:', activity.subject);
+        }
+
         const parts = [
             `Subject: ${activity.subject || ''}`,
             `Type: ${activity.type || ''}`,
@@ -351,7 +401,11 @@ class PipedriveIntegration {
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated activity text:', text);
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated activity text:', text);
+        }
+        
         return text;
     }
 
@@ -404,7 +458,10 @@ class PipedriveIntegration {
     }
 
     createPersonText(person) {
-        console.log('Creating person text for:', person.name); // Add debug logging
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating person text for:', person.name);
+        }
+
         const parts = [
             `Name: ${person.name || ''}`,
             person.title ? `Title: ${person.title}` : null,
@@ -418,7 +475,11 @@ class PipedriveIntegration {
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated text:', text); // Add debug logging
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated person text:', text);
+        }
+        
         return text;
     }
 
@@ -441,39 +502,46 @@ class PipedriveIntegration {
     async storeVectors(vectors, useLangChain = true) {
         if (vectors.length === 0) return;
 
-        console.log(`\n=== Starting Vector Storage ===`);
-        console.log(`Total vectors to store: ${vectors.length}`);
-        console.log(`Using LangChain: ${useLangChain}`);
-        console.log(`First vector sample:`, {
-            id: vectors[0].id,
-            metadata: {
-                type: vectors[0].metadata.type,
-                source: vectors[0].metadata.source,
-                customerId: vectors[0].metadata.customerId
-            },
-            vectorLength: vectors[0].values.length
-        });
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, '=== Starting Vector Storage ===');
+            this.log(LOG_LEVELS.DEBUG, 'First vector sample:', {
+                id: vectors[0].id,
+                metadata: {
+                    type: vectors[0].metadata.type,
+                    source: vectors[0].metadata.source,
+                    customerId: vectors[0].metadata.customerId
+                },
+                vectorLength: vectors[0].values.length
+            });
+        }
+
+        this.log(LOG_LEVELS.INFO, `Processing ${vectors.length} vectors`);
         
         const namespace = vectors[0].metadata.customerId.toString();
-        console.log(`Using namespace: ${namespace}`);
+        this.log(LOG_LEVELS.INFO, `Using namespace: ${namespace}`);
         
         try {
             if (useLangChain) {
-                console.log('Using LangChain Pinecone Service for storage');
+                this.log(LOG_LEVELS.INFO, 'Using LangChain Pinecone Service');
                 await this.langchainPinecone.addDocuments(vectors, namespace);
             } else {
-                console.log('Using standard Pinecone Service for storage');
+                this.log(LOG_LEVELS.INFO, 'Using standard Pinecone Service');
                 await this.pineconeService.upsertBatch(vectors, namespace);
             }
-            console.log(`Successfully stored ${vectors.length} vectors in namespace: ${namespace}`);
-            console.log(`=== Vector Storage Complete ===\n`);
+            
+            this.log(LOG_LEVELS.INFO, `Successfully stored ${vectors.length} vectors`);
+            
+            if (this.logLevel >= LOG_LEVELS.DEBUG) {
+                this.log(LOG_LEVELS.DEBUG, '=== Vector Storage Complete ===');
+            }
         } catch (error) {
-            console.error('Error storing vectors in Pinecone:', error);
+            this.log(LOG_LEVELS.ERROR, 'Error storing vectors:', error);
             throw error;
         }
     }
 
     async updateSyncStatus(syncId, recordCount, integrationId) {
+        this.log(LOG_LEVELS.DEBUG, 'Updating sync status', { syncId, recordCount });
         await dbHelper.query(`
             UPDATE sync_history
             SET status = 'completed',
@@ -488,10 +556,12 @@ class PipedriveIntegration {
                 last_full_sync = CURRENT_TIMESTAMP
             WHERE id = $1
         `, [integrationId]);
+        this.log(LOG_LEVELS.DEBUG, 'Sync status updated successfully');
     }
 
     async updateSyncError(syncId, errorMessage) {
         if (syncId) {
+            this.log(LOG_LEVELS.ERROR, 'Updating sync with error', { syncId, errorMessage });
             await dbHelper.query(`
                 UPDATE sync_history
                 SET status = 'failed',
@@ -544,7 +614,10 @@ class PipedriveIntegration {
     }
 
     createNoteText(note) {
-        console.log('Creating note text for note:', note.id);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating note text for note:', note.id);
+        }
+
         const parts = [
             note.content ? `Content: ${note.content}` : null,
             note.deal_id ? `Deal ID: ${note.deal_id}` : null,
@@ -557,7 +630,11 @@ class PipedriveIntegration {
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated note text:', text);
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated note text:', text);
+        }
+        
         return text;
     }
 
@@ -610,7 +687,10 @@ class PipedriveIntegration {
     }
 
     createOrganizationText(org) {
-        console.log('Creating organization text for:', org.name);
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Creating organization text for:', org.name);
+        }
+
         const parts = [
             `Name: ${org.name || ''}`,
             org.address ? `Address: ${[
@@ -630,7 +710,11 @@ class PipedriveIntegration {
         ];
 
         const text = parts.filter(part => part).join('\n');
-        console.log('Generated organization text:', text);
+        
+        if (this.logLevel >= LOG_LEVELS.DEBUG) {
+            this.log(LOG_LEVELS.DEBUG, 'Generated organization text:', text);
+        }
+        
         return text;
     }
 }

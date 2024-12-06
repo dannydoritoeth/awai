@@ -2,39 +2,62 @@ const { PineconeStore } = require("@langchain/pinecone");
 const { Pinecone } = require('@pinecone-database/pinecone');
 const { Document } = require("@langchain/core/documents");
 
+// Define logging levels
+const LOG_LEVELS = {
+    ERROR: 0,   // Only errors
+    INFO: 1,    // Basic info + errors
+    DEBUG: 2    // Detailed info + basic info + errors
+};
+
 class LangchainPineconeService {
-    constructor(apiKey, embeddingService) {
+    constructor(apiKey, embeddingService, logLevel = LOG_LEVELS.INFO) {
         const client = new Pinecone({
             apiKey: apiKey
         });
 
         this.embeddings = embeddingService;
         this.pineconeIndex = client.Index("sales-copilot");
+        this.logLevel = logLevel;
+    }
+
+    log(level, message, data = null) {
+        if (level <= this.logLevel) {
+            switch (level) {
+                case LOG_LEVELS.ERROR:
+                    console.error(message, data || '');
+                    break;
+                case LOG_LEVELS.INFO:
+                    console.log(message, data ? `(${JSON.stringify(data)})` : '');
+                    break;
+                case LOG_LEVELS.DEBUG:
+                    console.log('DEBUG:', message, data || '');
+                    break;
+            }
+        }
     }
 
     async addDocuments(vectors, namespace) {
-        console.log('Processing vectors:', {
-            count: vectors.length,
-            sample: {
-                id: vectors[0].id,
-                type: vectors[0].metadata.type,
-                hasEmbedding: !!vectors[0].values
-            }
+        this.log(LOG_LEVELS.INFO, `Processing ${vectors.length} vectors for namespace ${namespace}`);
+        
+        this.log(LOG_LEVELS.DEBUG, 'Vector sample:', {
+            id: vectors[0].id,
+            type: vectors[0].metadata.type,
+            hasEmbedding: !!vectors[0].values
         });
 
-        // Convert our vectors to LangChain documents
-        // Use the original text that was used to create the embeddings
+        // Convert vectors to documents
         const docs = vectors.map(vector => {
-            // Get the original text that was used to create the embedding
-            let pageContent;
             try {
-                // Parse the raw data to get the original object
                 const originalData = JSON.parse(vector.metadata.rawData);
-                
-                // Recreate the text based on the entity type
+                let pageContent;
+
+                // Use the appropriate text creation method based on type
                 switch (vector.metadata.type) {
                     case 'deal':
                         pageContent = this.createDealText(originalData);
+                        break;
+                    case 'lead':
+                        pageContent = this.createLeadText(originalData);
                         break;
                     case 'person':
                         pageContent = this.createPersonText(originalData);
@@ -48,43 +71,42 @@ class LangchainPineconeService {
                     case 'activity':
                         pageContent = this.createActivityText(originalData);
                         break;
-                    case 'lead':
-                        pageContent = this.createLeadText(originalData);
-                        break;
                     default:
                         pageContent = this.createTextFromMetadata(vector.metadata);
                 }
+
+                return new Document({ 
+                    pageContent, 
+                    metadata: vector.metadata 
+                });
             } catch (error) {
-                console.warn('Error recreating original text, falling back to metadata:', error);
-                pageContent = this.createTextFromMetadata(vector.metadata);
+                this.log(LOG_LEVELS.ERROR, 'Error processing vector:', { 
+                    id: vector.id, 
+                    type: vector.metadata.type,
+                    error: error.message 
+                });
+                throw error;
             }
-
-            return new Document({
-                pageContent,
-                metadata: vector.metadata
-            });
         });
 
-        console.log('Sample document:', {
+        this.log(LOG_LEVELS.DEBUG, 'Sample document:', {
             pageContent: docs[0].pageContent.substring(0, 100) + '...',
-            metadata: {
-                type: docs[0].metadata.type,
-                source: docs[0].metadata.source,
-                id: docs[0].metadata.id
-            }
+            type: docs[0].metadata.type
         });
 
-        // Create vector store
-        const vectorStore = await PineconeStore.fromDocuments(
-            docs,
-            this.embeddings,
-            {
+        try {
+            this.log(LOG_LEVELS.INFO, 'Storing documents in Pinecone');
+            const vectorStore = await PineconeStore.fromDocuments(docs, this.embeddings, {
                 pineconeIndex: this.pineconeIndex,
                 namespace: namespace,
-            }
-        );
-
-        return vectorStore;
+            });
+            
+            this.log(LOG_LEVELS.INFO, `Successfully stored ${docs.length} documents`);
+            return vectorStore;
+        } catch (error) {
+            this.log(LOG_LEVELS.ERROR, 'Failed to store documents:', error);
+            throw error;
+        }
     }
 
     // Text creation functions copied from PipedriveIntegration
@@ -267,4 +289,8 @@ class LangchainPineconeService {
     }
 }
 
-module.exports = LangchainPineconeService; 
+// Export both the class and logging levels
+module.exports = {
+    LangchainPineconeService,
+    LOG_LEVELS
+}; 

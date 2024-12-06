@@ -5,6 +5,7 @@ const PineconeService = require('./services/pineconeService');
 const EmbeddingService = require('./services/embeddingService');
 const dbHelper = require('./services/dbHelper');
 const yargs = require('yargs');
+const { LangchainPineconeService, LOG_LEVELS } = require('./services/langchainPineconeService');
 
 // Parse command line arguments
 const argv = yargs
@@ -19,6 +20,13 @@ const argv = yargs
         default: 3,
         description: 'Number of records to process in test mode'
     })
+    .option('log-level', {
+        alias: 'log',
+        type: 'number',
+        default: 1,
+        choices: [0, 1, 2],
+        description: '0=ERROR, 1=INFO, 2=DEBUG'
+    })
     .argv;
 
 class Worker {
@@ -31,12 +39,16 @@ class Worker {
         this.testMode = argv.testMode;
         this.limit = argv.limit;
 
+        // Set logging level based on environment or command line args
+        const logLevel = process.env.LOG_LEVEL || (this.testMode ? LOG_LEVELS.DEBUG : LOG_LEVELS.INFO);
+
         // Initialize integrations with services and test mode settings
         this.pipedriveIntegration = new PipedriveIntegration(
             this.embeddingService,
             this.pineconeService,
             this.testMode,
-            this.limit
+            this.limit,
+            logLevel
         );
         this.agentboxIntegration = new AgentboxIntegration(
             this.embeddingService,
