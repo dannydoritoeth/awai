@@ -3,6 +3,7 @@ const dbHelper = require('../../services/dbHelper');
 const { Document } = require("@langchain/core/documents");
 const { LangchainPineconeService, LOG_LEVELS } = require('../../services/langchainPineconeService');
 const LangchainEmbeddingAdapter = require('../../services/langchainEmbeddingAdapter');
+const PipedriveDocumentCreator = require('./documentCreator');
 
 // Helper function to clean metadata values
 function cleanMetadata(metadata) {
@@ -78,11 +79,15 @@ class PipedriveIntegration {
             const entityTypes = [
                 { name: 'deals', fetch: this.fetchDeals.bind(this), create: this.createDealVectors.bind(this) },
                 { name: 'leads', fetch: this.fetchLeads.bind(this), create: this.createLeadVectors.bind(this) },
-                // ... other entity types
+                { name: 'activities', fetch: this.fetchActivities.bind(this), create: this.createActivityVectors.bind(this) },
+                { name: 'people', fetch: this.fetchPeople.bind(this), create: this.createPeopleVectors.bind(this) },
+                { name: 'notes', fetch: this.fetchNotes.bind(this), create: this.createNoteVectors.bind(this) },
+                { name: 'organizations', fetch: this.fetchOrganizations.bind(this), create: this.createOrganizationVectors.bind(this) }
             ];
 
             let totalCount = 0;
             for (const entityType of entityTypes) {
+                this.log(LOG_LEVELS.INFO, `Processing ${entityType.name}...`);
                 const items = await entityType.fetch(integration);
                 const vectors = await entityType.create(items, integration);
                 await this.storeVectors(vectors);
@@ -179,56 +184,26 @@ class PipedriveIntegration {
         if (deals.length === 0) return [];
 
         this.log(LOG_LEVELS.INFO, `Creating vectors for ${deals.length} deals`);
-        const dealTexts = deals.map(deal => this.createDealText(deal));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(dealTexts);
         
-        const vectors = deals.map((deal, index) => {
-            const metadata = {
-                type: 'deal',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                dealId: deal.id?.toString() || '',
-                title: deal.title || '',
-                value: (deal.value || 0).toString(),
-                currency: deal.currency || '',
-                status: deal.status || '',
-                stageId: deal.stage_id?.toString() || '',
-                organizationId: typeof deal.org_id === 'object' ? deal.org_id?.value?.toString() || '' : deal.org_id?.toString() || '',
-                organizationName: deal.org_name || '',
-                personId: typeof deal.person_id === 'object' ? deal.person_id?.value?.toString() || '' : deal.person_id?.toString() || '',
-                personName: deal.person_name || '',
-                ownerId: deal.owner_id?.toString() || '',
-                expectedCloseDate: deal.expected_close_date || '',
-                addTime: deal.add_time || '',
-                updateTime: deal.update_time || '',
-                closeTime: deal.close_time || '',
-                lostReason: deal.lost_reason || '',
-                visibleTo: deal.visible_to || '',
-                activeFlag: !!deal.active,
-                rawData: JSON.stringify(deal)
-            };
-
-            const doc = new Document({
-                pageContent: this.createDealText(deal),
-                metadata
+        // Create LangChain Documents
+        const documents = deals.map(deal => {
+            const text = this.createDealText(deal);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'deal',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    dealId: deal.id?.toString() || '',
+                    rawData: JSON.stringify(deal)
+                }
             });
-
-            return {
-                id: `pipedrive_deal_${deal.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
 
-        if (this.logLevel >= LOG_LEVELS.DEBUG) {
-            this.log(LOG_LEVELS.DEBUG, 'Sample vector:', {
-                id: vectors[0].id,
-                metadataKeys: Object.keys(vectors[0].metadata)
-            });
-        }
-
-        return vectors;
+        // Let LangChain handle the embedding and storage
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createDealText(deal) {
@@ -238,18 +213,12 @@ class PipedriveIntegration {
 
         const parts = [
             `Title: ${deal.title}`,
-            `Value: ${deal.value} ${deal.currency}`,
-            `Status: ${deal.status}`,
-            `Stage: ${deal.stage_id}`,
-            `Organization: ${deal.org_name}`,
-            `Person: ${deal.person_name}`,
-            `Expected Close Date: ${deal.expected_close_date}`,
-            `Add Time: ${deal.add_time}`,
-            `Update Time: ${deal.update_time}`,
-            `Close Time: ${deal.close_time}`,
-            `Lost Reason: ${deal.lost_reason}`,
-            `Visible To: ${deal.visible_to}`,
-            `Active: ${deal.active}`
+            `Person: ${deal.person_name || 'Unknown'}`,
+            `Organization: ${deal.organization_name || 'Unknown'}`,
+            `Value: ${deal.value?.amount || 0} ${deal.value?.currency || ''}`,
+            `Source: ${deal.source_name || 'Unknown'}`,
+            `Status: ${deal.status || 'Unknown'}`,
+            `Notes: ${deal.note || ''}`
         ];
 
         const text = parts.filter(part => part).join('\n');
@@ -265,54 +234,26 @@ class PipedriveIntegration {
         if (leads.length === 0) return [];
 
         this.log(LOG_LEVELS.INFO, `Creating vectors for ${leads.length} leads`);
-        const leadTexts = leads.map(lead => this.createLeadText(lead));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(leadTexts);
         
-        const vectors = leads.map((lead, index) => {
-            const metadata = {
-                type: 'lead',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                leadId: lead.id?.toString() || '',
-                title: lead.title || '',
-                value: lead.value?.amount ? lead.value.amount.toString() : '0',
-                currency: lead.value?.currency || '',
-                ownerId: typeof lead.owner_id === 'object' ? lead.owner_id?.value?.toString() || '' : lead.owner_id?.toString() || '',
-                personId: typeof lead.person_id === 'object' ? lead.person_id?.value?.toString() || '' : lead.person_id?.toString() || '',
-                organizationId: typeof lead.organization_id === 'object' ? lead.organization_id?.value?.toString() || '' : lead.organization_id?.toString() || '',
-                personName: lead.person_name || '',
-                organizationName: lead.organization_name || '',
-                expectedCloseDate: lead.expected_close_date || '',
-                addTime: lead.add_time || '',
-                updateTime: lead.update_time || '',
-                status: lead.status || '',
-                source: lead.source_name || '',
-                notes: lead.note || '',
-                labelIds: Array.isArray(lead.label_ids) ? lead.label_ids.join(', ') : '',
-                rawData: JSON.stringify(lead)
-            };
-
-            const doc = new Document({
-                pageContent: this.createLeadText(lead),
-                metadata
+        // Create LangChain Documents
+        const documents = leads.map(lead => {
+            const text = this.createLeadText(lead);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'lead',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    leadId: lead.id?.toString() || '',
+                    rawData: JSON.stringify(lead)
+                }
             });
-
-            return {
-                id: `pipedrive_lead_${lead.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
 
-        if (this.logLevel >= LOG_LEVELS.DEBUG) {
-            this.log(LOG_LEVELS.DEBUG, 'Sample vector:', {
-                id: vectors[0].id,
-                metadataKeys: Object.keys(vectors[0].metadata)
-            });
-        }
-
-        return vectors;
+        // Let LangChain handle the embedding and storage
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createLeadText(lead) {
@@ -342,47 +283,25 @@ class PipedriveIntegration {
     async createActivityVectors(activities, integration) {
         if (activities.length === 0) return [];
 
-        const activityTexts = activities.map(activity => this.createActivityText(activity));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(activityTexts);
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${activities.length} activities`);
         
-        return activities.map((activity, index) => {
-            const metadata = {
-                type: 'activity',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                activityId: activity.id?.toString() || '',
-                subject: activity.subject || '',
-                type: activity.type || '',
-                dueDate: activity.due_date || '',
-                dueTime: activity.due_time || '',
-                duration: activity.duration || '',
-                dealId: typeof activity.deal_id === 'object' ? activity.deal_id?.value?.toString() || '' : activity.deal_id?.toString() || '',
-                personId: typeof activity.person_id === 'object' ? activity.person_id?.value?.toString() || '' : activity.person_id?.toString() || '',
-                organizationId: typeof activity.org_id === 'object' ? activity.org_id?.value?.toString() || '' : activity.org_id?.toString() || '',
-                note: activity.note || '',
-                publicDescription: activity.public_description || '',
-                location: activity.location || '',
-                done: !!activity.done,
-                markedAsDoneTime: activity.marked_as_done_time || '',
-                activeFlag: !!activity.active_flag,
-                userId: typeof activity.user_id === 'object' ? activity.user_id?.value?.toString() || '' : activity.user_id?.toString() || '',
-                addTime: activity.add_time || '',
-                updateTime: activity.update_time || '',
-                rawData: JSON.stringify(activity)
-            };
-
-            const doc = new Document({
-                pageContent: this.createActivityText(activity),
-                metadata
+        const documents = activities.map(activity => {
+            const text = this.createActivityText(activity);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'activity',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    activityId: activity.id?.toString() || '',
+                    rawData: JSON.stringify(activity)
+                }
             });
-
-            return {
-                id: `pipedrive_activity_${activity.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
+
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createActivityText(activity) {
@@ -412,49 +331,25 @@ class PipedriveIntegration {
     async createPeopleVectors(people, integration) {
         if (people.length === 0) return [];
 
-        const peopleTexts = people.map(person => this.createPersonText(person));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(peopleTexts);
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${people.length} people`);
         
-        return people.map((person, index) => {
-            const metadata = {
-                type: 'person',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                personId: person.id?.toString() || '',
-                name: person.name || '',
-                firstName: person.first_name || '',
-                lastName: person.last_name || '',
-                email: Array.isArray(person.email) ? person.email.map(e => e.value).join(', ') : person.email || '',
-                phone: Array.isArray(person.phone) ? person.phone.map(p => p.value).join(', ') : person.phone || '',
-                organizationId: typeof person.org_id === 'object' ? person.org_id?.value?.toString() || '' : person.org_id?.toString() || '',
-                organizationName: person.org_name || '',
-                title: person.title || '',
-                visibleTo: person.visible_to || '',
-                ownerId: typeof person.owner_id === 'object' ? person.owner_id?.value?.toString() || '' : person.owner_id?.toString() || '',
-                labels: Array.isArray(person.labels) ? person.labels.join(', ') : '',
-                openDealsCount: (person.open_deals_count || '0').toString(),
-                wonDealsCount: (person.won_deals_count || '0').toString(),
-                lostDealsCount: (person.lost_deals_count || '0').toString(),
-                lastActivityDate: person.last_activity_date || '',
-                nextActivityDate: person.next_activity_date || '',
-                addTime: person.add_time || '',
-                updateTime: person.update_time || '',
-                activeFlag: !!person.active_flag,
-                rawData: JSON.stringify(person)
-            };
-
-            const doc = new Document({
-                pageContent: this.createPersonText(person),
-                metadata
+        const documents = people.map(person => {
+            const text = this.createPersonText(person);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'person',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    personId: person.id?.toString() || '',
+                    rawData: JSON.stringify(person)
+                }
             });
-
-            return {
-                id: `pipedrive_person_${person.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
+
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createPersonText(person) {
@@ -575,42 +470,25 @@ class PipedriveIntegration {
     async createNoteVectors(notes, integration) {
         if (notes.length === 0) return [];
 
-        const noteTexts = notes.map(note => this.createNoteText(note));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(noteTexts);
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${notes.length} notes`);
         
-        return notes.map((note, index) => {
-            const metadata = {
-                type: 'note',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                noteId: note.id?.toString() || '',
-                content: note.content || '',
-                dealId: typeof note.deal_id === 'object' ? note.deal_id?.value?.toString() || '' : note.deal_id?.toString() || '',
-                personId: typeof note.person_id === 'object' ? note.person_id?.value?.toString() || '' : note.person_id?.toString() || '',
-                organizationId: typeof note.org_id === 'object' ? note.org_id?.value?.toString() || '' : note.org_id?.toString() || '',
-                userId: typeof note.user_id === 'object' ? note.user_id?.value?.toString() || '' : note.user_id?.toString() || '',
-                addTime: note.add_time || '',
-                updateTime: note.update_time || '',
-                activeFlag: !!note.active_flag,
-                pinnedToDeal: !!note.pinned_to_deal_flag,
-                pinnedToOrganization: !!note.pinned_to_organization_flag,
-                pinnedToPerson: !!note.pinned_to_person_flag,
-                lastUpdateUserId: typeof note.last_update_user_id === 'object' ? note.last_update_user_id?.value?.toString() || '' : note.last_update_user_id?.toString() || '',
-                rawData: JSON.stringify(note)
-            };
-
-            const doc = new Document({
-                pageContent: this.createNoteText(note),
-                metadata
+        const documents = notes.map(note => {
+            const text = this.createNoteText(note);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'note',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    noteId: note.id?.toString() || '',
+                    rawData: JSON.stringify(note)
+                }
             });
-
-            return {
-                id: `pipedrive_note_${note.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
+
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createNoteText(note) {
@@ -641,49 +519,25 @@ class PipedriveIntegration {
     async createOrganizationVectors(organizations, integration) {
         if (organizations.length === 0) return [];
 
-        const organizationTexts = organizations.map(org => this.createOrganizationText(org));
-        const embeddings = await this.embeddingService.createBatchEmbeddings(organizationTexts);
+        this.log(LOG_LEVELS.INFO, `Creating vectors for ${organizations.length} organizations`);
         
-        return organizations.map((org, index) => {
-            const metadata = {
-                type: 'organization',
-                source: 'pipedrive',
-                customerId: integration.customer_id.toString(),
-                customerName: integration.customer_name,
-                organizationId: org.id?.toString() || '',
-                name: org.name || '',
-                address: org.address || '',
-                addressCountry: org.address_country || '',
-                addressLocality: org.address_locality || '',
-                addressPostalCode: org.address_postal_code || '',
-                ownerId: typeof org.owner_id === 'object' ? org.owner_id?.value?.toString() || '' : org.owner_id?.toString() || '',
-                activeFlag: !!org.active_flag,
-                visibleTo: org.visible_to || '',
-                email: Array.isArray(org.email) ? org.email.map(e => e.value).join(', ') : org.email || '',
-                phone: Array.isArray(org.phone) ? org.phone.map(p => p.value).join(', ') : org.phone || '',
-                webDomain: org.web_domain || '',
-                addTime: org.add_time || '',
-                updateTime: org.update_time || '',
-                labels: Array.isArray(org.labels) ? org.labels.join(', ') : '',
-                openDealsCount: (org.open_deals_count || '0').toString(),
-                wonDealsCount: (org.won_deals_count || '0').toString(),
-                lostDealsCount: (org.lost_deals_count || '0').toString(),
-                lastActivityDate: org.last_activity_date || '',
-                nextActivityDate: org.next_activity_date || '',
-                rawData: JSON.stringify(org)
-            };
-
-            const doc = new Document({
-                pageContent: this.createOrganizationText(org),
-                metadata
+        const documents = organizations.map(org => {
+            const text = this.createOrganizationText(org);
+            return new Document({
+                pageContent: text,
+                metadata: {
+                    type: 'organization',
+                    source: 'pipedrive',
+                    customerId: integration.customer_id.toString(),
+                    customerName: integration.customer_name,
+                    organizationId: org.id?.toString() || '',
+                    rawData: JSON.stringify(org)
+                }
             });
-
-            return {
-                id: `pipedrive_organization_${org.id}`,
-                values: embeddings[index],
-                metadata: doc.metadata
-            };
         });
+
+        await this.langchainPinecone.addDocuments(documents, integration.customer_id.toString());
+        return documents;
     }
 
     createOrganizationText(org) {
