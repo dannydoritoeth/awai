@@ -6,6 +6,7 @@ const EmbeddingService = require('./services/embeddingService');
 const dbHelper = require('./services/dbHelper');
 const yargs = require('yargs');
 const { LangchainPineconeService, LOG_LEVELS } = require('./services/langchainPineconeService');
+const SalesforceIntegration = require('./integrations/salesforce');
 
 // Parse command line arguments
 const argv = yargs
@@ -56,6 +57,13 @@ class Worker {
             this.testMode,
             this.limit
         );
+        this.salesforceIntegration = new SalesforceIntegration(
+            this.embeddingService,
+            this.pineconeService,
+            this.testMode,
+            this.limit,
+            logLevel
+        );
     }
 
     async processCustomerIntegrations() {
@@ -99,6 +107,8 @@ class Worker {
                         console.log('Starting Agentbox integration processing');
                         await this.agentboxIntegration.process(integration);
                         console.log('Completed Agentbox integration processing');
+                    } else if (integration.integration_type === 'salesforce') {
+                        await this.salesforceIntegration.process(integration);
                     }
                 } catch (error) {
                     console.error(`Error processing ${integration.integration_type} integration:`, error);

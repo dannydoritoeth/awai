@@ -1,10 +1,10 @@
 const BaseIntegration = require('../baseIntegration');
-const AgentboxClient = require('./client');
+const SalesforceClient = require('./client');
 const { entityTypes } = require('./entityTypes');
 
-class AgentboxIntegration extends BaseIntegration {
+class SalesforceIntegration extends BaseIntegration {
     createClient(integration) {
-        return new AgentboxClient(
+        return new SalesforceClient(
             integration.connection_settings,
             this.testMode,
             this.testLimit
@@ -16,4 +16,4 @@ class AgentboxIntegration extends BaseIntegration {
     }
 }
 
-module.exports = AgentboxIntegration; 
+module.exports = SalesforceIntegration; 
