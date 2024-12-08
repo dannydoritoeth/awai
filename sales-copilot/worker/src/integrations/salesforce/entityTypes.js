@@ -1,69 +1,60 @@
 const SalesforceDocumentCreator = require('./documentCreator');
+const BaseEntityProcessor = require('../baseEntityProcessor');
+const BaseMetadataCreator = require('../baseMetadataCreator');
 
-const createMetadata = (entity, integration, type) => ({
-    customerId: integration.customer_id.toString(),
-    customerName: integration.customer_name,
-    entityId: entity.Id,
-    type,
-    source: 'salesforce',
-    createdDate: entity.CreatedDate,
-    lastModifiedDate: entity.LastModifiedDate
-});
-
-const createLeadMetadata = (lead, integration) => ({
-    ...createMetadata(lead, integration, 'lead'),
-    leadId: lead.Id,
-    company: lead.Company,
-    status: lead.Status,
-    isConverted: lead.IsConverted,
-    convertedAccountId: lead.ConvertedAccountId,
-    convertedContactId: lead.ConvertedContactId,
-    convertedOpportunityId: lead.ConvertedOpportunityId,
-    convertedDate: lead.ConvertedDate,
-    lastActivityDate: lead.LastActivityDate
-});
-
-const processLeads = async (client, integration, langchainPinecone, logger) => {
-    logger.info('Processing Salesforce leads...');
-    
-    const leads = await client.getAllLeads();
-    if (leads.length === 0) {
-        logger.info('No leads found to process');
-        return 0;
+class SalesforceMetadataCreator extends BaseMetadataCreator {
+    static getSource() {
+        return 'salesforce';
     }
 
-    logger.info(`Creating documents for ${leads.length} leads`);
-    
-    const documents = leads.map(lead => 
-        SalesforceDocumentCreator.createDocument(
-            lead, 
-            'lead',
-            createLeadMetadata(lead, integration)
-        )
-    );
+    static createOpportunityMetadata(opportunity, integration) {
+        return {
+            ...this.createBaseMetadata(opportunity, integration, 'opportunity'),
+            opportunityId: opportunity.Id,
+            accountId: opportunity.AccountId,
+            ownerId: opportunity.OwnerId,
+            campaignId: opportunity.CampaignId,
+            amount: opportunity.Amount?.toString(),
+            probability: opportunity.Probability?.toString(),
+            stageName: opportunity.StageName,
+            isClosed: opportunity.IsClosed,
+            isWon: opportunity.IsWon,
+            fiscalYear: opportunity.FiscalYear?.toString(),
+            fiscalQuarter: opportunity.FiscalQuarter?.toString(),
+            lastActivityDate: opportunity.LastActivityDate,
+            lastStageChangeDate: opportunity.LastStageChangeDate
+        };
+    }
+}
 
-    logger.info(`Storing ${documents.length} lead documents in vector database`);
-    
-    await langchainPinecone.addDocuments(
-        documents,
-        integration.customer_id.toString()
+const processOpportunities = async (client, integration, langchainPinecone, logger) => {
+    return await BaseEntityProcessor.processEntities(
+        'opportunities',
+        client.getAllOpportunities.bind(client),
+        (opportunities, integration) => opportunities.map(opportunity => 
+            SalesforceDocumentCreator.createDocument(
+                opportunity,
+                'opportunity',
+                SalesforceMetadataCreator.createOpportunityMetadata(opportunity, integration)
+            )
+        ),
+        client,
+        integration,
+        langchainPinecone,
+        logger
     );
-
-    logger.info(`Successfully processed ${leads.length} leads`);
-    return leads.length;
 };
-
-// Add other entity processors here...
 
 const entityTypes = [
     { 
-        name: 'leads',
-        process: processLeads
-    }
-    // Add other entity types as needed
+        name: 'opportunities',
+        process: processOpportunities
+    },
+    // ... other entity types ...
 ];
 
 module.exports = {
     entityTypes,
-    processLeads
+    processOpportunities,
+    SalesforceMetadataCreator
 }; 

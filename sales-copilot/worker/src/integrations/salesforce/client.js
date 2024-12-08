@@ -61,11 +61,38 @@ class SalesforceClient {
         try {
             const limit = this.testMode ? this.testLimit : 200;
             const opportunities = await this._get('/query', {
-                q: `SELECT Id, Name, AccountId, Amount, CloseDate, Description,
-                    ExpectedRevenue, LeadSource, NextStep, Probability, StageName, Type,
-                    CreatedDate, LastModifiedDate 
-                    FROM Opportunity LIMIT ${limit}`
+                q: `SELECT 
+                    Id,
+                    Name,
+                    AccountId,
+                    Amount,
+                    CloseDate,
+                    Description,
+                    ExpectedRevenue,
+                    ForecastCategory,
+                    HasOpenActivity,
+                    HasOverdueTask,
+                    IsClosed,
+                    IsWon,
+                    LeadSource,
+                    NextStep,
+                    Probability,
+                    StageName,
+                    Type,
+                    OwnerId,
+                    CampaignId,
+                    LastActivityDate,
+                    LastStageChangeDate,
+                    FiscalYear,
+                    FiscalQuarter,
+                    CreatedDate,
+                    LastModifiedDate
+                    FROM Opportunity 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
             });
+            
+            console.log(`Retrieved ${opportunities.records.length} opportunities from Salesforce`);
             return opportunities.records;
         } catch (error) {
             console.error('Error fetching opportunities:', error);
