@@ -45,11 +45,41 @@ class SalesforceClient {
         try {
             const limit = this.testMode ? this.testLimit : 200;
             const accounts = await this._get('/query', {
-                q: `SELECT Id, Name, Type, Industry, Description, BillingAddress, 
-                    Phone, Website, AnnualRevenue, NumberOfEmployees, 
-                    CreatedDate, LastModifiedDate 
-                    FROM Account LIMIT ${limit}`
+                q: `SELECT 
+                    Id,
+                    Name,
+                    Type,
+                    Industry,
+                    Description,
+                    BillingStreet,
+                    BillingCity,
+                    BillingState,
+                    BillingPostalCode,
+                    BillingCountry,
+                    ShippingStreet,
+                    ShippingCity,
+                    ShippingState,
+                    ShippingPostalCode,
+                    ShippingCountry,
+                    Phone,
+                    Website,
+                    NumberOfEmployees,
+                    AnnualRevenue,
+                    Rating,
+                    CustomerPriority__c,
+                    SLA__c,
+                    Active__c,
+                    ParentId,
+                    OwnerId,
+                    LastActivityDate,
+                    CreatedDate,
+                    LastModifiedDate
+                    FROM Account 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
             });
+            
+            console.log(`Retrieved ${accounts.records.length} accounts from Salesforce`);
             return accounts.records;
         } catch (error) {
             console.error('Error fetching accounts:', error);
@@ -104,11 +134,43 @@ class SalesforceClient {
         try {
             const limit = this.testMode ? this.testLimit : 200;
             const contacts = await this._get('/query', {
-                q: `SELECT Id, AccountId, FirstName, LastName, Email, Phone, 
-                    Title, Department, Description, MailingAddress,
-                    CreatedDate, LastModifiedDate 
-                    FROM Contact LIMIT ${limit}`
+                q: `SELECT 
+                    Id,
+                    AccountId,
+                    FirstName,
+                    LastName,
+                    Title,
+                    Department,
+                    Email,
+                    Phone,
+                    MobilePhone,
+                    Description,
+                    MailingStreet,
+                    MailingCity,
+                    MailingState,
+                    MailingPostalCode,
+                    MailingCountry,
+                    OtherStreet,
+                    OtherCity,
+                    OtherState,
+                    OtherPostalCode,
+                    OtherCountry,
+                    Birthdate,
+                    LeadSource,
+                    Level__c,
+                    Languages__c,
+                    OwnerId,
+                    HasOptedOutOfEmail,
+                    DoNotCall,
+                    LastActivityDate,
+                    CreatedDate,
+                    LastModifiedDate
+                    FROM Contact 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
             });
+            
+            console.log(`Retrieved ${contacts.records.length} contacts from Salesforce`);
             return contacts.records;
         } catch (error) {
             console.error('Error fetching contacts:', error);
