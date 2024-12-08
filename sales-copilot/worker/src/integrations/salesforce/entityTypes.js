@@ -62,6 +62,49 @@ class SalesforceMetadataCreator extends BaseMetadataCreator {
             lastActivityDate: contact.LastActivityDate
         };
     }
+
+    static createActivityMetadata(activity, integration) {
+        const baseMetadata = {
+            ...this.createBaseMetadata(activity, integration, 'activity'),
+            activityId: activity.Id,
+            activityType: activity.activityType,
+            subject: activity.Subject,
+            whoId: activity.WhoId,
+            whatId: activity.WhatId,
+            ownerId: activity.OwnerId,
+            accountId: activity.AccountId,
+            type: activity.Type
+        };
+
+        if (activity.activityType === 'Task') {
+            return {
+                ...baseMetadata,
+                status: activity.Status,
+                priority: activity.Priority,
+                isHighPriority: activity.IsHighPriority,
+                isClosed: activity.IsClosed,
+                callType: activity.CallType,
+                callDuration: activity.CallDurationInSeconds,
+                activityDate: activity.ActivityDate,
+                reminderDateTime: activity.ReminderDateTime,
+                isReminderSet: activity.IsReminderSet
+            };
+        } else {
+            return {
+                ...baseMetadata,
+                location: activity.Location,
+                startDateTime: activity.StartDateTime,
+                endDateTime: activity.EndDateTime,
+                isAllDayEvent: activity.IsAllDayEvent,
+                isPrivate: activity.IsPrivate,
+                showAs: activity.ShowAs,
+                duration: activity.Duration,
+                isGroupEvent: activity.IsGroupEvent,
+                groupEventType: activity.GroupEventType,
+                isRecurrence: activity.IsRecurrence
+            };
+        }
+    }
 }
 
 const processOpportunities = async (client, integration, langchainPinecone, logger) => {
@@ -118,6 +161,24 @@ const processContacts = async (client, integration, langchainPinecone, logger) =
     );
 };
 
+const processActivities = async (client, integration, langchainPinecone, logger) => {
+    return await BaseEntityProcessor.processEntities(
+        'activities',
+        client.getAllActivities.bind(client),
+        (activities, integration) => activities.map(activity => 
+            SalesforceDocumentCreator.createDocument(
+                activity,
+                'activity',
+                SalesforceMetadataCreator.createActivityMetadata(activity, integration)
+            )
+        ),
+        client,
+        integration,
+        langchainPinecone,
+        logger
+    );
+};
+
 const entityTypes = [
     { 
         name: 'accounts',
@@ -130,6 +191,10 @@ const entityTypes = [
     { 
         name: 'opportunities',
         process: processOpportunities
+    },
+    { 
+        name: 'activities',
+        process: processActivities
     }
 ];
 
@@ -138,5 +203,6 @@ module.exports = {
     processAccounts,
     processContacts,
     processOpportunities,
+    processActivities,
     SalesforceMetadataCreator
 }; 

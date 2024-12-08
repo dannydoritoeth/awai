@@ -255,6 +255,216 @@ class SalesforceClient {
             throw error;
         }
     }
+
+    async getAllActivities() {
+        try {
+            const [tasks, events] = await Promise.all([
+                this.getAllTasks(),
+                this.getAllEvents()
+            ]);
+            
+            console.log(`Retrieved ${tasks.length + events.length} total activities from Salesforce`);
+            return [...tasks, ...events];
+        } catch (error) {
+            console.error('Error fetching activities:', error);
+            throw error;
+        }
+    }
+
+    async getAllTasks() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const tasks = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    Subject,
+                    Description,
+                    Status,
+                    Priority,
+                    ActivityDate,
+                    WhoId,
+                    WhatId,
+                    OwnerId,
+                    Type,
+                    IsHighPriority,
+                    IsClosed,
+                    CallDurationInSeconds,
+                    CallType,
+                    CallDisposition,
+                    CallObject,
+                    ReminderDateTime,
+                    IsReminderSet,
+                    AccountId,
+                    RecurrenceType,
+                    RecurrenceInterval,
+                    RecurrenceEndDateOnly,
+                    CreatedDate,
+                    LastModifiedDate
+                    FROM Task 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            console.log(`Retrieved ${tasks.records.length} tasks from Salesforce`);
+            return tasks.records.map(task => ({ ...task, activityType: 'Task' }));
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+            throw error;
+        }
+    }
+
+    async getAllEvents() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const events = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    Subject,
+                    Description,
+                    Location,
+                    StartDateTime,
+                    EndDateTime,
+                    ActivityDate,
+                    WhoId,
+                    WhatId,
+                    OwnerId,
+                    Type,
+                    IsAllDayEvent,
+                    IsPrivate,
+                    ShowAs,
+                    Duration,
+                    IsGroupEvent,
+                    GroupEventType,
+                    AccountId,
+                    RecurrenceType,
+                    RecurrenceInterval,
+                    RecurrenceEndDateOnly,
+                    IsRecurrence,
+                    CreatedDate,
+                    LastModifiedDate
+                    FROM Event 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            console.log(`Retrieved ${events.records.length} events from Salesforce`);
+            return events.records.map(event => ({ ...event, activityType: 'Event' }));
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            throw error;
+        }
+    }
+
+    async getLeadConversionHistory() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const conversions = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    LeadId,
+                    ConvertedDate,
+                    ConvertedAccountId,
+                    ConvertedContactId,
+                    ConvertedOpportunityId,
+                    CreatedById,
+                    IsDeleted,
+                    CreatedDate,
+                    SystemModstamp
+                    FROM LeadHistory 
+                    WHERE Field = 'converted'
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            console.log(`Retrieved ${conversions.records.length} lead conversion records`);
+            return conversions.records;
+        } catch (error) {
+            console.error('Error fetching lead conversion history:', error);
+            throw error;
+        }
+    }
+
+    async getLeadScoreHistory() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const scores = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    LeadId,
+                    Score,
+                    Grade,
+                    Reason,
+                    ModelId,
+                    CreatedDate
+                    FROM LeadScoreHistory__c 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            return scores.records;
+        } catch (error) {
+            console.error('Error fetching lead scores:', error);
+            throw error;
+        }
+    }
+
+    async getOpportunityHistory() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const history = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    OpportunityId,
+                    Field,
+                    OldValue,
+                    NewValue,
+                    CreatedDate,
+                    CreatedById,
+                    StageName,
+                    Amount,
+                    ExpectedRevenue,
+                    Probability,
+                    ForecastCategory
+                    FROM OpportunityHistory 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            console.log(`Retrieved ${history.records.length} opportunity history records`);
+            return history.records;
+        } catch (error) {
+            console.error('Error fetching opportunity history:', error);
+            throw error;
+        }
+    }
+
+    async getCampaignInfluence() {
+        try {
+            const limit = this.testMode ? this.testLimit : 200;
+            const influence = await this._get('/query', {
+                q: `SELECT 
+                    Id,
+                    CampaignId,
+                    OpportunityId,
+                    ContactId,
+                    ModelId,
+                    Influence,
+                    Revenue,
+                    FirstTouchDate,
+                    LastTouchDate,
+                    CreatedDate
+                    FROM CampaignInfluence 
+                    ORDER BY CreatedDate DESC 
+                    LIMIT ${limit}`
+            });
+            
+            console.log(`Retrieved ${influence.records.length} campaign influence records`);
+            return influence.records;
+        } catch (error) {
+            console.error('Error fetching campaign influence:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = SalesforceClient; 

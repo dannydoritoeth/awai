@@ -13,6 +13,8 @@ class SalesforceDocumentCreator extends BaseDocumentCreator {
                 return this.createContactText(entity);
             case 'opportunity':
                 return this.createOpportunityText(entity);
+            case 'activity':
+                return this.createActivityText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -105,6 +107,58 @@ class SalesforceDocumentCreator extends BaseDocumentCreator {
             contact.HasOptedOutOfEmail ? 'Has Opted Out of Email' : null,
             contact.DoNotCall ? 'Do Not Call' : null,
             contact.LastActivityDate ? `Last Activity: ${contact.LastActivityDate}` : null
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static createActivityText(activity) {
+        if (activity.activityType === 'Task') {
+            return this.createTaskText(activity);
+        } else if (activity.activityType === 'Event') {
+            return this.createEventText(activity);
+        }
+        throw new Error(`Unknown activity type: ${activity.activityType}`);
+    }
+
+    static createTaskText(task) {
+        const parts = [
+            `Type: Task`,
+            `Subject: ${task.Subject}`,
+            task.Description ? `Description: ${task.Description}` : null,
+            `Status: ${task.Status}`,
+            `Priority: ${task.Priority}`,
+            task.ActivityDate ? `Due Date: ${task.ActivityDate}` : null,
+            task.IsHighPriority ? 'High Priority' : null,
+            `Closed: ${task.IsClosed ? 'Yes' : 'No'}`,
+            task.CallType ? `Call Type: ${task.CallType}` : null,
+            task.CallDurationInSeconds ? `Call Duration: ${Math.floor(task.CallDurationInSeconds / 60)} minutes` : null,
+            task.CallDisposition ? `Call Disposition: ${task.CallDisposition}` : null,
+            task.ReminderDateTime ? `Reminder: ${task.ReminderDateTime}` : null,
+            task.RecurrenceType ? `Recurrence: ${task.RecurrenceType}` : null,
+            task.RecurrenceInterval ? `Recurrence Interval: ${task.RecurrenceInterval}` : null,
+            task.RecurrenceEndDateOnly ? `Recurrence End: ${task.RecurrenceEndDateOnly}` : null
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static createEventText(event) {
+        const parts = [
+            `Type: Event`,
+            `Subject: ${event.Subject}`,
+            event.Description ? `Description: ${event.Description}` : null,
+            event.Location ? `Location: ${event.Location}` : null,
+            event.StartDateTime ? `Start: ${event.StartDateTime}` : null,
+            event.EndDateTime ? `End: ${event.EndDateTime}` : null,
+            event.IsAllDayEvent ? 'All Day Event' : null,
+            event.ShowAs ? `Show As: ${event.ShowAs}` : null,
+            event.Duration ? `Duration: ${event.Duration} minutes` : null,
+            event.IsGroupEvent ? `Group Event: ${event.GroupEventType}` : null,
+            event.IsRecurrence ? 'Recurring Event' : null,
+            event.RecurrenceType ? `Recurrence: ${event.RecurrenceType}` : null,
+            event.RecurrenceInterval ? `Recurrence Interval: ${event.RecurrenceInterval}` : null,
+            event.RecurrenceEndDateOnly ? `Recurrence End: ${event.RecurrenceEndDateOnly}` : null
         ];
 
         return parts.filter(Boolean).join('\n');
