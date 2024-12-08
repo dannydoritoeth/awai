@@ -1,89 +1,194 @@
 const { BaseMetadataProcessor } = require('../baseMetadataProcessor');
 
-class OpportunityMetadataProcessor extends BaseMetadataProcessor {
-    processMetadata(record) {
+class RelationshipMetadataProcessor extends BaseMetadataProcessor {
+    processMetadata(record, relatedRecords = {}) {
+        const {
+            opportunities = [],
+            contacts = [],
+            accounts = [],
+            campaigns = []
+        } = relatedRecords;
+
         return {
             ...record,
-            // Normalize numerical values
-            amount: parseFloat(record.Amount) || 0,
-            probability: parseFloat(record.Probability) || 0,
-            expectedRevenue: parseFloat(record.ExpectedRevenue) || 0,
+            // Account relationship strength
+            accountStrength: this._calculateAccountStrength(record, accounts),
             
-            // Calculate derived metrics
-            daysInStage: this._calculateDaysInStage(record),
-            stageVelocity: this._calculateStageVelocity(record),
+            // Contact engagement metrics
+            contactEngagement: this._calculateContactEngagement(record, contacts),
             
-            // Categorize stages for pattern matching
-            stageCategory: this._categorizeStage(record.StageName),
+            // Deal velocity patterns
+            dealVelocityPatterns: this._analyzeDealVelocity(record, opportunities),
             
-            // Add time-based features
-            createdMonth: new Date(record.CreatedDate).getMonth() + 1,
-            createdQuarter: Math.floor(new Date(record.CreatedDate).getMonth() / 3) + 1,
-            dayOfWeek: new Date(record.CreatedDate).getDay()
+            // Marketing influence patterns
+            marketingPatterns: this._analyzeMarketingInfluence(record, campaigns),
+            
+            // Relationship network metrics
+            networkStrength: this._calculateNetworkStrength(record, relatedRecords)
         };
     }
 
-    _calculateDaysInStage(record) {
-        if (!record.CreatedDate) return 0;
-        const created = new Date(record.CreatedDate);
-        const now = new Date();
-        return Math.floor((now - created) / (1000 * 60 * 60 * 24));
-    }
+    _calculateAccountStrength(record, accounts) {
+        const account = accounts.find(a => a.Id === record.AccountId);
+        if (!account) return 0;
 
-    _calculateStageVelocity(record) {
-        const daysInStage = this._calculateDaysInStage(record);
-        return daysInStage > 0 ? (record.Probability / daysInStage) : 0;
-    }
-
-    _categorizeStage(stageName) {
-        const stageCategories = {
-            'Prospecting': 'early',
-            'Qualification': 'early',
-            'Needs Analysis': 'early',
-            'Value Proposition': 'middle',
-            'Id. Decision Makers': 'middle',
-            'Proposal/Price Quote': 'late',
-            'Negotiation/Review': 'late',
-            'Closed Won': 'won',
-            'Closed Lost': 'lost'
+        return {
+            lifetime_value: this._calculateLifetimeValue(account),
+            relationship_duration: this._calculateRelationshipDuration(account),
+            product_penetration: this._calculateProductPenetration(account),
+            engagement_level: this._calculateEngagementLevel(account)
         };
-        return stageCategories[stageName] || 'unknown';
+    }
+
+    _calculateContactEngagement(record, contacts) {
+        const relevantContacts = contacts.filter(c => c.AccountId === record.AccountId);
+        
+        return {
+            decision_makers: this._identifyDecisionMakers(relevantContacts),
+            engagement_frequency: this._calculateEngagementFrequency(relevantContacts),
+            last_engagement: this._getLastEngagement(relevantContacts),
+            sentiment_score: this._calculateSentiment(relevantContacts)
+        };
+    }
+
+    _analyzeDealVelocity(record, opportunities) {
+        const accountOpportunities = opportunities.filter(o => o.AccountId === record.AccountId);
+        
+        return {
+            avg_deal_cycle: this._calculateAvgDealCycle(accountOpportunities),
+            stage_conversion_rates: this._calculateStageConversion(accountOpportunities),
+            win_rate: this._calculateWinRate(accountOpportunities),
+            deal_size_trend: this._analyzeDealSizeTrend(accountOpportunities)
+        };
+    }
+
+    _analyzeMarketingInfluence(record, campaigns) {
+        return {
+            campaign_effectiveness: this._calculateCampaignEffectiveness(campaigns),
+            channel_preference: this._determineChannelPreference(campaigns),
+            content_engagement: this._analyzeContentEngagement(campaigns),
+            response_rates: this._calculateResponseRates(campaigns)
+        };
+    }
+
+    _calculateNetworkStrength(record, relatedRecords) {
+        return {
+            relationship_depth: this._calculateRelationshipDepth(record, relatedRecords),
+            cross_sell_potential: this._calculateCrossSellPotential(record, relatedRecords),
+            influence_score: this._calculateInfluenceScore(record, relatedRecords)
+        };
+    }
+}
+
+class OpportunityMetadataProcessor extends BaseMetadataProcessor {
+    processMetadata(record) {
+        const baseMetadata = super.processMetadata(record);
+        
+        return {
+            ...baseMetadata,
+            // Enhanced prediction features
+            winPredictionFactors: this._calculateWinPredictionFactors(record),
+            
+            // Advanced velocity metrics
+            velocityMetrics: this._calculateVelocityMetrics(record),
+            
+            // Competitive analysis
+            competitivePosition: this._analyzeCompetitivePosition(record),
+            
+            // Risk assessment
+            riskFactors: this._assessRiskFactors(record),
+            
+            // Deal complexity
+            complexityScore: this._calculateComplexityScore(record)
+        };
+    }
+
+    _calculateWinPredictionFactors(record) {
+        return {
+            historical_win_rate: this._getHistoricalWinRate(record),
+            deal_size_factor: this._analyzeDealSize(record),
+            stage_duration_impact: this._analyzeStageProgress(record),
+            engagement_quality: this._assessEngagementQuality(record),
+            competitive_factors: this._analyzeCompetitiveLandscape(record)
+        };
+    }
+
+    _calculateVelocityMetrics(record) {
+        return {
+            stage_velocity: this._calculateStageVelocity(record),
+            momentum_score: this._calculateMomentumScore(record),
+            acceleration_rate: this._calculateAccelerationRate(record),
+            bottleneck_risk: this._identifyBottlenecks(record)
+        };
+    }
+
+    _analyzeCompetitivePosition(record) {
+        return {
+            strength_vs_competitors: this._assessCompetitiveStrength(record),
+            differentiation_score: this._calculateDifferentiation(record),
+            value_proposition_alignment: this._assessValueAlignment(record)
+        };
+    }
+
+    _assessRiskFactors(record) {
+        return {
+            deal_size_risk: this._assessDealSizeRisk(record),
+            stakeholder_risk: this._assessStakeholderRisk(record),
+            competitive_risk: this._assessCompetitiveRisk(record),
+            timeline_risk: this._assessTimelineRisk(record),
+            budget_risk: this._assessBudgetRisk(record)
+        };
+    }
+
+    _calculateComplexityScore(record) {
+        return {
+            stakeholder_complexity: this._assessStakeholderComplexity(record),
+            technical_complexity: this._assessTechnicalComplexity(record),
+            implementation_complexity: this._assessImplementationComplexity(record),
+            integration_complexity: this._assessIntegrationComplexity(record)
+        };
     }
 }
 
 class LeadScoreMetadataProcessor extends BaseMetadataProcessor {
     processMetadata(record) {
+        const baseMetadata = super.processMetadata(record);
+        
         return {
-            ...record,
-            // Normalize scores
-            normalizedScore: parseFloat(record.Score) / 100,
+            ...baseMetadata,
+            // Enhanced behavioral scoring
+            behavioralScore: this._calculateBehavioralScore(record),
             
-            // Convert grade to numerical value
-            gradeValue: this._convertGradeToValue(record.Grade),
+            // Firmographic scoring
+            firmographicScore: this._calculateFirmographicScore(record),
             
-            // Categorize reasons for pattern matching
-            reasonCategory: this._categorizeReason(record.Reason),
+            // Intent signals
+            intentSignals: this._analyzeIntentSignals(record),
             
-            // Add time-based features
-            createdMonth: new Date(record.CreatedDate).getMonth() + 1,
-            createdQuarter: Math.floor(new Date(record.CreatedDate).getMonth() / 3) + 1
+            // Engagement patterns
+            engagementPatterns: this._analyzeEngagementPatterns(record),
+            
+            // Conversion probability
+            conversionProbability: this._calculateConversionProbability(record)
         };
     }
 
-    _convertGradeToValue(grade) {
-        const gradeValues = { 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0 };
-        return gradeValues[grade] || 0;
+    _calculateBehavioralScore(record) {
+        return {
+            website_engagement: this._analyzeWebsiteEngagement(record),
+            content_consumption: this._analyzeContentConsumption(record),
+            email_engagement: this._analyzeEmailEngagement(record),
+            social_engagement: this._analyzeSocialEngagement(record)
+        };
     }
 
-    _categorizeReason(reason) {
-        const categories = {
-            'High Engagement': 'engagement',
-            'Company Size': 'firmographic',
-            'Industry Match': 'firmographic',
-            'Budget Confirmed': 'qualification',
-            'Multiple Stakeholders': 'engagement'
+    _calculateFirmographicScore(record) {
+        return {
+            industry_fit: this._calculateIndustryFit(record),
+            company_size_fit: this._calculateCompanySizeFit(record),
+            technology_fit: this._calculateTechnologyFit(record),
+            budget_fit: this._calculateBudgetFit(record)
         };
-        return categories[reason] || 'other';
     }
 }
 
@@ -144,6 +249,7 @@ class CampaignInfluenceMetadataProcessor extends BaseMetadataProcessor {
 }
 
 module.exports = {
+    RelationshipMetadataProcessor,
     OpportunityMetadataProcessor,
     LeadScoreMetadataProcessor,
     CampaignInfluenceMetadataProcessor

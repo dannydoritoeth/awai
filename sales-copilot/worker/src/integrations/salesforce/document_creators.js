@@ -1,6 +1,7 @@
 const { BaseDocumentCreator } = require('../baseDocumentCreator');
 const { Document } = require('langchain/document');
 const {
+    RelationshipMetadataProcessor,
     OpportunityMetadataProcessor,
     LeadScoreMetadataProcessor,
     CampaignInfluenceMetadataProcessor
@@ -10,34 +11,85 @@ class OpportunityHistoryDocumentCreator extends BaseDocumentCreator {
     constructor() {
         super('opportunity_history');
         this.metadataProcessor = new OpportunityMetadataProcessor();
+        this.relationshipProcessor = new RelationshipMetadataProcessor();
     }
 
-    async createDocuments(records) {
+    async createDocuments(records, relatedRecords) {
         return records.map(record => {
             const metadata = this.metadataProcessor.processMetadata(record);
+            const relationshipData = this.relationshipProcessor.processMetadata(record, relatedRecords);
             
-            // Enhanced content for AI analysis
-            const content = `Opportunity ${record.OpportunityId} analysis:
-                Stage Change: ${record.Field === 'StageName' ? `Changed from ${record.OldValue} to ${record.NewValue}` : 'No stage change'}
-                Current Stage: ${record.StageName} (Category: ${metadata.stageCategory})
-                Days in Current Stage: ${metadata.daysInStage}
-                Stage Velocity: ${metadata.stageVelocity.toFixed(2)}
+            const content = `Opportunity ${record.OpportunityId} comprehensive analysis:
+                Stage Analysis:
+                - Current Stage: ${record.StageName} (${metadata.velocityMetrics.stage_velocity.toFixed(2)} velocity)
+                - Momentum Score: ${metadata.velocityMetrics.momentum_score.toFixed(2)}
+                - Bottleneck Risk: ${metadata.velocityMetrics.bottleneck_risk}
                 
-                Financial Metrics:
-                - Amount: ${metadata.amount}
-                - Expected Revenue: ${metadata.expectedRevenue}
-                - Probability: ${metadata.probability}%
+                Win Prediction:
+                - Historical Win Rate: ${metadata.winPredictionFactors.historical_win_rate}%
+                - Deal Size Impact: ${metadata.winPredictionFactors.deal_size_factor}
+                - Engagement Quality: ${metadata.winPredictionFactors.engagement_quality}
                 
-                Temporal Analysis:
-                - Created in Q${metadata.createdQuarter}
-                - Month: ${metadata.createdMonth}
-                - Day of Week: ${metadata.dayOfWeek}
+                Risk Assessment:
+                - Overall Risk Level: ${this._calculateOverallRisk(metadata.riskFactors)}
+                - Key Risks: ${this._formatKeyRisks(metadata.riskFactors)}
                 
-                This update was made by ${record.CreatedById} on ${record.CreatedDate}.
-                The opportunity is currently in the ${metadata.stageCategory} stage of the sales cycle.`;
+                Competitive Position:
+                - Strength vs Competitors: ${metadata.competitivePosition.strength_vs_competitors}
+                - Value Proposition Alignment: ${metadata.competitivePosition.value_proposition_alignment}
+                
+                Relationship Strength:
+                - Account Lifetime Value: ${relationshipData.accountStrength.lifetime_value}
+                - Decision Maker Engagement: ${relationshipData.contactEngagement.decision_makers.length} key stakeholders
+                - Network Influence Score: ${relationshipData.networkStrength.influence_score}
+                
+                Deal Complexity:
+                - Stakeholder Complexity: ${metadata.complexityScore.stakeholder_complexity}
+                - Technical Complexity: ${metadata.complexityScore.technical_complexity}
+                - Implementation Risk: ${metadata.complexityScore.implementation_complexity}
+                
+                Next Best Actions:
+                ${this._generateNextBestActions(metadata, relationshipData)}`;
 
-            return new Document({ pageContent: content, metadata });
+            return new Document({
+                pageContent: content,
+                metadata: {
+                    ...metadata,
+                    relationships: relationshipData
+                }
+            });
         });
+    }
+
+    _calculateOverallRisk(riskFactors) {
+        const riskScores = Object.values(riskFactors);
+        const avgRisk = riskScores.reduce((a, b) => a + b, 0) / riskScores.length;
+        return avgRisk > 0.7 ? 'High' : avgRisk > 0.4 ? 'Medium' : 'Low';
+    }
+
+    _formatKeyRisks(riskFactors) {
+        return Object.entries(riskFactors)
+            .filter(([_, score]) => score > 0.6)
+            .map(([risk]) => risk.replace('_risk', ''))
+            .join(', ');
+    }
+
+    _generateNextBestActions(metadata, relationshipData) {
+        const actions = [];
+        
+        if (metadata.velocityMetrics.bottleneck_risk > 0.6) {
+            actions.push('- Escalate to sales management for bottleneck resolution');
+        }
+        
+        if (relationshipData.contactEngagement.decision_makers.length < 2) {
+            actions.push('- Identify and engage additional decision makers');
+        }
+        
+        if (metadata.competitivePosition.strength_vs_competitors < 0.5) {
+            actions.push('- Strengthen competitive differentiation');
+        }
+        
+        return actions.join('\n');
     }
 }
 
@@ -51,24 +103,73 @@ class LeadScoreDocumentCreator extends BaseDocumentCreator {
         return records.map(record => {
             const metadata = this.metadataProcessor.processMetadata(record);
             
-            const content = `Lead ${record.LeadId} scoring analysis:
-                Score: ${metadata.normalizedScore * 100}% (Grade: ${record.Grade}, Value: ${metadata.gradeValue})
-                Category: ${metadata.reasonCategory}
+            const content = `Lead ${record.LeadId} comprehensive scoring analysis:
+                Overall Scores:
+                - Behavioral Score: ${this._formatScore(metadata.behavioralScore)}
+                - Firmographic Score: ${this._formatScore(metadata.firmographicScore)}
+                - Conversion Probability: ${(metadata.conversionProbability * 100).toFixed(1)}%
                 
-                Scoring Factors:
-                - Primary Reason: ${record.Reason}
-                - Category: ${metadata.reasonCategory}
+                Engagement Analysis:
+                - Website Activity: ${metadata.behavioralScore.website_engagement}
+                - Content Consumption: ${metadata.behavioralScore.content_consumption}
+                - Email Engagement: ${metadata.behavioralScore.email_engagement}
+                - Social Engagement: ${metadata.behavioralScore.social_engagement}
                 
-                Temporal Analysis:
-                - Scored in Q${metadata.createdQuarter}
-                - Month: ${metadata.createdMonth}
+                Company Fit:
+                - Industry Alignment: ${metadata.firmographicScore.industry_fit}
+                - Company Size Fit: ${metadata.firmographicScore.company_size_fit}
+                - Technology Stack: ${metadata.firmographicScore.technology_fit}
+                - Budget Alignment: ${metadata.firmographicScore.budget_fit}
                 
-                Model ${record.ModelId} generated this score on ${record.CreatedDate}.
-                The lead's quality is categorized as ${metadata.gradeValue >= 3 ? 'high' : metadata.gradeValue >= 2 ? 'medium' : 'low'} 
-                based on the grading scale.`;
+                Intent Signals:
+                ${this._formatIntentSignals(metadata.intentSignals)}
+                
+                Engagement Patterns:
+                ${this._formatEngagementPatterns(metadata.engagementPatterns)}
+                
+                Recommended Actions:
+                ${this._generateRecommendations(metadata)}`;
 
-            return new Document({ pageContent: content, metadata });
+            return new Document({
+                pageContent: content,
+                metadata
+            });
         });
+    }
+
+    _formatScore(scoreObject) {
+        const avgScore = Object.values(scoreObject).reduce((a, b) => a + b, 0) / Object.values(scoreObject).length;
+        return (avgScore * 100).toFixed(1) + '%';
+    }
+
+    _formatIntentSignals(signals) {
+        return Object.entries(signals)
+            .map(([signal, strength]) => `- ${signal}: ${strength > 0.7 ? 'Strong' : strength > 0.4 ? 'Medium' : 'Weak'}`)
+            .join('\n');
+    }
+
+    _formatEngagementPatterns(patterns) {
+        return Object.entries(patterns)
+            .map(([pattern, details]) => `- ${pattern}: ${details}`)
+            .join('\n');
+    }
+
+    _generateRecommendations(metadata) {
+        const recommendations = [];
+        
+        if (metadata.behavioralScore.website_engagement < 0.3) {
+            recommendations.push('- Increase website engagement through targeted content');
+        }
+        
+        if (metadata.firmographicScore.industry_fit > 0.7 && metadata.conversionProbability > 0.6) {
+            recommendations.push('- Fast-track for sales engagement');
+        }
+        
+        if (metadata.behavioralScore.content_consumption > 0.7) {
+            recommendations.push('- Provide advanced stage content');
+        }
+        
+        return recommendations.join('\n');
     }
 }
 
