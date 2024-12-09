@@ -1,3 +1,6 @@
+-- Enable trigram extension for fuzzy text matching
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Drop existing enum dependencies first
 DROP TABLE IF EXISTS customer_integrations CASCADE;
 DROP TABLE IF EXISTS integrations CASCADE;
@@ -86,12 +89,28 @@ CREATE TABLE entity_scores (
     UNIQUE(customer_id, entity_id, entity_type)
 );
 
+-- Table to store data quality reports
+CREATE TABLE data_quality_reports (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES customers(id),
+    entity_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,  -- 'contact', 'prospective_buyer', or 'enquiry'
+    quality_score INTEGER NOT NULL,
+    issues JSONB,  -- Array of issues found
+    warnings JSONB,  -- Array of warnings found
+    last_checked TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT quality_score_range CHECK (quality_score >= 0 AND quality_score <= 100),
+    UNIQUE(customer_id, entity_id, entity_type)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX idx_customer_integrations_customer_id ON customer_integrations(customer_id);
 CREATE INDEX idx_sync_history_customer_integration_id ON sync_history(customer_integration_id);
 CREATE INDEX idx_webhook_configurations_customer_integration_id ON webhook_configurations(customer_integration_id);
 CREATE INDEX idx_entity_scores_lookup ON entity_scores(customer_id, entity_id, entity_type);
 CREATE INDEX idx_entity_scores_type ON entity_scores(entity_type);
+CREATE INDEX idx_data_quality_reports_lookup ON data_quality_reports(customer_id, entity_id, entity_type);
+CREATE INDEX idx_data_quality_reports_score ON data_quality_reports(quality_score);
 
 -- Grant permissions to application user
 GRANT USAGE ON SCHEMA public TO tapuser;
