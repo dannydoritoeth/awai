@@ -138,25 +138,69 @@ The primary goal is to train AI models to replicate Salesforce Sales Einstein ca
 - Time span coverage
 - Update frequency
 
-### 2. Model Capabilities
+### 2. Document Processing
+- Rich semantic content generation
+- Structured metadata creation
+- Consistent document formatting
+- Efficient chunking strategies
+- Proper embedding generation
+- Quality vector representations
+
+### 3. Model Capabilities
 - Pattern recognition
 - Trend analysis
 - Anomaly detection
 - Prediction generation
 - Recommendation creation
 - Natural language processing
+- Semantic similarity matching
+- Retrieval augmented generation
+- Context-aware responses
+- Multi-document reasoning
 
-### 3. Performance Metrics
+### 4. LangChain Integration
+- Proper document loading patterns
+- Efficient embedding strategies
+- Vector store optimization
+- Retrieval chain design
+- Prompt engineering
+- Memory management
+- Context window utilization
+- Token optimization
+- Model selection criteria
+- Output formatting standards
+
+### 5. Performance Metrics
 - Accuracy targets
 - Response time limits
 - Update frequency
 - Resource utilization
 - Scalability requirements
 - Reliability standards
+- Embedding quality metrics
+- Retrieval relevance scores
+- Generation coherence measures
+- Context retention rates
 
 ## Integration Architecture Requirements
 
-### 1. Data Flow
+### 1. Integration Isolation
+- Each integration must be completely isolated from others
+- No integration-specific code in shared functions or base classes
+- All shared functionality must be integration-agnostic
+- Integration-specific logic must stay within its own directory
+- Adding or modifying an integration should not impact others
+- Base classes should only contain generic, reusable logic
+
+### 2. Code Organization
+- Use inheritance for shared functionality through base classes
+- Keep integration-specific implementations in separate directories
+- Maintain clear separation between shared and specific code
+- Use dependency injection for integration-specific services
+- Follow consistent naming and structure across integrations
+- Enable easy addition of new integrations without codebase changes
+
+### 3. Data Flow
 - Real-time synchronization
 - Batch processing
 - Event-driven updates
@@ -164,7 +208,23 @@ The primary goal is to train AI models to replicate Salesforce Sales Einstein ca
 - Retry mechanisms
 - Conflict resolution
 
-### 2. Security
+### 4. Document Processing Pipeline
+- Use LangChain for all document processing and vector storage
+- Create semantic documents with rich content and metadata
+- Process documents through LangChain's embedding service
+- Store embedded documents in Pinecone using LangChain's vector store
+- Maintain consistent document structure across integrations
+- Enable efficient semantic search and retrieval
+
+### 5. LangChain Integration
+- Utilize LangChain's document loading capabilities
+- Leverage LangChain's embedding models
+- Implement retrieval augmented generation
+- Use LangChain's vector store operations
+- Support semantic similarity search
+- Enable efficient document chunking and processing
+
+### 6. Security
 - Authentication
 - Authorization
 - Data encryption
@@ -172,7 +232,7 @@ The primary goal is to train AI models to replicate Salesforce Sales Einstein ca
 - Audit logging
 - Compliance adherence
 
-### 3. Scalability
+### 7. Scalability
 - Volume handling
 - Performance optimization
 - Resource management
@@ -231,3 +291,47 @@ The primary goal is to train AI models to replicate Salesforce Sales Einstein ca
 - Capability enhancement
 - Performance scaling
 - Resource optimization
+
+## Implementation Guidelines
+
+### 1. Integration Structure
+- Each integration must have its own directory
+- Standard file structure across integrations:
+  - `client.js` - API client implementation
+  - `documentCreator.js` - Document creation logic
+  - `entityTypes.js` - Entity definitions and processing
+  - `index.js` - Integration entry point
+- No cross-references between integration directories
+- No shared state between integrations
+
+### 2. Base Classes
+- Base classes must be generic and integration-agnostic
+- No integration-specific logic in base classes
+- Base classes should define clear interfaces
+- All integration-specific logic through inheritance
+- Base functionality through composition over modification
+- Clear documentation of extension points
+
+### 3. Shared Services
+- All shared services must be integration-agnostic
+- Services should accept standardized inputs
+- No integration-specific conditionals in shared code
+- Use dependency injection for integration-specific needs
+- Maintain clear service boundaries
+- Document service interfaces thoroughly
+
+### 4. Code Separation Rules
+- No importing between integration directories
+- No integration-specific configuration in shared code
+- No integration-specific types in base classes
+- No cross-integration dependencies
+- No shared mutable state
+- No integration-specific environment variables in shared code
+
+### 5. Testing Requirements
+- Integration tests must be isolated by integration
+- Shared code tests must use mock integrations
+- No integration-specific test utilities in shared code
+- Test coverage for both shared and specific code
+- Integration-specific test configuration in integration directory
+- Clear separation of test data by integration

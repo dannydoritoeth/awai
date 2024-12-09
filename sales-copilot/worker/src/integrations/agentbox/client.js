@@ -273,6 +273,50 @@ class AgentboxClient {
         }
     }
 
+    async getEnquiryInterestLevels() {
+        try {
+            const response = await this.client.get('/enquiry-interest-levels', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.enquiryInterestLevels) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.enquiryInterestLevels.length} interest levels`);
+            return response.data.response.enquiryInterestLevels;
+        } catch (error) {
+            console.error('Error fetching interest levels:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    async getPropertyTypes() {
+        try {
+            const response = await this.client.get('/property-types', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.propertyTypes) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.propertyTypes.length} property types`);
+            return response.data.response.propertyTypes;
+        } catch (error) {
+            console.error('Error fetching property types:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 

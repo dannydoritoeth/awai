@@ -48,6 +48,18 @@ const createStaffMetadata = (staff, integration) => ({
     officeName: staff.officeName || ''
 });
 
+const createInterestLevelMetadata = (interestLevel, integration) => ({
+    ...createMetadata(interestLevel, integration, 'interest_level'),
+    interestLevelId: interestLevel.id.toString(),
+    name: interestLevel.name || ''
+});
+
+const createPropertyTypeMetadata = (propertyType, integration) => ({
+    ...createMetadata(propertyType, integration, 'property_type'),
+    propertyTypeId: propertyType.id.toString(),
+    type: propertyType.type || ''
+});
+
 const processContacts = async (client, integration, langchainPinecone, logger) => {
     logger.info('Processing Agentbox contacts...');
     
@@ -138,6 +150,62 @@ const processStaff = async (client, integration, langchainPinecone, logger) => {
     return staff.length;
 };
 
+const processInterestLevels = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox interest levels...');
+    
+    const interestLevels = await client.getEnquiryInterestLevels();
+    if (interestLevels.length === 0) {
+        logger.info('No interest levels found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${interestLevels.length} interest levels`);
+    
+    const documents = interestLevels.map(level => 
+        AgentboxDocumentCreator.createDocument(
+            level, 
+            'interest_level',
+            createInterestLevelMetadata(level, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${interestLevels.length} interest levels`);
+    return interestLevels.length;
+};
+
+const processPropertyTypes = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox property types...');
+    
+    const propertyTypes = await client.getPropertyTypes();
+    if (propertyTypes.length === 0) {
+        logger.info('No property types found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${propertyTypes.length} property types`);
+    
+    const documents = propertyTypes.map(type => 
+        AgentboxDocumentCreator.createDocument(
+            type, 
+            'property_type',
+            createPropertyTypeMetadata(type, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${propertyTypes.length} property types`);
+    return propertyTypes.length;
+};
+
 const entityTypes = [
     { 
         name: 'contacts',
@@ -150,6 +218,68 @@ const entityTypes = [
     {
         name: 'staff',
         process: processStaff
+    },
+    {
+        name: 'property_type',
+        process: processPropertyTypes,
+        description: 'Property type classifications for real estate listings',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the property type'
+            },
+            {
+                name: 'type',
+                type: 'string',
+                description: 'Name of the property type (e.g., Residential, Commercial)'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'market_analysis',
+                description: 'Analyze market trends and performance by property type'
+            },
+            {
+                name: 'property_matching',
+                description: 'Match properties with buyer preferences based on type'
+            },
+            {
+                name: 'investment_insights',
+                description: 'Generate insights about different property type investments'
+            }
+        ]
+    },
+    {
+        name: 'interest_level',
+        process: processInterestLevels,
+        description: 'Standardized interest levels for enquiries and leads',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the interest level'
+            },
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the interest level (e.g., Hot, Warm, Cold)'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'lead_scoring',
+                description: 'Score leads based on engagement patterns and interest level'
+            },
+            {
+                name: 'engagement_prediction',
+                description: 'Predict likely engagement level based on contact behavior'
+            },
+            {
+                name: 'conversion_probability',
+                description: 'Calculate probability of conversion based on interest level history'
+            }
+        ]
     },
     {
         name: 'enquiry',
@@ -359,5 +489,7 @@ module.exports = {
     entityTypes,
     processContacts,
     processListings,
-    processStaff
+    processStaff,
+    processInterestLevels,
+    processPropertyTypes
 }; 

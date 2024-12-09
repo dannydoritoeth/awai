@@ -22,6 +22,10 @@ class AgentboxDocumentCreator {
                 return this.createListingText(entity);
             case 'staff':
                 return this.createStaffText(entity);
+            case 'interest_level':
+                return this.createInterestLevelText(entity);
+            case 'property_type':
+                return this.createPropertyTypeText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -81,6 +85,61 @@ class AgentboxDocumentCreator {
         ];
 
         return parts.filter(Boolean).join('\n');
+    }
+
+    static createInterestLevelText(interestLevel) {
+        const parts = [
+            `Interest Level: ${interestLevel.name}`,
+            `ID: ${interestLevel.id}`,
+            `Description: This represents a ${interestLevel.name.toLowerCase()} level of interest from a potential buyer or enquirer.`,
+            `Usage: Used for categorizing and scoring leads based on their engagement and likelihood to convert.`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static createPropertyTypeText(propertyType) {
+        const typeDescriptions = {
+            'Residential': 'Properties designed for living purposes, including houses, apartments, and units.',
+            'Commercial': 'Properties used for business purposes, including offices, retail spaces, and industrial buildings.',
+            'Rural': 'Properties in rural areas, including farms, ranches, and agricultural land.',
+            'Business': 'Properties with established businesses or suitable for business operations.',
+            'Holiday': 'Properties designed for vacation and short-term stays.'
+        };
+
+        const parts = [
+            `Property Type: ${propertyType.type}`,
+            `ID: ${propertyType.id}`,
+            `Description: ${typeDescriptions[propertyType.type] || `Properties classified as ${propertyType.type.toLowerCase()}`}`,
+            'Market Characteristics:',
+            `- Primary Use: ${propertyType.type.toLowerCase()} purposes`,
+            `- Target Market: ${this._getTargetMarket(propertyType.type)}`,
+            `- Investment Profile: ${this._getInvestmentProfile(propertyType.type)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _getTargetMarket(type) {
+        const targetMarkets = {
+            'Residential': 'Home buyers, families, and residential property investors',
+            'Commercial': 'Business owners, commercial investors, and property developers',
+            'Rural': 'Farmers, agricultural businesses, and lifestyle property seekers',
+            'Business': 'Entrepreneurs, business owners, and commercial operators',
+            'Holiday': 'Vacation home buyers, tourism operators, and lifestyle investors'
+        };
+        return targetMarkets[type] || 'General property buyers and investors';
+    }
+
+    static _getInvestmentProfile(type) {
+        const profiles = {
+            'Residential': 'Stable long-term growth with rental income potential',
+            'Commercial': 'Higher yields with longer lease terms and business tenants',
+            'Rural': 'Land value appreciation with agricultural or development potential',
+            'Business': 'Combined property and business investment opportunity',
+            'Holiday': 'Seasonal rental income with lifestyle benefits'
+        };
+        return profiles[type] || 'Standard property investment characteristics';
     }
 }
 
