@@ -30,6 +30,8 @@ class AgentboxDocumentCreator {
                 return this.createRegionText(entity);
             case 'enquiry_source':
                 return this.createEnquirySourceText(entity);
+            case 'contact_class':
+                return this.createContactClassText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -309,6 +311,122 @@ class AgentboxDocumentCreator {
             'Landing Page': 'Focused messaging, trackable results, campaign optimization'
         };
         return benefits[sourceName] || 'Diversified lead generation';
+    }
+
+    static createContactClassText(contactClass) {
+        const classDescriptions = {
+            'Buyer': 'Active property purchaser seeking to acquire real estate',
+            'Vendor': 'Property owner looking to sell their real estate',
+            'Solicitor': 'Legal professional handling property transactions',
+            'Developer': 'Professional involved in property development projects',
+            'Accountant': 'Financial professional providing property-related services',
+            'Tenant': 'Individual or entity renting a property',
+            'Landlord': 'Property owner leasing their real estate',
+            'Investor': 'Individual or entity investing in property for returns',
+            'Owner Occupier': 'Property owner living in their own property',
+            'Referrer': 'Individual or entity providing business referrals',
+            'Tradesperson': 'Professional providing property maintenance services',
+            'Supplier': 'Provider of property-related products or services',
+            'Conjunctional Agent': 'Partner agent collaborating on property deals',
+            'Buyer Solicitor': 'Legal representative for property buyers',
+            'Vendor Solicitor': 'Legal representative for property sellers',
+            'Auctioneer': 'Professional conducting property auctions',
+            'Business': 'Commercial entity involved in property transactions',
+            'Prospective Vendor': 'Potential property seller considering listing',
+            'Prospective Buyer': 'Potential property purchaser exploring options',
+            'Prospective Landlord': 'Potential property owner considering leasing'
+        };
+
+        const parts = [
+            `Contact Class: ${contactClass.displayName}`,
+            `Type: ${contactClass.type}`,
+            `Description: ${classDescriptions[contactClass.name] || 'Standard contact classification'}`,
+            '',
+            'Role Characteristics:',
+            `- Primary Function: ${this._getPrimaryFunction(contactClass.name)}`,
+            `- Typical Interactions: ${this._getTypicalInteractions(contactClass.name)}`,
+            `- Engagement Strategy: ${this._getEngagementStrategy(contactClass.name)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _getPrimaryFunction(className) {
+        const functions = {
+            'Buyer': 'Property acquisition and purchase negotiations',
+            'Vendor': 'Property sale and marketing coordination',
+            'Solicitor': 'Legal documentation and transaction support',
+            'Developer': 'Property development and project management',
+            'Accountant': 'Financial advice and transaction support',
+            'Tenant': 'Property rental and occupancy',
+            'Landlord': 'Property leasing and management',
+            'Investor': 'Property investment and portfolio management',
+            'Owner Occupier': 'Property ownership and residence',
+            'Referrer': 'Business referral and networking',
+            'Tradesperson': 'Property maintenance and improvements',
+            'Supplier': 'Product and service provision',
+            'Conjunctional Agent': 'Collaborative property sales',
+            'Buyer Solicitor': 'Buyer legal representation',
+            'Vendor Solicitor': 'Vendor legal representation',
+            'Auctioneer': 'Auction management and execution',
+            'Business': 'Commercial property transactions',
+            'Prospective Vendor': 'Property sale consideration',
+            'Prospective Buyer': 'Property purchase consideration',
+            'Prospective Landlord': 'Property leasing consideration'
+        };
+        return functions[className] || 'General property market participation';
+    }
+
+    static _getTypicalInteractions(className) {
+        const interactions = {
+            'Buyer': 'Property viewings, negotiations, purchase process',
+            'Vendor': 'Property listing, marketing approval, sale negotiations',
+            'Solicitor': 'Contract review, settlement coordination, legal advice',
+            'Developer': 'Project planning, construction coordination, sales strategy',
+            'Accountant': 'Financial planning, tax advice, transaction support',
+            'Tenant': 'Property viewings, lease agreements, maintenance requests',
+            'Landlord': 'Property management, tenant selection, maintenance approval',
+            'Investor': 'Market analysis, portfolio review, investment strategy',
+            'Owner Occupier': 'Property maintenance, community engagement',
+            'Referrer': 'Lead generation, network building, relationship management',
+            'Tradesperson': 'Maintenance quotes, repair work, property improvements',
+            'Supplier': 'Product supply, service delivery, account management',
+            'Conjunctional Agent': 'Deal collaboration, commission sharing, joint marketing',
+            'Buyer Solicitor': 'Purchase contracts, due diligence, buyer advocacy',
+            'Vendor Solicitor': 'Sale contracts, vendor advocacy, settlement coordination',
+            'Auctioneer': 'Auction preparation, bidding management, sale completion',
+            'Business': 'Commercial negotiations, lease arrangements, property transactions',
+            'Prospective Vendor': 'Market appraisals, selling advice, timing discussions',
+            'Prospective Buyer': 'Property requirements, market education, viewing arrangements',
+            'Prospective Landlord': 'Investment advice, market updates, management options'
+        };
+        return interactions[className] || 'Standard property-related interactions';
+    }
+
+    static _getEngagementStrategy(className) {
+        const strategies = {
+            'Buyer': 'Regular property matches, market updates, viewing coordination',
+            'Vendor': 'Marketing updates, feedback reports, price discussions',
+            'Solicitor': 'Transaction updates, document coordination, timeline management',
+            'Developer': 'Project updates, market insights, sales coordination',
+            'Accountant': 'Financial updates, transaction coordination, tax planning',
+            'Tenant': 'Property maintenance, lease renewals, payment management',
+            'Landlord': 'Property reports, tenant updates, maintenance coordination',
+            'Investor': 'Investment opportunities, market analysis, portfolio reviews',
+            'Owner Occupier': 'Property maintenance, community updates, market value tracking',
+            'Referrer': 'Regular contact, success sharing, relationship building',
+            'Tradesperson': 'Work coordination, quality assurance, ongoing relationship',
+            'Supplier': 'Regular ordering, service scheduling, account reviews',
+            'Conjunctional Agent': 'Deal sharing, commission arrangements, collaborative marketing',
+            'Buyer Solicitor': 'Purchase coordination, timeline management, documentation',
+            'Vendor Solicitor': 'Sale coordination, settlement management, documentation',
+            'Auctioneer': 'Auction planning, marketing coordination, results reporting',
+            'Business': 'Commercial opportunities, market updates, transaction management',
+            'Prospective Vendor': 'Market updates, timing advice, preparation guidance',
+            'Prospective Buyer': 'Property matches, market education, viewing arrangements',
+            'Prospective Landlord': 'Investment advice, market updates, management options'
+        };
+        return strategies[className] || 'Customized engagement based on needs and preferences';
     }
 }
 

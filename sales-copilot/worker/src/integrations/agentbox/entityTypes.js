@@ -74,6 +74,14 @@ const createEnquirySourceMetadata = (source, integration) => ({
     name: source.name
 });
 
+const createContactClassMetadata = (contactClass, integration) => ({
+    ...createMetadata(contactClass, integration, 'contact_class'),
+    classId: contactClass.id.toString(),
+    name: contactClass.name,
+    type: contactClass.type,
+    displayName: contactClass.displayName
+});
+
 const processContacts = async (client, integration, langchainPinecone, logger) => {
     logger.info('Processing Agentbox contacts...');
     
@@ -276,6 +284,34 @@ const processEnquirySources = async (client, integration, langchainService, logg
     return sources.length;
 };
 
+const processContactClasses = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox contact classes...');
+    
+    const classes = await client.getContactClasses();
+    if (classes.length === 0) {
+        logger.info('No contact classes found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${classes.length} contact classes`);
+    
+    const documents = classes.map(contactClass => 
+        AgentboxDocumentCreator.createDocument(
+            contactClass, 
+            'contact_class',
+            createContactClassMetadata(contactClass, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${classes.length} contact classes`);
+    return classes.length;
+};
+
 const entityTypes = [
     { 
         name: 'contacts',
@@ -288,6 +324,51 @@ const entityTypes = [
     {
         name: 'staff',
         process: processStaff
+    },
+    {
+        name: 'contact_class',
+        process: processContactClasses,
+        description: 'Classification and categorization of contacts in the system',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the contact class'
+            },
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the contact class'
+            },
+            {
+                name: 'type',
+                type: 'string',
+                description: 'Type of the contact class (e.g., Standard)'
+            },
+            {
+                name: 'displayName',
+                type: 'string',
+                description: 'Display name for the contact class'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'relationship_mapping',
+                description: 'Map and analyze relationships between different contact types'
+            },
+            {
+                name: 'contact_segmentation',
+                description: 'Segment contacts based on their roles and relationships'
+            },
+            {
+                name: 'interaction_analysis',
+                description: 'Analyze interaction patterns by contact class'
+            },
+            {
+                name: 'engagement_optimization',
+                description: 'Optimize engagement strategies for different contact types'
+            }
+        ]
     },
     {
         name: 'enquiry_source',
@@ -643,5 +724,6 @@ module.exports = {
     processInterestLevels,
     processPropertyTypes,
     processRegions,
-    processEnquirySources
+    processEnquirySources,
+    processContactClasses
 }; 

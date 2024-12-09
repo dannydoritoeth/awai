@@ -361,6 +361,28 @@ class AgentboxClient {
         }
     }
 
+    async getContactClasses() {
+        try {
+            const response = await this.client.get('/contact-classes', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.contactClasses) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.contactClasses.length} contact classes`);
+            return response.data.response.contactClasses;
+        } catch (error) {
+            console.error('Error fetching contact classes:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 
