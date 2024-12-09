@@ -26,6 +26,10 @@ class AgentboxDocumentCreator {
                 return this.createInterestLevelText(entity);
             case 'property_type':
                 return this.createPropertyTypeText(entity);
+            case 'region':
+                return this.createRegionText(entity);
+            case 'enquiry_source':
+                return this.createEnquirySourceText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -140,6 +144,171 @@ class AgentboxDocumentCreator {
             'Holiday': 'Seasonal rental income with lifestyle benefits'
         };
         return profiles[type] || 'Standard property investment characteristics';
+    }
+
+    static createRegionText(region) {
+        const stateDescriptions = {
+            'NSW': 'New South Wales',
+            'VIC': 'Victoria',
+            'QLD': 'Queensland',
+            'SA': 'South Australia',
+            'WA': 'Western Australia',
+            'TAS': 'Tasmania',
+            'NT': 'Northern Territory',
+            'ACT': 'Australian Capital Territory'
+        };
+
+        const parts = [
+            `Region: ${region.name}`,
+            `Regional Group: ${region.group}`,
+            `State: ${stateDescriptions[region.state] || region.state}`,
+            `Country: ${region.country}`,
+            '',
+            'Market Information:',
+            `- Location: ${this._getRegionDescription(region)}`,
+            `- Market Type: ${this._getMarketType(region)}`,
+            `- Key Features: ${this._getRegionFeatures(region)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _getRegionDescription(region) {
+        if (region.group === 'Sydney Region') {
+            return `Part of the greater Sydney metropolitan area in ${stateDescriptions[region.state]}, ${region.country}`;
+        }
+        return `Located in ${region.state}, ${region.country}`;
+    }
+
+    static _getMarketType(region) {
+        const marketTypes = {
+            'Blue Mountains & Surrounds': 'Lifestyle and tourism-focused market with mix of permanent residents and holiday properties',
+            'North Shore - Upper': 'Premium residential market with established family homes and prestigious schools',
+            'Canterbury/Bankstown': 'Diverse multicultural area with mix of residential and commercial properties',
+            'Northern Beaches': 'Coastal lifestyle market with premium beachside properties',
+            'Eastern Suburbs': 'High-end residential market with luxury properties and strong amenity',
+            'Northern Suburbs': 'Family-oriented residential market with good transport links',
+            'Hawkesbury': 'Semi-rural market with mix of residential and agricultural properties',
+            'Parramatta': 'Major commercial hub with growing residential development',
+            'Hills': 'Premium family market with larger blocks and newer developments',
+            'St George': 'Established residential area with good transport connections'
+        };
+        return marketTypes[region.name] || 'Mixed residential and commercial market';
+    }
+
+    static _getRegionFeatures(region) {
+        const features = {
+            'Blue Mountains & Surrounds': 'Natural beauty, tourism, lifestyle properties',
+            'North Shore - Upper': 'Premium schools, leafy streets, established homes',
+            'Canterbury/Bankstown': 'Cultural diversity, affordability, transport links',
+            'Northern Beaches': 'Coastal lifestyle, beaches, outdoor recreation',
+            'Eastern Suburbs': 'Beaches, entertainment, premium amenities',
+            'Northern Suburbs': 'Family friendly, parks, good schools',
+            'Hawkesbury': 'Rural lifestyle, heritage, river access',
+            'Parramatta': 'Business district, shopping, transport hub',
+            'Hills': 'Family lifestyle, space, modern amenities',
+            'St George': 'Community focus, transport, local shopping'
+        };
+        return features[region.name] || 'Mixed residential and commercial features';
+    }
+
+    static createEnquirySourceText(source) {
+        const sourceDescriptions = {
+            'Database': 'Internal database of existing contacts and leads',
+            'Domain.com.au': 'Major Australian real estate portal with national reach',
+            'Letterbox Drop': 'Direct mail marketing to specific geographic areas',
+            'Newspaper': 'Traditional print media advertising',
+            'Open House': 'Property inspection events open to the public',
+            'Realestate.com.au': 'Australia\'s largest property marketplace',
+            'Signboard': 'Physical property signage and display boards',
+            'Website': 'Company website and online presence',
+            'Word Of Mouth': 'Referrals and recommendations from existing clients',
+            'Phone Enquiry': 'Direct phone inquiries to the agency',
+            'Flow': 'Automated marketing and lead nurture system',
+            'Landing Page': 'Targeted web pages for specific campaigns'
+        };
+
+        const channelTypes = {
+            'Database': 'Internal',
+            'Domain.com.au': 'Online Portal',
+            'Letterbox Drop': 'Direct Marketing',
+            'Newspaper': 'Traditional Media',
+            'Open House': 'Event',
+            'Realestate.com.au': 'Online Portal',
+            'Signboard': 'Physical Marketing',
+            'Website': 'Digital',
+            'Word Of Mouth': 'Referral',
+            'Phone Enquiry': 'Direct Contact',
+            'Flow': 'Digital',
+            'Landing Page': 'Digital'
+        };
+
+        const parts = [
+            `Source: ${source.name}`,
+            `Channel Type: ${channelTypes[source.name] || 'Other'}`,
+            `Description: ${sourceDescriptions[source.name] || 'Custom enquiry source'}`,
+            '',
+            'Channel Characteristics:',
+            `- Type: ${this._getChannelType(source.name)}`,
+            `- Typical Usage: ${this._getChannelUsage(source.name)}`,
+            `- Key Benefits: ${this._getChannelBenefits(source.name)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _getChannelType(sourceName) {
+        const types = {
+            'Database': 'Internal data-driven channel for existing contact engagement',
+            'Domain.com.au': 'Major online property portal with national reach',
+            'Letterbox Drop': 'Traditional direct mail marketing channel',
+            'Newspaper': 'Print media advertising channel',
+            'Open House': 'In-person property viewing event',
+            'Realestate.com.au': 'Premier online property marketplace',
+            'Signboard': 'Physical on-site property marketing',
+            'Website': 'Digital owned media channel',
+            'Word Of Mouth': 'Organic referral network',
+            'Phone Enquiry': 'Direct communication channel',
+            'Flow': 'Automated digital marketing system',
+            'Landing Page': 'Targeted digital campaign page'
+        };
+        return types[sourceName] || 'Custom marketing channel';
+    }
+
+    static _getChannelUsage(sourceName) {
+        const usage = {
+            'Database': 'Lead nurturing and repeat business generation',
+            'Domain.com.au': 'Broad market reach and qualified lead generation',
+            'Letterbox Drop': 'Local area marketing and community engagement',
+            'Newspaper': 'Traditional brand awareness and property promotion',
+            'Open House': 'Direct property showcasing and buyer engagement',
+            'Realestate.com.au': 'Maximum exposure to active property seekers',
+            'Signboard': 'Local area awareness and property identification',
+            'Website': 'Brand presence and direct enquiry generation',
+            'Word Of Mouth': 'Trust-based referrals and recommendations',
+            'Phone Enquiry': 'Immediate response to property interest',
+            'Flow': 'Automated lead nurturing and engagement',
+            'Landing Page': 'Campaign-specific lead capture'
+        };
+        return usage[sourceName] || 'General enquiry generation';
+    }
+
+    static _getChannelBenefits(sourceName) {
+        const benefits = {
+            'Database': 'High conversion rate, low cost, targeted communication',
+            'Domain.com.au': 'Wide reach, qualified leads, strong brand presence',
+            'Letterbox Drop': 'Geographic targeting, local presence, tangible marketing',
+            'Newspaper': 'Traditional audience reach, brand credibility, local focus',
+            'Open House': 'Direct buyer interaction, immediate feedback, multiple viewings',
+            'Realestate.com.au': 'Highest visibility, serious buyers, detailed analytics',
+            'Signboard': 'Local awareness, 24/7 visibility, brand reinforcement',
+            'Website': 'Brand control, cost-effective, detailed information',
+            'Word Of Mouth': 'High trust, quality leads, strong relationships',
+            'Phone Enquiry': 'Immediate engagement, personal connection, quick response',
+            'Flow': 'Automated engagement, consistent follow-up, scalable process',
+            'Landing Page': 'Focused messaging, trackable results, campaign optimization'
+        };
+        return benefits[sourceName] || 'Diversified lead generation';
     }
 }
 

@@ -317,6 +317,50 @@ class AgentboxClient {
         }
     }
 
+    async getRegions() {
+        try {
+            const response = await this.client.get('/regions', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.regions) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.regions.length} regions`);
+            return response.data.response.regions;
+        } catch (error) {
+            console.error('Error fetching regions:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    async getEnquirySources() {
+        try {
+            const response = await this.client.get('/enquiry-sources', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.enquirySources) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.enquirySources.length} enquiry sources`);
+            return response.data.response.enquirySources;
+        } catch (error) {
+            console.error('Error fetching enquiry sources:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 

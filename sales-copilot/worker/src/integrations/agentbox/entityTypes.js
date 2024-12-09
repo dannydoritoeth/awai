@@ -60,6 +60,20 @@ const createPropertyTypeMetadata = (propertyType, integration) => ({
     type: propertyType.type || ''
 });
 
+const createRegionMetadata = (region, integration) => ({
+    ...createMetadata(region, integration, 'region'),
+    name: region.name,
+    group: region.group,
+    state: region.state,
+    country: region.country
+});
+
+const createEnquirySourceMetadata = (source, integration) => ({
+    ...createMetadata(source, integration, 'enquiry_source'),
+    sourceId: source.id.toString(),
+    name: source.name
+});
+
 const processContacts = async (client, integration, langchainPinecone, logger) => {
     logger.info('Processing Agentbox contacts...');
     
@@ -206,6 +220,62 @@ const processPropertyTypes = async (client, integration, langchainService, logge
     return propertyTypes.length;
 };
 
+const processRegions = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox regions...');
+    
+    const regions = await client.getRegions();
+    if (regions.length === 0) {
+        logger.info('No regions found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${regions.length} regions`);
+    
+    const documents = regions.map(region => 
+        AgentboxDocumentCreator.createDocument(
+            region, 
+            'region',
+            createRegionMetadata(region, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${regions.length} regions`);
+    return regions.length;
+};
+
+const processEnquirySources = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox enquiry sources...');
+    
+    const sources = await client.getEnquirySources();
+    if (sources.length === 0) {
+        logger.info('No enquiry sources found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${sources.length} enquiry sources`);
+    
+    const documents = sources.map(source => 
+        AgentboxDocumentCreator.createDocument(
+            source, 
+            'enquiry_source',
+            createEnquirySourceMetadata(source, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${sources.length} enquiry sources`);
+    return sources.length;
+};
+
 const entityTypes = [
     { 
         name: 'contacts',
@@ -218,6 +288,86 @@ const entityTypes = [
     {
         name: 'staff',
         process: processStaff
+    },
+    {
+        name: 'enquiry_source',
+        process: processEnquirySources,
+        description: 'Sources of property enquiries and lead generation channels',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the enquiry source'
+            },
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the enquiry source channel'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'channel_effectiveness',
+                description: 'Analyze effectiveness of different lead generation channels'
+            },
+            {
+                name: 'source_attribution',
+                description: 'Track and attribute leads to their originating sources'
+            },
+            {
+                name: 'conversion_analysis',
+                description: 'Analyze conversion rates by enquiry source'
+            },
+            {
+                name: 'channel_optimization',
+                description: 'Recommend optimal channel mix based on performance'
+            }
+        ]
+    },
+    {
+        name: 'region',
+        process: processRegions,
+        description: 'Geographic regions for property location classification',
+        fields: [
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the region'
+            },
+            {
+                name: 'group',
+                type: 'string',
+                description: 'Regional group (e.g., Sydney Region)'
+            },
+            {
+                name: 'state',
+                type: 'string',
+                description: 'State/territory code'
+            },
+            {
+                name: 'country',
+                type: 'string',
+                description: 'Country name'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'location_analysis',
+                description: 'Analyze property distribution and trends by region'
+            },
+            {
+                name: 'market_segmentation',
+                description: 'Segment market data by geographic regions'
+            },
+            {
+                name: 'area_matching',
+                description: 'Match buyer preferences with regional characteristics'
+            },
+            {
+                name: 'demographic_insights',
+                description: 'Generate insights about regional demographics and preferences'
+            }
+        ]
     },
     {
         name: 'property_type',
@@ -491,5 +641,7 @@ module.exports = {
     processListings,
     processStaff,
     processInterestLevels,
-    processPropertyTypes
+    processPropertyTypes,
+    processRegions,
+    processEnquirySources
 }; 
