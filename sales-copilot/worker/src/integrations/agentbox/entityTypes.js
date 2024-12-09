@@ -88,6 +88,31 @@ const createContactSourceMetadata = (source, integration) => ({
     name: source.name
 });
 
+const createOfficeMetadata = (office, integration) => ({
+    ...createMetadata(office, integration, 'office'),
+    officeId: office.id.toString(),
+    name: office.name,
+    status: office.status,
+    companyName: office.companyName || '',
+    tradingName: office.tradingName || '',
+    website: office.website || '',
+    email: office.email || '',
+    phone: office.phone || '',
+    franchiseGroup: office.franchiseGroup || '',
+    location: office.location ? {
+        latitude: office.location.lat,
+        longitude: office.location.long
+    } : null,
+    address: office.address ? {
+        streetAddress: office.address.streetAddress,
+        suburb: office.address.suburb,
+        state: office.address.state,
+        postcode: office.address.postcode,
+        country: office.address.country
+    } : null,
+    lastModified: office.lastModified
+});
+
 const processContacts = async (client, integration, langchainPinecone, logger) => {
     logger.info('Processing Agentbox contacts...');
     
@@ -346,6 +371,34 @@ const processContactSources = async (client, integration, langchainService, logg
     return sources.length;
 };
 
+const processOffices = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox offices...');
+    
+    const offices = await client.getOffices();
+    if (offices.length === 0) {
+        logger.info('No offices found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${offices.length} offices`);
+    
+    const documents = offices.map(office => 
+        AgentboxDocumentCreator.createDocument(
+            office, 
+            'office',
+            createOfficeMetadata(office, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${offices.length} offices`);
+    return offices.length;
+};
+
 const entityTypes = [
     { 
         name: 'contacts',
@@ -358,6 +411,81 @@ const entityTypes = [
     {
         name: 'staff',
         process: processStaff
+    },
+    {
+        name: 'office',
+        process: processOffices,
+        description: 'Real estate office locations and business units',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the office'
+            },
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the office'
+            },
+            {
+                name: 'status',
+                type: 'string',
+                description: 'Current status of the office'
+            },
+            {
+                name: 'companyName',
+                type: 'string',
+                description: 'Legal company name'
+            },
+            {
+                name: 'tradingName',
+                type: 'string',
+                description: 'Trading name of the office'
+            },
+            {
+                name: 'address',
+                type: 'object',
+                description: 'Physical location details'
+            },
+            {
+                name: 'location',
+                type: 'object',
+                description: 'Geographic coordinates'
+            },
+            {
+                name: 'website',
+                type: 'string',
+                description: 'Office website URL'
+            },
+            {
+                name: 'email',
+                type: 'string',
+                description: 'Primary contact email'
+            },
+            {
+                name: 'phone',
+                type: 'string',
+                description: 'Primary contact phone'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'geographic_analysis',
+                description: 'Analyze office coverage and market presence'
+            },
+            {
+                name: 'performance_tracking',
+                description: 'Track and compare office performance metrics'
+            },
+            {
+                name: 'resource_optimization',
+                description: 'Optimize resource allocation across offices'
+            },
+            {
+                name: 'market_coverage',
+                description: 'Analyze market coverage and identify gaps'
+            }
+        ]
     },
     {
         name: 'contact_class',
@@ -795,5 +923,6 @@ module.exports = {
     processRegions,
     processEnquirySources,
     processContactClasses,
-    processContactSources
+    processContactSources,
+    processOffices
 }; 

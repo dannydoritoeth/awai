@@ -405,6 +405,28 @@ class AgentboxClient {
         }
     }
 
+    async getOffices() {
+        try {
+            const response = await this.client.get('/offices', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.offices) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.offices.length} offices`);
+            return response.data.response.offices;
+        } catch (error) {
+            console.error('Error fetching offices:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 

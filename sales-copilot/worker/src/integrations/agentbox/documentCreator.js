@@ -34,6 +34,8 @@ class AgentboxDocumentCreator {
                 return this.createContactClassText(entity);
             case 'contact_source':
                 return this.createContactSourceText(entity);
+            case 'office':
+                return this.createOfficeText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -526,6 +528,125 @@ class AgentboxDocumentCreator {
             'Magnifi - Agent lead form': 'Agent-driven follow-up, structured process, tracked engagement'
         };
         return strategies[sourceName] || 'Standard follow-up process';
+    }
+
+    static createOfficeText(office) {
+        const parts = [
+            `Office: ${office.name}`,
+            `Status: ${office.status}`,
+            office.companyName ? `Company: ${office.companyName}` : null,
+            office.tradingName ? `Trading As: ${office.tradingName}` : null,
+            '',
+            'Location Information:',
+            this._formatAddress(office.address),
+            office.location ? `Coordinates: ${office.location.lat}, ${office.location.long}` : null,
+            '',
+            'Contact Details:',
+            office.phone ? `Phone: ${office.phone}` : null,
+            office.email ? `Email: ${office.email}` : null,
+            office.website ? `Website: ${office.website}` : null,
+            '',
+            'Business Information:',
+            `- Market Coverage: ${this._getMarketCoverage(office)}`,
+            `- Service Area: ${this._getServiceArea(office)}`,
+            `- Office Type: ${this._getOfficeType(office)}`,
+            '',
+            'Operational Details:',
+            `- Business Focus: ${this._getBusinessFocus(office)}`,
+            `- Market Position: ${this._getMarketPosition(office)}`,
+            `- Coverage Strategy: ${this._getCoverageStrategy(office)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _formatAddress(address) {
+        if (!address) return null;
+        const parts = [
+            address.streetAddress,
+            address.suburb,
+            address.state,
+            address.postcode,
+            address.country
+        ].filter(Boolean);
+        return `Address: ${parts.join(', ')}`;
+    }
+
+    static _getMarketCoverage(office) {
+        if (office.name.includes('Eveleigh')) {
+            return 'Inner city technology precinct with mixed residential and commercial properties';
+        } else if (office.name.includes('Newtown')) {
+            return 'Inner west urban area with diverse property portfolio';
+        }
+        return 'Mixed metropolitan area with diverse property types';
+    }
+
+    static _getServiceArea(office) {
+        const suburbs = {
+            'Eveleigh': ['Eveleigh', 'Redfern', 'Waterloo', 'Alexandria', 'Erskineville'],
+            'Newtown': ['Newtown', 'Enmore', 'Stanmore', 'Camperdown', 'Erskineville']
+        };
+
+        for (const [key, value] of Object.entries(suburbs)) {
+            if (office.name.includes(key)) {
+                return `Primary coverage: ${value.join(', ')}`;
+            }
+        }
+        return 'Metropolitan area coverage';
+    }
+
+    static _getOfficeType(office) {
+        if (office.franchiseGroup) {
+            return `Franchise office - ${office.franchiseGroup}`;
+        } else if (office.companyName) {
+            return 'Independent office with corporate structure';
+        }
+        return 'Independent real estate office';
+    }
+
+    static _getBusinessFocus(office) {
+        const focuses = {
+            'Eveleigh': 'Technology precinct properties, urban renewal developments, commercial leasing',
+            'Newtown': 'Inner west residential, heritage properties, creative spaces',
+            'default': 'Full-service real estate operations including sales, leasing, and property management'
+        };
+
+        for (const [key, value] of Object.entries(focuses)) {
+            if (office.name.includes(key)) {
+                return value;
+            }
+        }
+        return focuses.default;
+    }
+
+    static _getMarketPosition(office) {
+        const positions = {
+            'Eveleigh': 'Leading technology precinct specialist with strong commercial focus',
+            'Newtown': 'Inner west lifestyle property expert with heritage expertise',
+            'default': 'Full-service real estate agency with comprehensive market coverage'
+        };
+
+        for (const [key, value] of Object.entries(positions)) {
+            if (office.name.includes(key)) {
+                return value;
+            }
+        }
+        return positions.default;
+    }
+
+    static _getCoverageStrategy(office) {
+        const strategies = {
+            'Eveleigh': 'Focus on technology precinct and surrounding urban renewal areas',
+            'Newtown': 'Specialized in inner west character properties and local community',
+            'default': 'Comprehensive coverage of metropolitan property market'
+        };
+
+        for (const [key, value] of Object.entries(strategies)) {
+            if (office.name.includes(key)) {
+                return value;
+            }
+        }
+        return strategies.default;
     }
 }
 
