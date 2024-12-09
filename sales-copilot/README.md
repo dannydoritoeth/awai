@@ -2,6 +2,9 @@
 
 A platform that integrates with various CRM systems to provide AI-powered insights.
 
+Primary Objective: lead/opportunity/deal scoring, generative ai, client summary/best next action, 
+
+
 ## Project Structure
 
 - `/api` - REST API server for managing integrations and user interactions

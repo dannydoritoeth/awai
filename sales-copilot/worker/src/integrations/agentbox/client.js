@@ -154,6 +154,125 @@ class AgentboxClient {
         return staffMembers;
     }
 
+    async getEnquiries() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const response = await this._get('/enquiries', {
+                version: 2,
+                limit,
+                page: 1
+            });
+
+            if (!response || !response.response || !response.response.enquiries) {
+                console.error('Invalid response format from Agentbox enquiries API');
+                return [];
+            }
+
+            console.log(`Retrieved ${response.response.enquiries.length} enquiries`);
+            return response.response.enquiries;
+        } catch (error) {
+            console.error('Error fetching enquiries:', error);
+            throw error;
+        }
+    }
+
+    async getProspectiveBuyers() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const response = await this._get('/prospective-buyers', {
+                version: 2,
+                limit,
+                page: 1
+            });
+
+            if (!response || !response.response || !response.response.prospectiveBuyers) {
+                console.error('Invalid response format from Agentbox prospective buyers API');
+                return [];
+            }
+
+            console.log(`Retrieved ${response.response.prospectiveBuyers.length} prospective buyers`);
+            return response.response.prospectiveBuyers;
+        } catch (error) {
+            console.error('Error fetching prospective buyers:', error);
+            throw error;
+        }
+    }
+
+    async getListings() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const response = await this._get('/listings', {
+                version: 2,
+                limit,
+                page: 1,
+                filter: {
+                    incSurroundSuburbs: false,
+                    matchAllFeature: false
+                }
+            });
+
+            if (!response || !response.response || !response.response.listings) {
+                console.error('Invalid response format from Agentbox listings API');
+                return [];
+            }
+
+            console.log(`Retrieved ${response.response.listings.length} listings`);
+            return response.response.listings;
+        } catch (error) {
+            console.error('Error fetching listings:', error);
+            throw error;
+        }
+    }
+
+    async getContacts() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const response = await this._get('/contacts', {
+                version: 2,
+                limit,
+                page: 1,
+                filter: {
+                    matchAllContactClass: false,
+                    reqIncSurroundSuburbs: false,
+                    limitSearch: true
+                }
+            });
+
+            if (!response || !response.response || !response.response.contacts) {
+                console.error('Invalid response format from Agentbox contacts API');
+                return [];
+            }
+
+            console.log(`Retrieved ${response.response.contacts.length} contacts`);
+            return response.response.contacts;
+        } catch (error) {
+            console.error('Error fetching contacts:', error);
+            throw error;
+        }
+    }
+
+    async getSearchRequirements() {
+        try {
+            const limit = this.testMode ? this.testLimit : 100;
+            const response = await this._get('/search-requirements', {
+                version: 2,
+                limit,
+                page: 1
+            });
+
+            if (!response || !response.response || !response.response.searchRequirements) {
+                console.error('Invalid response format from Agentbox search requirements API');
+                return [];
+            }
+
+            console.log(`Retrieved ${response.response.searchRequirements.length} search requirements`);
+            return response.response.searchRequirements;
+        } catch (error) {
+            console.error('Error fetching search requirements:', error);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 

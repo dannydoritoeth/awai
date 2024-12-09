@@ -150,6 +150,208 @@ const entityTypes = [
     {
         name: 'staff',
         process: processStaff
+    },
+    {
+        name: 'enquiry',
+        description: 'Property enquiries from potential buyers/renters',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the enquiry'
+            },
+            {
+                name: 'comment',
+                type: 'string',
+                description: 'The enquiry message content'
+            },
+            {
+                name: 'date',
+                type: 'datetime',
+                description: 'When the enquiry was made'
+            },
+            {
+                name: 'type',
+                type: 'string',
+                description: 'Type of enquiry (e.g., Buyer Enquiry)'
+            },
+            {
+                name: 'origin',
+                type: 'string',
+                description: 'Source of the enquiry'
+            },
+            {
+                name: 'firstCreated',
+                type: 'datetime',
+                description: 'When the enquiry was first created in the system'
+            },
+            {
+                name: 'lastModified',
+                type: 'datetime',
+                description: 'When the enquiry was last modified'
+            }
+        ],
+        relationships: [
+            {
+                name: 'property',
+                type: 'property',
+                description: 'The property this enquiry is about'
+            },
+            {
+                name: 'contact',
+                type: 'contact',
+                description: 'The contact who made the enquiry'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'intent_classification',
+                description: 'Classify enquiry intent (inspection, pricing, documentation, etc.)'
+            },
+            {
+                name: 'priority_scoring',
+                description: 'Score enquiry priority based on content and context'
+            },
+            {
+                name: 'response_suggestion',
+                description: 'Suggest appropriate responses based on enquiry type and content'
+            },
+            {
+                name: 'feature_extraction',
+                description: 'Extract key property features of interest from enquiry text'
+            },
+            {
+                name: 'sentiment_analysis',
+                description: 'Analyze enquiry sentiment and urgency'
+            }
+        ]
+    },
+    {
+        name: 'prospective_buyer',
+        description: 'Potential property buyers with their engagement history and status',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the prospective buyer'
+            },
+            {
+                name: 'enquirySource',
+                type: 'string',
+                description: 'Source of the initial enquiry'
+            },
+            {
+                name: 'interestLevel',
+                type: 'string',
+                description: 'Level of interest (e.g., Warm, Hot, Cold)'
+            },
+            {
+                name: 'priceFeedback',
+                type: 'number',
+                description: 'Price feedback provided by the buyer'
+            },
+            {
+                name: 'totalEnquiries',
+                type: 'number',
+                description: 'Total number of enquiries made'
+            },
+            {
+                name: 'totalInspections',
+                type: 'number',
+                description: 'Total number of property inspections'
+            },
+            {
+                name: 'totalOffers',
+                type: 'number',
+                description: 'Total number of offers made'
+            },
+            {
+                name: 'totalNotes',
+                type: 'number',
+                description: 'Total number of notes recorded'
+            },
+            {
+                name: 'contractTaken',
+                type: 'boolean',
+                description: 'Whether a contract has been taken'
+            },
+            {
+                name: 'reportTaken',
+                type: 'boolean',
+                description: 'Whether a property report has been taken'
+            },
+            {
+                name: 'ongoingInterest',
+                type: 'boolean',
+                description: 'Whether there is ongoing interest'
+            },
+            {
+                name: 'followUp',
+                type: 'boolean',
+                description: 'Whether follow-up is required'
+            },
+            {
+                name: 'firstActivityDate',
+                type: 'datetime',
+                description: 'Date of first activity'
+            },
+            {
+                name: 'lastActivityDate',
+                type: 'datetime',
+                description: 'Date of most recent activity'
+            }
+        ],
+        relationships: [
+            {
+                name: 'enquiries',
+                type: 'enquiry',
+                description: 'Related property enquiries'
+            },
+            {
+                name: 'properties',
+                type: 'property',
+                description: 'Properties of interest'
+            },
+            {
+                name: 'contact',
+                type: 'contact',
+                description: 'Associated contact record'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'engagement_scoring',
+                description: 'Calculate buyer engagement level based on activity history'
+            },
+            {
+                name: 'buyer_stage_analysis',
+                description: 'Determine buyer stage in purchase journey'
+            },
+            {
+                name: 'activity_pattern_recognition',
+                description: 'Identify patterns in buyer activity and engagement'
+            },
+            {
+                name: 'next_action_prediction',
+                description: 'Predict and suggest next best actions'
+            },
+            {
+                name: 'conversion_probability',
+                description: 'Calculate probability of conversion based on engagement metrics'
+            },
+            {
+                name: 'price_sensitivity_analysis',
+                description: 'Analyze price feedback and offer history'
+            },
+            {
+                name: 'engagement_trend_analysis',
+                description: 'Track and analyze changes in engagement over time'
+            },
+            {
+                name: 'follow_up_prioritization',
+                description: 'Prioritize follow-up actions based on engagement and status'
+            }
+        ]
     }
 ];
 
