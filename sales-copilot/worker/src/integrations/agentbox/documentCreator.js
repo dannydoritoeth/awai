@@ -4,14 +4,141 @@ const { BaseDocumentCreator } = require('../baseDocumentCreator');
 class AgentboxDocumentCreator {
     static createDocument(entity, type, metadata) {
         const pageContent = this.createText(entity, type);
+        const enhancedMetadata = this.createEnhancedMetadata(entity, type, metadata);
         return new Document({
             pageContent,
-            metadata: {
-                ...metadata,
-                type,
-                source: 'agentbox'
-            }
+            metadata: enhancedMetadata
         });
+    }
+
+    static createEnhancedMetadata(entity, type, baseMetadata) {
+        return {
+            ...baseMetadata,
+            type,
+            source: 'agentbox',
+            relationships: this._buildRelationships(entity, type),
+            metrics: this._calculateMetrics(entity, type),
+            history: this._buildHistory(entity)
+        };
+    }
+
+    static _buildRelationships(entity, type) {
+        const relationships = {
+            contacts: [],
+            listings: [],
+            staff: [],
+            office: null,
+            region: null,
+            propertyType: null,
+            enquiries: [],
+            searchRequirements: []
+        };
+
+        switch (type) {
+            case 'contact':
+                if (entity.office) relationships.office = { id: entity.office.id, type: 'office' };
+                if (entity.assignedStaff) relationships.staff.push({ id: entity.assignedStaff.id, type: 'staff' });
+                if (entity.viewedListings) relationships.listings = entity.viewedListings.map(l => ({ id: l.id, type: 'listing' }));
+                if (entity.enquiries) relationships.enquiries = entity.enquiries.map(e => ({ id: e.id, type: 'enquiry' }));
+                if (entity.searchRequirements) relationships.searchRequirements = entity.searchRequirements.map(sr => ({ id: sr.id, type: 'search_requirement' }));
+                break;
+
+            case 'listing':
+                if (entity.office) relationships.office = { id: entity.office.id, type: 'office' };
+                if (entity.listingAgent) relationships.staff.push({ id: entity.listingAgent.id, type: 'staff' });
+                if (entity.interestedContacts) relationships.contacts = entity.interestedContacts.map(c => ({ id: c.id, type: 'contact' }));
+                if (entity.region) relationships.region = { id: entity.region.id, type: 'region' };
+                if (entity.propertyType) relationships.propertyType = { id: entity.propertyType.id, type: 'property_type' };
+                if (entity.enquiries) relationships.enquiries = entity.enquiries.map(e => ({ id: e.id, type: 'enquiry' }));
+                break;
+
+            case 'staff':
+                if (entity.office) relationships.office = { id: entity.office.id, type: 'office' };
+                if (entity.team) relationships.staff = entity.team.map(s => ({ id: s.id, type: 'staff' }));
+                if (entity.listings) relationships.listings = entity.listings.map(l => ({ id: l.id, type: 'listing' }));
+                if (entity.contacts) relationships.contacts = entity.contacts.map(c => ({ id: c.id, type: 'contact' }));
+                if (entity.enquiries) relationships.enquiries = entity.enquiries.map(e => ({ id: e.id, type: 'enquiry' }));
+                break;
+        }
+
+        return relationships;
+    }
+
+    static _calculateMetrics(entity, type) {
+        return {
+            engagementScore: this._calculateEngagementScore(entity, type),
+            activityLevel: this._calculateActivityLevel(entity, type),
+            marketRelevance: this._calculateMarketRelevance(entity, type),
+            lastActivity: entity.lastModified || entity.lastActivity,
+            totalInteractions: this._countInteractions(entity, type)
+        };
+    }
+
+    static _buildHistory(entity) {
+        return {
+            statusChanges: entity.statusHistory || [],
+            interactions: entity.interactions || [],
+            modifications: entity.modifications || [],
+            created: entity.firstCreated,
+            modified: entity.lastModified
+        };
+    }
+
+    static _calculateEngagementScore(entity, type) {
+        let score = 0;
+        switch (type) {
+            case 'contact':
+                if (entity.enquiries) score += entity.enquiries.length * 10;
+                if (entity.viewedListings) score += entity.viewedListings.length * 5;
+                if (entity.searchRequirements) score += entity.searchRequirements.length * 3;
+                break;
+            case 'listing':
+                if (entity.enquiries) score += entity.enquiries.length * 10;
+                if (entity.interestedContacts) score += entity.interestedContacts.length * 5;
+                if (entity.openHomes) score += entity.openHomes.length * 3;
+                break;
+            case 'staff':
+                if (entity.listings) score += entity.listings.length * 5;
+                if (entity.contacts) score += entity.contacts.length * 3;
+                if (entity.enquiries) score += entity.enquiries.length * 2;
+                break;
+        }
+        return score;
+    }
+
+    static _calculateActivityLevel(entity, type) {
+        const now = new Date();
+        const lastActivity = new Date(entity.lastModified || entity.lastActivity);
+        const daysSinceActivity = Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24));
+
+        if (daysSinceActivity < 7) return 'high';
+        if (daysSinceActivity < 30) return 'medium';
+        return 'low';
+    }
+
+    static _calculateMarketRelevance(entity, type) {
+        let relevance = 'medium';
+        switch (type) {
+            case 'contact':
+                if (entity.interestLevel === 'Hot') relevance = 'high';
+                if (entity.searchRequirements?.length > 0) relevance = 'high';
+                break;
+            case 'listing':
+                if (entity.status === 'Active' && entity.enquiries?.length > 0) relevance = 'high';
+                break;
+            case 'staff':
+                if (entity.listings?.some(l => l.status === 'Active')) relevance = 'high';
+                break;
+        }
+        return relevance;
+    }
+
+    static _countInteractions(entity, type) {
+        let count = 0;
+        if (entity.enquiries) count += entity.enquiries.length;
+        if (entity.interactions) count += entity.interactions.length;
+        if (entity.modifications) count += entity.modifications.length;
+        return count;
     }
 
     static createText(entity, type) {
@@ -55,7 +182,23 @@ class AgentboxDocumentCreator {
             contact.website ? `Website: ${contact.website}` : null,
             `Status: ${contact.status}`,
             `Type: ${contact.type}`,
-            `Source: ${contact.source}`
+            `Source: ${contact.source}`,
+            '',
+            'Relationships:',
+            `Contact Class: ${this._formatContactClass(contact.class)}`,
+            `Source: ${this._formatContactSource(contact.source)}`,
+            `Primary Office: ${this._formatOffice(contact.office)}`,
+            `Assigned Staff: ${this._formatStaff(contact.assignedStaff)}`,
+            '',
+            'Engagement History:',
+            `Interest Level: ${this._formatInterestLevel(contact.interestLevel)}`,
+            `Recent Enquiries: ${this._summarizeEnquiries(contact.enquiries)}`,
+            `Property Preferences: ${this._summarizeSearchRequirements(contact.searchRequirements)}`,
+            '',
+            'Market Activity:',
+            `Viewed Listings: ${this._summarizeViewedListings(contact.viewedListings)}`,
+            `Favorite Regions: ${this._summarizeRegions(contact.regions)}`,
+            `Preferred Property Types: ${this._summarizePropertyTypes(contact.propertyTypes)}`
         ];
 
         return parts.filter(Boolean).join('\n');
@@ -78,7 +221,22 @@ class AgentboxDocumentCreator {
                 listing.property.address.state,
                 listing.property.address.postcode
             ].filter(Boolean).join(', ')}` : null,
-            listing.property?.address?.region ? `Region: ${listing.property.address.region}` : null
+            listing.property?.address?.region ? `Region: ${listing.property.address.region}` : null,
+            '',
+            'Property Details:',
+            `Property Type: ${this._formatPropertyType(listing.propertyType)}`,
+            `Region: ${this._formatRegion(listing.region)}`,
+            `Office: ${this._formatOffice(listing.office)}`,
+            '',
+            'Market Activity:',
+            `Enquiry Count: ${this._summarizeEnquiries(listing.enquiries)}`,
+            `Interested Contacts: ${this._summarizeInterestedContacts(listing.interestedContacts)}`,
+            `Similar Listings: ${this._summarizeSimilarListings(listing.similarListings)}`,
+            '',
+            'Sales Process:',
+            `Listing Agent: ${this._formatStaff(listing.listingAgent)}`,
+            `Open Home History: ${this._summarizeOpenHomes(listing.openHomes)}`,
+            `Price History: ${this._summarizePriceHistory(listing.priceHistory)}`
         ];
 
         return parts.filter(Boolean).join('\n');
@@ -93,7 +251,20 @@ class AgentboxDocumentCreator {
             staff.mobile ? `Mobile: ${staff.mobile}` : null,
             staff.phone ? `Phone: ${staff.phone}` : null,
             staff.officeName ? `Office: ${staff.officeName}` : null,
-            `Status: ${staff.status}`
+            `Status: ${staff.status}`,
+            '',
+            'Work Context:',
+            `Office: ${this._formatOffice(staff.office)}`,
+            `Team Members: ${this._summarizeTeamMembers(staff.team)}`,
+            '',
+            'Performance Metrics:',
+            `Active Listings: ${this._summarizeActiveListings(staff.listings)}`,
+            `Contact Portfolio: ${this._summarizeContactPortfolio(staff.contacts)}`,
+            `Recent Enquiries: ${this._summarizeEnquiries(staff.enquiries)}`,
+            '',
+            'Territory Coverage:',
+            `Primary Regions: ${this._summarizeRegions(staff.regions)}`,
+            `Property Types: ${this._summarizePropertyTypes(staff.propertyTypes)}`
         ];
 
         return parts.filter(Boolean).join('\n');
@@ -703,6 +874,88 @@ class AgentboxDocumentCreator {
         ];
 
         return parts.filter(Boolean).join('\n');
+    }
+
+    // Helper methods for formatting and summarizing relationships
+    static _formatContactClass(contactClass) {
+        return contactClass ? `${contactClass.name} (${contactClass.type})` : 'Not specified';
+    }
+
+    static _formatContactSource(source) {
+        return source ? `${source.name}` : 'Not specified';
+    }
+
+    static _formatOffice(office) {
+        return office ? `${office.name} (${office.suburb})` : 'Not specified';
+    }
+
+    static _formatStaff(staff) {
+        return staff ? `${staff.firstName} ${staff.lastName} (${staff.role})` : 'Not assigned';
+    }
+
+    static _formatInterestLevel(level) {
+        return level ? `${level.name}` : 'Not specified';
+    }
+
+    static _summarizeEnquiries(enquiries) {
+        if (!enquiries?.length) return 'No recent enquiries';
+        return `${enquiries.length} enquiries (Last: ${new Date(enquiries[0].date).toLocaleDateString()})`;
+    }
+
+    static _summarizeSearchRequirements(requirements) {
+        if (!requirements?.length) return 'No specific requirements';
+        return requirements.map(r => r.description).join(', ');
+    }
+
+    static _summarizeViewedListings(listings) {
+        if (!listings?.length) return 'No viewed listings';
+        return `${listings.length} listings viewed`;
+    }
+
+    static _summarizeRegions(regions) {
+        if (!regions?.length) return 'No specific regions';
+        return regions.map(r => r.name).join(', ');
+    }
+
+    static _summarizePropertyTypes(types) {
+        if (!types?.length) return 'No specific types';
+        return types.map(t => t.name).join(', ');
+    }
+
+    static _summarizeTeamMembers(team) {
+        if (!team?.length) return 'No team members';
+        return `${team.length} team members`;
+    }
+
+    static _summarizeActiveListings(listings) {
+        if (!listings?.length) return 'No active listings';
+        const active = listings.filter(l => l.status === 'Active');
+        return `${active.length} active out of ${listings.length} total`;
+    }
+
+    static _summarizeContactPortfolio(contacts) {
+        if (!contacts?.length) return 'No contacts';
+        return `${contacts.length} contacts managed`;
+    }
+
+    static _summarizeOpenHomes(openHomes) {
+        if (!openHomes?.length) return 'No open homes scheduled';
+        return `${openHomes.length} open homes held`;
+    }
+
+    static _summarizePriceHistory(history) {
+        if (!history?.length) return 'No price changes';
+        return `${history.length} price updates`;
+    }
+
+    static _summarizeInterestedContacts(contacts) {
+        if (!contacts?.length) return 'No interested contacts';
+        return `${contacts.length} interested contacts`;
+    }
+
+    static _summarizeSimilarListings(listings) {
+        if (!listings?.length) return 'No similar listings';
+        return `${listings.length} similar properties`;
     }
 }
 
