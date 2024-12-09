@@ -36,6 +36,8 @@ class AgentboxDocumentCreator {
                 return this.createContactSourceText(entity);
             case 'office':
                 return this.createOfficeText(entity);
+            case 'enquiry_type':
+                return this.createEnquiryTypeText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -647,6 +649,60 @@ class AgentboxDocumentCreator {
             }
         }
         return strategies.default;
+    }
+
+    static createEnquiryTypeText(type) {
+        const typeDescriptions = {
+            'General Enquiry': 'General information requests and non-specific enquiries',
+            'Buyer Enquiry': 'Property purchase and viewing requests from potential buyers',
+            'Vendor Enquiry': 'Property listing and selling requests from potential vendors',
+            'Tenant Enquiry': 'Rental and leasing requests from potential tenants',
+            'Complaint': 'Issues, concerns, and formal complaints requiring attention',
+            'Contract': 'Contract-related enquiries and documentation requests',
+            'Other': 'Miscellaneous enquiries not fitting standard categories'
+        };
+
+        const priorities = {
+            'General Enquiry': 'Standard priority with normal response time',
+            'Buyer Enquiry': 'High priority requiring prompt attention',
+            'Vendor Enquiry': 'High priority with business development focus',
+            'Tenant Enquiry': 'Medium priority with rental focus',
+            'Complaint': 'Urgent priority requiring immediate attention',
+            'Contract': 'High priority with legal/compliance focus',
+            'Other': 'Variable priority based on content'
+        };
+
+        const requirements = {
+            'General Enquiry': 'Standard information package and follow-up',
+            'Buyer Enquiry': 'Property details, inspection arrangements, price information',
+            'Vendor Enquiry': 'Market analysis, appraisal scheduling, listing process',
+            'Tenant Enquiry': 'Property availability, inspection times, application process',
+            'Complaint': 'Acknowledgment, investigation, resolution plan',
+            'Contract': 'Document preparation, legal review, timeline coordination',
+            'Other': 'Custom response based on enquiry content'
+        };
+
+        const timelines = {
+            'General Enquiry': '24-48 hours for initial response',
+            'Buyer Enquiry': 'Same day response with 24-hour follow-up',
+            'Vendor Enquiry': 'Same day response with appraisal within 48 hours',
+            'Tenant Enquiry': '24-hour response with inspection scheduling',
+            'Complaint': 'Immediate acknowledgment, 48-hour resolution plan',
+            'Contract': 'Same day review, 48-hour processing',
+            'Other': 'Response within 48 hours'
+        };
+
+        const parts = [
+            `Enquiry Type: ${type.name}`,
+            `Description: ${typeDescriptions[type.name] || 'Standard enquiry classification'}`,
+            '',
+            'Handling Characteristics:',
+            `- Priority Level: ${priorities[type.name] || 'Standard priority level'}`,
+            `- Response Requirements: ${requirements[type.name] || 'Standard response protocol'}`,
+            `- Typical Timeline: ${timelines[type.name] || 'Standard response timeline'}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
     }
 }
 
@@ -2041,4 +2097,4 @@ module.exports = {
     ListingDocumentCreator,
     ContactDocumentCreator,
     SearchRequirementDocumentCreator
-}; 
+        };
