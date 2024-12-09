@@ -73,10 +73,25 @@ CREATE TABLE webhook_configurations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table to store entity scores
+CREATE TABLE entity_scores (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES customers(id),
+    entity_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,  -- 'lead' or 'opportunity'
+    score INTEGER NOT NULL,
+    factors JSONB,  -- Store contributing factors
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT score_range CHECK (score >= 1 AND score <= 99),
+    UNIQUE(customer_id, entity_id, entity_type)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX idx_customer_integrations_customer_id ON customer_integrations(customer_id);
 CREATE INDEX idx_sync_history_customer_integration_id ON sync_history(customer_integration_id);
 CREATE INDEX idx_webhook_configurations_customer_integration_id ON webhook_configurations(customer_integration_id);
+CREATE INDEX idx_entity_scores_lookup ON entity_scores(customer_id, entity_id, entity_type);
+CREATE INDEX idx_entity_scores_type ON entity_scores(entity_type);
 
 -- Grant permissions to application user
 GRANT USAGE ON SCHEMA public TO tapuser;
