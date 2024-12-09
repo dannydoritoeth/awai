@@ -82,6 +82,12 @@ const createContactClassMetadata = (contactClass, integration) => ({
     displayName: contactClass.displayName
 });
 
+const createContactSourceMetadata = (source, integration) => ({
+    ...createMetadata(source, integration, 'contact_source'),
+    sourceId: source.id.toString(),
+    name: source.name
+});
+
 const processContacts = async (client, integration, langchainPinecone, logger) => {
     logger.info('Processing Agentbox contacts...');
     
@@ -310,6 +316,34 @@ const processContactClasses = async (client, integration, langchainService, logg
 
     logger.info(`Successfully processed ${classes.length} contact classes`);
     return classes.length;
+};
+
+const processContactSources = async (client, integration, langchainService, logger) => {
+    logger.info('Processing Agentbox contact sources...');
+    
+    const sources = await client.getContactSources();
+    if (sources.length === 0) {
+        logger.info('No contact sources found to process');
+        return 0;
+    }
+
+    logger.info(`Creating documents for ${sources.length} contact sources`);
+    
+    const documents = sources.map(source => 
+        AgentboxDocumentCreator.createDocument(
+            source, 
+            'contact_source',
+            createContactSourceMetadata(source, integration)
+        )
+    );
+
+    await langchainService.addDocuments(
+        documents,
+        integration.customer_id.toString()
+    );
+
+    logger.info(`Successfully processed ${sources.length} contact sources`);
+    return sources.length;
 };
 
 const entityTypes = [
@@ -713,6 +747,41 @@ const entityTypes = [
                 description: 'Prioritize follow-up actions based on engagement and status'
             }
         ]
+    },
+    {
+        name: 'contact_source',
+        process: processContactSources,
+        description: 'Sources and channels through which contacts are acquired',
+        fields: [
+            {
+                name: 'id',
+                type: 'string',
+                description: 'Unique identifier for the contact source'
+            },
+            {
+                name: 'name',
+                type: 'string',
+                description: 'Name of the contact acquisition source'
+            }
+        ],
+        aiCapabilities: [
+            {
+                name: 'source_effectiveness',
+                description: 'Analyze effectiveness of different contact acquisition channels'
+            },
+            {
+                name: 'lead_quality',
+                description: 'Assess lead quality by source channel'
+            },
+            {
+                name: 'channel_roi',
+                description: 'Calculate return on investment for each source channel'
+            },
+            {
+                name: 'acquisition_optimization',
+                description: 'Optimize contact acquisition strategy across channels'
+            }
+        ]
     }
 ];
 
@@ -725,5 +794,6 @@ module.exports = {
     processPropertyTypes,
     processRegions,
     processEnquirySources,
-    processContactClasses
+    processContactClasses,
+    processContactSources
 }; 

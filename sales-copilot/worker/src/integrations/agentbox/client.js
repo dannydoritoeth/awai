@@ -383,6 +383,28 @@ class AgentboxClient {
         }
     }
 
+    async getContactSources() {
+        try {
+            const response = await this.client.get('/contact-sources', {
+                params: {
+                    version: 2,
+                    limit: 20,
+                    page: 1
+                }
+            });
+
+            if (!response.data.response || !response.data.response.contactSources) {
+                throw new Error('Invalid response format from Agentbox API');
+            }
+
+            console.log(`Retrieved ${response.data.response.contactSources.length} contact sources`);
+            return response.data.response.contactSources;
+        } catch (error) {
+            console.error('Error fetching contact sources:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
     // Add more methods for other Agentbox endpoints as needed
 }
 

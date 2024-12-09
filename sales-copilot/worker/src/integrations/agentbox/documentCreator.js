@@ -32,6 +32,8 @@ class AgentboxDocumentCreator {
                 return this.createEnquirySourceText(entity);
             case 'contact_class':
                 return this.createContactClassText(entity);
+            case 'contact_source':
+                return this.createContactSourceText(entity);
             default:
                 throw new Error(`Unknown entity type: ${type}`);
         }
@@ -427,6 +429,103 @@ class AgentboxDocumentCreator {
             'Prospective Landlord': 'Investment advice, market updates, management options'
         };
         return strategies[className] || 'Customized engagement based on needs and preferences';
+    }
+
+    static createContactSourceText(source) {
+        const sourceDescriptions = {
+            'Phone Enquiry': 'Direct telephone contact initiated by potential clients',
+            'Email Enquiry': 'Email-based communication from interested parties',
+            'Website Enquiry': 'Inquiries submitted through the agency website',
+            'Auto Email': 'Automated email-based lead generation',
+            'Import': 'Contacts imported from external systems or databases',
+            'Other': 'Miscellaneous contact acquisition methods',
+            'Open Homes Inspection': 'Contacts gathered during property viewings',
+            'Doorknocking': 'Direct community engagement through door-to-door contact',
+            'API': 'Contacts acquired through system integrations',
+            'Sandbox': 'Test contacts for system validation',
+            'Magnifi - Agent lead form': 'Leads generated through Magnifi agent forms'
+        };
+
+        const parts = [
+            `Source: ${source.name}`,
+            `Description: ${sourceDescriptions[source.name] || 'Custom contact acquisition channel'}`,
+            '',
+            'Channel Characteristics:',
+            `- Type: ${this._getSourceType(source.name)}`,
+            `- Engagement Model: ${this._getEngagementModel(source.name)}`,
+            `- Lead Quality Indicators: ${this._getQualityIndicators(source.name)}`,
+            `- Follow-up Strategy: ${this._getFollowUpStrategy(source.name)}`
+        ];
+
+        return parts.filter(Boolean).join('\n');
+    }
+
+    static _getSourceType(sourceName) {
+        const types = {
+            'Phone Enquiry': 'Direct communication channel with immediate interaction',
+            'Email Enquiry': 'Digital communication channel with asynchronous interaction',
+            'Website Enquiry': 'Online form submission with structured data collection',
+            'Auto Email': 'Automated digital communication channel',
+            'Import': 'Bulk data acquisition channel',
+            'Other': 'Alternative contact acquisition methods',
+            'Open Homes Inspection': 'In-person engagement channel',
+            'Doorknocking': 'Direct outreach channel',
+            'API': 'Technical integration channel',
+            'Sandbox': 'Testing and validation channel',
+            'Magnifi - Agent lead form': 'Agent-specific digital lead capture'
+        };
+        return types[sourceName] || 'Custom acquisition channel';
+    }
+
+    static _getEngagementModel(sourceName) {
+        const models = {
+            'Phone Enquiry': 'Real-time conversation with immediate response capability',
+            'Email Enquiry': 'Response-driven engagement with documentation trail',
+            'Website Enquiry': 'Form-based interaction with automated processing',
+            'Auto Email': 'Automated engagement sequence with tracking',
+            'Import': 'Batch processing with targeted follow-up',
+            'Other': 'Varied engagement based on source specifics',
+            'Open Homes Inspection': 'Face-to-face interaction with property context',
+            'Doorknocking': 'Personal interaction in client environment',
+            'API': 'System-driven engagement with automation',
+            'Sandbox': 'Test environment engagement simulation',
+            'Magnifi - Agent lead form': 'Agent-mediated digital engagement'
+        };
+        return models[sourceName] || 'Standard engagement process';
+    }
+
+    static _getQualityIndicators(sourceName) {
+        const indicators = {
+            'Phone Enquiry': 'High intent, immediate interest, direct communication',
+            'Email Enquiry': 'Specific interest, documented requirements, follow-up potential',
+            'Website Enquiry': 'Digital engagement, self-qualified, trackable interest',
+            'Auto Email': 'Automated qualification, behavior tracking, engagement metrics',
+            'Import': 'Historical data, pre-qualified status, bulk processing',
+            'Other': 'Variable quality based on source specifics',
+            'Open Homes Inspection': 'High intent, property-specific interest, in-person validation',
+            'Doorknocking': 'Local market interest, direct qualification, relationship building',
+            'API': 'System-validated data, integration quality, automated verification',
+            'Sandbox': 'Test data quality metrics',
+            'Magnifi - Agent lead form': 'Agent-qualified leads, structured data capture'
+        };
+        return indicators[sourceName] || 'Standard quality assessment metrics';
+    }
+
+    static _getFollowUpStrategy(sourceName) {
+        const strategies = {
+            'Phone Enquiry': 'Immediate response, detailed requirements gathering, personalized follow-up',
+            'Email Enquiry': 'Prompt response, information package, scheduled follow-up',
+            'Website Enquiry': 'Automated confirmation, personalized response, systematic follow-up',
+            'Auto Email': 'Automated sequence, engagement tracking, triggered follow-up',
+            'Import': 'Segmented outreach, targeted campaigns, systematic engagement',
+            'Other': 'Customized follow-up based on source characteristics',
+            'Open Homes Inspection': 'Same-day follow-up, property-specific feedback, next steps',
+            'Doorknocking': 'Relationship building, local market updates, community engagement',
+            'API': 'Automated workflow, system-triggered actions, integrated follow-up',
+            'Sandbox': 'Test follow-up process validation',
+            'Magnifi - Agent lead form': 'Agent-driven follow-up, structured process, tracked engagement'
+        };
+        return strategies[sourceName] || 'Standard follow-up process';
     }
 }
 
