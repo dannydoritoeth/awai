@@ -20,6 +20,19 @@ CREATE TABLE integrations (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create enum for auth types
+CREATE TYPE auth_type AS ENUM ('oauth2', 'api_key');
+
+-- Table to store customers
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Recreate the customer_integrations table
 CREATE TABLE customer_integrations (
     id SERIAL PRIMARY KEY,
@@ -38,19 +51,6 @@ CREATE TABLE customer_integrations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(customer_id, integration_id)
-);
-
--- Create enum for auth types
-CREATE TYPE auth_type AS ENUM ('oauth2', 'api_key');
-
--- Table to store customers
-CREATE TABLE customers (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    status VARCHAR(50) DEFAULT 'active',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Table to track sync status and history
@@ -80,37 +80,72 @@ CREATE TABLE webhook_configurations (
 CREATE TABLE entity_scores (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id),
+    integration_id INTEGER REFERENCES integrations(id),
     entity_id TEXT NOT NULL,
-    entity_type TEXT NOT NULL,  -- 'lead' or 'opportunity'
+    entity_type TEXT NOT NULL,
     score INTEGER NOT NULL,
-    factors JSONB,  -- Store contributing factors
+    factors JSONB,
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT score_range CHECK (score >= 1 AND score <= 99),
-    UNIQUE(customer_id, entity_id, entity_type)
+    UNIQUE(customer_id, integration_id, entity_id, entity_type)
 );
 
 -- Table to store data quality reports
 CREATE TABLE data_quality_reports (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id),
+    integration_id INTEGER REFERENCES integrations(id),
     entity_id TEXT NOT NULL,
-    entity_type TEXT NOT NULL,  -- 'contact', 'prospective_buyer', or 'enquiry'
+    entity_type TEXT NOT NULL,
     quality_score INTEGER NOT NULL,
-    issues JSONB,  -- Array of issues found
-    warnings JSONB,  -- Array of warnings found
+    issues JSONB,
+    warnings JSONB,
     last_checked TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT quality_score_range CHECK (quality_score >= 0 AND quality_score <= 100),
-    UNIQUE(customer_id, entity_id, entity_type)
+    UNIQUE(customer_id, integration_id, entity_id, entity_type)
+);
+
+-- Integration-specific tables for duplicate checking
+CREATE TABLE agentbox_contacts (
+    id TEXT NOT NULL,
+    customer_id INTEGER REFERENCES customers(id),
+    email TEXT,
+    mobile TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    source TEXT,
+    type TEXT,
+    created_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE,
+    PRIMARY KEY (customer_id, id)
+);
+
+CREATE TABLE pipedrive_contacts (
+    id TEXT NOT NULL,
+    customer_id INTEGER REFERENCES customers(id),
+    email JSONB, -- Array of email objects
+    phone JSONB, -- Array of phone objects
+    first_name TEXT,
+    last_name TEXT,
+    created_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE,
+    PRIMARY KEY (customer_id, id)
 );
 
 -- Create indexes for better query performance
 CREATE INDEX idx_customer_integrations_customer_id ON customer_integrations(customer_id);
 CREATE INDEX idx_sync_history_customer_integration_id ON sync_history(customer_integration_id);
 CREATE INDEX idx_webhook_configurations_customer_integration_id ON webhook_configurations(customer_integration_id);
-CREATE INDEX idx_entity_scores_lookup ON entity_scores(customer_id, entity_id, entity_type);
+CREATE INDEX idx_entity_scores_lookup ON entity_scores(customer_id, integration_id, entity_id, entity_type);
 CREATE INDEX idx_entity_scores_type ON entity_scores(entity_type);
-CREATE INDEX idx_data_quality_reports_lookup ON data_quality_reports(customer_id, entity_id, entity_type);
+CREATE INDEX idx_data_quality_reports_lookup ON data_quality_reports(customer_id, integration_id, entity_id, entity_type);
 CREATE INDEX idx_data_quality_reports_score ON data_quality_reports(quality_score);
+
+-- Indexes for duplicate checking
+CREATE INDEX idx_agentbox_contacts_email ON agentbox_contacts(customer_id, email);
+CREATE INDEX idx_agentbox_contacts_mobile ON agentbox_contacts(customer_id, mobile);
+CREATE INDEX idx_agentbox_contacts_name ON agentbox_contacts(customer_id, first_name, last_name);
+CREATE INDEX idx_pipedrive_contacts_name ON pipedrive_contacts(customer_id, first_name, last_name);
 
 -- Grant permissions to application user
 GRANT USAGE ON SCHEMA public TO tapuser;

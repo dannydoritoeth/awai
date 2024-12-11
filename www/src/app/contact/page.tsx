@@ -26,7 +26,7 @@ export default function ContactPage() {
         <div className="container mx-auto px-4 max-w-6xl">
           {/* Target Audience Line */}
           <p className="text-center text-gray-600 mb-4">
-            For Business Owners Who Want to Save Time and Money Using AI
+            For Sales Teams Who Want to <span className="underline">Earn More</span> and <span className="underline">Work Less</span>
           </p>
 
           {/* Main Call to Action */}
@@ -47,13 +47,25 @@ export default function ContactPage() {
 
           {/* Calendly Widget */}
           <div className="calendly-inline-widget" 
-            data-url="https://calendly.com/scottb1978/30min"
+            data-url="https://calendly.com/scott-acceleratewith/30min"
             style={{ 
               minWidth: '320px',
               height: '800px',
               width: '100%',
             }} 
           />
+          
+          {/* Alternative Contact Method */}
+          <p className="text-center text-gray-600 mt-4">
+            Can't find a suitable time? Email{' '}
+            <a 
+              href="mailto:scott@acceleratewith.ai" 
+              className="text-[#0066FF] hover:underline"
+            >
+              scott@acceleratewith.ai
+            </a>
+            {' '}to arrange a meeting.
+          </p>
         </div>
       </main>
     </>
