@@ -3,30 +3,17 @@ import Link from 'next/link';
 
 export function ContactHeader() {
   return (
-    <header className="fixed w-full bg-white z-50 shadow-sm">
-      <div className="container mx-auto px-4 py-4">
-        <nav className="flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold text-gray-900">
-            AccelerateWith.ai
+    <header className="fixed w-full top-0 z-50 bg-white">
+      <div className="container mx-auto px-8 py-4">
+        <div className="flex justify-center">
+          <Link href="/">
+            <img
+              src="/assets/logos/awai-logo.svg"
+              alt="Accelerate with AI Logo"
+              className="w-[360px] h-[120px]"
+            />
           </Link>
-          
-          <div className="flex items-center space-x-8">
-            <Link 
-              href="https://www.youtube.com/@scott.bradley.16940" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-700 hover:text-gray-900"
-            >
-              Free Content
-            </Link>
-            <Link href="/services" className="text-gray-700 hover:text-gray-900">
-              Services
-            </Link>
-            <Link href="/contact" className="text-gray-700 hover:text-gray-900">
-              Contact Us
-            </Link>
-          </div>
-        </nav>
+        </div>
       </div>
     </header>
   );
