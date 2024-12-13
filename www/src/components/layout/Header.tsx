@@ -21,6 +21,14 @@ export function Header() {
               Services
             </Link>
             <Link 
+              href="https://www.youtube.com/@scott.bradley.16940"
+              target="_blank"
+              rel="noopener noreferrer" 
+              className="text-2xl text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              Free Content
+            </Link>
+            <Link 
               href="/contact" 
               className="text-2xl px-6 py-2 bg-[#0A2E4D] text-white rounded-md 
                 hover:bg-[#164875] transition-colors duration-300 
