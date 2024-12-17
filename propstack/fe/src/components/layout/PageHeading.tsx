@@ -2,6 +2,7 @@
 
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
+import { navigationStore } from '@/lib/navigation'
 
 interface PageHeadingProps {
   title: string
@@ -12,11 +13,16 @@ interface PageHeadingProps {
 export function PageHeading({ title, description, showBackButton }: PageHeadingProps) {
   const router = useRouter()
 
+  const handleBack = () => {
+    navigationStore.isBackNavigation = true
+    router.back()
+  }
+
   return (
     <div>
       <div className="flex items-center gap-2">
         {showBackButton && (
-          <button onClick={() => router.back()}>
+          <button onClick={handleBack}>
             <ChevronLeftIcon className="w-8 h-8 text-gray-900" />
           </button>
         )}

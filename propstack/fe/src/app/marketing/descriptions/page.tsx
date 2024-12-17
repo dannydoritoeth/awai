@@ -3,7 +3,7 @@
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { ListingForm } from '@/components/marketing/descriptions/ListingForm'
-import { DescriptionHeader } from '@/components/marketing/descriptions/DescriptionHeader'
+import { PageHeading } from '@/components/layout/PageHeading'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,9 +15,13 @@ export default function ListingDescriptionsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <PageTransition showBackButton>
+      <PageTransition>
         <main className="container mx-auto px-4">
-          <DescriptionHeader onReset={handleReset} />
+          <PageHeading 
+            title="Listing Description"
+            description="Create compelling property descriptions with AI"
+            showBackButton
+          />
           <div className="space-y-4">
             <ListingForm />
           </div>
