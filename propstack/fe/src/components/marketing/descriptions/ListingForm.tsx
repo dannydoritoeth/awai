@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
 
@@ -18,6 +18,7 @@ interface FormData {
   interiorSize?: string
   highlights: string[]
   otherDetails?: string
+  fullAddress?: google.maps.places.PlaceResult
 }
 
 export function ListingForm() {
@@ -29,8 +30,8 @@ export function ListingForm() {
     highlights: []
   })
 
+  const [inputValue, setInputValue] = useState('')
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [step, setStep] = useState(1)
 
@@ -38,6 +39,12 @@ export function ListingForm() {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
     libraries: ['places']
   })
+
+  useEffect(() => {
+    if (step === 1) {
+      setInputValue(formData.address)
+    }
+  }, [step])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,6 +57,25 @@ export function ListingForm() {
 
   const handleBack = () => {
     setStep(1)
+  }
+
+  const handlePlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace()
+    if (place) {
+      const address = place.formatted_address || ''
+      console.log(place)
+      setInputValue(address)
+      setFormData(prev => ({ ...prev, address }))
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
+    if (!formData.fullAddress) {
+        console.log(formData.fullAddress);
+        console.log(e.target.value);
+      setFormData(prev => ({ ...prev, address: e.target.value }))
+    }
   }
 
   if (step === 2) {
@@ -77,18 +103,13 @@ export function ListingForm() {
                     autocompleteRef.current = autocomplete
                     autocomplete.setFields(['formatted_address'])
                   }}
-                  onPlaceSelected={(place) => {
-                    const address = place.formatted_address || ''
-                    setFormData(prev => ({ ...prev, address }))
-                    if (inputRef.current) {
-                      inputRef.current.value = address
-                    }
-                  }}
+                  options={{ fields: ['formatted_address'] }}
+                  onPlaceChanged={handlePlaceChanged}
                 >
                   <input
-                    ref={inputRef}
                     type="text"
-                    defaultValue={formData.address}
+                    value={inputValue}
+                    onChange={handleInputChange}
                     className="form-input"
                     placeholder="Start typing an address..."
                   />
