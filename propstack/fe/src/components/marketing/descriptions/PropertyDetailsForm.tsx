@@ -23,84 +23,141 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Property Details</h3>
           <form className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-700">$</label>
-              <input
-                type="text"
-                value={formData.price || ''}
-                onChange={(e) => onChange({ price: e.target.value })}
-                placeholder="Price (optional)"
-                className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
-              />
+            {/* Price with currency dropdown */}
+            <div className="flex gap-2">
+              <select
+                className="w-16 rounded-md border-gray-300 shadow-sm text-gray-900"
+                defaultValue="$"
+              >
+                <option>$</option>
+              </select>
+              <div className="flex-1">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.price || ''}
+                    onChange={(e) => onChange({ price: e.target.value })}
+                    placeholder="Price (optional)"
+                    className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                      formData.price ? 'pt-6' : ''
+                    }`}
+                  />
+                  {formData.price && (
+                    <label className="absolute left-2 top-1 text-xs text-gray-500">
+                      Price (optional)
+                    </label>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-700">Bedrooms</label>
+            {/* Bedrooms */}
+            <div className="relative">
               <input
                 type="number"
                 value={formData.bedrooms || ''}
                 onChange={(e) => onChange({ bedrooms: e.target.value })}
-                className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
+                placeholder="Bedrooms"
+                className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                  formData.bedrooms ? 'pt-6' : ''
+                }`}
               />
+              {formData.bedrooms && (
+                <label className="absolute left-2 top-1 text-xs text-gray-500">
+                  Bedrooms
+                </label>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-700">Bathrooms</label>
+            {/* Bathrooms */}
+            <div className="relative">
               <input
                 type="number"
                 value={formData.bathrooms || ''}
                 onChange={(e) => onChange({ bathrooms: e.target.value })}
-                className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
+                placeholder="Bathrooms"
+                className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                  formData.bathrooms ? 'pt-6' : ''
+                }`}
               />
+              {formData.bathrooms && (
+                <label className="absolute left-2 top-1 text-xs text-gray-500">
+                  Bathrooms
+                </label>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-700">Parking (optional)</label>
+            {/* Parking */}
+            <div className="relative">
               <input
                 type="text"
                 value={formData.parking || ''}
                 onChange={(e) => onChange({ parking: e.target.value })}
-                className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
+                placeholder="Parking (optional)"
+                className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                  formData.parking ? 'pt-6' : ''
+                }`}
               />
+              {formData.parking && (
+                <label className="absolute left-2 top-1 text-xs text-gray-500">
+                  Parking (optional)
+                </label>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-700">Lot Size (optional)</label>
-              <div className="flex gap-2">
+            {/* Lot Size */}
+            <div className="relative flex gap-2">
+              <div className="flex-1 relative">
                 <input
                   type="text"
                   value={formData.lotSize || ''}
                   onChange={(e) => onChange({ lotSize: e.target.value })}
-                  className="flex-1 rounded-md border-gray-300 shadow-sm text-gray-900"
+                  placeholder="Lot Size (optional)"
+                  className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                    formData.lotSize ? 'pt-6' : ''
+                  }`}
                 />
-                <select
-                  value={formData.lotSizeUnit || 'sqft'}
-                  onChange={(e) => onChange({ lotSizeUnit: e.target.value as 'sqft' | 'acres' })}
-                  className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
-                >
-                  <option>Sq Feet</option>
-                  <option>Acres</option>
-                </select>
+                {formData.lotSize && (
+                  <label className="absolute left-2 top-1 text-xs text-gray-500">
+                    Lot Size (optional)
+                  </label>
+                )}
               </div>
+              <select
+                value={formData.lotSizeUnit || 'sqft'}
+                onChange={(e) => onChange({ lotSizeUnit: e.target.value as 'sqft' | 'acres' })}
+                className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
+              >
+                <option value="sqft">Sq Feet</option>
+                <option value="acres">Acres</option>
+              </select>
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-700">Interior size (optional)</label>
-              <div className="flex gap-2">
+            {/* Interior Size */}
+            <div className="relative flex gap-2">
+              <div className="flex-1 relative">
                 <input
                   type="text"
                   value={formData.interiorSize || ''}
                   onChange={(e) => onChange({ interiorSize: e.target.value })}
-                  className="flex-1 rounded-md border-gray-300 shadow-sm text-gray-900"
+                  placeholder="Interior Size (optional)"
+                  className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
+                    formData.interiorSize ? 'pt-6' : ''
+                  }`}
                 />
-                <select
-                  value={formData.interiorSizeUnit || 'sqft'}
-                  onChange={(e) => onChange({ interiorSizeUnit: e.target.value as 'sqft' })}
-                  className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
-                >
-                  <option>Sq Feet</option>
-                </select>
+                {formData.interiorSize && (
+                  <label className="absolute left-2 top-1 text-xs text-gray-500">
+                    Interior Size (optional)
+                  </label>
+                )}
               </div>
+              <select
+                value={formData.interiorSizeUnit || 'sqft'}
+                onChange={(e) => onChange({ interiorSizeUnit: e.target.value as 'sqft' })}
+                className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
+              >
+                <option value="sqft">Sq Feet</option>
+              </select>
             </div>
           </form>
         </div>
