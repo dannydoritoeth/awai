@@ -25,12 +25,12 @@ export function PageTransition({ children, showBackButton = false }: PageTransit
   return (
     <div className="relative w-full h-full">
       {shouldShowBackButton && (
-        <div className="container mx-auto px-4 mb-2">
+        <div className="container mx-auto px-4">
           <button
             onClick={handleBack}
-            className="flex items-center text-gray-600 hover:text-gray-900 text-lg"
+            className="inline-flex items-center text-gray-900 text-3xl font-bold"
           >
-            <ChevronLeftIcon className="w-6 h-6" />
+            <ChevronLeftIcon className="w-8 h-8" />
             <span>Back</span>
           </button>
         </div>
