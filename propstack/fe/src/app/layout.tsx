@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PropStack AI",
+  title: "PropStack IO",
   description: "AI-powered real estate platform",
 };
 

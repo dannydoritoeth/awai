@@ -21,6 +21,12 @@ interface FormData {
   fullAddress?: google.maps.places.PlaceResult
 }
 
+interface FormErrors {
+  address?: string
+  listingType?: string
+  propertyType?: string
+}
+
 export function ListingForm() {
   const [formData, setFormData] = useState<FormData>({
     address: '',
@@ -34,6 +40,8 @@ export function ListingForm() {
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
   const [step, setStep] = useState(1)
+  const [isAddressSelected, setIsAddressSelected] = useState(false)
+  const [errors, setErrors] = useState<FormErrors>({})
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
@@ -52,7 +60,9 @@ export function ListingForm() {
   }
 
   const handleNext = () => {
-    setStep(2)
+    if (validateForm()) {
+      setStep(2)
+    }
   }
 
   const handleBack = () => {
@@ -63,19 +73,34 @@ export function ListingForm() {
     const place = autocompleteRef.current?.getPlace()
     if (place) {
       const address = place.formatted_address || ''
-      console.log(place)
       setInputValue(address)
-      setFormData(prev => ({ ...prev, address }))
+      setFormData(prev => ({ ...prev, address, fullAddress: place }))
+      setIsAddressSelected(true)
+      setErrors(prev => ({ ...prev, address: undefined }))
     }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
-    if (!formData.fullAddress) {
-        console.log(formData.fullAddress);
-        console.log(e.target.value);
-      setFormData(prev => ({ ...prev, address: e.target.value }))
+    setIsAddressSelected(false)
+    setFormData(prev => ({ ...prev, address: e.target.value, fullAddress: undefined }))
+  }
+
+  const validateForm = () => {
+    const newErrors: FormErrors = {}
+
+    if (!isAddressSelected) {
+      newErrors.address = 'Please select an address'
     }
+    if (!formData.listingType) {
+      newErrors.listingType = 'Please select if this is for sale or rent'
+    }
+    if (!formData.propertyType) {
+      newErrors.propertyType = 'Please select a property type'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   if (step === 2) {
@@ -117,6 +142,7 @@ export function ListingForm() {
               ) : (
                 <input type="text" className="form-input" disabled />
               )}
+              {errors.address && <p className="text-red-500">{errors.address}</p>}
             </div>
 
             <div>
@@ -152,6 +178,7 @@ export function ListingForm() {
                 />
                 For rent
               </label>
+              {errors.listingType && <p className="text-red-500">{errors.listingType}</p>}
             </div>
           </form>
         </div>
@@ -185,6 +212,7 @@ export function ListingForm() {
                 {label}
               </label>
             ))}
+            {errors.propertyType && <p className="text-red-500">{errors.propertyType}</p>}
           </div>
         </div>
       </div>
