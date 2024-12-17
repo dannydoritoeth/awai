@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
+import { useState } from 'react'
 
 interface PropertyDetailsFormProps {
   onBack: () => void
@@ -8,7 +9,35 @@ interface PropertyDetailsFormProps {
   onChange: (updates: Partial<FormData>) => void
 }
 
+interface FormErrors {
+  bedrooms?: string
+  bathrooms?: string
+}
+
 export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDetailsFormProps) {
+  const [errors, setErrors] = useState<FormErrors>({})
+
+  const validateForm = () => {
+    const newErrors: FormErrors = {}
+
+    if (!formData.bedrooms) {
+      newErrors.bedrooms = 'Please enter number of bedrooms'
+    }
+    if (!formData.bathrooms) {
+      newErrors.bathrooms = 'Please enter number of bathrooms'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleNext = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (validateForm()) {
+      // Proceed to next step
+    }
+  }
+
   const handleHighlightToggle = (highlight: string) => {
     const newHighlights = formData.highlights.includes(highlight)
       ? formData.highlights.filter(h => h !== highlight)
@@ -56,16 +85,22 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
               <input
                 type="number"
                 value={formData.bedrooms || ''}
-                onChange={(e) => onChange({ bedrooms: e.target.value })}
+                onChange={(e) => {
+                  onChange({ bedrooms: e.target.value })
+                  setErrors(prev => ({ ...prev, bedrooms: undefined }))
+                }}
                 placeholder="Bedrooms"
                 className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
                   formData.bedrooms ? 'pt-6' : ''
-                }`}
+                } ${errors.bedrooms ? 'border-red-500' : ''}`}
               />
               {formData.bedrooms && (
                 <label className="absolute left-2 top-1 text-xs text-gray-500">
                   Bedrooms
                 </label>
+              )}
+              {errors.bedrooms && (
+                <p className="mt-1 text-sm text-red-500">{errors.bedrooms}</p>
               )}
             </div>
 
@@ -74,16 +109,22 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
               <input
                 type="number"
                 value={formData.bathrooms || ''}
-                onChange={(e) => onChange({ bathrooms: e.target.value })}
+                onChange={(e) => {
+                  onChange({ bathrooms: e.target.value })
+                  setErrors(prev => ({ ...prev, bathrooms: undefined }))
+                }}
                 placeholder="Bathrooms"
                 className={`w-full rounded-md border-gray-300 shadow-sm text-gray-900 ${
                   formData.bathrooms ? 'pt-6' : ''
-                }`}
+                } ${errors.bathrooms ? 'border-red-500' : ''}`}
               />
               {formData.bathrooms && (
                 <label className="absolute left-2 top-1 text-xs text-gray-500">
                   Bathrooms
                 </label>
+              )}
+              {errors.bathrooms && (
+                <p className="mt-1 text-sm text-red-500">{errors.bathrooms}</p>
               )}
             </div>
 
@@ -220,7 +261,7 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
           Back
         </button>
         <button
-          type="submit"
+          onClick={handleNext}
           className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors"
         >
           Next
