@@ -21,7 +21,7 @@ export function PageTransition({ children, showBackButton = false }: PageTransit
   }
 
   const shouldShowBackButton = showBackButton && pathname !== '/'
-
+  console.log("isBack", isBack);
   return (
     <div className="relative w-full h-full">
       {shouldShowBackButton && (
