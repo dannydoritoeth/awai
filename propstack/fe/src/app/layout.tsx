@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   description: "AI-powered real estate platform",
 };
 
-export const dynamic = 'force-static'
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
 
 export default function RootLayout({
   children,

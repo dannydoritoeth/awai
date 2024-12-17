@@ -1,8 +1,8 @@
+"use client"
+
 import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
-
-export const dynamic = 'force-static'
 
 export default function Home() {
   return (

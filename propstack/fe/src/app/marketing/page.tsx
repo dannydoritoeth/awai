@@ -2,7 +2,7 @@ import { MarketingDashboard } from '@/components/marketing/descriptions/Marketin
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export default function MarketingPage() {
   return (
