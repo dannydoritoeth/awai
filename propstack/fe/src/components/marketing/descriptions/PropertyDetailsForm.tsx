@@ -102,69 +102,49 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
                 </select>
               </div>
             </div>
+          </form>
+        </div>
 
-            <div className="flex flex-wrap gap-2">
-              {[
-                'Renovation potential', 'Lot size', 'Neighbourhood',
-                'Outdoor space', 'Price point', 'Parking',
-                'Quality of build', 'Nearby attractions', 'Environment',
-                'Basement', 'Rental income'
-              ].map(highlight => (
-                <button
-                  key={highlight}
-                  type="button"
-                  onClick={() => handleHighlightToggle(highlight)}
-                  className={`px-3 py-1 rounded-full border ${
-                    formData.highlights.includes(highlight)
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  } text-sm`}
-                >
-                  {highlight}
+        {/* Right Column - Property Highlights & Other Details */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
+          <div className="space-y-6">
+            {/* Highlights Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Property Highlights</h3>
+              <p className="text-sm text-gray-600 mb-4">The AI will pay special attention to these areas.</p>
+              
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'Renovation potential', 'Lot size', 'Neighbourhood',
+                  'Outdoor space', 'Price point', 'Parking',
+                  'Quality of build', 'Nearby attractions', 'Environment',
+                  'Basement', 'Rental income'
+                ].map(highlight => (
+                  <button
+                    key={highlight}
+                    type="button"
+                    onClick={() => handleHighlightToggle(highlight)}
+                    className={`px-3 py-1 rounded-full border ${
+                      formData.highlights.includes(highlight)
+                        ? 'bg-blue-50 border-blue-300 text-blue-700'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    } text-sm`}
+                  >
+                    {highlight}
+                  </button>
+                ))}
+                <button className="px-3 py-1 rounded-full border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">
+                  + Add your own
                 </button>
-              ))}
+              </div>
             </div>
 
+            {/* Other Details Section */}
             <div>
               <h4 className="text-sm font-medium text-gray-900 mb-2">Other details</h4>
               <textarea
                 value={formData.otherDetails || ''}
                 onChange={(e) => onChange({ otherDetails: e.target.value })}
-                placeholder="Example: Open house dates, renovations / updates, any specific conditions etc."
-                className="w-full h-32 rounded-md border-gray-300 shadow-sm text-gray-900"
-              />
-            </div>
-          </form>
-        </div>
-
-        {/* Right Column - Property Highlights */}
-        <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900">Property Highlights</h3>
-          <p className="text-sm text-gray-600 mb-4">The AI will pay special attention to these areas.</p>
-          
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {[
-                'Renovation potential', 'Lot size', 'Neighbourhood',
-                'Outdoor space', 'Price point', 'Parking',
-                'Quality of build', 'Nearby attractions', 'Environment',
-                'Basement', 'Rental income'
-              ].map(highlight => (
-                <button
-                  key={highlight}
-                  className="px-3 py-1 rounded-full border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  {highlight}
-                </button>
-              ))}
-              <button className="px-3 py-1 rounded-full border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">
-                + Add your own
-              </button>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Other details</h4>
-              <textarea
                 placeholder="Example: Open house dates, renovations / updates, any specific conditions etc."
                 className="w-full h-32 rounded-md border-gray-300 shadow-sm text-gray-900"
               />
