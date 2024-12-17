@@ -19,7 +19,7 @@ export function PageHeading({ title, description, showBackButton }: PageHeadingP
   }
 
   return (
-    <div>
+    <div className="mb-8">
       <div className="flex items-center gap-2">
         {showBackButton && (
           <button onClick={handleBack}>
