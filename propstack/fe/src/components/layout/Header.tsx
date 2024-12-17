@@ -9,6 +9,11 @@ export function Header() {
   const { user, isAnonymous, signOut } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
 
+  const handleCloseModal = () => {
+    console.log('Closing modal...')
+    setShowAuthModal(false)
+  }
+
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -43,7 +48,7 @@ export function Header() {
           </div>
         </div>
       </div>
-      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+      {showAuthModal && <AuthModal onClose={handleCloseModal} />}
     </header>
   )
 } 

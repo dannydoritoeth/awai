@@ -34,6 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  const continueAnonymously = async () => {
+    const { data, error } = await supabase.auth.signInAnonymously()
+    if (error) {
+      console.error('Anonymous login error:', error)
+      throw error
+    }
+    return data
+  }
+
   const value = {
     user,
     isAnonymous,
@@ -62,14 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
     },
-    continueAnonymously: async () => {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: 'anonymous@example.com',
-        password: 'anonymous',
-      })
-      if (error) throw error
-      setIsAnonymous(true)
-    }
+    continueAnonymously: continueAnonymously
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
