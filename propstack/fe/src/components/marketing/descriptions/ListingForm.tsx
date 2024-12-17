@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
 
@@ -9,6 +9,15 @@ interface FormData {
   unitNumber?: string
   listingType: 'sale' | 'rent' | ''
   propertyType: 'house' | 'condo' | 'vacant-land' | 'multi-family' | 'townhouse' | 'other' | ''
+  price?: string
+  bedrooms?: string
+  bathrooms?: string
+  parking?: string
+  lotSize?: string
+  lotSizeUnit?: 'sqft' | 'acres'
+  interiorSize?: string
+  highlights: string[]
+  otherDetails?: string
 }
 
 export function ListingForm() {
@@ -16,8 +25,12 @@ export function ListingForm() {
     address: '',
     unitNumber: '',
     listingType: '',
-    propertyType: ''
+    propertyType: '',
+    highlights: []
   })
+
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [step, setStep] = useState(1)
 
@@ -31,8 +44,22 @@ export function ListingForm() {
     // Handle form submission
   }
 
+  const handleNext = () => {
+    setStep(2)
+  }
+
+  const handleBack = () => {
+    setStep(1)
+  }
+
   if (step === 2) {
-    return <PropertyDetailsForm onBack={() => setStep(1)} />
+    return (
+      <PropertyDetailsForm 
+        onBack={handleBack}
+        formData={formData}
+        onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
+      />
+    )
   }
 
   return (
@@ -45,15 +72,29 @@ export function ListingForm() {
             <div>
               <label className="block text-sm text-gray-700">Address</label>
               {isLoaded ? (
-                <Autocomplete>
+                <Autocomplete
+                  onLoad={autocomplete => {
+                    autocompleteRef.current = autocomplete
+                    autocomplete.setFields(['formatted_address'])
+                  }}
+                  onPlaceSelected={(place) => {
+                    const address = place.formatted_address || ''
+                    setFormData(prev => ({ ...prev, address }))
+                    if (inputRef.current) {
+                      inputRef.current.value = address
+                    }
+                  }}
+                >
                   <input
+                    ref={inputRef}
                     type="text"
-                    className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
+                    defaultValue={formData.address}
+                    className="form-input"
                     placeholder="Start typing an address..."
                   />
                 </Autocomplete>
               ) : (
-                <input type="text" className="w-full rounded-md border-gray-300 shadow-sm text-gray-900" disabled />
+                <input type="text" className="form-input" disabled />
               )}
             </div>
 
@@ -61,7 +102,9 @@ export function ListingForm() {
               <label className="block text-sm text-gray-700">Unit number (optional)</label>
               <input
                 type="text"
-                className="w-full rounded-md border-gray-300 shadow-sm text-gray-900"
+                value={formData.unitNumber}
+                onChange={(e) => setFormData(prev => ({ ...prev, unitNumber: e.target.value }))}
+                className="form-input"
               />
             </div>
 
@@ -110,7 +153,12 @@ export function ListingForm() {
                   name="propertyType"
                   value={value}
                   checked={formData.propertyType === value}
-                  onChange={(e) => setFormData(prev => ({ ...prev, propertyType: value as FormData['propertyType'] }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      propertyType: value as FormData['propertyType']
+                    }))
+                  }}
                   className="mr-2"
                 />
                 {label}
@@ -122,7 +170,7 @@ export function ListingForm() {
 
       <div className="flex justify-center mt-4">
         <button
-          onClick={() => setStep(2)}
+          onClick={handleNext}
           className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors w-full max-w-xs"
         >
           Next
