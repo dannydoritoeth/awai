@@ -13,11 +13,13 @@ export const metadata: Metadata = {
   description: "AI-powered real estate platform",
 };
 
+export const dynamic = 'force-static'
+
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en" className={inter.variable}>
       <body className="bg-white">
@@ -26,5 +28,5 @@ export default function RootLayout({
         </AuthProvider>
       </body>
     </html>
-  );
+  )
 }

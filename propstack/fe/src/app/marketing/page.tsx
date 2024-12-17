@@ -1,8 +1,8 @@
-"use client"
-
 import { MarketingDashboard } from '@/components/marketing/descriptions/MarketingDashboard'
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
+
+export const dynamic = 'force-static'
 
 export default function MarketingPage() {
   return (
