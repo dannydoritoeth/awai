@@ -4,12 +4,12 @@ import {
   ShareIcon, 
   EnvelopeIcon 
 } from '@heroicons/react/24/outline'
-import { MarketingTool } from './MarketingTool'
+import { MarketingTool } from '../MarketingTool'
 
 const tools = [
   {
-    title: 'Generate Listing Descriptions',
-    description: 'Create professional property descriptions for MLS or portals',
+    title: 'Listing Descriptions',
+    description: 'Create professional property descriptions',
     icon: PencilSquareIcon,
     href: '/marketing/descriptions',
     color: 'bg-blue-50',
