@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
 
-interface FormData {
+interface ListingFormData {
   address: string
   unitNumber?: string
   listingType: 'sale' | 'rent' | ''
@@ -28,7 +28,7 @@ interface FormErrors {
 }
 
 export function ListingForm() {
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<ListingFormData>({
     address: '',
     unitNumber: '',
     listingType: '',
@@ -204,7 +204,7 @@ export function ListingForm() {
                   onChange={(e) => {
                     setFormData(prev => ({
                       ...prev,
-                      propertyType: value as FormData['propertyType']
+                      propertyType: value as ListingFormData['propertyType']
                     }))
                   }}
                   className="mr-2"

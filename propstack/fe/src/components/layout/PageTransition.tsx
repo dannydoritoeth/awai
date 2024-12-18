@@ -6,9 +6,10 @@ import { navigationStore } from '@/lib/navigation'
 
 interface PageTransitionProps {
   children: React.ReactNode
+  showBackButton?: boolean
 }
 
-export function PageTransition({ children }: PageTransitionProps) {
+export function PageTransition({ children, showBackButton }: PageTransitionProps) {
   const pathname = usePathname()
 
   return (

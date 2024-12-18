@@ -20,7 +20,7 @@ export function PageHeading({ title, description, showBackButton }: PageHeadingP
 
   return (
     <div className="mb-8">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 mt-4">
         {showBackButton && (
           <button onClick={handleBack}>
             <ChevronLeftIcon className="w-8 h-8 text-gray-900" />

@@ -5,8 +5,8 @@ import { useState } from 'react'
 
 interface PropertyDetailsFormProps {
   onBack: () => void
-  formData: FormData
-  onChange: (updates: Partial<FormData>) => void
+  formData: ListingFormData
+  onChange: (updates: Partial<ListingFormData>) => void
 }
 
 interface FormErrors {
