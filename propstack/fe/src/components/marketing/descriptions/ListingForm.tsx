@@ -190,7 +190,7 @@ export function ListingForm() {
             {[
               { value: 'house', label: 'House' },
               { value: 'multi-family', label: 'Multi-family' },
-              { value: 'condo', label: 'Condo' },
+              { value: 'condo', label: 'Apartment / Condo' },
               { value: 'townhouse', label: 'Townhouse' },
               { value: 'vacant-land', label: 'Vacant land' },
               { value: 'other', label: 'Other' },
