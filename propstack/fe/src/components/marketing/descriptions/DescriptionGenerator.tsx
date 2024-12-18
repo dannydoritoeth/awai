@@ -31,7 +31,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setError('Please sign in to save listings')
+        setError('Please sign in to generate the description')
         return
       }
 
