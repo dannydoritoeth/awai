@@ -7,6 +7,7 @@ import { EmailSignIn } from './EmailSignIn'
 export function SignInMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [showEmailForm, setShowEmailForm] = useState(false)
+  const [showEmailSignUp, setShowEmailSignUp] = useState(false)
 
   return (
     <div className="relative">
@@ -27,7 +28,7 @@ export function SignInMenu() {
               >
                 ← Back to options
               </button>
-              <EmailSignIn />
+              <EmailSignIn onSignUpChange={(isSignUp) => setShowEmailSignUp(isSignUp)} />
             </div>
           ) : (
             <div className="space-y-4">

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import type { ListingFormData } from '@/types'
 
 interface DescriptionGeneratorProps {
   onBack: () => void
