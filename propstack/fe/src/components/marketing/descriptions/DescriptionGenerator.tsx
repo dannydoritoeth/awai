@@ -14,6 +14,8 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
   const [language, setLanguage] = useState('English (Australia)')
   const [length, setLength] = useState('300')
   const [unit, setUnit] = useState('Words')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   const formatHighlights = (highlights: string[]) => {
@@ -22,8 +24,12 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
   }
 
   async function handleGenerateDescription() {
+    setSaving(true)
+    setError(null)
+    
     try {
-      // First save the listing data
+      console.log('Saving listing data:', formData)
+
       const { data: listing, error: saveError } = await supabase
         .from('listings')
         .insert({
@@ -45,17 +51,29 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         .select()
         .single()
 
-      if (saveError) throw saveError
+      if (saveError) {
+        console.error('Error saving listing:', saveError)
+        throw saveError
+      }
 
-      // Then redirect to the listing detail page
+      console.log('Listing saved:', listing)
       router.push(`/marketing/listings/${listing.id}`)
     } catch (error) {
-      console.error('Error saving listing:', error)
+      console.error('Error in handleGenerateDescription:', error)
+      setError('Failed to save listing. Please try again.')
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 text-red-900 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
+      
       <div className="flex flex-col md:flex-row gap-4">
         {/* Language and Length Settings */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
@@ -158,15 +176,17 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         <button
           onClick={onBack}
           className="px-6 py-2 text-gray-600 hover:text-gray-900 flex items-center gap-2"
+          disabled={saving}
         >
           <ChevronLeftIcon className="w-5 h-5" />
           Back
         </button>
         <button
           onClick={handleGenerateDescription}
-          className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          disabled={saving}
+          className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          Generate Description
+          {saving ? 'Saving...' : 'Generate Description'}
         </button>
       </div>
     </div>
