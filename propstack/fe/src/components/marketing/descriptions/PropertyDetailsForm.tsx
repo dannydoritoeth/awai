@@ -14,6 +14,22 @@ interface FormErrors {
   bathrooms?: string
 }
 
+const CURRENCIES = [
+  { symbol: '$', label: 'USD' },
+  { symbol: '£', label: 'GBP' },
+  { symbol: '€', label: 'EUR' },
+  { symbol: '¥', label: 'JPY' },
+] as const
+
+const SIZE_UNITS = [
+  { value: 'feet', label: 'Feet' },
+  { value: 'meters', label: 'Meters' },
+  { value: 'acres', label: 'Acres' },
+  { value: 'hectares', label: 'Hectares' },
+  { value: 'sqft', label: 'Sq Feet' },
+  { value: 'sqm', label: 'Sq Meters' },
+] as const
+
 export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDetailsFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
 
@@ -57,8 +73,13 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
               <select
                 className="w-16 rounded-md border-gray-300 shadow-sm text-gray-900"
                 defaultValue="$"
+                onChange={(e) => onChange({ currency: e.target.value })}
               >
-                <option>$</option>
+                {CURRENCIES.map(({ symbol }) => (
+                  <option key={symbol} value={symbol}>
+                    {symbol}
+                  </option>
+                ))}
               </select>
               <div className="flex-1">
                 <div className="relative">
@@ -165,12 +186,13 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
                 )}
               </div>
               <select
-                value={formData.lotSizeUnit || 'sqft'}
-                onChange={(e) => onChange({ lotSizeUnit: e.target.value as 'sqft' | 'acres' })}
-                className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
+                value={formData.lotSizeUnit || 'sqm'}
+                onChange={(e) => onChange({ lotSizeUnit: e.target.value as typeof SIZE_UNITS[number]['value'] })}
+                className="w-36 rounded-md border-gray-300 shadow-sm text-gray-900"
               >
-                <option value="sqft">Sq Feet</option>
-                <option value="acres">Acres</option>
+                {SIZE_UNITS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
 
@@ -193,11 +215,13 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
                 )}
               </div>
               <select
-                value={formData.interiorSizeUnit || 'sqft'}
-                onChange={(e) => onChange({ interiorSizeUnit: e.target.value as 'sqft' })}
-                className="w-24 rounded-md border-gray-300 shadow-sm text-gray-900"
+                value={formData.interiorSizeUnit || 'sqm'}
+                onChange={(e) => onChange({ interiorSizeUnit: e.target.value as typeof SIZE_UNITS[number]['value'] })}
+                className="w-36 rounded-md border-gray-300 shadow-sm text-gray-900"
               >
-                <option value="sqft">Sq Feet</option>
+                {SIZE_UNITS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
           </form>
