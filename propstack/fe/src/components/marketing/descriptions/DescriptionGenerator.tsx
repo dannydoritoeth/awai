@@ -28,11 +28,18 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      console.log('Saving listing data:', formData)
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError('Please sign in to save listings')
+        return
+      }
 
-      const { data: listing, error: saveError } = await supabase
+      // First save the listing
+      const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
+          user_id: user.id,
           address: formData.address,
           unit_number: formData.unitNumber,
           listing_type: formData.listingType,
@@ -51,15 +58,28 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         .select()
         .single()
 
-      if (saveError) {
-        console.error('Error saving listing:', saveError)
-        throw saveError
-      }
+      if (listingError) throw listingError
 
-      console.log('Listing saved:', listing)
+      // Then save initial description
+      const { error: descriptionError } = await supabase
+        .from('generated_descriptions')
+        .insert({
+          user_id: user.id,
+          listing_id: listing.id,
+          content: '', // Will be filled by AI
+          language: language,
+          target_length: parseInt(length),
+          target_unit: unit.toLowerCase(),
+          version: 1,
+          is_selected: true
+        })
+
+      if (descriptionError) throw descriptionError
+
+      // Redirect to listing detail
       router.push(`/marketing/listings/${listing.id}`)
     } catch (error) {
-      console.error('Error in handleGenerateDescription:', error)
+      console.error('Error:', error)
       setError('Failed to save listing. Please try again.')
     } finally {
       setSaving(false)

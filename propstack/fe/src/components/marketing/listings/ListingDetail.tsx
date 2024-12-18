@@ -37,6 +37,22 @@ export function ListingDetail({ listing }: ListingDetailProps) {
     }
   }
 
+  async function handleUpdate(updates: Partial<Listing>) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { error } = await supabase
+        .from('listings')
+        .update({ ...updates, user_id: user.id })
+        .eq('id', listing.id)
+
+      if (error) throw error
+    } catch (error) {
+      console.error('Error updating listing:', error)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6">
