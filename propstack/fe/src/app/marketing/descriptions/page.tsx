@@ -1,11 +1,11 @@
-"use client"
-
 import { Header } from '@/components/layout/Header'
 import { ListingForm } from '@/components/marketing/descriptions/ListingForm'
 import { PageHeading } from '@/components/layout/PageHeading'
 
-// Force dynamic rendering
+// Config object for Next.js
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 
 export default function ListingDescriptionsPage() {
   return (
