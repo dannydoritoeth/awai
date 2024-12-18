@@ -1,54 +1,38 @@
 "use client"
 
-import { BellIcon, UserCircleIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '@/contexts/AuthContext'
-import { useState } from 'react'
-import { AuthModal } from '../auth/AuthModal'
+import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
+import Link from 'next/link'
 
 export function Header() {
-  const { user, isAnonymous, signOut } = useAuth()
-  const [showAuthModal, setShowAuthModal] = useState(false)
-
-  const handleCloseModal = () => {
-    console.log('Closing modal...')
-    setShowAuthModal(false)
-  }
+  const { user, signOut } = useAuth()
 
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white shadow-sm">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">PropStack IO</h1>
+        <Link 
+          href="/" 
+          className="text-xl font-medium text-gray-900 hover:text-gray-700 transition-colors"
+        >
+          PropStack IO
+        </Link>
+        
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <BellIcon className="w-6 h-6 text-gray-600" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <UserCircleIcon className="w-6 h-6 text-gray-600" />
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-700">
-                  {isAnonymous ? 'Anonymous User' : user.email}
-                </span>
-                <button
-                  onClick={() => signOut()}
-                  className="text-sm text-red-600 hover:text-red-700"
-                >
-                  Sign Out
-                </button>
-              </div>
-            ) : (
+          {user ? (
+            <div className="flex items-center gap-4">
+              <div className="text-gray-600">{user.email}</div>
               <button
-                onClick={() => setShowAuthModal(true)}
-                className="text-sm text-blue-600 hover:text-blue-700"
+                onClick={signOut}
+                className="text-red-600 hover:text-red-700"
               >
-                Sign In
+                Sign Out
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <GoogleSignIn />
+          )}
         </div>
       </div>
-      {showAuthModal && <AuthModal onClose={handleCloseModal} />}
     </header>
   )
 } 
