@@ -15,7 +15,7 @@ export default function Home() {
         <main className="container mx-auto px-4">
           <PageHeading 
             title="Dashboard" 
-            description="Welcome to PropStack IO - your AI powered real estate marketing assistant"
+            description="Welcome to PropStack IO - your AI powered real estate assistant"
           />
           <DashboardGrid />
         </main>
