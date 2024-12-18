@@ -63,7 +63,7 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         {/* Left Column - Property Details */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Property Details</h3>
@@ -227,10 +227,9 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
           </form>
         </div>
 
-        {/* Right Column - Property Highlights & Other Details */}
+        {/* Right Column - Property Highlights */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <div className="space-y-6">
-            {/* Highlights Section */}
             <div>
               <h3 className="text-lg font-medium text-gray-900">Property Highlights</h3>
               <p className="text-sm text-gray-600 mb-4">The AI will pay special attention to these areas.</p>
