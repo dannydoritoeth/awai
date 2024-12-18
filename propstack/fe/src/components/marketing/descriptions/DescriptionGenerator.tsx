@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 interface DescriptionGeneratorProps {
   onBack: () => void
@@ -12,10 +14,44 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
   const [language, setLanguage] = useState('English (Australia)')
   const [length, setLength] = useState('300')
   const [unit, setUnit] = useState('Words')
+  const router = useRouter()
 
   const formatHighlights = (highlights: string[]) => {
     if (highlights.length === 0) return 'None selected'
     return highlights.join(', ')
+  }
+
+  async function handleGenerateDescription() {
+    try {
+      // First save the listing data
+      const { data: listing, error: saveError } = await supabase
+        .from('listings')
+        .insert({
+          address: formData.address,
+          unit_number: formData.unitNumber,
+          listing_type: formData.listingType,
+          property_type: formData.propertyType,
+          price: formData.price,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          parking: formData.parking,
+          lot_size: formData.lotSize,
+          lot_size_unit: formData.lotSizeUnit,
+          interior_size: formData.interiorSize,
+          highlights: formData.highlights,
+          other_details: formData.otherDetails,
+          language: language
+        })
+        .select()
+        .single()
+
+      if (saveError) throw saveError
+
+      // Then redirect to the listing detail page
+      router.push(`/marketing/listings/${listing.id}`)
+    } catch (error) {
+      console.error('Error saving listing:', error)
+    }
   }
 
   return (
@@ -127,6 +163,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           Back
         </button>
         <button
+          onClick={handleGenerateDescription}
           className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors"
         >
           Generate Description
