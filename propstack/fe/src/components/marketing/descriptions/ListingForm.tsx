@@ -69,7 +69,7 @@ export function ListingForm() {
   }
 
   const handleBack = () => {
-    setStep(1)
+    setStep(prev => prev - 1)
   }
 
   const handlePlaceChanged = () => {
@@ -118,7 +118,7 @@ export function ListingForm() {
   if (step === 3) {
     return (
       <LocationFeaturesForm 
-        onBack={handleBack}
+        onBack={() => setStep(2)}
         onNext={() => setStep(4)}
         formData={formData}
         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
@@ -129,7 +129,7 @@ export function ListingForm() {
   if (step === 2) {
     return (
       <PropertyDetailsForm 
-        onBack={handleBack}
+        onBack={() => setStep(1)}
         formData={formData}
         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
         onNext={() => setStep(3)}
