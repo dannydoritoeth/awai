@@ -31,14 +31,33 @@ interface FormErrors {
   propertyType?: string
 }
 
+const initialFormData: ListingFormData = {
+  address: '',
+  unitNumber: '',
+  listingType: '',
+  propertyType: '',
+  highlights: []
+}
+
 export function ListingForm() {
-  const [formData, setFormData] = useState<ListingFormData>({
-    address: '',
-    unitNumber: '',
-    listingType: '',
-    propertyType: '',
-    highlights: []
+  const [formData, setFormData] = useState<ListingFormData>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('listingFormData')
+      return saved ? JSON.parse(saved) : initialFormData
+    }
+    return initialFormData
   })
+
+  // Save to localStorage whenever form data changes
+  useEffect(() => {
+    localStorage.setItem('listingFormData', JSON.stringify(formData))
+  }, [formData])
+
+  // Clear localStorage after successful submission
+  const handleSubmitSuccess = () => {
+    localStorage.removeItem('listingFormData')
+    // ... other success handling
+  }
 
   const [inputValue, setInputValue] = useState('')
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)

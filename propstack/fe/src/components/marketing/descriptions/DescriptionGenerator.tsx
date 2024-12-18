@@ -5,6 +5,7 @@ import { ChevronLeftIcon } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { ListingFormData } from '@/types'
+import { GenerateAuthModal } from '@/components/marketing/descriptions/GenerateAuthModal'
 
 interface DescriptionGeneratorProps {
   onBack: () => void
@@ -17,6 +18,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
   const [unit, setUnit] = useState('Words')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
 
   const formatHighlights = (highlights: string[]) => {
@@ -29,10 +31,11 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      // Get current user
+      // Check auth first, before any database operations
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setError('Please sign in to generate the description')
+        setSaving(false) // Important: reset saving state
+        setShowAuthModal(true)
         return
       }
 
@@ -210,6 +213,13 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           {saving ? 'Saving...' : 'Generate Description'}
         </button>
       </div>
+
+      {showAuthModal && (
+        <GenerateAuthModal 
+          onClose={() => setShowAuthModal(false)}
+          onAuth={handleGenerateDescription}
+        />
+      )}
     </div>
   )
 } 
