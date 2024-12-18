@@ -213,7 +213,6 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
         if (status1 === google.maps.places.PlacesServiceStatus.OK && results1) {
           placesService.current!.nearbySearch(secondaryRequest, (results2, status2) => {
             if (status2 === google.maps.places.PlacesServiceStatus.OK && results2) {
-              // Combine and deduplicate results
               const allResults = [...results1, ...results2]
               const uniqueResults = allResults.reduce((acc, current) => {
                 const x = acc.find(item => item.name === current.name)
@@ -255,6 +254,10 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
                 }))
 
               setSelectedFeatures(nearbyFeatures)
+              // Update highlights when setting initial features
+              onChange({
+                highlights: nearbyFeatures.map(feature => feature.name)
+              })
             }
           })
         }
