@@ -1,11 +1,13 @@
 "use client"
 
 import { useAuth } from '@/contexts/AuthContext'
-import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
+import { AuthModal } from '@/components/auth/AuthModal'
 import Link from 'next/link'
+import { useState } from 'react'
 
 export function Header() {
   const { user, signOut } = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   return (
     <header className="bg-white shadow-sm">
@@ -29,10 +31,19 @@ export function Header() {
               </button>
             </div>
           ) : (
-            <GoogleSignIn />
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Sign In / Sign Up
+            </button>
           )}
         </div>
       </div>
+
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
+      )}
     </header>
   )
 } 
