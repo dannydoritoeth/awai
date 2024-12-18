@@ -115,8 +115,8 @@ export function ListingForm() {
 
   return (
     <>
-      <div className="flex gap-4">
-        {/* Left Column - Listing Details */}
+      <div className="flex flex-col md:flex-row gap-4 pb-4">
+        {/* Listing Details */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Listing Details</h3>
           <form className="space-y-4">
@@ -183,7 +183,7 @@ export function ListingForm() {
           </form>
         </div>
 
-        {/* Right Column - Property Type */}
+        {/* Property Type */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Property Type</h3>
           <div className="grid grid-cols-2 gap-4 text-gray-700">
@@ -217,6 +217,7 @@ export function ListingForm() {
         </div>
       </div>
 
+      {/* Next button */}
       <div className="flex justify-center mt-4">
         <button
           onClick={handleNext}
