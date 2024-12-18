@@ -158,7 +158,13 @@ export function ListingForm() {
         onBack={() => setStep(2)}
         onNext={() => setStep(4)}
         formData={formData}
-        onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
+        onChange={(updates) => {
+          setFormData(prev => ({
+            ...prev,
+            ...updates,
+            highlights: updates.highlights || []
+          }))
+        }}
       />
     )
   }

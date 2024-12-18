@@ -97,7 +97,13 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
               place.geometry.location
             )
           }
-          setSelectedFeatures(prev => [...prev, feature])
+          setSelectedFeatures(prev => {
+            const newFeatures = [...prev, feature]
+            onChange({
+              highlights: newFeatures.map(f => f.name)
+            })
+            return newFeatures
+          })
 
           if (mapRef.current) {
             mapRef.current.panTo(place.geometry.location)
@@ -119,7 +125,13 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
   }
 
   const removeFeature = (id: number) => {
-    setSelectedFeatures(prev => prev.filter(f => f.id !== id))
+    setSelectedFeatures(prev => {
+      const newFeatures = prev.filter(f => f.id !== id)
+      onChange({
+        highlights: newFeatures.map(feature => feature.name)
+      })
+      return newFeatures
+    })
   }
 
   const mapOptions = {
@@ -201,11 +213,18 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
         if (status1 === google.maps.places.PlacesServiceStatus.OK && results1) {
           placesService.current!.nearbySearch(secondaryRequest, (results2, status2) => {
             if (status2 === google.maps.places.PlacesServiceStatus.OK && results2) {
+              // Combine and deduplicate results
               const allResults = [...results1, ...results2]
+              const uniqueResults = allResults.reduce((acc, current) => {
+                const x = acc.find(item => item.name === current.name)
+                if (!x) {
+                  return acc.concat([current])
+                }
+                return acc
+              }, [] as google.maps.places.PlaceResult[])
               
-              const nearbyFeatures = allResults
+              const nearbyFeatures = uniqueResults
                 .filter(place => {
-                  // Keep only specific types we want
                   const wantedTypes = [
                     'school',
                     'primary_school',
@@ -225,7 +244,6 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
                 .map((place, index) => ({
                   id: index + 1,
                   name: place.name || '',
-                  // Make type names more readable
                   type: place.types?.[0]?.split('_')
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                     .join(' ') || '',
