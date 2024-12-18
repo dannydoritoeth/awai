@@ -3,10 +3,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { GoogleMap, Marker, StandaloneSearchBox } from '@react-google-maps/api'
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
-import { useGoogleMaps } from '@/hooks/useGoogleMaps'
+import { loadGoogleMapsScript } from '@/lib/googleMaps'
 
 interface LocationFeaturesFormProps {
   onBack: () => void
+  onNext: () => void
   formData: ListingFormData
   onChange: (updates: Partial<ListingFormData>) => void
 }
@@ -19,7 +20,7 @@ interface NearbyFeature {
   position: google.maps.LatLng | google.maps.LatLngLiteral
 }
 
-export function LocationFeaturesForm({ onBack, formData, onChange }: LocationFeaturesFormProps) {
+export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: LocationFeaturesFormProps) {
   const defaultCenter = { lat: 43.6532, lng: -79.3832 } // Toronto coordinates
   
   const [selectedFeatures, setSelectedFeatures] = useState<NearbyFeature[]>([])
@@ -29,7 +30,17 @@ export function LocationFeaturesForm({ onBack, formData, onChange }: LocationFea
   const [mapCenter, setMapCenter] = useState(defaultCenter)
   const geocoder = useRef<google.maps.Geocoder | null>(null)
   
-  const { isLoaded } = useGoogleMaps()
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  const [language, setLanguage] = useState('English (Australia)')
+  const [length, setLength] = useState('300')
+  const [unit, setUnit] = useState('Words')
+
+  useEffect(() => {
+    loadGoogleMapsScript().then(() => {
+      setIsLoaded(true)
+    })
+  }, [])
 
   useEffect(() => {
     if (isLoaded) {
@@ -321,6 +332,56 @@ export function LocationFeaturesForm({ onBack, formData, onChange }: LocationFea
         </div>
       </div>
 
+      {/* Language and Preview Section */}
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Language and Length Settings */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-medium text-gray-900">Language</h3>
+          <select 
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="mt-2 w-full rounded-md border-gray-300"
+          >
+            <option>English (Australia)</option>
+            <option>English (UK)</option>
+            <option>English (US)</option>
+            <option>English (Canada)</option>
+            <option>French (Canada)</option>
+          </select>
+
+          <div className="mt-6 flex gap-4">
+            <div className="flex-1">
+              <h3 className="text-lg font-medium text-gray-900">Ideal Length</h3>
+              <div className="mt-2 flex gap-2">
+                <input
+                  type="text"
+                  value={length}
+                  onChange={(e) => setLength(e.target.value)}
+                  className="w-full rounded-md border-gray-300"
+                />
+                <select
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  className="w-32 rounded-md border-gray-300"
+                >
+                  <option>Words</option>
+                  <option>Characters</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Area */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-medium text-gray-900">Preview</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Review your listing details before generating the description.
+          </p>
+          {/* Add preview content here */}
+        </div>
+      </div>
+
       {/* Navigation Buttons */}
       <div className="flex justify-between">
         <button
@@ -331,10 +392,9 @@ export function LocationFeaturesForm({ onBack, formData, onChange }: LocationFea
           Back
         </button>
         <button
-          onClick={() => {/* Handle next */}}
           className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors"
         >
-          Next
+          Generate Description
         </button>
       </div>
     </div>

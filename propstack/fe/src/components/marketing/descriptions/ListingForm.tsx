@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
 import { LocationFeaturesForm } from './LocationFeaturesForm'
+import { ListingPreview } from './ListingPreview'
+import { DescriptionGenerator } from './DescriptionGenerator'
 
 interface ListingFormData {
   address: string
@@ -104,10 +106,20 @@ export function ListingForm() {
     return Object.keys(newErrors).length === 0
   }
 
+  if (step === 4) {
+    return (
+      <DescriptionGenerator 
+        onBack={() => setStep(3)}
+        formData={formData}
+      />
+    )
+  }
+
   if (step === 3) {
     return (
       <LocationFeaturesForm 
         onBack={handleBack}
+        onNext={() => setStep(4)}
         formData={formData}
         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
       />
