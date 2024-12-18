@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useLoadScript, Autocomplete } from '@react-google-maps/api'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
+import { LocationFeaturesForm } from './LocationFeaturesForm'
 
 interface ListingFormData {
   address: string
@@ -103,12 +104,23 @@ export function ListingForm() {
     return Object.keys(newErrors).length === 0
   }
 
+  if (step === 3) {
+    return (
+      <LocationFeaturesForm 
+        onBack={handleBack}
+        formData={formData}
+        onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
+      />
+    )
+  }
+
   if (step === 2) {
     return (
       <PropertyDetailsForm 
         onBack={handleBack}
         formData={formData}
         onChange={(updates) => setFormData(prev => ({ ...prev, ...updates }))}
+        onNext={() => setStep(3)}
       />
     )
   }

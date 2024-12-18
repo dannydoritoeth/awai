@@ -7,6 +7,7 @@ interface PropertyDetailsFormProps {
   onBack: () => void
   formData: ListingFormData
   onChange: (updates: Partial<ListingFormData>) => void
+  onNext: () => void
 }
 
 interface FormErrors {
@@ -30,7 +31,7 @@ const SIZE_UNITS = [
   { value: 'sqm', label: 'Sq Meters' },
 ] as const
 
-export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDetailsFormProps) {
+export function PropertyDetailsForm({ onBack, formData, onChange, onNext }: PropertyDetailsFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
 
   const validateForm = () => {
@@ -50,7 +51,7 @@ export function PropertyDetailsForm({ onBack, formData, onChange }: PropertyDeta
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault()
     if (validateForm()) {
-      // Proceed to next step
+      onNext()
     }
   }
 
