@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/Header'
 import { ListingForm } from '@/components/marketing/descriptions/ListingForm'
 import { PageHeading } from '@/components/layout/PageHeading'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 // Config object for Next.js
 export const dynamic = 'force-dynamic'
@@ -17,9 +18,11 @@ export default function ListingDescriptionsPage() {
           description="Create compelling property descriptions with AI"
           showBackButton
         />
-        <div className="space-y-4">
-          <ListingForm />
-        </div>
+        <ErrorBoundary>
+          <div className="space-y-4">
+            <ListingForm />
+          </div>
+        </ErrorBoundary>
       </main>
     </div>
   )

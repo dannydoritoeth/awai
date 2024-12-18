@@ -27,9 +27,10 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           <select 
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="mt-2 w-full rounded-md border-gray-300"
+            className="mt-2 w-full rounded-md border-gray-300 text-gray-900"
           >
             <option>English (Australia)</option>
+            <option>English (New Zealand)</option>
             <option>English (UK)</option>
             <option>English (US)</option>
             <option>English (Canada)</option>
@@ -44,12 +45,12 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
                   type="text"
                   value={length}
                   onChange={(e) => setLength(e.target.value)}
-                  className="w-full rounded-md border-gray-300"
+                  className="w-full rounded-md border-gray-300 text-gray-900"
                 />
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="w-32 rounded-md border-gray-300"
+                  className="w-32 rounded-md border-gray-300 text-gray-900"
                 >
                   <option>Words</option>
                   <option>Characters</option>
@@ -62,7 +63,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         {/* Preview Area */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Listing Summary</h3>
-          <div className="mt-4 space-y-4 text-sm">
+          <div className="mt-4 space-y-4 text-gray-700">
             <div>
               <span className="font-medium">Address:</span>{' '}
               {formData.address}
@@ -72,7 +73,46 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
               <span className="font-medium">Type:</span>{' '}
               {formData.propertyType.charAt(0).toUpperCase() + formData.propertyType.slice(1)} for {formData.listingType}
             </div>
-            {/* ... rest of the summary fields ... */}
+            {formData.price && (
+              <div>
+                <span className="font-medium">Price:</span> ${formData.price}
+              </div>
+            )}
+            {formData.bedrooms && (
+              <div>
+                <span className="font-medium">Bedrooms:</span> {formData.bedrooms}
+              </div>
+            )}
+            {formData.bathrooms && (
+              <div>
+                <span className="font-medium">Bathrooms:</span> {formData.bathrooms}
+              </div>
+            )}
+            {formData.parking && (
+              <div>
+                <span className="font-medium">Parking:</span> {formData.parking}
+              </div>
+            )}
+            {formData.lotSize && (
+              <div>
+                <span className="font-medium">Lot Size:</span> {formData.lotSize} {formData.lotSizeUnit}
+              </div>
+            )}
+            {formData.interiorSize && (
+              <div>
+                <span className="font-medium">Interior Size:</span> {formData.interiorSize}
+              </div>
+            )}
+            <div>
+              <span className="font-medium">Property Highlights:</span>{' '}
+              {formatHighlights(formData.highlights)}
+            </div>
+            {formData.otherDetails && (
+              <div>
+                <span className="font-medium">Other Details:</span>{' '}
+                {formData.otherDetails}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect } from 'react'
-import { useLoadScript, Autocomplete } from '@react-google-maps/api'
+import { Autocomplete } from '@react-google-maps/api'
+import { useGoogleMaps } from '@/components/maps/GoogleMapsProvider'
 import { PropertyDetailsForm } from './PropertyDetailsForm'
 import { LocationFeaturesForm } from './LocationFeaturesForm'
 import { ListingPreview } from './ListingPreview'
@@ -46,10 +47,12 @@ export function ListingForm() {
   const [isAddressSelected, setIsAddressSelected] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
 
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: ['places']
-  })
+  const { isLoaded } = useGoogleMaps()
+
+  useEffect(() => {
+    console.log('Google Maps loaded:', isLoaded)
+    console.log('Window google object:', window.google)
+  }, [isLoaded])
 
   useEffect(() => {
     if (step === 1) {
@@ -73,13 +76,18 @@ export function ListingForm() {
   }
 
   const handlePlaceChanged = () => {
-    const place = autocompleteRef.current?.getPlace()
-    if (place) {
-      const address = place.formatted_address || ''
-      setInputValue(address)
-      setFormData(prev => ({ ...prev, address, fullAddress: place }))
-      setIsAddressSelected(true)
-      setErrors(prev => ({ ...prev, address: undefined }))
+    try {
+      const place = autocompleteRef.current?.getPlace()
+      console.log('Selected place:', place)
+      if (place) {
+        const address = place.formatted_address || ''
+        setInputValue(address)
+        setFormData(prev => ({ ...prev, address, fullAddress: place }))
+        setIsAddressSelected(true)
+        setErrors(prev => ({ ...prev, address: undefined }))
+      }
+    } catch (error) {
+      console.error('Error in handlePlaceChanged:', error)
     }
   }
 
@@ -104,6 +112,35 @@ export function ListingForm() {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const renderAutocomplete = () => {
+    try {
+      return isLoaded ? (
+        <Autocomplete
+          onLoad={autocomplete => {
+            console.log('Autocomplete loaded')
+            autocompleteRef.current = autocomplete
+            autocomplete.setFields(['formatted_address'])
+          }}
+          options={{ fields: ['formatted_address'] }}
+          onPlaceChanged={handlePlaceChanged}
+        >
+          <input
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            className="form-input"
+            placeholder="Start typing an address..."
+          />
+        </Autocomplete>
+      ) : (
+        <input type="text" className="form-input" disabled />
+      )
+    } catch (error) {
+      console.error('Error rendering Autocomplete:', error)
+      return <input type="text" className="form-input" disabled />
+    }
   }
 
   if (step === 4) {
@@ -146,26 +183,7 @@ export function ListingForm() {
           <form className="space-y-4">
             <div>
               <label className="block text-sm text-gray-700">Address</label>
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={autocomplete => {
-                    autocompleteRef.current = autocomplete
-                    autocomplete.setFields(['formatted_address'])
-                  }}
-                  options={{ fields: ['formatted_address'] }}
-                  onPlaceChanged={handlePlaceChanged}
-                >
-                  <input
-                    type="text"
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    className="form-input"
-                    placeholder="Start typing an address..."
-                  />
-                </Autocomplete>
-              ) : (
-                <input type="text" className="form-input" disabled />
-              )}
+              {renderAutocomplete()}
               {errors.address && <p className="text-red-500">{errors.address}</p>}
             </div>
 

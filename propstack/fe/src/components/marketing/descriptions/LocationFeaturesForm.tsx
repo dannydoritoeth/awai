@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { GoogleMap, Marker, StandaloneSearchBox } from '@react-google-maps/api'
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
-import { loadGoogleMapsScript } from '@/lib/googleMaps'
+import { useGoogleMaps } from '@/components/maps/GoogleMapsProvider'
 
 interface LocationFeaturesFormProps {
   onBack: () => void
@@ -30,17 +30,11 @@ export function LocationFeaturesForm({ onBack, onNext, formData, onChange }: Loc
   const [mapCenter, setMapCenter] = useState(defaultCenter)
   const geocoder = useRef<google.maps.Geocoder | null>(null)
   
-  const [isLoaded, setIsLoaded] = useState(false)
+  const { isLoaded } = useGoogleMaps()
 
   const [language, setLanguage] = useState('English (Australia)')
   const [length, setLength] = useState('300')
   const [unit, setUnit] = useState('Words')
-
-  useEffect(() => {
-    loadGoogleMapsScript().then(() => {
-      setIsLoaded(true)
-    })
-  }, [])
 
   useEffect(() => {
     if (isLoaded) {
