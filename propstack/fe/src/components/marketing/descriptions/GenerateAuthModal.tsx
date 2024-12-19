@@ -25,14 +25,13 @@ export function GenerateAuthModal({ onClose, onAuth }: GenerateAuthModalProps) {
   }, [onClose])
 
   useEffect(() => {
-    const handleAuth = () => {
-      onAuth()
-      onClose()
-    }
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
-        handleAuth()
+        // Small delay to ensure auth state is fully updated
+        setTimeout(() => {
+          onAuth()
+          onClose()
+        }, 100)
       }
     })
 

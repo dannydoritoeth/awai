@@ -58,15 +58,56 @@ create index if not exists listings_created_at_idx on listings(created_at desc);
 alter table listings enable row level security;
 alter table generated_descriptions enable row level security;
 
--- Simple ownership policy for listings
-create policy "only allow owner"
-  on listings
-  for all
+-- Drop ALL existing policies first
+drop policy if exists "only allow owner" on listings;
+drop policy if exists "anyone can view listings" on listings;
+drop policy if exists "owners can view their listings" on listings;
+drop policy if exists "owners can update their listings" on listings;
+drop policy if exists "owners can delete their listings" on listings;
+drop policy if exists "owners can create listings" on listings;
+
+drop policy if exists "only allow owner" on generated_descriptions;
+drop policy if exists "anyone can view descriptions" on generated_descriptions;
+drop policy if exists "owners can view their descriptions" on generated_descriptions;
+drop policy if exists "owners can update their descriptions" on generated_descriptions;
+drop policy if exists "owners can create descriptions" on generated_descriptions;
+
+-- Then create fresh policies
+-- Listings policies
+create policy "owners can create listings"
+  on listings for insert
+  with check (auth.uid() = user_id);
+
+create policy "owners can view their listings"
+  on listings for select
   using (auth.uid() = user_id);
 
--- Simple ownership policy for generated descriptions
-create policy "only allow owner"
-  on generated_descriptions
-  for all
+create policy "owners can update their listings"
+  on listings for update
   using (auth.uid() = user_id);
+
+create policy "owners can delete their listings"
+  on listings for delete
+  using (auth.uid() = user_id);
+
+-- Generated descriptions policies
+create policy "owners can create descriptions"
+  on generated_descriptions for insert
+  with check (
+    exists (
+      select 1 from listings
+      where listings.id = listing_id
+      and listings.user_id = auth.uid()
+    )
+  );
+
+create policy "owners can view their descriptions"
+  on generated_descriptions for select
+  using (
+    exists (
+      select 1 from listings
+      where listings.id = generated_descriptions.listing_id
+      and listings.user_id = auth.uid()
+    )
+  );
   

@@ -1,56 +1,73 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 interface ListingDetailProps {
-  listing: any // Type this properly based on your data structure
+  listingId: string
 }
 
-export function ListingDetail({ listing }: ListingDetailProps) {
-  const [description, setDescription] = useState(listing.description)
-  const [generating, setGenerating] = useState(false)
+export function ListingDetail({ listingId }: ListingDetailProps) {
+  const [listing, setListing] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
-  async function regenerateDescription() {
-    setGenerating(true)
-    try {
-      // Call your OpenAI endpoint
-      const response = await fetch('/api/generate-description', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(listing)
-      })
-      
-      const { description: newDescription } = await response.json()
-      
-      // Update in Supabase
-      await supabase
-        .from('listings')
-        .update({ description: newDescription })
-        .eq('id', listing.id)
+  useEffect(() => {
+    async function loadListing() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/auth/signin') // or wherever you want to redirect
+          return
+        }
 
-      setDescription(newDescription)
-    } catch (error) {
-      console.error('Error regenerating description:', error)
-    } finally {
-      setGenerating(false)
+        const { data, error } = await supabase
+          .from('listings')
+          .select(`
+            *,
+            generated_descriptions (
+              content,
+              language,
+              version,
+              created_at
+            )
+          `)
+          .eq('id', listingId)
+          .eq('user_id', user.id)
+          .single()
+
+        if (error) throw error
+        if (!data) throw new Error('Listing not found')
+
+        setListing(data)
+      } catch (err) {
+        console.error('Error loading listing:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load listing')
+      } finally {
+        setLoading(false)
+      }
     }
+
+    loadListing()
+  }, [listingId, router])
+
+  if (loading) {
+    return <div className="animate-pulse bg-white rounded-lg h-32"></div>
   }
 
-  async function handleUpdate(updates: Partial<Listing>) {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      const { error } = await supabase
-        .from('listings')
-        .update({ ...updates, user_id: user.id })
-        .eq('id', listing.id)
-
-      if (error) throw error
-    } catch (error) {
-      console.error('Error updating listing:', error)
-    }
+  if (error || !listing) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+        <h2 className="text-xl font-medium text-gray-900 mb-4">
+          Unable to load listing
+        </h2>
+        <p className="text-gray-600">
+          {error || 'The listing could not be found'}
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -62,21 +79,7 @@ export function ListingDetail({ listing }: ListingDetailProps) {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Property Description</h3>
-          <button
-            onClick={regenerateDescription}
-            disabled={generating}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {generating ? 'Generating...' : 'Regenerate'}
-          </button>
-        </div>
-        <div className="prose max-w-none">
-          {description || 'No description generated yet.'}
-        </div>
-      </div>
+      {/* Rest of your listing detail UI */}
     </div>
   )
 } 

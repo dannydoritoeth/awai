@@ -13,6 +13,9 @@ export function createServerClient() {
           return cookieStore.get(name)?.value
         },
       },
+      auth: {
+        persistSession: false // This ensures we get fresh session data
+      }
     }
   )
 } 

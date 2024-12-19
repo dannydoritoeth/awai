@@ -23,12 +23,18 @@ export function SavedListings() {
 
   async function loadListings() {
     try {
+      // Get current user first
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('Loading listings for user:', user?.id)
+
       const { data, error } = await supabase
         .from('listings')
         .select('*')
+        .eq('user_id', user?.id)  // Make sure we're filtering by user_id
         .order('created_at', { ascending: false })
 
       if (error) throw error
+      console.log('Found listings:', data?.length)
       setListings(data || [])
     } catch (error) {
       console.error('Error loading listings:', error)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeftIcon } from '@heroicons/react/20/solid'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +21,18 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
   const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
 
+  // Store form data when showing auth modal
+  useEffect(() => {
+    if (showAuthModal) {
+      localStorage.setItem('pendingListingData', JSON.stringify({
+        formData,
+        language,
+        length,
+        unit
+      }))
+    }
+  }, [showAuthModal, formData, language, length, unit])
+
   const formatHighlights = (highlights: string[]) => {
     if (highlights.length === 0) return 'None selected'
     return highlights.join(', ')
@@ -31,33 +43,36 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      // Check auth first, before any database operations
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setSaving(false) // Important: reset saving state
+        setSaving(false)
         setShowAuthModal(true)
         return
       }
 
-      // First save the listing
+      // Check for pending data if coming back from auth
+      const pendingData = localStorage.getItem('pendingListingData')
+      const dataToUse = pendingData ? JSON.parse(pendingData) : { formData, language, length, unit }
+
+      // Save listing and generate description
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
           user_id: user.id,
-          address: formData.address,
-          unit_number: formData.unitNumber,
-          listing_type: formData.listingType,
-          property_type: formData.propertyType,
-          price: formData.price,
-          bedrooms: formData.bedrooms,
-          bathrooms: formData.bathrooms,
-          parking: formData.parking,
-          lot_size: formData.lotSize,
-          lot_size_unit: formData.lotSizeUnit,
-          interior_size: formData.interiorSize,
-          highlights: formData.highlights,
-          other_details: formData.otherDetails,
-          language: language
+          address: dataToUse.formData.address,
+          unit_number: dataToUse.formData.unitNumber,
+          listing_type: dataToUse.formData.listingType,
+          property_type: dataToUse.formData.propertyType,
+          price: dataToUse.formData.price,
+          bedrooms: dataToUse.formData.bedrooms,
+          bathrooms: dataToUse.formData.bathrooms,
+          parking: dataToUse.formData.parking,
+          lot_size: dataToUse.formData.lotSize,
+          lot_size_unit: dataToUse.formData.lotSizeUnit,
+          interior_size: dataToUse.formData.interiorSize,
+          highlights: dataToUse.formData.highlights,
+          other_details: dataToUse.formData.otherDetails,
+          language: dataToUse.language
         })
         .select()
         .single()
@@ -80,7 +95,10 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
 
       if (descriptionError) throw descriptionError
 
-      // Redirect to listing detail
+      // Clear pending data after successful save
+      localStorage.removeItem('pendingListingData')
+      localStorage.removeItem('listingFormData')
+
       router.push(`/marketing/listings/${listing.id}`)
     } catch (error) {
       console.error('Error:', error)
