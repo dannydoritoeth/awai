@@ -43,18 +43,21 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setSaving(false)
-        setShowAuthModal(true)
-        return
+      const { data: { session } } = await supabase.auth.getSession()
+      console.log('Client session check:', {
+        hasSession: !!session,
+        userId: session?.user?.id
+      })
+
+      if (!session) {
+        throw new Error('No active session')
       }
 
       // First create listing with pending description
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
-          user_id: user.id,
+          user_id: session.user.id,
           address: formData.address,
           unit_number: formData.unitNumber,
           listing_type: formData.listingType,
@@ -94,22 +97,26 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
       if (descError) throw descError
 
       // Call edge function to generate description
-      const response = await fetch('/api/generate-description', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({
-          id: listing.id,
-          ...formData,
-          language,
-          target_length: parseInt(length),
-          target_unit: unit
-        })
-      })
+      const { data, error: functionError } = await supabase.functions.invoke<{ description: string }>(
+        'generate-description',
+        {
+          body: {
+            id: listing.id,
+            ...formData,
+            language,
+            target_length: parseInt(length),
+            target_unit: unit
+          }
+        }
+      )
 
-      if (!response.ok) throw new Error('Failed to generate description')
+      if (functionError) {
+        throw new Error(`Failed to generate description: ${functionError.message}`)
+      }
+
+      if (!data?.description) {
+        throw new Error('No description returned from function')
+      }
 
       router.push(`/marketing/listings/${listing.id}`)
     } catch (error) {

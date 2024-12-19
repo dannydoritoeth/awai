@@ -17,7 +17,12 @@ const openai = new OpenAI({
 const serviceRoleUrl = Deno.env.get('SERVICE_ROLE_URL')
 const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY')
 
-const supabase = createClient(serviceRoleUrl!, serviceRoleKey!)
+const supabase = createClient(serviceRoleUrl!, serviceRoleKey!, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+})
 
 interface ListingData {
   id: string
@@ -43,14 +48,17 @@ console.log("Hello from Functions!")
 
 Deno.serve(async (req: Request) => {
   try {
-    // Verify auth
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('Missing authorization header')
+    // Get listing data from request
+    const data = await req.json()
+    console.log('Received data:', data)
+
+    // Validate the data structure
+    if (!data.id || !data.address) {
+      throw new Error('Missing required fields')
     }
 
-    // Get listing data from request
-    const data: ListingData = await req.json()
+    // Log headers for debugging
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()))
 
     // Build the prompt
     const prompt = `Generate a compelling real estate description for the following property:
