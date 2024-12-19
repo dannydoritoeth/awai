@@ -1,121 +1,28 @@
-/// <reference lib="deno.ns" />
-
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
-// Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-import { createClient } from "jsr:@supabase/supabase-js"
-import { OpenAI } from "jsr:@openai/openai"
-
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY')
-})
-
-const serviceRoleUrl = Deno.env.get('SERVICE_ROLE_URL')
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY')
-
-const supabase = createClient(serviceRoleUrl!, serviceRoleKey!, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-})
-
-interface ListingData {
-  id: string
-  address: string
-  unit_number?: string
-  listing_type: string
-  property_type: string
-  price?: string
-  bedrooms?: string
-  bathrooms?: string
-  parking?: string
-  lot_size?: string
-  lot_size_unit?: string
-  interior_size?: string
-  highlights: string[]
-  other_details?: string
-  language: string
-  target_length: number
-  target_unit: string
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
 }
 
-console.log("Hello from Functions!")
-
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
-    // Get listing data from request
     const data = await req.json()
     console.log('Received data:', data)
 
-    // Validate the data structure
-    if (!data.id || !data.address) {
-      throw new Error('Missing required fields')
-    }
-
-    // Log headers for debugging
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()))
-
-    // Build the prompt
-    const prompt = `Generate a compelling real estate description for the following property:
-
-Address: ${data.address}${data.unit_number ? ` Unit ${data.unit_number}` : ''}
-Type: ${data.property_type} for ${data.listing_type}
-${data.price ? `Price: $${data.price}` : ''}
-${data.bedrooms ? `Bedrooms: ${data.bedrooms}` : ''}
-${data.bathrooms ? `Bathrooms: ${data.bathrooms}` : ''}
-${data.parking ? `Parking: ${data.parking}` : ''}
-${data.lot_size ? `Lot Size: ${data.lot_size} ${data.lot_size_unit}` : ''}
-${data.interior_size ? `Interior Size: ${data.interior_size}` : ''}
-Highlights: ${data.highlights.join(', ')}
-${data.other_details ? `Additional Details: ${data.other_details}` : ''}
-
-Please write a ${data.target_length} ${data.target_unit} description in ${data.language}. 
-Focus on the property's unique features and benefits. 
-Use a professional tone and avoid clichés.
-Highlight the location and any special amenities.`
-
-    // Generate description with OpenAI
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are an experienced real estate copywriter who creates compelling property descriptions."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
-    })
-
-    const description = completion.choices[0].message.content
-
-    // Save to database
-    const { error: dbError } = await supabase
-      .from('generated_descriptions')
-      .update({
-        content: description,
-        status: 'completed',
-        prompt_used: prompt,
-        model_used: 'gpt-4'
-      })
-      .eq('listing_id', data.id)
-      .eq('status', 'processing')
-
-    if (dbError) throw dbError
-
+    // Return test response
     return new Response(
-      JSON.stringify({ description }),
+      JSON.stringify({ 
+        description: "This is a test description. The AI generation will be implemented soon." 
+      }),
       { 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
       }
     )
@@ -124,7 +31,7 @@ Highlight the location and any special amenities.`
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500 
       }
     )
