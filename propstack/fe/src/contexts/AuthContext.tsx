@@ -7,7 +7,7 @@ import type { User } from '@supabase/supabase-js'
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signInWithGoogle: () => Promise<void>
+  signInWithGoogle: (redirectTo?: string) => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -36,23 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+  const signInWithGoogle = async ({ redirectTo }: { redirectTo?: string } = {}) => {
+    await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'email profile',
-        queryParams: {
-          prompt: 'select_account',
-          access_type: 'offline'
-        }
+        redirectTo: `${window.location.origin}/auth/callback?returnUrl=${redirectTo || '/'}`
       }
     })
-
-    if (error) {
-      console.error('Error signing in:', error)
-      throw error
-    }
   }
 
   const signInWithEmail = async (email: string, password: string) => {

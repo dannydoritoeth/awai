@@ -1,18 +1,22 @@
 "use client"
 
 import { useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { GoogleSignIn } from './GoogleSignIn'
 import { EmailSignIn } from './EmailSignIn'
 import { useState } from 'react'
 
 interface AuthModalProps {
   onClose: () => void
+  returnUrl?: string
 }
 
-export function AuthModal({ onClose }: AuthModalProps) {
+export function AuthModal({ onClose, returnUrl = window.location.pathname }: AuthModalProps) {
   const [showEmailForm, setShowEmailForm] = useState(false)
   const [showEmailSignUp, setShowEmailSignUp] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const handleSignUpChange = (isSignUp: boolean) => {
     setShowEmailSignUp(isSignUp)
@@ -28,6 +32,19 @@ export function AuthModal({ onClose }: AuthModalProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        setTimeout(() => {
+          router.push(returnUrl)
+          onClose()
+        }, 100)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [onClose, router, returnUrl])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -61,7 +78,7 @@ export function AuthModal({ onClose }: AuthModalProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            <GoogleSignIn />
+            <GoogleSignIn returnUrl={returnUrl} />
             <button
               onClick={() => setShowEmailForm(true)}
               className="w-full px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"

@@ -4,10 +4,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AuthModal } from '@/components/auth/AuthModal'
 import Link from 'next/link'
 import { useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 
 export function Header() {
   const { user, signOut } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/')  // Redirect to home page after sign out
+  }
 
   return (
     <header className="bg-white shadow-sm">
@@ -24,7 +32,7 @@ export function Header() {
             <div className="flex items-center gap-4">
               <div className="text-gray-600">{user.email}</div>
               <button
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="text-red-600 hover:text-red-700"
               >
                 Sign Out
@@ -42,7 +50,7 @@ export function Header() {
       </div>
 
       {showAuthModal && (
-        <AuthModal onClose={() => setShowAuthModal(false)} />
+        <AuthModal onClose={() => setShowAuthModal(false)} returnUrl={pathname} />
       )}
     </header>
   )
