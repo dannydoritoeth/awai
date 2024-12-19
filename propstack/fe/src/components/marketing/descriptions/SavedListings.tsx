@@ -23,21 +23,31 @@ export function SavedListings() {
 
   async function loadListings() {
     try {
-      // Get current user first
       const { data: { user } } = await supabase.auth.getUser()
-      console.log('Loading listings for user:', user?.id)
+      
+      // If no user, just show empty state
+      if (!user) {
+        setListings([])
+        setLoading(false)
+        return
+      }
 
       const { data, error } = await supabase
         .from('listings')
         .select('*')
-        .eq('user_id', user?.id)  // Make sure we're filtering by user_id
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      console.log('Found listings:', data?.length)
+      if (error) {
+        console.error('Database error:', error)
+        setListings([])
+        return
+      }
+
       setListings(data || [])
     } catch (error) {
-      console.error('Error loading listings:', error)
+      console.error('Error:', error)
+      setListings([])
     } finally {
       setLoading(false)
     }
