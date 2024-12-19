@@ -110,4 +110,9 @@ create policy "owners can view their descriptions"
       and listings.user_id = auth.uid()
     )
   );
+
+-- Add status field to the descriptions table
+alter table generated_descriptions add column if not exists status text 
+  check (status in ('processing', 'completed', 'failed')) 
+  default 'completed';
   

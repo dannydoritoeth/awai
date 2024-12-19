@@ -168,7 +168,11 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
           </div>
         </div>
         <div className="prose max-w-none">
-          {currentDescription?.content || 'No description generated yet.'}
+          {currentDescription?.status === 'processing' ? (
+            <div className="animate-pulse">Generating description...</div>
+          ) : (
+            currentDescription?.content || 'No description generated yet.'
+          )}
         </div>
       </div>
     </div>

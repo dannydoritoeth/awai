@@ -7,7 +7,7 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from "jsr:@supabase/supabase-js"
 import { OpenAI } from "jsr:@openai/openai"
 
 const openai = new OpenAI({
@@ -93,17 +93,14 @@ Highlight the location and any special amenities.`
     // Save to database
     const { error: dbError } = await supabase
       .from('generated_descriptions')
-      .insert({
-        listing_id: data.id,
+      .update({
         content: description,
-        language: data.language,
-        target_length: data.target_length,
-        target_unit: data.target_unit,
-        version: 1,
-        is_selected: true,
+        status: 'completed',
         prompt_used: prompt,
         model_used: 'gpt-4'
       })
+      .eq('listing_id', data.id)
+      .eq('status', 'processing')
 
     if (dbError) throw dbError
 
