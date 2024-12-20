@@ -17,6 +17,7 @@ export default function ListingDescriptionsPage() {
             title="Listing Descriptions"
             description="Create professional property descriptions"
             showBackButton
+            backPath="/marketing"
           />
           
           <div className="space-y-8">

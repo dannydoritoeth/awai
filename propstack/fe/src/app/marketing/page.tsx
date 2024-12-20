@@ -15,6 +15,7 @@ export default function MarketingPage() {
             title="Marketing Tools" 
             description="Create and manage your property marketing content"
             showBackButton
+            backPath="/"
           />
           <MarketingDashboard />
         </main>

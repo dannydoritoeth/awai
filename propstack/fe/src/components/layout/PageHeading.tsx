@@ -1,30 +1,28 @@
 "use client"
 
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
-import { useRouter } from 'next/navigation'
-import { navigationStore } from '@/lib/navigation'
+import Link from 'next/link'
 
 interface PageHeadingProps {
   title: string
   description?: string
   showBackButton?: boolean
+  backPath?: string
 }
 
-export function PageHeading({ title, description, showBackButton }: PageHeadingProps) {
-  const router = useRouter()
-
-  const handleBack = () => {
-    navigationStore.isBackNavigation = true
-    router.back()
-  }
-
+export function PageHeading({ 
+  title, 
+  description, 
+  showBackButton,
+  backPath = '/marketing'
+}: PageHeadingProps) {
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mt-4">
         {showBackButton && (
-          <button onClick={handleBack}>
+          <Link href={backPath}>
             <ChevronLeftIcon className="w-8 h-8 text-gray-900" />
-          </button>
+          </Link>
         )}
         <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
       </div>
