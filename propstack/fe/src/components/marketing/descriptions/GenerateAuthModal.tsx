@@ -4,14 +4,16 @@ import { useRef, useEffect } from 'react'
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn'
 import { EmailSignIn } from '@/components/auth/EmailSignIn'
 import { supabase } from '@/lib/supabase'
+import { useRouter, usePathname } from 'next/navigation'
 
 interface GenerateAuthModalProps {
   onClose: () => void
-  onAuth: () => void
 }
 
-export function GenerateAuthModal({ onClose, onAuth }: GenerateAuthModalProps) {
+export function GenerateAuthModal({ onClose }: GenerateAuthModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     // Handle clicks outside modal
@@ -25,18 +27,17 @@ export function GenerateAuthModal({ onClose, onAuth }: GenerateAuthModalProps) {
   }, [onClose])
 
   useEffect(() => {
+    // Store current path for after auth
+    localStorage.setItem('authReturnPath', pathname)
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
-        // Small delay to ensure auth state is fully updated
-        setTimeout(() => {
-          onAuth()
-          onClose()
-        }, 100)
+        onClose()
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [onAuth, onClose])
+  }, [onClose, pathname])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

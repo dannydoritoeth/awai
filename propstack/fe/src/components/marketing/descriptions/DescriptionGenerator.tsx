@@ -38,23 +38,22 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     return highlights.join(', ')
   }
 
+  // Check auth before generation
   async function handleGenerateDescription() {
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session) {
+      // Just show auth modal - don't save anything yet
+      setShowAuthModal(true)
+      return
+    }
+
+    // Only proceed with generation if logged in
     setSaving(true)
     setError(null)
     
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) {
-        localStorage.setItem('pendingListingData', JSON.stringify({
-          formData, language, length, unit
-        }))
-        setSaving(false)
-        setShowAuthModal(true)
-        return
-      }
-
-      // First create listing
+      // Create listing
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
@@ -116,7 +115,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
 
     } catch (error) {
       console.error('Error:', error)
-      setError('Failed to start generation. Please try again.')
+      setError('Failed to generate description. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -249,7 +248,6 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
       {showAuthModal && (
         <GenerateAuthModal 
           onClose={() => setShowAuthModal(false)}
-          onAuth={handleGenerateDescription}
         />
       )}
     </div>
