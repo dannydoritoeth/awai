@@ -48,6 +48,23 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
       return
     }
 
+    // Check credits
+    const { data: credits, error: creditsError } = await supabase
+      .from('credits')
+      .select('balance')
+      .eq('user_id', session.user.id)
+      .single()
+
+    if (creditsError) {
+      setError('Failed to check credits. Please try again.')
+      return
+    }
+
+    if (credits.balance < 1) {
+      setError('Not enough credits. Please upgrade your plan.')
+      return
+    }
+
     // Only proceed with generation if logged in
     setSaving(true)
     setError(null)
@@ -109,6 +126,14 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           }
         }
       ).catch(console.error) // Log any errors but don't block
+
+      // Deduct credit after successful generation
+      const { error: deductError } = await supabase
+        .from('credits')
+        .update({ balance: credits.balance - 1 })
+        .eq('user_id', session.user.id)
+
+      if (deductError) throw deductError
 
       // Redirect immediately to listing page
       router.push(`/marketing/listings/${listing.id}`)

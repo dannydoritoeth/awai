@@ -9,10 +9,10 @@ import { useState } from 'react'
 
 interface AuthModalProps {
   onClose: () => void
-  returnUrl?: string
+  isJoining?: boolean
 }
 
-export function AuthModal({ onClose, returnUrl = window.location.pathname }: AuthModalProps) {
+export function AuthModal({ onClose, isJoining }: AuthModalProps) {
   const [showEmailForm, setShowEmailForm] = useState(false)
   const [showEmailSignUp, setShowEmailSignUp] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -37,14 +37,14 @@ export function AuthModal({ onClose, returnUrl = window.location.pathname }: Aut
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         setTimeout(() => {
-          router.push(returnUrl)
+          router.push(window.location.pathname)
           onClose()
         }, 100)
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [onClose, router, returnUrl])
+  }, [onClose, router])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -53,10 +53,13 @@ export function AuthModal({ onClose, returnUrl = window.location.pathname }: Aut
         className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md"
       >
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-medium text-gray-900">
-            {showEmailForm 
-              ? (showEmailSignUp ? 'Sign Up with Email' : 'Sign In with Email')
-              : 'Welcome to PropStack IO'}
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">
+            {isJoining 
+              ? 'Create a PropStack IO account' 
+              : showEmailForm 
+                ? 'Sign In' 
+                : 'Welcome to PropStack IO'
+            }
           </h2>
           <button
             onClick={onClose}
@@ -78,7 +81,7 @@ export function AuthModal({ onClose, returnUrl = window.location.pathname }: Aut
           </div>
         ) : (
           <div className="space-y-4">
-            <GoogleSignIn returnUrl={returnUrl} />
+            <GoogleSignIn returnUrl={window.location.pathname} />
             <button
               onClick={() => setShowEmailForm(true)}
               className="w-full px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"

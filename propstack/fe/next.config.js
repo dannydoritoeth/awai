@@ -1,7 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Add any other Next.js config options here
+  images: {
+    domains: [
+      'lh3.googleusercontent.com',  // Google profile pictures
+      'avatars.githubusercontent.com'  // GitHub profile pictures (if needed)
+    ]
+  }
 }
 
 module.exports = nextConfig 

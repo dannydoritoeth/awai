@@ -3,15 +3,80 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthModal } from '@/components/auth/AuthModal'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
+import { UserCircleIcon, CreditCardIcon } from '@heroicons/react/24/outline'
+import { supabase } from '@/lib/supabase'
+import Image from 'next/image'
 
 export function Header() {
   const { user, signOut } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showFreeContent, setShowFreeContent] = useState(false)
   const router = useRouter()
+  const [credits, setCredits] = useState<number | null>(null)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [isJoining, setIsJoining] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      const checkAndInitCredits = async () => {
+        try {
+          console.log('Checking credits for user:', user.id);
+          
+          const { data: existingCredits, error: selectError } = await supabase
+            .from('credits')
+            .select('balance')
+            .eq('user_id', user.id)
+            .single()
+
+          console.log('Existing credits:', existingCredits, 'Error:', selectError);
+
+          if (selectError?.code === 'PGRST116') {
+            console.log('No credits found, creating initial credits');
+            
+            const { data: newCredits, error: insertError } = await supabase
+              .from('credits')
+              .insert([
+                { user_id: user.id, balance: 5 }
+              ])
+              .select()
+              .single()
+
+            console.log('New credits created:', newCredits, 'Error:', insertError);
+
+            if (newCredits) {
+              setCredits(newCredits.balance)
+            } else if (insertError) {
+              console.error('Error creating credits:', insertError)
+            }
+          } else if (existingCredits) {
+            console.log('Setting existing credits:', existingCredits.balance);
+            setCredits(existingCredits.balance)
+          }
+        } catch (error) {
+          console.error('Error in checkAndInitCredits:', error)
+        }
+      }
+
+      checkAndInitCredits()
+    } else {
+      console.log('No user found')
+    }
+  }, [user])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSignOut = async () => {
     await signOut()
@@ -31,10 +96,10 @@ export function Header() {
 
           <nav className="flex items-center gap-6">
             <Link 
-              href="/plans" 
+              href="/pricing" 
               className="text-gray-600 hover:text-gray-900"
             >
-              Plans
+              Pricing
             </Link>
 
             <div className="relative">
@@ -64,28 +129,83 @@ export function Header() {
         
         <div className="flex items-center gap-4">
           {user ? (
-            <div className="flex items-center gap-4">
-              <div className="text-gray-600">{user.email}</div>
+            <div className="relative" ref={menuRef}>
               <button
-                onClick={handleSignOut}
-                className="text-red-600 hover:text-red-700"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-4"
               >
-                Sign Out
+                <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
+                  <CreditCardIcon className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    {credits} credits
+                  </span>
+                </div>
+                {user.user_metadata?.avatar_url ? (
+                  <Image
+                    src={user.user_metadata.avatar_url}
+                    alt="Profile"
+                    width={32}
+                    height={32}
+                    className="rounded-full"
+                  />
+                ) : (
+                  <UserCircleIcon className="w-8 h-8 text-gray-600" />
+                )}
               </button>
+
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                  <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
+                    {user.email}
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Sign In / Sign Up
-            </button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
+                <CreditCardIcon className="w-4 h-4" />
+                <span className="text-sm font-medium">5 credits</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsJoining(false)
+                    setShowAuthModal(true)
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-900"
+                >
+                  Sign in
+                </button>
+                <button
+                  onClick={() => {
+                    setIsJoining(true)
+                    setShowAuthModal(true)
+                  }}
+                  className="px-4 py-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {showAuthModal && (
-        <AuthModal onClose={() => setShowAuthModal(false)} />
+        <AuthModal 
+          onClose={() => {
+            setShowAuthModal(false)
+            setIsJoining(false)
+          }} 
+          isJoining={isJoining}
+        />
       )}
     </header>
   )
