@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
+import { ChevronLeftIcon, ChevronRightIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
+import { CheckIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 
 interface ListingDetailProps {
@@ -15,6 +16,7 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentDescriptionIndex, setCurrentDescriptionIndex] = useState(0)
+  const [copied, setCopied] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -75,6 +77,25 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
   const descriptions = listing?.generated_descriptions || []
   const currentDescription = descriptions[currentDescriptionIndex]
 
+  const handleCopy = async () => {
+    if (currentDescription?.content) {
+      await navigator.clipboard.writeText(currentDescription.content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  // Add date formatting helper
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
   if (loading) {
     return <div className="animate-pulse bg-white rounded-lg h-32"></div>
   }
@@ -106,7 +127,7 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
             Back to Listings
           </Link>
           <span className="text-sm text-gray-500">
-            Created {new Date(listing.created_at).toLocaleDateString()}
+            Created {formatDate(listing.created_at)}
           </span>
         </div>
 
@@ -187,7 +208,7 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
           Back to Listings
         </Link>
         <span className="text-sm text-gray-500">
-          Created {new Date(listing.created_at).toLocaleDateString()}
+          Created {formatDate(listing.created_at)}
         </span>
       </div>
 
@@ -245,6 +266,18 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">Property Description</h3>
           <div className="flex items-center gap-4">
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1 text-gray-500 hover:text-gray-700"
+              title="Copy to clipboard"
+            >
+              {copied ? (
+                <CheckIcon className="w-5 h-5 text-green-500" />
+              ) : (
+                <ClipboardDocumentIcon className="w-5 h-5" />
+              )}
+              <span className="text-sm">{copied ? 'Copied!' : 'Copy'}</span>
+            </button>
             <div className="text-sm text-gray-500">
               Version {currentDescriptionIndex + 1} of {descriptions.length}
             </div>
