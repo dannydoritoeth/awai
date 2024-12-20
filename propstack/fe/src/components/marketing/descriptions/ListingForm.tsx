@@ -43,26 +43,54 @@ export function ListingForm() {
   const [formData, setFormData] = useState<ListingFormData>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('listingFormData')
+      const currentStep = localStorage.getItem('listingFormStep')
+      
+      // Clear data if we're starting fresh (no step saved)
+      if (!currentStep) {
+        localStorage.removeItem('listingFormData')
+        return initialFormData
+      }
+      
       return saved ? JSON.parse(saved) : initialFormData
     }
     return initialFormData
   })
 
-  // Save to localStorage whenever form data changes
+  const [step, setStep] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedStep = localStorage.getItem('listingFormStep')
+      return savedStep ? parseInt(savedStep) : 1
+    }
+    return 1
+  })
+
+  // Save form data and step to localStorage
   useEffect(() => {
     localStorage.setItem('listingFormData', JSON.stringify(formData))
-  }, [formData])
+    localStorage.setItem('listingFormStep', step.toString())
+  }, [formData, step])
 
-  // Clear localStorage after successful submission
-  const handleSubmitSuccess = () => {
-    localStorage.removeItem('listingFormData')
-    // ... other success handling
+  // Clear everything when unmounting
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem('listingFormData')
+      localStorage.removeItem('listingFormStep')
+    }
+  }, [])
+
+  const handleNext = () => {
+    if (validateForm()) {
+      setStep(prev => prev + 1)
+    }
+  }
+
+  const handleBack = () => {
+    setStep(prev => prev - 1)
   }
 
   const [inputValue, setInputValue] = useState('')
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
-  const [step, setStep] = useState(1)
   const [isAddressSelected, setIsAddressSelected] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
 
@@ -82,16 +110,6 @@ export function ListingForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // Handle form submission
-  }
-
-  const handleNext = () => {
-    if (validateForm()) {
-      setStep(2)
-    }
-  }
-
-  const handleBack = () => {
-    setStep(prev => prev - 1)
   }
 
   const handlePlaceChanged = () => {
