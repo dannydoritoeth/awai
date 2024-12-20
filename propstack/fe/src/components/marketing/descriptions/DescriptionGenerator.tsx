@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { ListingFormData } from '@/types'
 import { GenerateAuthModal } from '@/components/marketing/descriptions/GenerateAuthModal'
+import { ListingSummary } from '@/components/marketing/listings/ListingSummary'
 
 interface DescriptionGeneratorProps {
   onBack: () => void
@@ -70,7 +71,21 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      // Create listing
+      // Format price with currency symbol before saving
+      const formattedPrice = formData.price 
+        ? `${formData.currency}${formData.price}`
+        : null
+
+      // Format sizes with units
+      const formattedLotSize = formData.lotSize 
+        ? `${formData.lotSize} ${formData.lotSizeUnit}`
+        : null
+
+      const formattedInteriorSize = formData.interiorSize 
+        ? `${formData.interiorSize} ${formData.lotSizeUnit}`
+        : null
+
+      // Create listing with formatted values
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
@@ -79,13 +94,12 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           unit_number: formData.unitNumber,
           listing_type: formData.listingType,
           property_type: formData.propertyType,
-          price: formData.price,
+          price: formattedPrice,
           bedrooms: formData.bedrooms,
           bathrooms: formData.bathrooms,
           parking: formData.parking,
-          lot_size: formData.lotSize,
-          lot_size_unit: formData.lotSizeUnit,
-          interior_size: formData.interiorSize,
+          lot_size: formattedLotSize,        // Store with unit
+          interior_size: formattedInteriorSize,  // Store with unit
           highlights: formData.highlights,
           other_details: formData.otherDetails,
           language: language
@@ -197,57 +211,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         {/* Preview Area */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Listing Summary</h3>
-          <div className="mt-4 space-y-4 text-gray-700">
-            <div>
-              <span className="font-medium">Address:</span>{' '}
-              {formData.address}
-              {formData.unitNumber && ` Unit ${formData.unitNumber}`}
-            </div>
-            <div>
-              <span className="font-medium">Type:</span>{' '}
-              {formData.propertyType.charAt(0).toUpperCase() + formData.propertyType.slice(1)} for {formData.listingType}
-            </div>
-            {formData.price && (
-              <div>
-                <span className="font-medium">Price:</span> ${formData.price}
-              </div>
-            )}
-            {formData.bedrooms && (
-              <div>
-                <span className="font-medium">Bedrooms:</span> {formData.bedrooms}
-              </div>
-            )}
-            {formData.bathrooms && (
-              <div>
-                <span className="font-medium">Bathrooms:</span> {formData.bathrooms}
-              </div>
-            )}
-            {formData.parking && (
-              <div>
-                <span className="font-medium">Parking:</span> {formData.parking}
-              </div>
-            )}
-            {formData.lotSize && (
-              <div>
-                <span className="font-medium">Lot Size:</span> {formData.lotSize} {formData.lotSizeUnit}
-              </div>
-            )}
-            {formData.interiorSize && (
-              <div>
-                <span className="font-medium">Interior Size:</span> {formData.interiorSize}
-              </div>
-            )}
-            <div>
-              <span className="font-medium">Property Highlights:</span>{' '}
-              {formatHighlights(formData.highlights)}
-            </div>
-            {formData.otherDetails && (
-              <div>
-                <span className="font-medium">Other Details:</span>{' '}
-                {formData.otherDetails}
-              </div>
-            )}
-          </div>
+          <ListingSummary listing={formData} />
         </div>
       </div>
 
