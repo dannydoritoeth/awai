@@ -46,49 +46,38 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session) {
-        // Save current form data before showing auth modal
         localStorage.setItem('pendingListingData', JSON.stringify({
-          formData,
-          language,
-          length,
-          unit
+          formData, language, length, unit
         }))
         setSaving(false)
         setShowAuthModal(true)
         return
       }
 
-      // Check for pending data after auth
-      const pendingData = localStorage.getItem('pendingListingData')
-      const dataToUse = pendingData ? JSON.parse(pendingData) : { formData, language, length, unit }
-
-      // First create listing with pending description
+      // Create listing with pending description
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
           user_id: session.user.id,
-          address: dataToUse.formData.address,
-          unit_number: dataToUse.formData.unitNumber,
-          listing_type: dataToUse.formData.listingType,
-          property_type: dataToUse.formData.propertyType,
-          price: dataToUse.formData.price,
-          bedrooms: dataToUse.formData.bedrooms,
-          bathrooms: dataToUse.formData.bathrooms,
-          parking: dataToUse.formData.parking,
-          lot_size: dataToUse.formData.lotSize,
-          lot_size_unit: dataToUse.formData.lotSizeUnit,
-          interior_size: dataToUse.formData.interiorSize,
-          highlights: dataToUse.formData.highlights,
-          other_details: dataToUse.formData.otherDetails,
-          language: dataToUse.language
+          address: formData.address,
+          unit_number: formData.unitNumber,
+          listing_type: formData.listingType,
+          property_type: formData.propertyType,
+          price: formData.price,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          parking: formData.parking,
+          lot_size: formData.lotSize,
+          lot_size_unit: formData.lotSizeUnit,
+          interior_size: formData.interiorSize,
+          highlights: formData.highlights,
+          other_details: formData.otherDetails,
+          language: language
         })
         .select()
         .single()
 
       if (listingError) throw listingError
-
-      // Clear pending data after successful save
-      localStorage.removeItem('pendingListingData')
 
       // Create pending description
       const { data: description, error: descError } = await supabase
@@ -96,44 +85,40 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         .insert({
           listing_id: listing.id,
           content: 'Generating...',
-          language: dataToUse.language,
-          target_length: parseInt(dataToUse.length),
-          target_unit: dataToUse.unit.toLowerCase(),
+          status: 'processing',
+          language: language,
+          target_length: parseInt(length),
+          target_unit: unit.toLowerCase(),
           version: 1,
-          is_selected: true,
-          status: 'processing'
+          is_selected: true
         })
         .select()
         .single()
 
       if (descError) throw descError
 
-      // Call edge function to generate description
-      const { data, error: functionError } = await supabase.functions.invoke<{ description: string }>(
+      // Call edge function and let it handle the status updates
+      const { error: functionError } = await supabase.functions.invoke(
         'generate-description',
         {
           body: {
             id: listing.id,
-            ...dataToUse.formData,
-            language: dataToUse.language,
-            target_length: parseInt(dataToUse.length),
-            target_unit: dataToUse.unit
+            ...formData,
+            language: language,
+            target_length: parseInt(length),
+            target_unit: unit
           }
         }
       )
 
-      if (functionError) {
-        throw new Error(`Failed to generate description: ${functionError.message}`)
-      }
+      if (functionError) throw functionError
 
-      if (!data?.description) {
-        throw new Error('No description returned from function')
-      }
-
+      // Navigate to listing page - it will show the generating state
       router.push(`/marketing/listings/${listing.id}`)
+
     } catch (error) {
       console.error('Error:', error)
-      setError('Failed to save listing. Please try again.')
+      setError('Failed to start generation. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -259,7 +244,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
           disabled={saving}
           className="bg-blue-600 text-white px-8 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          {saving ? 'Generating...' : 'Generate Description'}
+          Generate Description
         </button>
       </div>
 
