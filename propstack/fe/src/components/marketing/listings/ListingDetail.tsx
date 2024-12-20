@@ -19,6 +19,22 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
 
   useEffect(() => {
     loadListing()
+
+    // Set up polling if description is processing/generating
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('generated_descriptions')
+        .select('status')
+        .eq('listing_id', listingId)
+        .single()
+
+      if (data?.status === 'completed' || data?.status === 'error') {
+        clearInterval(interval)
+        loadListing() // Reload to get final description
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(interval)
   }, [listingId])
 
   async function loadListing() {
@@ -72,6 +88,89 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
         <p className="text-gray-600">
           {error || 'The listing could not be found'}
         </p>
+      </div>
+    )
+  }
+
+  // Show loading state while generating
+  if (currentDescription?.status === 'processing' || currentDescription?.status === 'generating') {
+    return (
+      <div className="space-y-6">
+        {/* Keep the header */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/marketing/descriptions"
+            className="flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <ChevronLeftIcon className="w-5 h-5 mr-1" />
+            Back to Listings
+          </Link>
+          <span className="text-sm text-gray-500">
+            Created {new Date(listing.created_at).toLocaleDateString()}
+          </span>
+        </div>
+
+        {/* Property Details */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-2xl font-medium text-gray-900">{listing.address}</h2>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-medium text-gray-900">Property Details</h3>
+              <dl className="mt-2 space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Type</dt>
+                  <dd className="text-gray-900">{listing.property_type}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">For</dt>
+                  <dd className="text-gray-900">{listing.listing_type}</dd>
+                </div>
+                {listing.price && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Price</dt>
+                    <dd className="text-gray-900">${listing.price}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">Features</h3>
+              <dl className="mt-2 space-y-2">
+                {listing.bedrooms && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Bedrooms</dt>
+                    <dd className="text-gray-900">{listing.bedrooms}</dd>
+                  </div>
+                )}
+                {listing.bathrooms && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Bathrooms</dt>
+                    <dd className="text-gray-900">{listing.bathrooms}</dd>
+                  </div>
+                )}
+                {listing.parking && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">Parking</dt>
+                    <dd className="text-gray-900">{listing.parking}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading Description Section */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Property Description</h3>
+          </div>
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+            <div className="text-gray-500 mt-4">Generating description...</div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -167,11 +266,18 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
             </div>
           </div>
         </div>
-        <div className="prose max-w-none">
-          {currentDescription?.status === 'processing' ? (
-            <div className="animate-pulse">Generating description...</div>
+        <div className="text-gray-700">
+          {currentDescription?.status === 'processing' || currentDescription?.status === 'generating' ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              <div className="text-gray-500 mt-4">Generating description...</div>
+            </div>
           ) : (
-            currentDescription?.content || 'No description generated yet.'
+            <div className="whitespace-pre-wrap">
+              {currentDescription?.content || 'No description generated yet.'}
+            </div>
           )}
         </div>
       </div>

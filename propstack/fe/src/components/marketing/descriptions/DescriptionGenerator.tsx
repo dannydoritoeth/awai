@@ -54,7 +54,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         return
       }
 
-      // Create listing with pending description
+      // First create listing
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
@@ -79,7 +79,7 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
 
       if (listingError) throw listingError
 
-      // Create pending description
+      // Create description with processing status
       const { data: description, error: descError } = await supabase
         .from('generated_descriptions')
         .insert({
@@ -97,23 +97,21 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
 
       if (descError) throw descError
 
-      // Call edge function and let it handle the status updates
-      const { error: functionError } = await supabase.functions.invoke(
+      // Fire and forget - don't await
+      supabase.functions.invoke(
         'generate-description',
         {
           body: {
             id: listing.id,
             ...formData,
-            language: language,
+            language,
             target_length: parseInt(length),
             target_unit: unit
           }
         }
-      )
+      ).catch(console.error) // Log any errors but don't block
 
-      if (functionError) throw functionError
-
-      // Navigate to listing page - it will show the generating state
+      // Redirect immediately to listing page
       router.push(`/marketing/listings/${listing.id}`)
 
     } catch (error) {
