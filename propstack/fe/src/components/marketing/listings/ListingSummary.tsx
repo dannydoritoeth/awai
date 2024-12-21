@@ -58,7 +58,7 @@ export function ListingSummary({ listing }: ListingSummaryProps) {
           <span className="font-medium">Interior Size:</span> {listing.interiorSize}
         </div>
       )}
-      {listing.highlights && (
+      {listing.highlights && listing.highlights.length > 0 && (
         <div>
           <span className="font-medium">Property Highlights:</span>{' '}
           {listing.highlights.join(', ')}
