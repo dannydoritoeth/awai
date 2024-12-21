@@ -79,17 +79,34 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
+      // Destructure out all camelCase fields
+      const { 
+        fullAddress, 
+        interiorSize,
+        interiorSizeUnit,
+        lotSize,
+        lotSizeUnit,
+        currency,
+        listingType,
+        propertyType,
+        unitNumber,
+        otherDetails,
+        ...rest 
+      } = formData;
+      
       const formattedData = {
-        ...formData,
+        ...rest,
         user_id: session.user.id,
-        // Store price with currency symbol
+        // Convert all fields to snake_case
+        listing_type: listingType,
+        property_type: propertyType,
+        unit_number: unitNumber,
+        other_details: otherDetails,
+        // Format price with currency symbol
         price: formData.price ? `${formData.currency}${formData.price}` : null,
         // Format sizes with units
         lot_size: formData.lotSize ? `${formData.lotSize} ${formData.lotSizeUnit}` : null,
         interior_size: formData.interiorSize ? `${formData.interiorSize} ${formData.interiorSizeUnit}` : null,
-        unit_number: formData.unitNumber,
-        // Remove currency field since it's now part of price
-        currency: undefined
       }
 
       // Create listing with formatted values
@@ -200,10 +217,13 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         {/* Preview Area */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Listing Summary</h3>
-          {console.log('Form Data:', formData)}
-          {console.log('Unit Number:', formData.unitNumber)}
-          {console.log('Lot Size:', formData.lotSize, formData.lotSizeUnit)}
-          {console.log('Interior Size:', formData.interiorSize, formData.interiorSizeUnit)}
+          {console.log('Form Data for Summary:', {
+            lotSize: formData.lotSize,
+            lotSizeUnit: formData.lotSizeUnit,
+            interiorSize: formData.interiorSize,
+            interiorSizeUnit: formData.interiorSizeUnit,
+            otherDetails: formData.otherDetails
+          })}
           
           <ListingSummary 
             listing={{

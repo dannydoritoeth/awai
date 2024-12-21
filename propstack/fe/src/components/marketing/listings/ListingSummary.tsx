@@ -17,6 +17,11 @@ interface ListingSummaryProps {
 }
 
 export function ListingSummary({ listing }: ListingSummaryProps) {
+  // Helper function to capitalize first letter
+  const capitalize = (str: string) => {
+    return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+  };
+
   return (
     <div className="space-y-4 text-gray-700">
       <div>
@@ -24,10 +29,12 @@ export function ListingSummary({ listing }: ListingSummaryProps) {
         {listing.address}
         {listing.unitNumber && ` Unit ${listing.unitNumber}`}
       </div>
-      <div>
-        <span className="font-medium">Type:</span>{' '}
-        {listing.propertyType.charAt(0).toUpperCase() + listing.propertyType.slice(1)} for {listing.listingType}
-      </div>
+      {listing.propertyType && listing.listingType && (
+        <div>
+          <span className="font-medium">Type:</span>{' '}
+          {capitalize(listing.propertyType)} for {listing.listingType}
+        </div>
+      )}
       {listing.price && (
         <div>
           <span className="font-medium">Price:</span> {listing.price}

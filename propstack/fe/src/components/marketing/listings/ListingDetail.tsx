@@ -218,7 +218,22 @@ export function ListingDetail({ listingId }: ListingDetailProps) {
             Created {formatDate(listing.created_at)}
           </div>
         </div>
-        <ListingSummary listing={listing} />
+        <ListingSummary 
+          listing={{
+            address: listing.address,
+            unitNumber: listing.unit_number,
+            propertyType: listing.property_type,
+            listingType: listing.listing_type,
+            price: listing.price,
+            bedrooms: listing.bedrooms,
+            bathrooms: listing.bathrooms,
+            parking: listing.parking,
+            lotSize: listing.lot_size,
+            interiorSize: listing.interior_size,
+            highlights: listing.highlights,
+            otherDetails: listing.other_details
+          }} 
+        />
       </div>
 
       {/* Generated Descriptions Section */}
