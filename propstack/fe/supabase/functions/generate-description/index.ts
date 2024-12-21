@@ -45,36 +45,24 @@ Deno.serve(async (req: Request) => {
     if (updateError1) throw updateError1
 
     // Build the prompt
-    const formatPrice = (price: string, currency: string = 'USD') => {
-      const symbols = {
-        USD: '$',
-        AUD: '$',
-        NZD: '$',
-        GBP: '£',
-        EUR: '€',
-        CAD: '$'
-      }
-      return `${symbols[currency as keyof typeof symbols] || '$'}${price}`
-    }
-
     const prompt = `Generate a compelling real estate description for the following property:
 
 Address: ${data.address}${data.unitNumber ? ` Unit ${data.unitNumber}` : ''}
 Type: ${data.propertyType} for ${data.listingType}
-${data.price ? `Price: ${formatPrice(data.price, data.currency)}` : ''}
+${data.price ? `Price: ${data.price}` : ''}
 ${data.bedrooms ? `Bedrooms: ${data.bedrooms}` : ''}
 ${data.bathrooms ? `Bathrooms: ${data.bathrooms}` : ''}
 ${data.parking ? `Parking: ${data.parking}` : ''}
-${data.lotSize ? `Lot Size: ${data.lotSize} ${data.lotSizeUnit}` : ''}
-${data.interiorSize ? `Interior Size: ${data.interiorSize}` : ''}
+${data.lot_size ? `Lot Size: ${data.lot_size}` : ''}
+${data.interior_size ? `Interior Size: ${data.interior_size}` : ''}
 Highlights: ${data.highlights.join(', ')}
 ${data.otherDetails ? `Additional Details: ${data.otherDetails}` : ''}
 
 Please write a ${data.target_length} ${data.target_unit} description in ${data.language}. 
-Focus on the property's unique features and benefits. 
-Use a professional tone and avoid clichés.
-Highlight the location and any special amenities.
-Use ${formatPrice('', data.currency)} as the currency symbol when mentioning price.`
+Use the exact price format (${data.price}) when mentioning the price.
+Use the exact size units as provided (${data.lot_size}, ${data.interior_size}).
+Focus on the property's unique features and benefits.
+Use a professional tone and avoid clichés.`
 
     console.log('Creating OpenAI completion...')
     const completion = await openai.chat.completions.create({

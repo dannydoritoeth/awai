@@ -18,8 +18,9 @@ interface ListingFormData {
   bathrooms?: string
   parking?: string
   lotSize?: string
-  lotSizeUnit?: 'sqft' | 'acres'
+  lotSizeUnit?: 'feet' | 'meters' | 'acres' | 'hectares' | 'sqft' | 'sqm'
   interiorSize?: string
+  interiorSizeUnit?: 'feet' | 'meters' | 'acres' | 'hectares' | 'sqft' | 'sqm'
   highlights: string[]
   otherDetails?: string
   fullAddress?: google.maps.places.PlaceResult
@@ -36,6 +37,8 @@ const initialFormData: ListingFormData = {
   unitNumber: '',
   listingType: '',
   propertyType: '',
+  lotSizeUnit: 'sqm',
+  interiorSizeUnit: 'sqm',
   highlights: []
 }
 

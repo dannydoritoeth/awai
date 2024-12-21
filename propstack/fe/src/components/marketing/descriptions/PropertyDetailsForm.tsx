@@ -187,7 +187,7 @@ export function PropertyDetailsForm({ onBack, formData, onChange, onNext }: Prop
                 )}
               </div>
               <select
-                value={formData.lotSizeUnit || 'sqm'}
+                value={formData.lotSizeUnit ?? 'sqm'}
                 onChange={(e) => onChange({ lotSizeUnit: e.target.value as typeof SIZE_UNITS[number]['value'] })}
                 className="w-36 rounded-md border-gray-300 shadow-sm text-gray-900"
               >
@@ -216,7 +216,7 @@ export function PropertyDetailsForm({ onBack, formData, onChange, onNext }: Prop
                 )}
               </div>
               <select
-                value={formData.interiorSizeUnit || 'sqm'}
+                value={formData.interiorSizeUnit ?? 'sqm'}
                 onChange={(e) => onChange({ interiorSizeUnit: e.target.value as typeof SIZE_UNITS[number]['value'] })}
                 className="w-36 rounded-md border-gray-300 shadow-sm text-gray-900"
               >

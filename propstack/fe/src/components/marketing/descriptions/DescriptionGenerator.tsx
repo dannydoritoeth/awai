@@ -39,6 +39,14 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     return highlights.join(', ')
   }
 
+  const formatPrice = (price: string, currency: string) => {
+    return `${currency}${price.toString().replace('k', ',000')}`
+  }
+
+  const formatSize = (size: string, unit: string) => {
+    return `${size} ${unit}`
+  }
+
   // Check auth before generation
   async function handleGenerateDescription() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -71,39 +79,23 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
     setError(null)
     
     try {
-      // Format price with currency symbol before saving
-      const formattedPrice = formData.price 
-        ? `${formData.currency}${formData.price}`
-        : null
-
-      // Format sizes with units
-      const formattedLotSize = formData.lotSize 
-        ? `${formData.lotSize} ${formData.lotSizeUnit}`
-        : null
-
-      const formattedInteriorSize = formData.interiorSize 
-        ? `${formData.interiorSize} ${formData.lotSizeUnit}`
-        : null
+      const formattedData = {
+        ...formData,
+        user_id: session.user.id,
+        // Store price with currency symbol
+        price: formData.price ? `${formData.currency}${formData.price}` : null,
+        // Format sizes with units
+        lot_size: formData.lotSize ? `${formData.lotSize} ${formData.lotSizeUnit}` : null,
+        interior_size: formData.interiorSize ? `${formData.interiorSize} ${formData.interiorSizeUnit}` : null,
+        unit_number: formData.unitNumber,
+        // Remove currency field since it's now part of price
+        currency: undefined
+      }
 
       // Create listing with formatted values
       const { data: listing, error: listingError } = await supabase
         .from('listings')
-        .insert({
-          user_id: session.user.id,
-          address: formData.address,
-          unit_number: formData.unitNumber,
-          listing_type: formData.listingType,
-          property_type: formData.propertyType,
-          price: formattedPrice,
-          bedrooms: formData.bedrooms,
-          bathrooms: formData.bathrooms,
-          parking: formData.parking,
-          lot_size: formattedLotSize,        // Store with unit
-          interior_size: formattedInteriorSize,  // Store with unit
-          highlights: formData.highlights,
-          other_details: formData.otherDetails,
-          language: language
-        })
+        .insert(formattedData)
         .select()
         .single()
 
@@ -127,19 +119,16 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
 
       if (descError) throw descError
 
-      // Fire and forget - don't await
-      supabase.functions.invoke(
-        'generate-description',
-        {
-          body: {
-            id: listing.id,
-            ...formData,
-            language,
-            target_length: parseInt(length),
-            target_unit: unit
-          }
+      // Pass the same formatted data to the Edge Function
+      supabase.functions.invoke('generate-description', {
+        body: {
+          id: listing.id,
+          ...formattedData,
+          language,
+          target_length: parseInt(length),
+          target_unit: unit
         }
-      ).catch(console.error) // Log any errors but don't block
+      })
 
       // Deduct credit after successful generation
       const { error: deductError } = await supabase
@@ -211,7 +200,31 @@ export function DescriptionGenerator({ onBack, formData }: DescriptionGeneratorP
         {/* Preview Area */}
         <div className="flex-1 bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-medium text-gray-900">Listing Summary</h3>
-          <ListingSummary listing={formData} />
+          {console.log('Form Data:', formData)}
+          {console.log('Unit Number:', formData.unitNumber)}
+          {console.log('Lot Size:', formData.lotSize, formData.lotSizeUnit)}
+          {console.log('Interior Size:', formData.interiorSize, formData.interiorSizeUnit)}
+          
+          <ListingSummary 
+            listing={{
+              address: formData.address,
+              unitNumber: formData.unitNumber,
+              propertyType: formData.propertyType,
+              listingType: formData.listingType,
+              price: formData.price ? `${formData.currency}${formData.price}` : undefined,
+              bedrooms: formData.bedrooms,
+              bathrooms: formData.bathrooms,
+              parking: formData.parking,
+              lotSize: formData.lotSize && formData.lotSizeUnit 
+                ? `${formData.lotSize} ${formData.lotSizeUnit}`
+                : undefined,
+              interiorSize: formData.interiorSize && formData.interiorSizeUnit 
+                ? `${formData.interiorSize} ${formData.interiorSizeUnit}`
+                : undefined,
+              highlights: formData.highlights,
+              otherDetails: formData.otherDetails
+            }} 
+          />
         </div>
       </div>
 
