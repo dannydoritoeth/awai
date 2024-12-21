@@ -9,6 +9,7 @@ import { ChevronDownIcon } from '@heroicons/react/20/solid'
 import { UserCircleIcon, CreditCardIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
+import { FeedbackModal } from '../feedback/FeedbackModal'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -19,6 +20,8 @@ export function Header() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [isJoining, setIsJoining] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
 
   useEffect(() => {
     if (user) {
@@ -78,6 +81,16 @@ export function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    async function getUserEmail() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setUserEmail(user.email)
+      }
+    }
+    getUserEmail()
+  }, [])
+
   const handleSignOut = async () => {
     await signOut()
     router.push('/')
@@ -95,12 +108,12 @@ export function Header() {
           </Link>
 
           <nav className="flex items-center gap-6">
-            <Link 
+            {/* <Link 
               href="/pricing" 
               className="text-gray-600 hover:text-gray-900"
             >
               Pricing
-            </Link>
+            </Link> */}
 
             <div className="relative">
               <button
@@ -134,8 +147,15 @@ export function Header() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-4"
               >
-                <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
-                  <CreditCardIcon className="w-4 h-4" />
+                <div className={`flex items-center gap-2 ${
+                  credits && credits <= 3 
+                    ? 'text-red-600 bg-red-50' 
+                    : 'text-gray-600 bg-gray-50'
+                  } px-3 py-1 rounded-full`}
+                >
+                  <CreditCardIcon className={`w-4 h-4 ${
+                    credits && credits <= 3 ? 'text-red-600' : 'text-gray-600'
+                  }`} />
                   <span className="text-sm font-medium">
                     {credits} credits
                   </span>
@@ -158,6 +178,12 @@ export function Header() {
                   <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
                     {user.email}
                   </div>
+                  <button
+                    onClick={() => setShowFeedback(true)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Request More Credits
+                  </button>
                   <button
                     onClick={handleSignOut}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
@@ -207,6 +233,13 @@ export function Header() {
           isJoining={isJoining}
         />
       )}
+
+      <FeedbackModal
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        context="credits"
+        userEmail={userEmail}
+      />
     </header>
   )
 } 
