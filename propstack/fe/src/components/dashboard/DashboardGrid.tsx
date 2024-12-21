@@ -17,13 +17,6 @@ const features = [
     href: '/marketing',
   },
   {
-    title: 'Social Media',
-    subtitle: 'Amplify Your Presence',
-    icon: Share2,
-    color: 'bg-purple-50',
-    href: '/social',
-  },
-  {
     title: 'Data & Analytics',
     subtitle: 'Make Informed Decisions',
     icon: BarChart3,

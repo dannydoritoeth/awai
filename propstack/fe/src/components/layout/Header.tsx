@@ -22,6 +22,7 @@ export function Header() {
   const [isJoining, setIsJoining] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const freeContentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user) {
@@ -70,11 +71,13 @@ export function Header() {
     }
   }, [user])
 
-  // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false)
+      }
+      if (freeContentRef.current && !freeContentRef.current.contains(event.target as Node)) {
+        setShowFreeContent(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -115,7 +118,7 @@ export function Header() {
               Pricing
             </Link> */}
 
-            <div className="relative">
+            <div className="relative" ref={freeContentRef}>
               <button
                 onClick={() => setShowFreeContent(!showFreeContent)}
                 className="flex items-center gap-1 text-gray-600 hover:text-gray-900"
