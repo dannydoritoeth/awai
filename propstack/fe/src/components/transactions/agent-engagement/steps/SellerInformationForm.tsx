@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
-import { AgentEngagementData } from '../types'
+import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
 import { StandaloneSearchBox } from '@react-google-maps/api'
 import { useGoogleMaps } from '@/components/maps/GoogleMapsProvider'
 

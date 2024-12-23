@@ -1,5 +1,5 @@
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
-import { AgentEngagementData } from '../types'
+import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
 import React from 'react'
 
 interface ReviewFormProps {

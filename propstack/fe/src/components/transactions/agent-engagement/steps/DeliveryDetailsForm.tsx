@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronRightIcon } from '@heroicons/react/24/outline'
 import { InfoIcon } from 'lucide-react'
-import { AgentEngagementData } from '../types'
+import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
 
 interface DeliveryDetailsFormProps {
   formData: AgentEngagementData
