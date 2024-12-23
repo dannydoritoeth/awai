@@ -1,4 +1,4 @@
-export interface Form6Data {
+export interface AgentEngagementData {
   // Delivery Details
   deliveryMethod: 'email' | 'hardcopy'
   requiredDateTime: string

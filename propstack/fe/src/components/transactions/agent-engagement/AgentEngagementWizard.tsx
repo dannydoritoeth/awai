@@ -1,16 +1,16 @@
 "use client"
 
 import { useState } from 'react'
-import { Form6Data } from './types'
-import { DeliveryDetailsForm } from './steps/DeliveryDetailsForm'
-import { SellerInformationForm } from './steps/SellerInformationForm'
-import { PropertyDetailsForm } from './steps/PropertyDetailsForm'
-import { PropertyFeaturesForm } from './steps/PropertyFeaturesForm'
-import { LegalComplianceForm } from './steps/LegalComplianceForm'
-import { ReviewForm } from './steps/ReviewForm'
-import { FormSteps } from './FormSteps'
+import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
+import { DeliveryDetailsForm } from '@/components/transactions/agent-engagement/steps/DeliveryDetailsForm'
+import { SellerInformationForm } from '@/components/transactions/agent-engagement/steps/SellerInformationForm'
+import { PropertyDetailsForm } from '@/components/transactions/agent-engagement/steps/PropertyDetailsForm'
+import { PropertyFeaturesForm } from '@/components/transactions/agent-engagement/steps/PropertyFeaturesForm'
+import { LegalComplianceForm } from '@/components/transactions/agent-engagement/steps/LegalComplianceForm'
+import { ReviewForm } from '@/components/transactions/agent-engagement/steps/ReviewForm'
+import { FormSteps } from '@/components/transactions/agent-engagement/FormSteps'
 
-const initialFormData: Form6Data = {
+const initialFormData: AgentEngagementData = {
   // Delivery Details
   deliveryMethod: 'email',
   requiredDateTime: '',
@@ -63,7 +63,7 @@ const steps = [
 
 export function AgentEngagementWizard() {
   const [step, setStep] = useState(1)
-  const [formData, setFormData] = useState<Form6Data>(initialFormData)
+  const [formData, setFormData] = useState<AgentEngagementData>(initialFormData)
 
   const handleNext = () => {
     setStep(current => current + 1)
@@ -78,7 +78,7 @@ export function AgentEngagementWizard() {
     console.log('Form submitted:', formData)
   }
 
-  const updateFormData = (updates: Partial<Form6Data>) => {
+  const updateFormData = (updates: Partial<AgentEngagementData>) => {
     setFormData(current => ({ ...current, ...updates }))
   }
 

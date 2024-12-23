@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { InfoIcon } from 'lucide-react'
-import { Form6Data } from '../types'
+import { AgentEngagementData } from '../types'
 
 interface LegalComplianceFormProps {
-  formData: Form6Data
-  onChange: (updates: Partial<Form6Data>) => void
+  formData: AgentEngagementData
+  onChange: (updates: Partial<AgentEngagementData>) => void
   onNext: () => void
   onBack: () => void
 }
@@ -16,5 +16,28 @@ export function LegalComplianceForm({
   onNext, 
   onBack 
 }: LegalComplianceFormProps) {
-  // Copy implementation from form6 version
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {}
+    
+    if (formData.commission < 0) {
+      newErrors.commission = 'Commission cannot be negative'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleNext = () => {
+    if (validate()) {
+      onNext()
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-6">
+      {/* Copy full JSX implementation */}
+    </div>
+  )
 } 

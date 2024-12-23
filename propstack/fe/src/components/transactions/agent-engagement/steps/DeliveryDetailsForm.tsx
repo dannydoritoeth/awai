@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ChevronRightIcon } from '@heroicons/react/24/outline'
 import { InfoIcon } from 'lucide-react'
-import { Form6Data } from '../types'
+import { AgentEngagementData } from '../types'
 
 interface DeliveryDetailsFormProps {
-  formData: Form6Data
-  onChange: (updates: Partial<Form6Data>) => void
+  formData: AgentEngagementData
+  onChange: (updates: Partial<AgentEngagementData>) => void
   onNext: () => void
 }
 
