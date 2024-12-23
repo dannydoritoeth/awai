@@ -31,13 +31,6 @@ const features = [
     href: '/strategy',
   },
   {
-    title: 'Referrals',
-    subtitle: 'Connect with an Agent',
-    icon: Users,
-    color: 'bg-pink-50',
-    href: '/referrals',
-  },
-  {
     title: 'Transactions',
     subtitle: 'Manage Workflow',
     icon: ClipboardList,
