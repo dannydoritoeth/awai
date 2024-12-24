@@ -85,3 +85,6 @@ CREATE TRIGGER set_agent_engagements_timestamp
   BEFORE UPDATE ON agent_engagements
   FOR EACH ROW
   EXECUTE FUNCTION trigger_set_timestamp(); 
+
+-- Update the engagement status enum if needed
+ALTER TYPE engagement_status ADD VALUE IF NOT EXISTS 'title_search'; 

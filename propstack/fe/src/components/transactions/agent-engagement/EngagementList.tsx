@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { listEngagements } from '@/services/engagements'
+import { listEngagements, updateEngagementStatus } from '@/services/engagements'
 import { Badge } from '@/components/ui/Badge'
 import { PostgrestError } from '@supabase/supabase-js'
+import { EllipsisHorizontalIcon, MagnifyingGlassIcon, ChevronLeftIcon } from '@heroicons/react/24/outline'
+import { Menu } from '@headlessui/react'
+import { toast } from 'react-hot-toast'
+import Link from 'next/link'
 
 interface Engagement {
   id: string
@@ -49,6 +53,17 @@ export function EngagementList() {
     }
   }
 
+  const handleStatusUpdate = async (id: string, status: 'title_search') => {
+    try {
+      await updateEngagementStatus(id, status)
+      toast.success('Status updated successfully')
+      // You might want to refresh the list here
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toast.error('Failed to update status')
+    }
+  }
+
   if (loading) {
     return <div className="animate-pulse bg-white rounded-lg h-32"></div>
   }
@@ -79,24 +94,66 @@ export function EngagementList() {
   }
 
   return (
-    <div className="grid gap-4">
-      {engagements.map((engagement) => (
-        <div
-          key={engagement.id}
-          onClick={() => router.push(`/transactions/agent-engagement/${engagement.id}`)}
-          className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-900">{engagement.property_address}</h3>
-              <p className="text-sm text-gray-500">{engagement.seller_name}</p>
-            </div>
-            <Badge className={getStatusColor(engagement.status)}>
-              {engagement.status.replace('_', ' ').toUpperCase()}
-            </Badge>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/transactions"
+            className="flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <ChevronLeftIcon className="w-5 h-5" />
+            <span className="ml-1">Back to Transactions</span>
+          </Link>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Agent Engagements
+          </h1>
         </div>
-      ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {engagements.map((engagement) => (
+          <div
+            key={engagement.id}
+            onClick={() => router.push(`/transactions/agent-engagement/${engagement.id}`)}
+            className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900">{engagement.property_address}</h3>
+                <p className="text-sm text-gray-500">{engagement.seller_name}</p>
+              </div>
+              <Badge className={getStatusColor(engagement.status)}>
+                {engagement.status.replace('_', ' ').toUpperCase()}
+              </Badge>
+            </div>
+            
+            <Menu as="div" className="relative">
+              <Menu.Button className="p-2 hover:bg-gray-50 rounded-full">
+                <EllipsisHorizontalIcon className="w-5 h-5 text-gray-500" />
+              </Menu.Button>
+              
+              <Menu.Items className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                <div className="py-1">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => handleStatusUpdate(engagement.id, 'title_search')}
+                        className={`${
+                          active ? 'bg-gray-50' : ''
+                        } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
+                      >
+                        <MagnifyingGlassIcon className="w-4 h-4 mr-2" />
+                        Start Title Search
+                      </button>
+                    )}
+                  </Menu.Item>
+                  {/* ... other menu items ... */}
+                </div>
+              </Menu.Items>
+            </Menu>
+          </div>
+        ))}
+      </div>
     </div>
   )
 } 

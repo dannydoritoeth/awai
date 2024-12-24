@@ -1,3 +1,5 @@
+export type EngagementStatus = 'new' | 'title_search' | 'review' | 'agreement'
+
 export interface AgentEngagementData {
   // Delivery Details
   deliveryMethod: 'email' | 'hardcopy'

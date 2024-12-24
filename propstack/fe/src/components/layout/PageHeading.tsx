@@ -5,12 +5,19 @@ import Link from 'next/link'
 
 interface PageHeadingProps {
   title: string
-  description: string
-  backHref?: string
+  description?: string
   showBackButton?: boolean
+  backHref?: string
+  backPath?: string
 }
 
-export function PageHeading({ title, description, backHref, showBackButton }: PageHeadingProps) {
+export function PageHeading({ 
+  title, 
+  description,
+  showBackButton,
+  backHref,
+  backPath
+}: PageHeadingProps) {
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mt-4">
