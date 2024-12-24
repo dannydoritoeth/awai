@@ -4,9 +4,14 @@ import { PostgrestError } from '@supabase/supabase-js'
 
 export async function createEngagement(data: AgentEngagementData) {
   try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('No authenticated user')
+
     const { data: engagement, error } = await supabase
       .from('agent_engagements')
       .insert([{
+        user_id: user.id,
         delivery_method: data.deliveryMethod,
         required_date_time: data.requiredDateTime,
         seller_name: data.sellerName,

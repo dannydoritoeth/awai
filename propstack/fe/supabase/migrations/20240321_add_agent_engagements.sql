@@ -59,6 +59,12 @@ CREATE TABLE agent_engagements (
 -- Add RLS policies
 ALTER TABLE agent_engagements ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own engagements" ON agent_engagements;
+DROP POLICY IF EXISTS "Users can create engagements" ON agent_engagements;
+DROP POLICY IF EXISTS "Users can update their engagements" ON agent_engagements;
+
+-- Create new policies
 CREATE POLICY "Users can view their own engagements"
   ON agent_engagements
   FOR SELECT
