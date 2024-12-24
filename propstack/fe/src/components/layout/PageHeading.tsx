@@ -14,8 +14,8 @@ export function PageHeading({ title, description, backHref, showBackButton }: Pa
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mt-4">
-        {showBackButton && (
-          <Link href={backHref}>
+        {showBackButton && backHref && (
+          <Link href={backHref || '/'}>
             <ChevronLeftIcon className="w-8 h-8 text-gray-900" />
           </Link>
         )}
