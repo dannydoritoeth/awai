@@ -40,11 +40,11 @@ const initialFormData: AgentEngagementData = {
   adviceToMarketPrice: false,
   
   // Compliance & Legal
-  sellerWarranties: 'na',
-  heritageListed: 'na',
-  contaminatedLand: 'na',
-  environmentManagement: 'na',
-  presentLandUse: 'na',
+  sellerWarranties: '' as YesNoNa,
+  heritageListed: '' as YesNoNa,
+  contaminatedLand: '' as YesNoNa,
+  environmentManagement: '' as YesNoNa,
+  presentLandUse: '' as YesNoNa,
   neighbourhoodDisputes: false,
   encumbrances: false,
   gstApplicable: false,
