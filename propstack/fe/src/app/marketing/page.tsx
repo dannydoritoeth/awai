@@ -1,9 +1,9 @@
-import { MarketingDashboard } from '@/components/marketing/descriptions/MarketingDashboard'
+"use client"
+
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { PageHeading } from '@/components/layout/PageHeading'
-
-export const dynamic = 'force-dynamic'
+import { MarketingDashboard } from '@/components/marketing/descriptions/MarketingDashboard'
 
 export default function MarketingPage() {
   return (
@@ -12,10 +12,10 @@ export default function MarketingPage() {
       <PageTransition>
         <main className="container mx-auto px-4">
           <PageHeading 
-            title="Marketing Tools" 
-            description="Create and manage your property marketing content"
+            title="Marketing" 
+            description="AI powered marketing tools for real estate"
+            backHref="/"
             showBackButton
-            backPath="/"
           />
           <MarketingDashboard />
         </main>
