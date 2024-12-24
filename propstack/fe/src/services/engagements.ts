@@ -62,6 +62,7 @@ export async function createEngagement(data: AgentEngagementData) {
 }
 
 export async function updateEngagement(id: string, data: Partial<AgentEngagementData>) {
+  console.log('updateEngagement started', { id, data })
   try {
     const { data: engagement, error } = await supabase
       .from('agent_engagements')
@@ -107,6 +108,7 @@ export async function updateEngagement(id: string, data: Partial<AgentEngagement
       throw error
     }
 
+    console.log('updateEngagement completed', engagement)
     return engagement
   } catch (err) {
     const error = err as Error | PostgrestError

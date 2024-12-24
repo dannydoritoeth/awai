@@ -148,6 +148,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   }
 
   const handleSubmit = async () => {
+    console.log('Submit started, id:', id)
     setLoading(true)
     setError(null)
     
@@ -159,9 +160,14 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
 
     try {
       if (id) {
+        console.log('Updating existing engagement')
         await updateEngagement(id, formData)
         toast.success('Changes saved successfully')
+        console.log('Update completed')
+        // Explicitly prevent any navigation
+        return
       } else {
+        console.log('Creating new engagement')
         const newEngagement = await createEngagement(formData)
         toast.success('Engagement created successfully')
         router.push(`/transactions/agent-engagement/${newEngagement.id}?new=true`)
