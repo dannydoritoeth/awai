@@ -1,11 +1,10 @@
 "use client"
 
-import { AgentEngagementWizard } from '@/components/transactions/agent-engagement/AgentEngagementWizard'
 import { Header } from '@/components/layout/Header'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { PageHeading } from '@/components/layout/PageHeading'
-
-export const dynamic = 'force-static'
+import { AgentEngagementWizard } from '@/components/transactions/agent-engagement/AgentEngagementWizard'
+import { EngagementList } from '@/components/transactions/agent-engagement/EngagementList'
 
 export default function AgentEngagementPage() {
   return (
@@ -19,7 +18,13 @@ export default function AgentEngagementPage() {
             backHref="/transactions"
             showBackButton
           />
-          <AgentEngagementWizard />
+          <div className="space-y-8">
+            <AgentEngagementWizard />
+            <div>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Engagements</h2>
+              <EngagementList />
+            </div>
+          </div>
         </main>
       </PageTransition>
     </div>

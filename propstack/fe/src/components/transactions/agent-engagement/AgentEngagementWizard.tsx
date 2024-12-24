@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
 import { SellerInformationForm } from '@/components/transactions/agent-engagement/steps/SellerInformationForm'
 import { PropertyDetailsForm } from '@/components/transactions/agent-engagement/steps/PropertyDetailsForm'
@@ -8,6 +8,11 @@ import { PropertyFeaturesForm } from '@/components/transactions/agent-engagement
 import { LegalComplianceForm } from '@/components/transactions/agent-engagement/steps/LegalComplianceForm'
 import { ReviewForm } from '@/components/transactions/agent-engagement/steps/ReviewForm'
 import { FormSteps } from '@/components/transactions/agent-engagement/FormSteps'
+import { createEngagement, updateEngagement, getEngagement } from '@/services/engagements'
+import { useRouter } from 'next/navigation'
+import { PostgrestError } from '@supabase/supabase-js'
+import { useAuth } from '@/contexts/AuthContext'
+import { EngagementAuthModal } from './EngagementAuthModal'
 
 const initialFormData: AgentEngagementData = {
   // Delivery Details
@@ -60,21 +65,68 @@ const steps = [
   'Review'
 ]
 
-export function AgentEngagementWizard() {
+export function AgentEngagementWizard({ id }: { id?: string }) {
+  const { user } = useAuth()
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<AgentEngagementData>(initialFormData)
 
+  useEffect(() => {
+    if (id) {
+      loadEngagement()
+    }
+  }, [id])
+
+  async function loadEngagement() {
+    try {
+      setError(null)
+      const data = await getEngagement(id!)
+      setFormData({
+        ...initialFormData,
+        ...data
+      })
+    } catch (err) {
+      const error = err as Error | PostgrestError
+      console.error('Error loading engagement:', error)
+      setError(error.message || 'Failed to load engagement')
+    }
+  }
+
   const handleNext = () => {
-    setStep(current => current + 1)
+    setStep(s => Math.min(s + 1, steps.length))
   }
 
   const handleBack = () => {
-    setStep(current => current - 1)
+    setStep(s => Math.max(s - 1, 1))
   }
 
   const handleSubmit = async () => {
-    // Handle form submission
-    console.log('Form submitted:', formData)
+    setLoading(true)
+    setError(null)
+    
+    if (!user) {
+      setShowAuthModal(true)
+      setLoading(false)
+      return
+    }
+
+    try {
+      if (id) {
+        await updateEngagement(id, formData)
+      } else {
+        await createEngagement(formData)
+      }
+      router.push('/transactions/agent-engagement')
+    } catch (err) {
+      const error = err as Error | PostgrestError
+      console.error('Error saving engagement:', error)
+      setError(error.message || 'Failed to save engagement')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const updateFormData = (updates: Partial<AgentEngagementData>) => {
@@ -86,9 +138,15 @@ export function AgentEngagementWizard() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="space-y-8">
       <FormSteps steps={steps} currentStep={step} />
       
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+          <p className="text-red-800 text-sm">{error}</p>
+        </div>
+      )}
+
       {/* Form Steps */}
       {step === 1 && (
         <PropertyDetailsForm
@@ -129,6 +187,10 @@ export function AgentEngagementWizard() {
           onBack={handleBack}
           onEditStep={handleEditStep}
         />
+      )}
+
+      {showAuthModal && (
+        <EngagementAuthModal onClose={() => setShowAuthModal(false)} />
       )}
     </div>
   )
