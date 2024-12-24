@@ -11,8 +11,9 @@ export interface AgentEngagementData {
   
   // Property Details
   propertyAddress: string
-  titleReference: string
   spNumber: string
+  surveyPlanNumber: string
+  titleReference: string
   saleMethod: 'private' | 'auction'
   listPrice?: string
   auctionDetails?: {

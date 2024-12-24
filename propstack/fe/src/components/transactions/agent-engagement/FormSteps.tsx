@@ -17,7 +17,6 @@ export function FormSteps({ steps, currentStep }: FormStepsProps) {
           return (
             <div key={step} className="flex flex-col items-center">
               <div className="flex items-center">
-                {/* Circle with number or check */}
                 <div
                   className={`
                     w-8 h-8 rounded-full flex items-center justify-center
@@ -38,7 +37,6 @@ export function FormSteps({ steps, currentStep }: FormStepsProps) {
                   )}
                 </div>
 
-                {/* Connecting line */}
                 {index < steps.length - 1 && (
                   <div 
                     className={`
@@ -49,16 +47,10 @@ export function FormSteps({ steps, currentStep }: FormStepsProps) {
                 )}
               </div>
 
-              {/* Step label */}
               <div className="mt-2 text-center">
                 <div className={`text-sm ${isCurrent ? 'text-indigo-600 font-medium' : 'text-gray-500'}`}>
                   {step}
                 </div>
-                {isCurrent && (
-                  <div className="text-xs text-indigo-600">
-                    Current step
-                  </div>
-                )}
               </div>
             </div>
           )

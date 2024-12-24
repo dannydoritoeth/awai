@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
-import { DeliveryDetailsForm } from '@/components/transactions/agent-engagement/steps/DeliveryDetailsForm'
 import { SellerInformationForm } from '@/components/transactions/agent-engagement/steps/SellerInformationForm'
 import { PropertyDetailsForm } from '@/components/transactions/agent-engagement/steps/PropertyDetailsForm'
 import { PropertyFeaturesForm } from '@/components/transactions/agent-engagement/steps/PropertyFeaturesForm'
@@ -23,8 +22,9 @@ const initialFormData: AgentEngagementData = {
   
   // Property Details
   propertyAddress: '',
-  titleReference: '',
   spNumber: '',
+  surveyPlanNumber: '',
+  titleReference: '',
   saleMethod: 'private',
   listPrice: '',
   
@@ -53,7 +53,6 @@ const initialFormData: AgentEngagementData = {
 }
 
 const steps = [
-  'Delivery Details',
   'Property Details',
   'Seller Information',
   'Property Features',
@@ -88,21 +87,14 @@ export function AgentEngagementWizard() {
       
       {/* Form Steps */}
       {step === 1 && (
-        <DeliveryDetailsForm
-          formData={formData}
-          onChange={updateFormData}
-          onNext={handleNext}
-        />
-      )}
-      {step === 2 && (
         <PropertyDetailsForm
           formData={formData}
           onChange={updateFormData}
           onNext={handleNext}
-          onBack={handleBack}
+          isFirstStep={true}
         />
       )}
-      {step === 3 && (
+      {step === 2 && (
         <SellerInformationForm
           formData={formData}
           onChange={updateFormData}
@@ -110,7 +102,7 @@ export function AgentEngagementWizard() {
           onBack={handleBack}
         />
       )}
-      {step === 4 && (
+      {step === 3 && (
         <PropertyFeaturesForm
           formData={formData}
           onChange={updateFormData}
@@ -118,7 +110,7 @@ export function AgentEngagementWizard() {
           onBack={handleBack}
         />
       )}
-      {step === 5 && (
+      {step === 4 && (
         <LegalComplianceForm
           formData={formData}
           onChange={updateFormData}
@@ -126,7 +118,7 @@ export function AgentEngagementWizard() {
           onBack={handleBack}
         />
       )}
-      {step === 6 && (
+      {step === 5 && (
         <ReviewForm
           formData={formData}
           onSubmit={handleSubmit}
