@@ -60,13 +60,13 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
         {/* Seller Name */}
         <div>
           <label className="block text-sm font-medium text-gray-500">
-            Seller Name
+            Full Name/s of Seller
             <div className="mt-1">
               <input
                 type="text"
                 value={formData.sellerName}
-                onChange={(e) => onChange({ sellerName: e.target.value })}
-                className="form-input"
+                onChange={(e) => onChange({ sellerName: e.target.value.toUpperCase() })}
+                className="form-input uppercase"
                 placeholder="Full legal name"
               />
             </div>
