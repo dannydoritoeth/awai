@@ -66,6 +66,8 @@ const steps = [
   'Review'
 ]
 
+const FORM_STORAGE_KEY = 'agent-engagement-draft'
+
 export function AgentEngagementWizard({ id }: { id?: string }) {
   const { user } = useAuth()
   const router = useRouter()
@@ -73,7 +75,38 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   const [error, setError] = useState<string | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [step, setStep] = useState(id ? 5 : 1)
-  const [formData, setFormData] = useState<AgentEngagementData>(initialFormData)
+  const [formData, setFormData] = useState<AgentEngagementData>(() => {
+    // Try to load saved draft on initial mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(FORM_STORAGE_KEY)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setStep(5) // Set to review step when restoring data
+          return parsed
+        } catch (e) {
+          console.error('Error parsing saved form data:', e)
+        }
+      }
+    }
+    return initialFormData
+  })
+
+  // Check for auth return
+  useEffect(() => {
+    if (user) {
+      const saved = localStorage.getItem(FORM_STORAGE_KEY)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setFormData(parsed)
+          setStep(5) // Set to review step
+        } catch (e) {
+          console.error('Error parsing saved form data:', e)
+        }
+      }
+    }
+  }, [user])
 
   useEffect(() => {
     if (id) {
@@ -148,11 +181,13 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   }
 
   const handleSubmit = async () => {
-    console.log('Submit started, id:', id)
     setLoading(true)
     setError(null)
     
     if (!user) {
+      // Save form data and current step before showing auth modal
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formData))
+      localStorage.setItem('currentStep', step.toString())
       setShowAuthModal(true)
       setLoading(false)
       return
@@ -160,15 +195,13 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
 
     try {
       if (id) {
-        console.log('Updating existing engagement')
         await updateEngagement(id, formData)
         toast.success('Changes saved successfully')
-        console.log('Update completed')
-        // Explicitly prevent any navigation
         return
       } else {
-        console.log('Creating new engagement')
         const newEngagement = await createEngagement(formData)
+        localStorage.removeItem(FORM_STORAGE_KEY)
+        localStorage.removeItem('currentStep')
         toast.success('Engagement created successfully')
         router.push(`/transactions/agent-engagement/${newEngagement.id}?new=true`)
         return
@@ -181,6 +214,11 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleAuthSuccess = () => {
+    // Will trigger the useEffect above when user becomes available
+    setShowAuthModal(false)
   }
 
   return (
@@ -236,7 +274,10 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       )}
 
       {showAuthModal && (
-        <EngagementAuthModal onClose={() => setShowAuthModal(false)} />
+        <EngagementAuthModal 
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
       )}
     </div>
   )

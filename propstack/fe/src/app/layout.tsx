@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from '@/contexts/AuthContext'
 import { GoogleMapsProvider } from '@/components/maps/GoogleMapsProvider'
 import { Toaster } from 'react-hot-toast'
+import { AuthReturnHandler } from '@/components/auth/AuthReturnHandler'
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({
         <AuthProvider>
           <GoogleMapsProvider>
             {children}
+            <AuthReturnHandler />
           </GoogleMapsProvider>
         </AuthProvider>
         <Toaster 
