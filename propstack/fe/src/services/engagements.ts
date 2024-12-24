@@ -124,6 +124,10 @@ export async function getEngagement(id: string) {
       .single()
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        // Record not found
+        return null
+      }
       console.error('Database error:', error)
       throw error
     }

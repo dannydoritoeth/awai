@@ -71,7 +71,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(id ? 5 : 1)
   const [formData, setFormData] = useState<AgentEngagementData>(initialFormData)
 
   useEffect(() => {
@@ -84,9 +84,44 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
     try {
       setError(null)
       const data = await getEngagement(id!)
+      
+      if (!data) {
+        throw new Error('No engagement found')
+      }
+
+      // Map database fields (snake_case) to form data (camelCase)
       setFormData({
-        ...initialFormData,
-        ...data
+        deliveryMethod: data.delivery_method as 'email' | 'hardcopy',
+        requiredDateTime: data.required_date_time,
+        sellerName: data.seller_name,
+        sellerAddress: data.seller_address,
+        sellerPhone: data.seller_phone,
+        sellerEmail: data.seller_email,
+        propertyAddress: data.property_address,
+        spNumber: data.sp_number,
+        surveyPlanNumber: data.survey_plan_number,
+        titleReference: data.title_reference,
+        saleMethod: data.sale_method as 'private' | 'auction',
+        listPrice: data.list_price,
+        auctionDetails: data.auction_details,
+        propertyType: data.property_type as 'house' | 'unit' | 'land' | 'other',
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        carSpaces: data.car_spaces,
+        pool: data.pool,
+        bodyCorp: data.body_corp,
+        electricalSafetySwitch: data.electrical_safety_switch,
+        smokeAlarms: data.smoke_alarms,
+        sellerWarranties: data.seller_warranties as YesNoNa,
+        heritageListed: data.heritage_listed as YesNoNa,
+        contaminatedLand: data.contaminated_land as YesNoNa,
+        environmentManagement: data.environment_management as YesNoNa,
+        presentLandUse: data.present_land_use as YesNoNa,
+        neighbourhoodDisputes: data.neighbourhood_disputes,
+        encumbrances: data.encumbrances,
+        gstApplicable: data.gst_applicable,
+        authorisedMarketing: data.authorised_marketing,
+        commission: data.commission
       })
     } catch (err) {
       const error = err as Error | PostgrestError
@@ -95,12 +130,20 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
     }
   }
 
+  const handleChange = (updates: Partial<AgentEngagementData>) => {
+    setFormData(current => ({ ...current, ...updates }))
+  }
+
   const handleNext = () => {
     setStep(s => Math.min(s + 1, steps.length))
   }
 
   const handleBack = () => {
     setStep(s => Math.max(s - 1, 1))
+  }
+
+  const handleEditStep = (stepNumber: number) => {
+    setStep(stepNumber)
   }
 
   const handleSubmit = async () => {
@@ -129,14 +172,6 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
     }
   }
 
-  const updateFormData = (updates: Partial<AgentEngagementData>) => {
-    setFormData(current => ({ ...current, ...updates }))
-  }
-
-  const handleEditStep = (stepNumber: number) => {
-    setStep(stepNumber)
-  }
-
   return (
     <div className="space-y-8">
       <FormSteps steps={steps} currentStep={step} />
@@ -151,7 +186,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       {step === 1 && (
         <PropertyDetailsForm
           formData={formData}
-          onChange={updateFormData}
+          onChange={handleChange}
           onNext={handleNext}
           isFirstStep={true}
         />
@@ -159,7 +194,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       {step === 2 && (
         <SellerInformationForm
           formData={formData}
-          onChange={updateFormData}
+          onChange={handleChange}
           onNext={handleNext}
           onBack={handleBack}
         />
@@ -167,7 +202,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       {step === 3 && (
         <PropertyFeaturesForm
           formData={formData}
-          onChange={updateFormData}
+          onChange={handleChange}
           onNext={handleNext}
           onBack={handleBack}
         />
@@ -175,7 +210,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       {step === 4 && (
         <LegalComplianceForm
           formData={formData}
-          onChange={updateFormData}
+          onChange={handleChange}
           onNext={handleNext}
           onBack={handleBack}
         />
