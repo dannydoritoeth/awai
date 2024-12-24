@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { PostgrestError } from '@supabase/supabase-js'
 import { useAuth } from '@/contexts/AuthContext'
 import { EngagementAuthModal } from './EngagementAuthModal'
+import { toast } from 'react-hot-toast'
 
 const initialFormData: AgentEngagementData = {
   // Delivery Details
@@ -159,14 +160,18 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
     try {
       if (id) {
         await updateEngagement(id, formData)
+        toast.success('Changes saved successfully')
       } else {
-        await createEngagement(formData)
+        const newEngagement = await createEngagement(formData)
+        toast.success('Engagement created successfully')
+        router.push(`/transactions/agent-engagement/${newEngagement.id}?new=true`)
+        return
       }
-      router.push('/transactions/agent-engagement')
     } catch (err) {
       const error = err as Error | PostgrestError
       console.error('Error saving engagement:', error)
       setError(error.message || 'Failed to save engagement')
+      toast.error('Failed to save changes')
     } finally {
       setLoading(false)
     }

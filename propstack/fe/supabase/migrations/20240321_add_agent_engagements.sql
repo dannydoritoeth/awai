@@ -78,7 +78,7 @@ CREATE POLICY "Users can create engagements"
 CREATE POLICY "Users can update their engagements"
   ON agent_engagements
   FOR UPDATE
-  USING (auth.uid() = user_id AND status = 'new');
+  USING (auth.uid() = user_id);
 
 -- Add updated_at trigger
 CREATE TRIGGER set_agent_engagements_timestamp
