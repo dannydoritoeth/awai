@@ -1,36 +1,55 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   ChevronUpDownIcon,
   ChevronUpIcon,
   ChevronDownIcon 
 } from '@heroicons/react/24/outline'
-import { Listing } from '@/types/listings'
+import { supabase } from '@/lib/supabase'
+import { Spinner } from '@/components/ui/Spinner'
+
+interface Listing {
+  id: string
+  address: string
+  property_type: string
+  listing_type: string
+  created_at: string
+  description?: string
+  status: string
+}
 
 type SortField = 'address' | 'created_at' | 'status'
 type SortDirection = 'asc' | 'desc'
 
 export function ListingsTable() {
   const router = useRouter()
+  const [listings, setListings] = useState<Listing[]>([])
+  const [loading, setLoading] = useState(true)
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  // Mock data - replace with real data from your API
-  const listings = [
-    {
-      id: '1',
-      address: '123 Main St',
-      bedrooms: 3,
-      bathrooms: 2,
-      created_at: '2024-01-20T10:00:00Z',
-      status: 'draft',
-      description: 'Modern family home...'
-    },
-    // Add more mock data...
-  ]
+  useEffect(() => {
+    loadListings()
+  }, [])
+
+  async function loadListings() {
+    try {
+      const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setListings(data || [])
+    } catch (error) {
+      console.error('Error loading listings:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
@@ -57,6 +76,14 @@ export function ListingsTable() {
       }
       return (a[sortField] < b[sortField] ? -1 : 1) * modifier
     })
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Spinner />
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-lg shadow">
@@ -89,7 +116,7 @@ export function ListingsTable() {
                 </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Details
+                Type
               </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -115,7 +142,7 @@ export function ListingsTable() {
             {filteredListings.map((listing) => (
               <tr 
                 key={listing.id}
-                onClick={() => router.push(`/marketing/descriptions/${listing.id}`)}
+                onClick={() => router.push(`/marketing/listings/${listing.id}`)}
                 className="hover:bg-gray-50 cursor-pointer"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -125,7 +152,7 @@ export function ListingsTable() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-500">
-                    {listing.bedrooms} bed • {listing.bathrooms} bath
+                    {listing.property_type} · {listing.listing_type}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
