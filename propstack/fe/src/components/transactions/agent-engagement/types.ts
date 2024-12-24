@@ -43,14 +43,14 @@ export interface AgentEngagementData {
   }
   
   // Compliance & Legal
-  sellerWarranties: 'yes' | 'no' | 'na'
-  heritageListed: 'yes' | 'no' | 'na'
-  contaminatedLand: 'yes' | 'no' | 'na'
-  environmentManagement: 'yes' | 'no' | 'na'
-  presentLandUse: 'yes' | 'no' | 'na'
-  neighbourhoodDisputes: boolean
-  encumbrances: boolean
-  gstApplicable: boolean
+  sellerWarranties: YesNoNa
+  heritageListed: YesNoNa
+  contaminatedLand: YesNoNa
+  environmentManagement: YesNoNa
+  presentLandUse: YesNoNa
+  neighbourhoodDisputes: string
+  encumbrances: string
+  gstApplicable: string
+  authorisedMarketing: string
   commission: number
-  authorisedMarketing: boolean
 } 

@@ -10,6 +10,7 @@ interface LegalComplianceFormProps {
 }
 
 type YesNoNa = 'yes' | 'no' | 'na'
+type YesNo = 'yes' | 'no'
 
 export function LegalComplianceForm({ formData, onChange, onNext, onBack }: LegalComplianceFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -34,6 +35,18 @@ export function LegalComplianceForm({ formData, onChange, onNext, onBack }: Lega
     }
     if (formData.commission < 0) {
       newErrors.commission = 'Commission cannot be negative'
+    }
+    if (!formData.neighbourhoodDisputes) {
+      newErrors.neighbourhoodDisputes = 'Please select an option'
+    }
+    if (!formData.encumbrances) {
+      newErrors.encumbrances = 'Please select an option'
+    }
+    if (!formData.gstApplicable) {
+      newErrors.gstApplicable = 'Please select an option'
+    }
+    if (!formData.authorisedMarketing) {
+      newErrors.authorisedMarketing = 'Please select an option'
     }
 
     setErrors(newErrors)
@@ -72,6 +85,31 @@ export function LegalComplianceForm({ formData, onChange, onNext, onBack }: Lega
     </div>
   )
 
+  const renderYesNoSelect = (
+    field: keyof Pick<AgentEngagementData, 'neighbourhoodDisputes' | 'encumbrances' | 'gstApplicable' | 'authorisedMarketing'>,
+    label: string
+  ) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-500">
+        {label}
+        <div className="mt-1">
+          <select
+            value={formData[field]}
+            onChange={(e) => onChange({ [field]: e.target.value })}
+            className="form-input"
+          >
+            <option value="">Select...</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </label>
+      {errors[field] && (
+        <p className="mt-1 text-sm text-red-600">{errors[field]}</p>
+      )}
+    </div>
+  )
+
   return (
     <div className="bg-white rounded-xl shadow-sm p-6">
       <div className="space-y-6">
@@ -84,49 +122,14 @@ export function LegalComplianceForm({ formData, onChange, onNext, onBack }: Lega
           {renderYesNoNaSelect('presentLandUse', 'Present Land Use')}
         </div>
 
-        {/* Yes/No Questions */}
+        {/* Additional Details - Now as Select dropdowns */}
         <div>
           <h4 className="text-sm font-medium text-gray-500 mb-4">Additional Details</h4>
           <div className="grid grid-cols-2 gap-4">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.neighbourhoodDisputes}
-                onChange={(e) => onChange({ neighbourhoodDisputes: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Neighbourhood Disputes</span>
-            </label>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.encumbrances}
-                onChange={(e) => onChange({ encumbrances: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Encumbrances/Easements</span>
-            </label>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.gstApplicable}
-                onChange={(e) => onChange({ gstApplicable: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">GST Applicable</span>
-            </label>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.authorisedMarketing}
-                onChange={(e) => onChange({ authorisedMarketing: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Authorised Marketing</span>
-            </label>
+            {renderYesNoSelect('neighbourhoodDisputes', 'Neighbourhood Disputes')}
+            {renderYesNoSelect('encumbrances', 'Encumbrances/Easements')}
+            {renderYesNoSelect('gstApplicable', 'GST Applicable')}
+            {renderYesNoSelect('authorisedMarketing', 'Authorised Marketing')}
           </div>
         </div>
 
