@@ -81,6 +81,10 @@ export function AgentEngagementWizard() {
     setFormData(current => ({ ...current, ...updates }))
   }
 
+  const handleEditStep = (stepNumber: number) => {
+    setStep(stepNumber)
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <FormSteps steps={steps} currentStep={step} />
@@ -123,6 +127,7 @@ export function AgentEngagementWizard() {
           formData={formData}
           onSubmit={handleSubmit}
           onBack={handleBack}
+          onEditStep={handleEditStep}
         />
       )}
     </div>
