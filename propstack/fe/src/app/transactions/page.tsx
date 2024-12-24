@@ -5,6 +5,8 @@ import { PageTransition } from '@/components/layout/PageTransition'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { TransactionsGrid } from '@/components/transactions/TransactionsGrid'
 
+export const dynamic = 'force-static'
+
 export default function TransactionsPage() {
   return (
     <div className="min-h-screen bg-gray-50">

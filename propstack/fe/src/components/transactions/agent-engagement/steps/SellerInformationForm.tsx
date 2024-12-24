@@ -56,7 +56,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6">
-      <div className="space-y-6">
+      <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
         {/* Seller Name */}
         <div>
           <label className="block text-sm font-medium text-gray-500">
@@ -68,6 +68,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                 onChange={(e) => onChange({ sellerName: e.target.value.toUpperCase() })}
                 className="form-input uppercase"
                 placeholder="Full legal name"
+                autoComplete="off"
               />
             </div>
           </label>
@@ -92,6 +93,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                     onChange={(e) => onChange({ sellerAddress: e.target.value })}
                     className="form-input"
                     placeholder="Start typing to search..."
+                    autoComplete="off"
                   />
                 </StandaloneSearchBox>
               ) : (
@@ -101,6 +103,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                   onChange={(e) => onChange({ sellerAddress: e.target.value })}
                   className="form-input"
                   placeholder="Loading address search..."
+                  autoComplete="off"
                 />
               )}
             </div>
@@ -121,6 +124,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                 onChange={(e) => onChange({ sellerPhone: e.target.value })}
                 className="form-input"
                 placeholder="Phone number"
+                autoComplete="off"
               />
             </div>
           </label>
@@ -140,6 +144,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                 onChange={(e) => onChange({ sellerEmail: e.target.value })}
                 className="form-input"
                 placeholder="Email address"
+                autoComplete="off"
               />
             </div>
           </label>
@@ -180,6 +185,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                     onChange={(e) => onChange({ listPrice: e.target.value })}
                     className="form-input"
                     placeholder="Enter list price"
+                    autoComplete="off"
                   />
                 </div>
               </label>
@@ -203,6 +209,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                         } 
                       })}
                       className="form-input"
+                      autoComplete="off"
                     />
                   </div>
                 </label>
@@ -225,6 +232,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                         } 
                       })}
                       className="form-input"
+                      autoComplete="off"
                     />
                   </div>
                 </label>
@@ -248,6 +256,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                       })}
                       className="form-input"
                       placeholder="Enter auction venue"
+                      autoComplete="off"
                     />
                   </div>
                 </label>
@@ -262,6 +271,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
         {/* Navigation */}
         <div className="flex justify-between">
           <button
+            type="button"
             onClick={onBack}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900"
           >
@@ -269,6 +279,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
             Back
           </button>
           <button
+            type="button"
             onClick={handleNext}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
@@ -276,7 +287,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
             <ChevronRightIcon className="w-5 h-5" />
           </button>
         </div>
-      </div>
+      </form>
     </div>
   )
 } 
