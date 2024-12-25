@@ -1,89 +1,142 @@
 "use client"
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { PropertyDetailsForm } from '@/components/listings/steps/PropertyDetailsForm'
-import { LocationDetailsForm } from '@/components/listings/steps/LocationDetailsForm'
-import { FeaturesForm } from '@/components/listings/steps/FeaturesForm'
-import { ReviewForm } from '@/components/listings/steps/ReviewForm'
+import { BasicPropertyForm } from './steps/BasicPropertyForm'
+import { PropertyFeaturesForm } from './steps/PropertyFeaturesForm'
+import { HighlightsForm } from './steps/HighlightsForm'
+import { ReviewForm } from './steps/ReviewForm'
 import { StepIndicator } from '@/components/ui/StepIndicator'
+
+const steps = [
+  'Basic Details',
+  'Property Features',
+  'Highlights',
+  'Review'
+]
+
+const initialFormData = {
+  address: '',
+  latitude: null,
+  longitude: null,
+  propertyType: '',
+  listingType: '',
+  price: '',
+  currency: '$',
+  bedrooms: '',
+  bathrooms: '',
+  parking: '',
+  lotSize: '',
+  lotSizeUnit: 'sqm',
+  interiorSize: '',
+  interiorSizeUnit: 'sqm',
+  highlights: [],
+  otherDetails: '',
+  // Location Features fields
+  locationFeatures: [],
+  nearbyAttractions: '',
+  publicTransport: '',
+  schools: '',
+  shopping: '',
+  neighborhood: ''
+}
 
 export function ListingWizard() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [formData, setFormData] = useState({})
+  const [step, setStep] = useState(1)
+  const [formData, setFormData] = useState(initialFormData)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFormUpdate = useCallback((data: any) => {
-    console.log('Form data updated:', data)
-    setFormData(prev => ({ ...prev, ...data }))
-  }, [])
+  const handleNext = () => {
+    setStep(step + 1)
+  }
+
+  const handleBack = () => {
+    setStep(step - 1)
+  }
 
   const handleSubmit = async () => {
+    setLoading(true)
+    setError(null)
+
     try {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/auth/signin')
+        return
+      }
+
+      const { error } = await supabase
         .from('listings')
-        .insert([formData])
-        .select()
-        .single()
+        .insert([{
+          user_id: user.id,
+          ...formData
+        }])
 
       if (error) throw error
 
       router.push('/listings')
     } catch (err) {
       console.error('Error creating listing:', err)
-      setError('Failed to create listing')
+      setError(err instanceof Error ? err.message : 'Failed to create listing')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  const handleFormUpdate = (updates: Partial<typeof initialFormData>) => {
+    setFormData(prev => ({ ...prev, ...updates }))
   }
 
   return (
     <div className="max-w-3xl mx-auto">
-      <StepIndicator
-        steps={["Property Details", "Location", "Features", "Review"]}
-        currentStep={currentStep}
+      <StepIndicator 
+        steps={steps}
+        currentStep={step}
         className="mb-8"
       />
 
-      {currentStep === 1 && (
-        <PropertyDetailsForm
-          data={formData}
-          onUpdate={handleFormUpdate}
-          onNext={() => setCurrentStep(2)}
-        />
-      )}
+      <div className="bg-white rounded-lg shadow-sm">
+        {step === 1 && (
+          <BasicPropertyForm
+            data={formData}
+            onUpdate={handleFormUpdate}
+            onNext={handleNext}
+          />
+        )}
+        {step === 2 && (
+          <PropertyFeaturesForm
+            data={formData}
+            onUpdate={handleFormUpdate}
+            onNext={handleNext}
+            onBack={handleBack}
+          />
+        )}
+        {step === 3 && (
+          <HighlightsForm
+            data={formData}
+            onUpdate={handleFormUpdate}
+            onNext={handleNext}
+            onBack={handleBack}
+          />
+        )}
+        {step === 4 && (
+          <ReviewForm
+            data={formData}
+            onSubmit={handleSubmit}
+            onBack={handleBack}
+            loading={loading}
+          />
+        )}
 
-      {currentStep === 2 && (
-        <LocationDetailsForm
-          data={formData}
-          onUpdate={handleFormUpdate}
-          onNext={() => setCurrentStep(3)}
-          onBack={() => setCurrentStep(1)}
-        />
-      )}
-
-      {currentStep === 3 && (
-        <FeaturesForm
-          data={formData}
-          onUpdate={handleFormUpdate}
-          onNext={() => setCurrentStep(4)}
-          onBack={() => setCurrentStep(2)}
-        />
-      )}
-
-      {currentStep === 4 && (
-        <ReviewForm
-          data={formData}
-          onBack={() => setCurrentStep(3)}
-          onSubmit={handleSubmit}
-        />
-      )}
-
-      {error && (
-        <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-md">
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="p-4 text-red-700 bg-red-50 border border-red-200 rounded-md mt-4">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   )
 } 
