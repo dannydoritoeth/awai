@@ -8,13 +8,13 @@ import {
   ClipboardList,
 } from 'lucide-react';
 
-const features = [
+const features: DashboardCard[] = [
   {
-    title: 'Marketing',
-    subtitle: 'Reach the Right Audience',
+    title: 'Listings',
+    subtitle: 'Manage your property listings',
     icon: Megaphone,
     color: 'bg-blue-50',
-    href: '/marketing',
+    href: '/listings'
   },
   {
     title: 'Data & Analytics',

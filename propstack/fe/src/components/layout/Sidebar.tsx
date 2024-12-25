@@ -24,12 +24,11 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    name: 'Marketing',
-    href: '/marketing',
+    name: 'Listings',
+    href: '/listings',
     icon: MegaphoneIcon,
     items: [
-      { name: 'Descriptions', href: '/marketing/descriptions' },
-      { name: 'Social Media', href: '/marketing/social' },
+      { name: 'All Listings', href: '/listings' },
     ]
   },
   {
