@@ -6,10 +6,10 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
-import { UserCircleIcon, CreditCardIcon } from '@heroicons/react/24/outline'
+import { UserCircleIcon, CreditCardIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
-import { FeedbackModal } from '../feedback/FeedbackModal'
+import { Menu } from '@headlessui/react'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -145,11 +145,8 @@ export function Header() {
         
         <div className="flex items-center gap-4">
           {user ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center gap-4"
-              >
+            <Menu as="div" className="relative">
+              <Menu.Button className="flex items-center gap-4">
                 <div className={`flex items-center gap-2 ${
                   credits && credits <= 3 
                     ? 'text-red-600 bg-red-50' 
@@ -174,28 +171,38 @@ export function Header() {
                 ) : (
                   <UserCircleIcon className="w-8 h-8 text-gray-600" />
                 )}
-              </button>
+              </Menu.Button>
 
-              {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                  <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
-                    {user.email}
-                  </div>
-                  <button
-                    onClick={() => setShowFeedback(true)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Request More Credits
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50"
-                  >
-                    Sign Out
-                  </button>
+              <Menu.Items className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
+                  {user.email}
                 </div>
-              )}
-            </div>
+                <Menu.Item>
+                  {({ active }) => (
+                    <a
+                      href="mailto:scott@acceleratewith.ai?subject=PropStack%20Credits%20Request"
+                      className={`block px-4 py-2 text-sm text-gray-700 ${
+                        active ? 'bg-gray-100' : ''
+                      }`}
+                    >
+                      Request more credits
+                    </a>
+                  )}
+                </Menu.Item>
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={handleSignOut}
+                      className={`w-full text-left px-4 py-2 text-sm text-red-600 ${
+                        active ? 'bg-gray-50' : ''
+                      }`}
+                    >
+                      Sign Out
+                    </button>
+                  )}
+                </Menu.Item>
+              </Menu.Items>
+            </Menu>
           ) : (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1 rounded-full">
@@ -236,13 +243,6 @@ export function Header() {
           isJoining={isJoining}
         />
       )}
-
-      <FeedbackModal
-        isOpen={showFeedback}
-        onClose={() => setShowFeedback(false)}
-        context="credits"
-        userEmail={userEmail}
-      />
     </header>
   )
 } 

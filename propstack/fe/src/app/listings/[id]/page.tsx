@@ -1,16 +1,21 @@
+"use client"
+
 import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { ListingDetail } from '@/components/listings/ListingDetail'
 import Link from 'next/link'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
+import { use } from 'react'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default function ListingDetailPage({ params }: PageProps) {
+  const { id } = use(params)
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -25,7 +30,7 @@ export default function ListingDetailPage({ params }: PageProps) {
           </Link>
         </div>
         
-        <ListingDetail listingId={params.id} />
+        <ListingDetail listingId={id} />
       </main>
     </div>
   )
