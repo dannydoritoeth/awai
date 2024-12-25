@@ -1,11 +1,11 @@
 import { Header } from '@/components/layout/Header'
-import { PageTransition } from '@/components/layout/PageTransition'
+
 
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <PageTransition>
+      
         <main className="container mx-auto px-4 py-16">
           <h1 className="text-4xl font-bold text-gray-900 text-center mb-4">
             Choose the plan that fits your needs.
@@ -70,7 +70,7 @@ export default function PricingPage() {
             </div>
           </div>
         </main>
-      </PageTransition>
+      
     </div>
   )
 } 

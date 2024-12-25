@@ -1,12 +1,12 @@
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
-import { PageTransition } from '@/components/layout/PageTransition'
+
 
 export default function EngagementNotFound() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <PageTransition>
+      
         <main className="container mx-auto px-4 py-8">
           <div className="bg-white rounded-lg shadow-sm p-6 text-center">
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">
@@ -23,7 +23,7 @@ export default function EngagementNotFound() {
             </Link>
           </div>
         </main>
-      </PageTransition>
+      
     </div>
   )
 } 

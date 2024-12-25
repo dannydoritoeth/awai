@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { notFound } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
-import { PageTransition } from '@/components/layout/PageTransition'
+
 import { PageHeading } from '@/components/layout/PageHeading'
 import { AgentEngagementWizard } from '@/components/transactions/agent-engagement/AgentEngagementWizard'
 import { useSearchParams } from 'next/navigation'
@@ -46,13 +46,13 @@ export default function AgentEngagementDetailPage({ params }: PageProps) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <PageTransition>
+        
           <main className="container mx-auto px-4 py-8">
             <div className="flex justify-center items-center min-h-[400px]">
               <Spinner />
             </div>
           </main>
-        </PageTransition>
+        
       </div>
     )
   }
@@ -64,7 +64,7 @@ export default function AgentEngagementDetailPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <PageTransition>
+      
         <main className="container mx-auto px-4">
           <PageHeading 
             title="Agent Engagement" 
@@ -81,7 +81,7 @@ export default function AgentEngagementDetailPage({ params }: PageProps) {
 
           <AgentEngagementWizard id={id} />
         </main>
-      </PageTransition>
+      
     </div>
   )
 } 
