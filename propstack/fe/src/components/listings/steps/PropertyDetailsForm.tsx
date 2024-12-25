@@ -1,17 +1,54 @@
 "use client"
 
+import { useRef, useCallback, useState } from 'react'
+import { Autocomplete } from '@react-google-maps/api'
 import { ChevronRightIcon } from '@heroicons/react/24/outline'
+import { useMaps } from '@/contexts/MapsContext'
 
 interface PropertyDetailsFormProps {
-  data: any // Replace with proper type
+  data: any
   onUpdate: (data: any) => void
   onNext: () => void
 }
 
 export function PropertyDetailsForm({ data, onUpdate, onNext }: PropertyDetailsFormProps) {
+  const { isLoaded, loadError } = useMaps()
+  const [inputValue, setInputValue] = useState(data.address || '')
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+
+  const onLoad = useCallback((autocomplete: google.maps.places.Autocomplete) => {
+    console.log('Autocomplete loaded:', autocomplete)
+    autocompleteRef.current = autocomplete
+  }, [])
+
+  const onPlaceChanged = useCallback(() => {
+    if (autocompleteRef.current) {
+      const place = autocompleteRef.current.getPlace()
+      console.log('Selected place:', place)
+      
+      if (place.geometry && place.formatted_address) {
+        onUpdate({
+          ...data,
+          address: place.formatted_address,
+          latitude: place.geometry.location?.lat(),
+          longitude: place.geometry.location?.lng(),
+        })
+        setInputValue(place.formatted_address)
+      }
+    }
+  }, [data, onUpdate])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onNext()
+  }
+
+  if (loadError) {
+    return <div>Error loading Google Maps</div>
+  }
+
+  if (!isLoaded) {
+    return <div>Loading...</div>
   }
 
   return (
@@ -19,19 +56,30 @@ export function PropertyDetailsForm({ data, onUpdate, onNext }: PropertyDetailsF
       <h2 className="text-xl font-semibold text-gray-900">Property Details</h2>
 
       <div className="space-y-4">
-        {/* Address */}
+        {/* Address with Google Places Autocomplete */}
         <div>
           <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-            Property Addressk
+            Property Address
           </label>
-          <input
-            type="text"
-            id="address"
-            value={data.address || ''}
-            onChange={(e) => onUpdate({ ...data, address: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            required
-          />
+          <Autocomplete
+            onLoad={onLoad}
+            onPlaceChanged={onPlaceChanged}
+            options={{
+              componentRestrictions: { country: "us" },
+              types: ["address"],
+              fields: ["formatted_address", "geometry", "place_id"]
+            }}
+          >
+            <input
+              type="text"
+              id="address"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Enter address"
+              required
+            />
+          </Autocomplete>
         </div>
 
         {/* Property Type */}

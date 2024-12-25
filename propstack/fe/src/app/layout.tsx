@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from '@/contexts/AuthContext'
-import { GoogleMapsProvider } from '@/components/maps/GoogleMapsProvider'
+import { MapsProvider } from '@/contexts/MapsContext'
 import { Toaster } from 'react-hot-toast'
 import { AuthReturnHandler } from '@/components/auth/AuthReturnHandler'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -29,7 +29,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="bg-white">
         <AuthProvider>
-          <GoogleMapsProvider>
+          <MapsProvider>
             <div className="flex">
               <Sidebar />
               <div className="flex-1">
@@ -37,7 +37,7 @@ export default function RootLayout({
               </div>
             </div>
             <AuthReturnHandler />
-          </GoogleMapsProvider>
+          </MapsProvider>
         </AuthProvider>
         <Toaster />
       </body>

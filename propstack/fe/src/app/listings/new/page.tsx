@@ -1,6 +1,6 @@
 import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
-import { ListingWizard } from '@/components/marketing/descriptions/ListingWizard'
+import { ListingWizard } from '@/components/listings/ListingWizard'
 
 export default function NewListingPage() {
   return (
