@@ -12,43 +12,34 @@ interface HighlightsFormProps {
 
 const PROPERTY_HIGHLIGHTS = [
   'Renovation potential',
-  'Lot size',
   'Outdoor space',
-  'Price point',
-  'Quality of build',
-  'Natural light',
-  'Views',
-  'Storage space',
-  'Garage',
-  'Modern features',
-  'Character features',
-  'Energy efficient',
-  'Recently updated',
-  'Low maintenance',
-  'Privacy',
-  'Security features'
+  'Quality of build'
 ] as const
 
 const LOCATION_HIGHLIGHTS = [
   'Close to public transport',
-  'Near schools',
-  'Shopping nearby',
-  'Quiet street',
-  'Parks nearby',
-  'Good neighborhood',
-  'Close to CBD',
-  'Beach access',
-  'Mountain views',
-  'Near restaurants',
-  'Near entertainment'
+  'Near schools'
 ] as const
 
 export function HighlightsForm({ data, onUpdate, onNext, onBack }: HighlightsFormProps) {
-  const handleHighlightToggle = (highlight: string) => {
-    const newHighlights = data.highlights?.includes(highlight)
-      ? data.highlights.filter((h: string) => h !== highlight)
-      : [...(data.highlights || []), highlight]
-    onUpdate({ highlights: newHighlights })
+  const handleHighlightToggle = (highlight: string, type: 'property' | 'location') => {
+    const arrayKey = type === 'property' ? 'propertyHighlights' : 'locationHighlights'
+    const otherArrayKey = type === 'property' ? 'locationHighlights' : 'propertyHighlights'
+    
+    // Remove the highlight from the other array if it exists there
+    const otherHighlights = (data[otherArrayKey] || []).filter(h => h !== highlight)
+    
+    // Toggle in the correct array
+    const currentHighlights = data[arrayKey] || []
+    const newHighlights = currentHighlights.includes(highlight)
+      ? currentHighlights.filter(h => h !== highlight)
+      : [...currentHighlights, highlight]
+    
+    // Update both arrays
+    onUpdate({
+      [arrayKey]: newHighlights,
+      [otherArrayKey]: otherHighlights
+    })
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -75,12 +66,12 @@ export function HighlightsForm({ data, onUpdate, onNext, onBack }: HighlightsFor
                   <button
                     key={highlight}
                     type="button"
-                    onClick={() => handleHighlightToggle(highlight)}
+                    onClick={() => handleHighlightToggle(highlight, 'property')}
                     className={`px-3 py-1 rounded-full border ${
-                      data.highlights?.includes(highlight)
+                      data.propertyHighlights?.includes(highlight)
                         ? 'bg-blue-50 border-blue-300 text-blue-700'
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    } text-sm`}
+                    } text-sm whitespace-nowrap`}
                   >
                     {highlight}
                   </button>
@@ -115,12 +106,12 @@ export function HighlightsForm({ data, onUpdate, onNext, onBack }: HighlightsFor
                   <button
                     key={highlight}
                     type="button"
-                    onClick={() => handleHighlightToggle(highlight)}
+                    onClick={() => handleHighlightToggle(highlight, 'location')}
                     className={`px-3 py-1 rounded-full border ${
-                      data.highlights?.includes(highlight)
+                      data.locationHighlights?.includes(highlight)
                         ? 'bg-blue-50 border-blue-300 text-blue-700'
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                    } text-sm`}
+                    } text-sm whitespace-nowrap`}
                   >
                     {highlight}
                   </button>

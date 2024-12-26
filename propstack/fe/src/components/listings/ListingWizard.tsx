@@ -39,7 +39,10 @@ const initialFormData = {
   publicTransport: '',
   schools: '',
   shopping: '',
-  neighborhood: ''
+  neighborhood: '',
+  propertyHighlights: [] as string[],
+  locationHighlights: [] as string[],
+  locationNotes: ''
 }
 
 export function ListingWizard() {

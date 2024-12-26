@@ -16,31 +16,47 @@ export function ReviewForm({ data, onSubmit, onBack, loading }: ReviewFormProps)
   }
 
   const renderDetailRow = (label: string, value: string | number | null | undefined) => (
-    <div className="py-3 flex justify-between border-b border-gray-100 last:border-0">
-      <dt className="text-sm font-medium text-gray-500">{label}</dt>
+    <div className="py-2 flex justify-between">
+      <dt className="text-sm text-gray-600">{label}</dt>
       <dd className="text-sm text-gray-900 text-right">{value || 'Not specified'}</dd>
     </div>
   )
 
-  return (
-    <form onSubmit={handleSubmit} className="p-6 space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Review Listing</h2>
+  const renderHighlights = (highlights: string[] = [], type: 'property' | 'location') => (
+    <div className="flex flex-wrap justify-end gap-1">
+      {highlights.length > 0 ? (
+        highlights.map((highlight) => (
+          <span
+            key={highlight}
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs
+              ${type === 'property' 
+                ? 'bg-blue-50 text-blue-700'
+                : 'bg-green-50 text-green-700'
+              }`}
+          >
+            {highlight}
+          </span>
+        ))
+      ) : (
+        <span className="text-sm text-gray-500">None selected</span>
+      )}
+    </div>
+  )
 
-      <div className="space-y-6">
-        {/* Basic Details */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Details</h3>
-          <dl className="space-y-1">
+  return (
+    <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <h2 className="text-lg font-medium text-gray-900">Review Listing</h2>
+
+      <div className="space-y-4">
+        {/* Basic Details & Property Features combined */}
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <dl className="divide-y divide-gray-100">
+            {/* Basic Details */}
             {renderDetailRow('Address', data.address)}
             {renderDetailRow('Property Type', data.propertyType)}
             {renderDetailRow('Listing Type', data.listingType)}
-          </dl>
-        </div>
 
-        {/* Property Features */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Property Features</h3>
-          <dl className="space-y-1">
+            {/* Property Features */}
             {renderDetailRow('Price', data.price ? `${data.currency}${data.price}` : null)}
             {renderDetailRow('Bedrooms', data.bedrooms)}
             {renderDetailRow('Bathrooms', data.bathrooms)}
@@ -56,59 +72,30 @@ export function ReviewForm({ data, onSubmit, onBack, loading }: ReviewFormProps)
           </dl>
         </div>
 
-        {/* Property Highlights */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Property Highlights</h3>
-          <dl className="space-y-1">
-            <div className="py-3 flex justify-between border-b border-gray-100">
-              <dt className="text-sm font-medium text-gray-500">Selected Features</dt>
-              <dd className="text-sm text-gray-900 text-right max-w-[60%] flex flex-wrap justify-end gap-1">
-                {data.highlights?.length > 0 ? (
-                  data.highlights.filter(h => !h.includes('Near') && !h.includes('Close to')).map((highlight: string) => (
-                    <span
-                      key={highlight}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700"
-                    >
-                      {highlight}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-500">None selected</span>
-                )}
-              </dd>
-            </div>
-            {data.otherDetails && renderDetailRow('Other Details', data.otherDetails)}
-          </dl>
-        </div>
+        {/* Highlights Section */}
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          {/* Property Highlights */}
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Property Highlights</h3>
+            {renderHighlights(data.propertyHighlights, 'property')}
+            {data.otherDetails && (
+              <p className="mt-2 text-sm text-gray-600">{data.otherDetails}</p>
+            )}
+          </div>
 
-        {/* Location Highlights */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Location Highlights</h3>
-          <dl className="space-y-1">
-            <div className="py-3 flex justify-between border-b border-gray-100">
-              <dt className="text-sm font-medium text-gray-500">Nearby Features</dt>
-              <dd className="text-sm text-gray-900 text-right max-w-[60%] flex flex-wrap justify-end gap-1">
-                {data.highlights?.length > 0 ? (
-                  data.highlights.filter(h => h.includes('Near') || h.includes('Close to')).map((highlight: string) => (
-                    <span
-                      key={highlight}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700"
-                    >
-                      {highlight}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-500">None selected</span>
-                )}
-              </dd>
-            </div>
-            {data.locationNotes && renderDetailRow('Location Notes', data.locationNotes)}
-          </dl>
+          {/* Location Highlights */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Location Highlights</h3>
+            {renderHighlights(data.locationHighlights, 'location')}
+            {data.locationNotes && (
+              <p className="mt-2 text-sm text-gray-600">{data.locationNotes}</p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-6">
+      <div className="flex justify-between pt-4">
         <button
           type="button"
           onClick={onBack}
@@ -120,7 +107,7 @@ export function ReviewForm({ data, onSubmit, onBack, loading }: ReviewFormProps)
         <button
           type="submit"
           disabled={loading}
-          className={`px-8 py-2 rounded-md text-white 
+          className={`px-6 py-2 rounded-md text-white 
             ${loading 
               ? 'bg-blue-400 cursor-not-allowed' 
               : 'bg-blue-600 hover:bg-blue-700'
