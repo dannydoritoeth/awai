@@ -118,7 +118,7 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
             id="propertyType"
             value={data.propertyType || ''}
             onChange={(e) => onUpdate({ propertyType: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="form-select mt-1"
             required
           >
             <option value="">Select type</option>
@@ -138,7 +138,7 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
             id="listingType"
             value={data.listingType || ''}
             onChange={(e) => onUpdate({ listingType: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="form-select mt-1"
             required
           >
             <option value="">Select type</option>

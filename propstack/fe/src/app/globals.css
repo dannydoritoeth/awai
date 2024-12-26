@@ -12,7 +12,12 @@
   .form-select {
     @apply block w-full rounded-md border-gray-300 shadow-sm 
     focus:border-blue-500 focus:ring-blue-500 
-    bg-white text-gray-900;
+    bg-white text-gray-900
+    appearance-none bg-no-repeat
+    bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%236b7280%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2012l-6-6h12l-6%206z%22%2F%3E%3C%2Fsvg%3E')]
+    bg-[length:1.5em_1.5em]
+    bg-[right_0.5rem_center]
+    pr-10;
   }
 
   .form-textarea {
@@ -27,9 +32,13 @@
   input[type="password"],
   input[type="number"],
   input[type="tel"],
-  select,
   textarea {
     @apply form-input;
+  }
+
+  /* Make select elements use form-select by default */
+  select {
+    @apply form-select;
   }
 }
 

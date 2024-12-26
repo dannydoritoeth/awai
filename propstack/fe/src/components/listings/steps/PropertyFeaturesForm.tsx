@@ -11,10 +11,10 @@ interface PropertyFeaturesFormProps {
 }
 
 const CURRENCIES = [
-  { symbol: '$', label: 'USD' },
-  { symbol: '£', label: 'GBP' },
-  { symbol: '€', label: 'EUR' },
-  { symbol: '¥', label: 'JPY' },
+  { symbol: '$' },
+  { symbol: '£' },
+  { symbol: '€' },
+  { symbol: '¥' },
 ] as const
 
 const SIZE_UNITS = [
@@ -45,9 +45,9 @@ export function PropertyFeaturesForm({ data, onUpdate, onNext, onBack }: Propert
               onChange={(e) => onUpdate({ currency: e.target.value })}
               className="w-20 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {CURRENCIES.map(({ symbol, label }) => (
+              {CURRENCIES.map(({ symbol }) => (
                 <option key={symbol} value={symbol}>
-                  {symbol} {label}
+                  {symbol}
                 </option>
               ))}
             </select>
