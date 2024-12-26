@@ -13,12 +13,24 @@ interface HighlightsFormProps {
 const PROPERTY_HIGHLIGHTS = [
   'Renovation potential',
   'Outdoor space',
-  'Quality of build'
+  'Quality build',
+  'Natural light',
+  'Modern kitchen',
+  'Storage space',
+  'Air conditioning',
+  'High ceilings',
+  'Open plan layout'
 ] as const
 
 const LOCATION_HIGHLIGHTS = [
   'Close to public transport',
-  'Near schools'
+  'Near schools',
+  'Shopping nearby',
+  'Quiet street',
+  'Parks and recreation',
+  'Medical facilities',
+  'Restaurant precinct',
+  'Beach proximity'
 ] as const
 
 export function HighlightsForm({ data, onUpdate, onNext, onBack }: HighlightsFormProps) {
