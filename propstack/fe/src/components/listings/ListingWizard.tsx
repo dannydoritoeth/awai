@@ -71,12 +71,33 @@ export function ListingWizard() {
         return
       }
 
+      // Format the data to match database types
+      const listingData = {
+        user_id: user.id,
+        address: formData.address,
+        latitude: formData.latitude ? Number(formData.latitude) : null,
+        longitude: formData.longitude ? Number(formData.longitude) : null,
+        property_type: formData.propertyType,
+        listing_type: formData.listingType,
+        price: formData.price?.toString(),
+        currency: formData.currency || '$',
+        bedrooms: formData.bedrooms ? Number(formData.bedrooms) : null,
+        bathrooms: formData.bathrooms ? Number(formData.bathrooms) : null,
+        parking: formData.parking?.toString(),
+        lot_size: formData.lotSize?.toString(),
+        lot_size_unit: formData.lotSizeUnit || 'sqft',
+        interior_size: formData.interiorSize?.toString(),
+        interior_size_unit: formData.interiorSizeUnit || 'sqft',
+        property_highlights: formData.propertyHighlights || [],
+        location_highlights: formData.locationHighlights || [],
+        location_notes: formData.locationNotes,
+        other_details: formData.otherDetails,
+        status: 'draft'
+      }
+
       const { error } = await supabase
         .from('listings')
-        .insert([{
-          user_id: user.id,
-          ...formData
-        }])
+        .insert([listingData])
 
       if (error) throw error
 
