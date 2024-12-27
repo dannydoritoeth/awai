@@ -1,13 +1,15 @@
 interface StatusBadgeProps {
   status: string
-  type: 'review' | 'title' | 'social' | 'images'
+  type: 'description' | 'title' | 'social' | 'images'
 }
 
 export function StatusBadge({ status, type }: StatusBadgeProps) {
   const getStatusColor = () => {
     switch (status) {
-      case 'pending':
+      case 'todo':
         return 'bg-gray-100 text-gray-800'
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
       case 'in_progress':
         return 'bg-blue-100 text-blue-800'
       case 'completed':
@@ -23,8 +25,8 @@ export function StatusBadge({ status, type }: StatusBadgeProps) {
 
   const getLabel = () => {
     switch (type) {
-      case 'review':
-        return 'Review'
+      case 'description':
+        return 'Description'
       case 'title':
         return 'Title Check'
       case 'social':
@@ -36,10 +38,19 @@ export function StatusBadge({ status, type }: StatusBadgeProps) {
     }
   }
 
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'todo':
+        return 'To do'
+      default:
+        return status
+    }
+  }
+
   return (
     <div className="flex items-center space-x-2">
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor()}`}>
-        {getLabel()}: {status}
+        {getLabel()}: {getStatusDisplay(status || 'todo')}
       </span>
     </div>
   )

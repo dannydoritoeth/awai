@@ -33,14 +33,14 @@ CREATE TABLE IF NOT EXISTS listings (
   status TEXT DEFAULT 'draft',
   
   -- Action Statuses
-  review_status TEXT DEFAULT 'pending' 
-    CHECK (review_status IN ('pending', 'in_progress', 'completed')),
-  title_check_status TEXT DEFAULT 'pending' 
-    CHECK (title_check_status IN ('pending', 'in_progress', 'completed')),
-  social_media_status TEXT DEFAULT 'pending' 
-    CHECK (social_media_status IN ('pending', 'in_progress', 'completed')),
-  images_status TEXT DEFAULT 'pending' 
-    CHECK (images_status IN ('pending', 'uploaded', 'described', 'completed'))
+  description_status TEXT DEFAULT 'todo' 
+    CHECK (description_status IN ('todo', 'pending', 'in_progress', 'completed')),
+  title_check_status TEXT DEFAULT 'todo' 
+    CHECK (title_check_status IN ('todo', 'pending', 'in_progress', 'completed')),
+  social_media_status TEXT DEFAULT 'todo' 
+    CHECK (social_media_status IN ('todo', 'pending', 'in_progress', 'completed')),
+  images_status TEXT DEFAULT 'todo' 
+    CHECK (images_status IN ('todo', 'uploaded', 'described', 'completed'))
 );
 
 -- Create generated descriptions table

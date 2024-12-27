@@ -95,7 +95,7 @@ export default function ListingDetailPage({ params }: ListingDetailProps) {
             <ListingActions 
               listingId={id}
               statuses={{
-                review: listing.review_status,
+                description: listing.description_status,
                 titleCheck: listing.title_check_status,
                 socialMedia: listing.social_media_status,
                 images: listing.images_status

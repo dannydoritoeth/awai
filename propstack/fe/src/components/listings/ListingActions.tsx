@@ -11,7 +11,7 @@ import { StatusBadge } from './StatusBadge'
 interface ListingActionsProps {
   listingId: string
   statuses: {
-    review: string
+    description: string
     titleCheck: string
     socialMedia: string
     images: string
@@ -21,8 +21,8 @@ interface ListingActionsProps {
 export function ListingActions({ listingId, statuses }: ListingActionsProps) {
   const router = useRouter()
 
-  const handleGenerateDescription = async () => {
-    // TODO: Implement description generation
+  const handleGenerateDescription = () => {
+    router.push(`/listings/${listingId}/description`)
   }
 
   const handleTitleCheck = async () => {
@@ -40,10 +40,10 @@ export function ListingActions({ listingId, statuses }: ListingActionsProps) {
       <div className="space-y-4">
         {/* Status Overview */}
         <div className="space-y-2">
-          <StatusBadge status={statuses.review} type="review" />
-          <StatusBadge status={statuses.titleCheck} type="title" />
-          <StatusBadge status={statuses.socialMedia} type="social" />
-          <StatusBadge status={statuses.images} type="images" />
+          <StatusBadge status={statuses.description || 'todo'} type="description" />
+          <StatusBadge status={statuses.titleCheck || 'todo'} type="title" />
+          <StatusBadge status={statuses.socialMedia || 'todo'} type="social" />
+          <StatusBadge status={statuses.images || 'todo'} type="images" />
         </div>
 
         {/* Action Buttons */}
