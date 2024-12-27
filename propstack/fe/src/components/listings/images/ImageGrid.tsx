@@ -9,6 +9,7 @@ interface ImageGridProps {
     id: string
     url: string
     order_index: number
+    caption?: string
   }>
   onDelete: (imageId: string) => void
   onTransform?: (imageId: string, type: 'enhance' | 'relight' | 'upscale') => Promise<void>
@@ -18,6 +19,7 @@ interface ImageWithSignedUrl {
   id: string
   signedUrl?: string
   isLoading: boolean
+  caption?: string
 }
 
 export function ImageGrid({ images, onDelete, onTransform }: ImageGridProps) {
@@ -90,27 +92,36 @@ export function ImageGrid({ images, onDelete, onTransform }: ImageGridProps) {
           const isTransforming = transforming === image.id
 
           return (
-            <div key={image.id} className="relative group aspect-square">
-              <div 
-                className="relative w-full h-full cursor-pointer"
-                onClick={() => setLightboxImage(signedUrlData.signedUrl || null)}
-              >
-                <img
-                  src={signedUrlData.signedUrl}
-                  alt=""
-                  className={`absolute inset-0 w-full h-full object-cover rounded-lg ${isTransforming ? 'opacity-50' : ''}`}
-                  onError={(e) => {
-                    e.currentTarget.onerror = null
-                    console.error('Image failed to load:', signedUrlData.signedUrl)
-                  }}
-                />
-                
-                {isTransforming && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  </div>
-                )}
+            <div key={image.id} className="relative group">
+              <div className="aspect-square">
+                <div 
+                  className="relative w-full h-full cursor-pointer"
+                  onClick={() => setLightboxImage(signedUrlData.signedUrl || null)}
+                >
+                  <img
+                    src={signedUrlData.signedUrl}
+                    alt=""
+                    className={`absolute inset-0 w-full h-full object-cover rounded-lg ${isTransforming ? 'opacity-50' : ''}`}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null
+                      console.error('Image failed to load:', signedUrlData.signedUrl)
+                    }}
+                  />
+                  
+                  {isTransforming && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Caption */}
+              {image.caption && (
+                <div className="mt-2 text-sm text-gray-600 line-clamp-2">
+                  {image.caption}
+                </div>
+              )}
               
               {/* Action buttons */}
               <div className="absolute top-2 right-2 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
