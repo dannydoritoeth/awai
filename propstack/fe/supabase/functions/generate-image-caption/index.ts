@@ -137,14 +137,26 @@ serve(async (req: Request) => {
           continue
         }
 
-        // Convert blob to base64
-        const base64 = await imageData.arrayBuffer().then(buffer => 
-          btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        // Convert blob to base64 using chunks
+        const chunks: Uint8Array[] = []
+        const reader = imageData.stream().getReader()
+        
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          chunks.push(value)
+        }
+
+        // Combine chunks and convert to base64
+        const blob = new Blob(chunks)
+        const base64 = btoa(
+          new Uint8Array(await blob.arrayBuffer())
+            .reduce((data, byte) => data + String.fromCharCode(byte), '')
         )
 
         // Generate caption
         const completion = await openai.chat.completions.create({
-          model: "gpt-4-vision-preview",
+          model: "gpt-4-turbo",
           messages: [
             {
               role: "system",

@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS listing_images (
   listing_id UUID REFERENCES listings(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
   description TEXT,
+  caption TEXT,
   order_index INTEGER,
   status TEXT DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'described'))
 );
