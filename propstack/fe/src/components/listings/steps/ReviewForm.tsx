@@ -17,6 +17,10 @@ export function ReviewForm({ data, onSubmit, onBack, loading, readOnly = false, 
     onSubmit()
   }
 
+  const getValue = (field: string) => {
+    return data[field] || data[field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)]
+  }
+
   const renderDetailRow = (label: string, value: string | number | null | undefined) => (
     <div className="py-2 flex justify-between">
       <dt className="text-sm text-gray-600">{label}</dt>
@@ -55,22 +59,26 @@ export function ReviewForm({ data, onSubmit, onBack, loading, readOnly = false, 
           <div className="bg-white rounded-lg shadow-sm p-4">
             <dl className="divide-y divide-gray-100">
               {/* Basic Details */}
-              {renderDetailRow('Address', data.address)}
-              {renderDetailRow('Property Type', data.propertyType)}
-              {renderDetailRow('Listing Type', data.listingType)}
+              {renderDetailRow('Address', getValue('address'))}
+              {renderDetailRow('Property Type', getValue('propertyType'))}
+              {renderDetailRow('Listing Type', getValue('listingType'))}
 
               {/* Property Features */}
-              {renderDetailRow('Price', data.price ? `${data.currency}${data.price}` : null)}
-              {renderDetailRow('Bedrooms', data.bedrooms)}
-              {renderDetailRow('Bathrooms', data.bathrooms)}
-              {renderDetailRow('Parking', data.parking)}
+              {renderDetailRow('Price', getValue('price') ? `${getValue('currency')}${getValue('price')}` : null)}
+              {renderDetailRow('Bedrooms', getValue('bedrooms'))}
+              {renderDetailRow('Bathrooms', getValue('bathrooms'))}
+              {renderDetailRow('Parking', getValue('parking'))}
               {renderDetailRow(
-                'Interior Size', 
-                data.interiorSize ? `${data.interiorSize} ${data.interiorSizeUnit}` : null
+                'Interior Size',
+                getValue('interiorSize') 
+                  ? `${getValue('interiorSize')} ${getValue('interiorSizeUnit') || 'sqft'}`
+                  : null
               )}
               {renderDetailRow(
-                'Lot Size', 
-                data.lotSize ? `${data.lotSize} ${data.lotSizeUnit}` : null
+                'Lot Size',
+                getValue('lotSize')
+                  ? `${getValue('lotSize')} ${getValue('lotSizeUnit') || 'sqft'}`
+                  : null
               )}
             </dl>
           </div>
@@ -80,18 +88,18 @@ export function ReviewForm({ data, onSubmit, onBack, loading, readOnly = false, 
             {/* Property Highlights */}
             <div className="mb-4">
               <h3 className="text-sm font-medium text-gray-900 mb-2">Property Highlights</h3>
-              {renderHighlights(data.propertyHighlights, 'property')}
-              {data.otherDetails && (
-                <p className="mt-2 text-sm text-gray-600">{data.otherDetails}</p>
+              {renderHighlights(getValue('propertyHighlights') || getValue('property_highlights'), 'property')}
+              {getValue('otherDetails') && (
+                <p className="mt-2 text-sm text-gray-600">{getValue('otherDetails')}</p>
               )}
             </div>
 
             {/* Location Highlights */}
             <div>
               <h3 className="text-sm font-medium text-gray-900 mb-2">Location Highlights</h3>
-              {renderHighlights(data.locationHighlights, 'location')}
-              {data.locationNotes && (
-                <p className="mt-2 text-sm text-gray-600">{data.locationNotes}</p>
+              {renderHighlights(getValue('locationHighlights') || getValue('location_highlights'), 'location')}
+              {getValue('locationNotes') && (
+                <p className="mt-2 text-sm text-gray-600">{getValue('locationNotes')}</p>
               )}
             </div>
           </div>
