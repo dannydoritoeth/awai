@@ -1,7 +1,6 @@
 import { 
   PencilIcon, 
   DocumentTextIcon,
-  MagnifyingGlassIcon,
   ShareIcon,
   PhotoIcon
 } from '@heroicons/react/24/outline'
@@ -12,7 +11,6 @@ interface ListingActionsProps {
   listingId: string
   statuses: {
     description: string
-    titleCheck: string
     socialMedia: string
     images: string
   }
@@ -21,63 +19,34 @@ interface ListingActionsProps {
 export function ListingActions({ listingId, statuses }: ListingActionsProps) {
   const router = useRouter()
 
-  const handleGenerateDescription = () => {
-    router.push(`/listings/${listingId}/description`)
-  }
-
-  const handleTitleCheck = async () => {
-    // TODO: Implement title check
-  }
-
-  const handleSocialMedia = async () => {
-    // TODO: Implement social media
-  }
-
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">Actions</h3>
-      
-      <div className="space-y-4">
-        {/* Status Overview */}
-        <div className="space-y-2">
-          <StatusBadge status={statuses.description || 'todo'} type="description" />
-          <StatusBadge status={statuses.titleCheck || 'todo'} type="title" />
-          <StatusBadge status={statuses.socialMedia || 'todo'} type="social" />
-          <StatusBadge status={statuses.images || 'todo'} type="images" />
+    <div className="bg-white rounded-lg shadow-sm">
+      <div className="p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Actions</h2>
+        
+        {/* Status Badges */}
+        <div className="space-y-2 mb-6">
+          <StatusBadge status={statuses.description} type="description" />
+          <StatusBadge status={statuses.images} type="images" />
+          <StatusBadge status={statuses.socialMedia} type="social" />
         </div>
 
         {/* Action Buttons */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <button
             onClick={() => router.push(`/listings/${listingId}/edit`)}
             className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             <PencilIcon className="w-4 h-4 mr-2" />
-            Edit Listing
+            Edit Details
           </button>
 
           <button
-            onClick={handleGenerateDescription}
+            onClick={() => router.push(`/listings/${listingId}/description`)}
             className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             <DocumentTextIcon className="w-4 h-4 mr-2" />
-            Listing Description
-          </button>
-
-          <button
-            onClick={handleTitleCheck}
-            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <MagnifyingGlassIcon className="w-4 h-4 mr-2" />
-            Title Check
-          </button>
-
-          <button
-            onClick={handleSocialMedia}
-            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <ShareIcon className="w-4 h-4 mr-2" />
-            Social Media
+            Generate Description
           </button>
 
           <button
@@ -86,6 +55,14 @@ export function ListingActions({ listingId, statuses }: ListingActionsProps) {
           >
             <PhotoIcon className="w-4 h-4 mr-2" />
             Manage Images
+          </button>
+
+          <button
+            onClick={() => router.push(`/listings/${listingId}/social`)}
+            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <ShareIcon className="w-4 h-4 mr-2" />
+            Social Media
           </button>
         </div>
       </div>
