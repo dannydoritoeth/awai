@@ -228,4 +228,51 @@ ADD COLUMN IF NOT EXISTS version INTEGER;
 
 -- Add index for better query performance
 CREATE INDEX IF NOT EXISTS idx_description_portal_sync_description_id 
-  ON description_portal_sync(description_id); 
+  ON description_portal_sync(description_id);
+
+-- Create storage bucket for listing images if it doesn't exist
+insert into storage.buckets (id, name, public)
+values ('listing-images', 'listing-images', true)
+on conflict (id) do nothing;
+
+-- Storage Policies
+-- Drop existing policies first
+drop policy if exists "Allow public access to listing images" on storage.objects;
+drop policy if exists "Allow authenticated users to upload images" on storage.objects;
+drop policy if exists "Allow users to delete their own images" on storage.objects;
+
+-- Recreate policies
+create policy "Allow public access to listing images"
+on storage.objects for select
+using (bucket_id = 'listing-images');
+
+create policy "Allow authenticated users to upload images"
+on storage.objects for insert
+with check (
+  bucket_id = 'listing-images' 
+  and auth.role() = 'authenticated'
+);
+
+create policy "Allow users to delete their own images"
+on storage.objects for delete
+using (
+  bucket_id = 'listing-images' 
+  and auth.role() = 'authenticated'
+);
+
+-- Update listing_images table to use order_index consistently
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'listing_images'
+        AND column_name = 'order'
+    ) THEN
+        ALTER TABLE listing_images RENAME COLUMN "order" TO order_index;
+    END IF;
+END $$;
+
+-- Add index for order_index
+create index if not exists idx_listing_images_order_index 
+on listing_images(order_index); 
