@@ -243,11 +243,11 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
     onToggle: () => void
     children: React.ReactNode 
   }) => (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg bg-white">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between text-left"
+        className="w-full px-4 py-3 flex items-center justify-between text-left text-gray-900"
       >
         <div>
           <h3 className="text-sm font-medium text-gray-900">{title}</h3>
@@ -262,7 +262,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
         />
       </button>
       {isOpen && (
-        <div className="px-4 pb-4 border-t">
+        <div className="px-4 pb-4 border-t text-gray-900">
           {children}
         </div>
       )}
@@ -270,7 +270,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
   )
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-white rounded-lg shadow-sm p-6 text-gray-900">
       <div className="space-y-6">
         {/* Basic Options */}
         <div className="space-y-6">
@@ -291,7 +291,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
                   className={`px-4 py-2 rounded-md text-sm
                     ${options.length === option.value
                       ? 'bg-blue-100 text-blue-700 border-blue-200'
-                      : 'bg-gray-50 text-gray-700 border-gray-200'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                     } border`}
                 >
                   <div className="font-medium">{option.label}</div>
@@ -316,7 +316,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
                       ...prev, 
                       wordCount: parseInt(e.target.value) 
                     }))}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700"
                   />
                   <span className="text-sm text-gray-500 whitespace-nowrap">
                     words
@@ -326,40 +326,40 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
             )}
           </div>
 
-          {/* Style and Format */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Writing Style
-              </label>
-              <select
-                value={options.style}
-                onChange={(e) => setOptions(prev => ({ ...prev, style: e.target.value as any }))}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="professional">Professional</option>
-                <option value="casual">Casual</option>
-                <option value="luxury">Luxury</option>
-                <option value="modern">Modern</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Format
-              </label>
-              <select
-                value={options.format}
-                onChange={(e) => setOptions(prev => ({ ...prev, format: e.target.value as any }))}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="paragraph">Paragraphs</option>
-                <option value="bullet-points">Bullet Points</option>
-                <option value="structured">Structured (Features & Benefits)</option>
-              </select>
-            </div>
+          {/* Style Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Writing Style
+            </label>
+            <select
+              value={options.style}
+              onChange={(e) => setOptions(prev => ({ ...prev, style: e.target.value as any }))}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700"
+            >
+              <option value="professional">Professional</option>
+              <option value="casual">Casual</option>
+              <option value="luxury">Luxury</option>
+              <option value="modern">Modern</option>
+            </select>
           </div>
 
+          {/* Format Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Format
+            </label>
+            <select
+              value={options.format}
+              onChange={(e) => setOptions(prev => ({ ...prev, format: e.target.value as any }))}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700"
+            >
+              <option value="paragraph">Paragraphs</option>
+              <option value="bullet-points">Bullet Points</option>
+              <option value="structured">Structured (Features & Benefits)</option>
+            </select>
+          </div>
+
+          {/* Language & Region */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Language & Region
@@ -367,7 +367,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
             <select
               value={options.locale}
               onChange={(e) => setOptions(prev => ({ ...prev, locale: e.target.value as any }))}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700"
             >
               <option value="au">Australian English {options.locale === 'au' && '(Auto-detected)'}</option>
               <option value="us">American English {options.locale === 'us' && '(Auto-detected)'}</option>
@@ -625,7 +625,7 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
               customInstructions: e.target.value 
             }))}
             rows={3}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700"
             placeholder="Add any specific instructions or preferences..."
           />
         </div>

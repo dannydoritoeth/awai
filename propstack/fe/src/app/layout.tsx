@@ -26,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="bg-white">
+    <html lang="en" className="h-full">
+      <body className="h-full text-gray-900 bg-gray-50">
         <AuthProvider>
           <MapsProvider>
             <div className="flex">
