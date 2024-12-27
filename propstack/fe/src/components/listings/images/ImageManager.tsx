@@ -288,6 +288,24 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
     }
   }
 
+  const handleNavigate = (direction: 'prev' | 'next') => {
+    if (!selectedImage) return
+
+    const currentIndex = images.findIndex(img => img.id === selectedImage.id)
+    if (currentIndex === -1) return
+
+    let nextIndex: number
+    if (direction === 'next') {
+      nextIndex = currentIndex + 1
+    } else {
+      nextIndex = currentIndex - 1
+    }
+
+    if (nextIndex >= 0 && nextIndex < images.length) {
+      setSelectedImage(images[nextIndex])
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -357,6 +375,9 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         onClose={() => setSelectedImage(null)}
         onTransform={handleTransform}
         onCaptionUpdate={handleCaptionUpdate}
+        onNavigate={handleNavigate}
+        hasPrevious={selectedImage ? images.findIndex(img => img.id === selectedImage.id) > 0 : false}
+        hasNext={selectedImage ? images.findIndex(img => img.id === selectedImage.id) < images.length - 1 : false}
       />
 
       <CaptionDialog

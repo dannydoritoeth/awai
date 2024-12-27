@@ -11,18 +11,40 @@ interface ImageSidebarProps {
   onClose: () => void
   onTransform?: (imageId: string, type: 'enhance' | 'relight' | 'upscale') => Promise<void>
   onCaptionUpdate?: (imageId: string, caption: string) => Promise<void>
+  onNavigate?: (direction: 'prev' | 'next') => void
+  hasPrevious?: boolean
+  hasNext?: boolean
 }
 
-export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: ImageSidebarProps) {
+export function ImageSidebar({ 
+  image, 
+  onClose, 
+  onTransform, 
+  onCaptionUpdate,
+  onNavigate,
+  hasPrevious = false,
+  hasNext = false
+}: ImageSidebarProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [caption, setCaption] = useState(image?.caption || '')
+  const [caption, setCaption] = useState('')
   const [transforming, setTransforming] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Get signed URL when image changes
+  // Get signed URL and update caption when image changes
   useEffect(() => {
     if (!image) return
+
+    // Clear previous image and show loading state
+    setSignedUrl(null)
+    setIsLoading(true)
+
+    // Update caption when image changes
+    setCaption(image.caption || '')
+    // Auto-open caption editor when navigating
+    setIsEditing(true)
 
     supabase.storage
       .from('listing-images')
@@ -36,7 +58,27 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
           setSignedUrl(data.signedUrl)
         }
       })
-  }, [image?.url])
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }, [image])
+
+  const handleSave = async (andNext: boolean = false) => {
+    if (!image || !onCaptionUpdate) return
+    setIsSaving(true)
+    try {
+      await onCaptionUpdate(image.id, caption)
+      if (andNext && onNavigate && hasNext) {
+        onNavigate('next')
+      } else {
+        setIsEditing(false)
+      }
+    } catch (error) {
+      console.error('Error saving caption:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   if (!image) return null
 
@@ -44,7 +86,29 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
     <div className="fixed inset-y-0 right-0 w-[800px] bg-white shadow-xl border-l border-gray-200 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center p-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Image Editor</h3>
+        <div className="flex items-center space-x-4">
+          <h3 className="text-lg font-semibold text-gray-900">Image Editor</h3>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => onNavigate?.('prev')}
+              disabled={!hasPrevious}
+              className="p-1.5 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onNavigate?.('next')}
+              disabled={!hasNext}
+              className="p-1.5 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
         <button
           onClick={onClose}
           className="p-1 text-gray-400 hover:text-gray-500 rounded-full"
@@ -54,13 +118,16 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Main Content Area */}
         <div className="p-6 space-y-6">
           {/* Image Preview */}
-          {signedUrl && (
-            <div className="relative">
+          <div className="relative w-full aspect-[4/3] bg-gray-50 rounded-lg">
+            {isLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : signedUrl ? (
               <div 
-                className="relative w-full aspect-[4/3] cursor-pointer bg-gray-50"
+                className="relative w-full h-full cursor-pointer"
                 onClick={() => setShowLightbox(true)}
               >
                 <img
@@ -68,26 +135,30 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
                   alt=""
                   className="w-full h-full object-contain"
                 />
-                {/* Overlay for brush/selection area will go here */}
                 <div className="absolute inset-0 pointer-events-none">
-                  {/* This is where we'll add the brush overlay */}
+                </div>
+
+                <div className="absolute top-4 right-4 flex items-center space-x-2 bg-black bg-opacity-50 rounded-lg p-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowLightbox(true)
+                    }}
+                    className="p-1 text-white hover:text-gray-200"
+                    title="View full size"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 4v3m4-3h3m-3-4V7m-4 4H7" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-
-              {/* Image Actions Bar */}
-              <div className="absolute top-4 right-4 flex items-center space-x-2 bg-black bg-opacity-50 rounded-lg p-2">
-                <button
-                  onClick={() => setShowLightbox(true)}
-                  className="p-1 text-white hover:text-gray-200"
-                  title="View full size"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 4v3m4-3h3m-3-4V7m-4 4H7" />
-                  </svg>
-                </button>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                <span>Failed to load image</span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Tools and Options */}
           <div className="grid grid-cols-2 gap-6">
@@ -149,12 +220,14 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h4 className="font-medium text-gray-900">Caption</h4>
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="p-1 text-gray-400 hover:text-gray-500 rounded-full"
-                >
-                  <PencilIcon className="w-4 h-4" />
-                </button>
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="p-1 text-gray-400 hover:text-gray-500 rounded-full"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               
               {isEditing ? (
@@ -172,18 +245,26 @@ export function ImageSidebar({ image, onClose, onTransform, onCaptionUpdate }: I
                         setIsEditing(false)
                       }}
                       className="px-3 py-1 text-sm text-gray-600 hover:text-gray-700"
+                      disabled={isSaving}
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={async () => {
-                        await onCaptionUpdate?.(image.id, caption)
-                        setIsEditing(false)
-                      }}
-                      className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                      onClick={() => handleSave(false)}
+                      disabled={isSaving}
+                      className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                     >
-                      Save
+                      {isSaving ? 'Saving...' : 'Save'}
                     </button>
+                    {hasNext && (
+                      <button
+                        onClick={() => handleSave(true)}
+                        disabled={isSaving}
+                        className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                      >
+                        {isSaving ? 'Saving...' : 'Save & Next'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
