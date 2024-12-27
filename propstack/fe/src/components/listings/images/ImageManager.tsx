@@ -5,6 +5,7 @@ import { ImageUploader } from './ImageUploader'
 import { ImageGrid } from './ImageGrid'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
+import { SparklesIcon } from '@heroicons/react/24/outline'
 
 interface ImageManagerProps {
   listingId: string
@@ -12,6 +13,7 @@ interface ImageManagerProps {
     id: string
     url: string
     order_index: number
+    caption?: string
   }>
 }
 
@@ -24,6 +26,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   const [loading, setLoading] = useState(false)
   const [images, setImages] = useState(initialImages)
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
+  const [generatingCaptions, setGeneratingCaptions] = useState(false)
 
   const handleUpload = async (files: FileList) => {
     setLoading(true)
@@ -160,8 +163,46 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
     }
   }
 
+  const handleTransform = async (imageId: string, type: 'enhance' | 'relight' | 'upscale') => {
+    // Implementation will come later
+    toast.error('Image transformation not implemented yet')
+  }
+
+  const handleGenerateCaptions = async () => {
+    if (images.length === 0) {
+      toast.error('No images to generate captions for')
+      return
+    }
+
+    setGeneratingCaptions(true)
+    try {
+      // Implementation will come later
+      toast.error('Caption generation not implemented yet')
+    } finally {
+      setGeneratingCaptions(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-900">Listing Images</h2>
+        <button
+          onClick={handleGenerateCaptions}
+          disabled={generatingCaptions || images.length === 0}
+          className={`
+            inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
+            ${generatingCaptions || images.length === 0
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }
+          `}
+        >
+          <SparklesIcon className="w-4 h-4 mr-2" />
+          {generatingCaptions ? 'Generating Captions...' : 'Generate AI Captions'}
+        </button>
+      </div>
+
       <ImageUploader 
         onUpload={handleUpload} 
         loading={loading} 
@@ -184,6 +225,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       <ImageGrid 
         images={images}
         onDelete={handleDelete}
+        onTransform={handleTransform}
       />
     </div>
   )
