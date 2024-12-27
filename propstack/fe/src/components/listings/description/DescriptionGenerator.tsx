@@ -158,7 +158,6 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
     setError(null)
 
     try {
-      // Validate listing ID
       if (!listing?.id) {
         throw new Error('Invalid listing ID')
       }
@@ -166,9 +165,25 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create the payload
+      // First create the description record
+      const { data: descriptionRecord, error: insertError } = await supabase
+        .from('generated_descriptions')
+        .insert({
+          listing_id: listing.id,
+          status: 'generating',
+          options: options
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        throw new Error(`Failed to create description record: ${insertError.message}`)
+      }
+
+      // Create the payload for the edge function
       const payload = {
         listingId: listing.id,
+        descriptionId: descriptionRecord.id, // Pass the new description ID
         options: {
           ...options,
           naturalness: {
@@ -190,51 +205,26 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
           locationHighlights: listing.location_highlights,
           locationNotes: listing.location_notes,
           otherDetails: listing.other_details,
-          verifiedAmenities: listing.verified_amenities,
-          verifiedFeatures: listing.verified_features,
-          verifiedMeasurements: {
-            lotSize: listing.lot_size,
-            interiorSize: listing.interior_size,
-            bedrooms: listing.bedrooms,
-            bathrooms: listing.bathrooms,
-            parking: listing.parking
-          }
+          address: listing.address
         }
       }
-
-      console.log('Sending payload:', payload)
 
       // Call edge function
       const { data, error: fnError } = await supabase.functions.invoke(
         'generate-description',
         {
-          body: payload  // Remove JSON.stringify, let Supabase handle it
+          body: payload
         }
       )
 
       if (fnError) {
-        console.error('Edge function error:', fnError)
         throw new Error(fnError instanceof Error ? fnError.message : 'Failed to generate description')
-      }
-
-      console.log('Edge function response:', data)
-
-      if (!data) {
-        throw new Error('No response from description generator')
       }
 
       onComplete()
     } catch (err) {
       console.error('Error generating description:', err)
-      let errorMessage = 'Failed to generate description'
-      
-      if (err instanceof Error) {
-        errorMessage = err.message
-      } else if (typeof err === 'object' && err !== null) {
-        errorMessage = JSON.stringify(err)
-      }
-      
-      setError(errorMessage)
+      setError(err instanceof Error ? err.message : 'Failed to generate description')
     } finally {
       setLoading(false)
     }

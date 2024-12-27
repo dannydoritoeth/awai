@@ -1,7 +1,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { OpenAI } from 'https://esm.sh/openai@4.20.1'
 
 console.log('Loading generate-description function...')
+
+const openai = new OpenAI({
+  apiKey: Deno.env.get('OPENAI_API_KEY')
+})
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +15,6 @@ const corsHeaders = {
 }
 
 serve(async (req: Request) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -25,18 +29,13 @@ serve(async (req: Request) => {
       throw new Error('Request body is empty')
     }
 
-    const { listingId, options, listingData } = body
-    console.log('Parsed request data:', { listingId, options, listingData })
-
-    // Validate required data
-    if (!listingId) {
-      throw new Error('Missing listingId')
-    }
+    const { listingId, descriptionId, options, listingData } = body
+    console.log('Parsed request data:', { listingId, descriptionId, options, listingData })
 
     // Create Supabase client with service role key for admin access
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use service role key instead
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
         auth: {
           autoRefreshToken: false,
@@ -45,44 +44,69 @@ serve(async (req: Request) => {
       }
     )
 
-    // Verify listing exists using RLS-bypassing query
-    const { data: listings, error: listingError } = await supabaseClient
-      .from('listings')
-      .select('id')
-      .eq('id', listingId)
+    // Build the prompt
+    const prompt = `Generate a compelling real estate description for the following property:
 
-    if (listingError) {
-      console.error('Error fetching listing:', listingError)
-      throw new Error(`Database error: ${listingError.message}`)
-    }
+Address: ${listingData.address}
+Type: ${listingData.propertyType} for ${listingData.listingType}
+Price: ${listingData.price}
+Bedrooms: ${listingData.bedrooms}
+Bathrooms: ${listingData.bathrooms}
+Parking: ${listingData.parking}
+Lot Size: ${listingData.lotSize}
+Interior Size: ${listingData.interiorSize}
+Property Highlights: ${listingData.propertyHighlights?.join(', ')}
+Location Highlights: ${listingData.locationHighlights?.join(', ')}
+Location Notes: ${listingData.locationNotes}
+Other Details: ${listingData.otherDetails}
 
-    if (!listings || listings.length === 0) {
-      throw new Error(`Listing not found: ${listingId}`)
-    }
+Please write a ${options.length} description.
+Use a ${options.style} style.
+Format as ${options.format}.
+Use ${options.tone} tone.`
 
-    // Use the provided listing data instead of fetching it again
-    const listing = listingData
+    console.log('Generating with prompt:', prompt)
 
-    // Update description status
+    // Generate the description
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are an experienced real estate copywriter who creates compelling property descriptions."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    })
+
+    const generatedContent = completion.choices[0].message.content
+
+    console.log('Generated content:', generatedContent)
+
+    // Update the specific description record
     const { error: updateError } = await supabaseClient
-      .from('listings')
-      .update({ description_status: 'in_progress' })
-      .eq('id', listingId)
+      .from('generated_descriptions')
+      .update({ 
+        content: generatedContent,
+        status: 'completed'
+      })
+      .eq('id', descriptionId)
+      .eq('status', 'generating')
 
     if (updateError) {
-      console.error('Error updating listing status:', updateError)
-      throw new Error(`Failed to update listing status: ${updateError.message}`)
+      console.error('Error updating description:', updateError)
+      throw updateError
     }
-
-    console.log('Listing status updated to in_progress')
-
-    // Generate description logic here
-    // ... your existing generation code ...
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'Description generation started'
+        content: generatedContent
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -91,21 +115,11 @@ serve(async (req: Request) => {
     )
 
   } catch (error) {
-    console.error('Edge function error:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    })
-
+    console.error('Edge function error:', error)
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
-        details: {
-          name: error.name,
-          stack: error.stack,
-          cause: error.cause
-        }
+        error: error.message
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

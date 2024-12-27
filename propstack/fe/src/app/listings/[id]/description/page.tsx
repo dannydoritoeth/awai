@@ -36,8 +36,13 @@ export default function DescriptionPage({ params }: PageParams) {
           .order('created_at', { ascending: false })
       ])
 
+      console.log('Descriptions loaded:', descriptionsRes.data) // Debug log
+      
       if (listingRes.data) setListing(listingRes.data)
-      if (descriptionsRes.data) setDescriptions(descriptionsRes.data)
+      if (descriptionsRes.data) {
+        setDescriptions(descriptionsRes.data)
+        setCurrentIndex(0)
+      }
     }
 
     fetchData()
@@ -83,13 +88,20 @@ export default function DescriptionPage({ params }: PageParams) {
           </div>
           
           <div>
-            {descriptions.length > 0 && (
+            {descriptions.length > 0 ? (
               <DescriptionViewer
                 listing={listing}
                 descriptions={descriptions}
                 currentIndex={currentIndex}
-                onIndexChange={setCurrentIndex}
+                onIndexChange={(index) => {
+                  console.log('Changing index to:', index) // Debug log
+                  setCurrentIndex(index)
+                }}
               />
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <p className="text-gray-500">No descriptions generated yet</p>
+              </div>
             )}
           </div>
         </div>

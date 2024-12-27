@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
 
@@ -8,7 +8,7 @@ interface DescriptionViewerProps {
     id: string
     content: string
     created_at: string
-    status: 'draft' | 'approved'
+    status: string
   }>
   currentIndex: number
   onIndexChange: (index: number) => void
@@ -29,13 +29,35 @@ export function DescriptionViewer({
   onIndexChange 
 }: DescriptionViewerProps) {
   const [editing, setEditing] = useState(false)
-  const [content, setContent] = useState(descriptions[currentIndex]?.content || '')
+  const [content, setContent] = useState('')
   const [selectedPortals, setSelectedPortals] = useState<string[]>([])
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Debug logs
+  console.log('DescriptionViewer props:', {
+    descriptionsCount: descriptions.length,
+    currentIndex,
+    currentContent: descriptions[currentIndex]?.content
+  })
+
+  useEffect(() => {
+    if (descriptions[currentIndex]?.content) {
+      setContent(descriptions[currentIndex].content)
+      console.log('Setting content:', descriptions[currentIndex].content)
+    }
+  }, [descriptions, currentIndex])
+
   const currentDescription = descriptions[currentIndex]
   const isApproved = currentDescription?.status === 'approved'
+  const isProcessing = currentDescription?.status === 'processing'
+  const isGenerating = currentDescription?.status === 'generating'
+  const hasError = currentDescription?.status === 'error'
+
+  if (!currentDescription) {
+    console.log('No current description found')
+    return null
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -84,9 +106,9 @@ export function DescriptionViewer({
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => onIndexChange(currentIndex - 1)}
+          onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
           disabled={currentIndex === 0}
-          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50"
+          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ChevronLeftIcon className="w-5 h-5" />
         </button>
@@ -94,17 +116,43 @@ export function DescriptionViewer({
           Version {currentIndex + 1} of {descriptions.length}
         </span>
         <button
-          onClick={() => onIndexChange(currentIndex + 1)}
+          onClick={() => onIndexChange(Math.min(descriptions.length - 1, currentIndex + 1))}
           disabled={currentIndex === descriptions.length - 1}
-          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50"
+          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ChevronRightIcon className="w-5 h-5" />
         </button>
       </div>
 
+      {/* Status */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-500">
+          Created: {new Date(currentDescription.created_at).toLocaleString()}
+        </span>
+        <span className={`text-sm px-2 py-1 rounded-full ${
+          isProcessing ? 'bg-yellow-100 text-yellow-800' :
+          isGenerating ? 'bg-blue-100 text-blue-800' :
+          hasError ? 'bg-red-100 text-red-800' :
+          isApproved ? 'bg-green-100 text-green-800' :
+          'bg-gray-100 text-gray-800'
+        }`}>
+          {currentDescription.status}
+        </span>
+      </div>
+
       {/* Description Content */}
       <div className="space-y-4">
-        {editing ? (
+        {isProcessing || isGenerating ? (
+          <div className="text-center py-8">
+            <div className="animate-pulse text-gray-500">
+              Generating description...
+            </div>
+          </div>
+        ) : hasError ? (
+          <div className="text-center py-8 text-red-600">
+            Error generating description. Please try again.
+          </div>
+        ) : editing ? (
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -112,50 +160,52 @@ export function DescriptionViewer({
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           />
         ) : (
-          <div className="prose max-w-none">
-            {content}
+          <div className="prose max-w-none whitespace-pre-wrap">
+            {content || currentDescription.content || 'No content available'}
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex justify-between items-center pt-4 border-t">
-        <div className="space-x-2">
-          {editing ? (
-            <>
+      {!isProcessing && !isGenerating && !hasError && (
+        <div className="flex justify-between items-center pt-4 border-t">
+          <div className="space-x-2">
+            {editing ? (
+              <>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
               <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
+                onClick={() => setEditing(true)}
                 className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
               >
-                Cancel
+                Edit
               </button>
-            </>
-          ) : (
+            )}
+          </div>
+          
+          {!isApproved && (
             <button
-              onClick={() => setEditing(true)}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              onClick={handleApprove}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
             >
-              Edit
+              Approve
             </button>
           )}
         </div>
-        
-        {!isApproved && (
-          <button
-            onClick={handleApprove}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-          >
-            Approve
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Portal Sync */}
       {isApproved && (
