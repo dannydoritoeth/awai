@@ -15,13 +15,20 @@ interface ImageManagerProps {
   }>
 }
 
+interface UploadProgress {
+  total: number
+  completed: number
+}
+
 export function ImageManager({ listingId, images: initialImages }: ImageManagerProps) {
   const [loading, setLoading] = useState(false)
-  // Initialize state only once with initialImages
   const [images, setImages] = useState(initialImages)
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
   const handleUpload = async (files: FileList) => {
     setLoading(true)
+    setUploadProgress({ total: files.length, completed: 0 })
+
     try {
       // First check if user is authenticated
       const { data: { session } } = await supabase.auth.getSession()
@@ -71,6 +78,12 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
           throw dbError
         }
 
+        // Update progress
+        setUploadProgress(prev => prev ? {
+          ...prev,
+          completed: prev.completed + 1
+        } : null)
+
         return data
       })
 
@@ -87,6 +100,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       toast.error(err instanceof Error ? err.message : 'Failed to upload images')
     } finally {
       setLoading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -148,7 +162,24 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
 
   return (
     <div className="space-y-6">
-      <ImageUploader onUpload={handleUpload} loading={loading} />
+      <ImageUploader 
+        onUpload={handleUpload} 
+        loading={loading} 
+      />
+
+      {uploadProgress && (
+        <div className="relative h-8 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+          <div 
+            className="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-200"
+            style={{ width: `${(uploadProgress.completed / uploadProgress.total) * 100}%` }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-sm font-medium text-gray-700 drop-shadow-sm">
+              Uploading {uploadProgress.completed} of {uploadProgress.total} images
+            </span>
+          </div>
+        </div>
+      )}
 
       <ImageGrid 
         images={images}
