@@ -16,48 +16,25 @@ const steps = [
   'Review'
 ]
 
-const initialFormData = {
-  address: '',
-  latitude: null,
-  longitude: null,
-  propertyType: '',
-  listingType: '',
-  price: '',
-  currency: '$',
-  bedrooms: '',
-  bathrooms: '',
-  parking: '',
-  lotSize: '',
-  lotSizeUnit: 'sqm',
-  interiorSize: '',
-  interiorSizeUnit: 'sqm',
-  highlights: [],
-  otherDetails: '',
-  // Location Features fields
-  locationFeatures: [],
-  nearbyAttractions: '',
-  publicTransport: '',
-  schools: '',
-  shopping: '',
-  neighborhood: '',
-  propertyHighlights: [] as string[],
-  locationHighlights: [] as string[],
-  locationNotes: ''
+interface ListingWizardProps {
+  initialData?: any
+  mode?: 'create' | 'edit'
+  listingId?: string
 }
 
-export function ListingWizard() {
-  const router = useRouter()
-  const [step, setStep] = useState(1)
-  const [formData, setFormData] = useState(initialFormData)
+export function ListingWizard({ initialData, mode = 'create', listingId }: ListingWizardProps) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [formData, setFormData] = useState(initialData || {})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const handleNext = () => {
-    setStep(step + 1)
+    setCurrentStep(currentStep + 1)
   }
 
   const handleBack = () => {
-    setStep(step - 1)
+    setCurrentStep(currentStep - 1)
   }
 
   const handleSubmit = async () => {
@@ -71,7 +48,6 @@ export function ListingWizard() {
         return
       }
 
-      // Format the data to match database types
       const listingData = {
         user_id: user.id,
         address: formData.address,
@@ -95,22 +71,32 @@ export function ListingWizard() {
         status: 'draft'
       }
 
-      const { error } = await supabase
-        .from('listings')
-        .insert([listingData])
+      let error
+      if (mode === 'edit' && listingId) {
+        const { error: updateError } = await supabase
+          .from('listings')
+          .update(listingData)
+          .eq('id', listingId)
+        error = updateError
+      } else {
+        const { error: insertError } = await supabase
+          .from('listings')
+          .insert([listingData])
+        error = insertError
+      }
 
       if (error) throw error
 
-      router.push('/listings')
+      router.push(mode === 'edit' ? `/listings/${listingId}` : '/listings')
     } catch (err) {
-      console.error('Error creating listing:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create listing')
+      console.error('Error saving listing:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save listing')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFormUpdate = (updates: Partial<typeof initialFormData>) => {
+  const handleFormUpdate = (updates: Partial<typeof initialData>) => {
     setFormData(prev => ({ ...prev, ...updates }))
   }
 
@@ -118,19 +104,19 @@ export function ListingWizard() {
     <div className="max-w-3xl mx-auto">
       <StepIndicator 
         steps={steps}
-        currentStep={step}
+        currentStep={currentStep}
         className="mb-8"
       />
 
       <div className="bg-white rounded-lg shadow-sm">
-        {step === 1 && (
+        {currentStep === 0 && (
           <BasicPropertyForm
             data={formData}
             onUpdate={handleFormUpdate}
             onNext={handleNext}
           />
         )}
-        {step === 2 && (
+        {currentStep === 1 && (
           <PropertyFeaturesForm
             data={formData}
             onUpdate={handleFormUpdate}
@@ -138,7 +124,7 @@ export function ListingWizard() {
             onBack={handleBack}
           />
         )}
-        {step === 3 && (
+        {currentStep === 2 && (
           <HighlightsForm
             data={formData}
             onUpdate={handleFormUpdate}
@@ -146,12 +132,13 @@ export function ListingWizard() {
             onBack={handleBack}
           />
         )}
-        {step === 4 && (
+        {currentStep === 3 && (
           <ReviewForm
             data={formData}
             onSubmit={handleSubmit}
             onBack={handleBack}
             loading={loading}
+            mode={mode}
           />
         )}
 

@@ -3,19 +3,18 @@
 import { useEffect, useState, use } from 'react'
 import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
-import { ReviewForm } from '@/components/listings/steps/ReviewForm'
+import { ListingWizard } from '@/components/listings/ListingWizard'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Spinner } from '@/components/ui/Spinner'
-import { ListingActions } from '@/components/listings/ListingActions'
 
-interface ListingDetailProps {
+interface EditListingPageProps {
   params: Promise<{
     id: string
   }>
 }
 
-export default function ListingDetailPage({ params }: ListingDetailProps) {
+export default function EditListingPage({ params }: EditListingPageProps) {
   const { id } = use(params)
   const [listing, setListing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -31,15 +30,31 @@ export default function ListingDetailPage({ params }: ListingDetailProps) {
 
       if (error) {
         console.error('Error fetching listing:', error)
+        router.push('/listings')
         return
       }
 
-      setListing(data)
+      // Transform database fields to match form field names
+      const transformedData = {
+        ...data,
+        propertyType: data.property_type,
+        listingType: data.listing_type,
+        lotSize: data.lot_size,
+        lotSizeUnit: data.lot_size_unit,
+        interiorSize: data.interior_size,
+        interiorSizeUnit: data.interior_size_unit,
+        propertyHighlights: data.property_highlights || [],
+        locationHighlights: data.location_highlights || [],
+        locationNotes: data.location_notes,
+        otherDetails: data.other_details,
+      }
+
+      setListing(transformedData)
       setLoading(false)
     }
 
     fetchListing()
-  }, [id])
+  }, [id, router])
 
   if (loading) {
     return (
@@ -72,36 +87,18 @@ export default function ListingDetailPage({ params }: ListingDetailProps) {
       <Header />
       <main className="container mx-auto px-4">
         <PageHeading 
-          title="Listing Details"
-          description="Review and manage your listing"
-          backHref="/listings"
+          title="Edit Listing"
+          description="Update your listing details"
+          backHref={`/listings/${id}`}
           showBackButton
         />
-
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left column - Review Form */}
-          <div className="lg:col-span-2">
-            <ReviewForm 
-              data={listing}
-              readOnly
-              onBack={() => router.push('/listings')}
-              onSubmit={() => {}}
-              loading={false}
-            />
-          </div>
-
-          {/* Right column - Actions */}
-          <div className="space-y-6">
-            <ListingActions 
-              listingId={id}
-              statuses={{
-                review: listing.review_status,
-                titleCheck: listing.title_check_status,
-                socialMedia: listing.social_media_status,
-                images: listing.images_status
-              }}
-            />
-          </div>
+        
+        <div className="mt-8">
+          <ListingWizard 
+            initialData={listing}
+            mode="edit"
+            listingId={id}
+          />
         </div>
       </main>
     </div>
