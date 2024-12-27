@@ -158,75 +158,83 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
     setError(null)
 
     try {
-      // Validate custom word count
-      if (options.length === 'custom' && (!options.wordCount || options.wordCount < 50 || options.wordCount > 1000)) {
-        throw new Error('Please enter a valid word count between 50 and 1000 words')
+      // Validate listing ID
+      if (!listing?.id) {
+        throw new Error('Invalid listing ID')
       }
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Update listing status
-      await supabase
-        .from('listings')
-        .update({ description_status: 'pending' })
-        .eq('id', listing.id)
-
-      // Create description generation request
-      const { error: insertError } = await supabase
-        .from('generated_descriptions')
-        .insert([{
-          listing_id: listing.id,
-          options: options,
-          status: 'processing'
-        }])
-
-      if (insertError) throw insertError
-
-      // Call edge function to start generation
-      const { error: fnError } = await supabase.functions.invoke('generate-description', {
-        body: {
-          listingId: listing.id,
-          options: {
-            ...options,
-            // Ensure strict fact checking if not explicitly disabled
-            naturalness: {
-              ...options.naturalness,
-              strictFactChecking: options.naturalness.strictFactChecking !== false
-            }
-          },
-          listingData: {
-            propertyType: listing.property_type,
-            listingType: listing.listing_type,
-            price: listing.price,
-            bedrooms: listing.bedrooms,
-            bathrooms: listing.bathrooms,
-            parking: listing.parking,
+      // Create the payload
+      const payload = {
+        listingId: listing.id,
+        options: {
+          ...options,
+          naturalness: {
+            ...options.naturalness,
+            strictFactChecking: options.naturalness.strictFactChecking !== false
+          }
+        },
+        listingData: {
+          id: listing.id,
+          propertyType: listing.property_type,
+          listingType: listing.listing_type,
+          price: listing.price,
+          bedrooms: listing.bedrooms,
+          bathrooms: listing.bathrooms,
+          parking: listing.parking,
+          lotSize: listing.lot_size,
+          interiorSize: listing.interior_size,
+          propertyHighlights: listing.property_highlights,
+          locationHighlights: listing.location_highlights,
+          locationNotes: listing.location_notes,
+          otherDetails: listing.other_details,
+          verifiedAmenities: listing.verified_amenities,
+          verifiedFeatures: listing.verified_features,
+          verifiedMeasurements: {
             lotSize: listing.lot_size,
             interiorSize: listing.interior_size,
-            propertyHighlights: listing.property_highlights,
-            locationHighlights: listing.location_highlights,
-            locationNotes: listing.location_notes,
-            otherDetails: listing.other_details,
-            verifiedAmenities: listing.verified_amenities,
-            verifiedFeatures: listing.verified_features,
-            verifiedMeasurements: {
-              lotSize: listing.lot_size,
-              interiorSize: listing.interior_size,
-              bedrooms: listing.bedrooms,
-              bathrooms: listing.bathrooms,
-              parking: listing.parking
-            }
+            bedrooms: listing.bedrooms,
+            bathrooms: listing.bathrooms,
+            parking: listing.parking
           }
         }
-      })
+      }
 
-      if (fnError) throw fnError
+      console.log('Sending payload:', payload)
+
+      // Call edge function
+      const { data, error: fnError } = await supabase.functions.invoke(
+        'generate-description',
+        {
+          body: payload  // Remove JSON.stringify, let Supabase handle it
+        }
+      )
+
+      if (fnError) {
+        console.error('Edge function error:', fnError)
+        throw new Error(fnError instanceof Error ? fnError.message : 'Failed to generate description')
+      }
+
+      console.log('Edge function response:', data)
+
+      if (!data) {
+        throw new Error('No response from description generator')
+      }
 
       onComplete()
     } catch (err) {
       console.error('Error generating description:', err)
-      setError(err instanceof Error ? err.message : 'Failed to generate description')
+      let errorMessage = 'Failed to generate description'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+      } else if (typeof err === 'object' && err !== null) {
+        errorMessage = JSON.stringify(err)
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

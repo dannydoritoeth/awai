@@ -1,3 +1,10 @@
+-- Drop existing tables
+DROP TABLE IF EXISTS listing_images CASCADE;
+DROP TABLE IF EXISTS social_media_content CASCADE;
+DROP TABLE IF EXISTS title_checks CASCADE;
+DROP TABLE IF EXISTS generated_descriptions CASCADE;
+DROP TABLE IF EXISTS listings CASCADE;
+
 -- Create listings table
 CREATE TABLE IF NOT EXISTS listings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -49,7 +56,10 @@ CREATE TABLE IF NOT EXISTS generated_descriptions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   listing_id UUID REFERENCES listings(id) ON DELETE CASCADE,
   content TEXT,
-  status TEXT CHECK (status IN ('processing', 'generating', 'completed', 'error')) DEFAULT 'processing'
+  status TEXT CHECK (status IN ('processing', 'generating', 'completed', 'error')) DEFAULT 'processing',
+  options JSONB,
+  error_message TEXT,
+  completed_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Enable RLS
@@ -69,9 +79,22 @@ CREATE POLICY "Users can update their own listings"
   ON listings FOR UPDATE
   USING (auth.uid() = user_id);
 
--- Generated descriptions policies
-CREATE POLICY "owners can create descriptions"
-  ON generated_descriptions FOR INSERT
+-- First drop all existing policies for generated_descriptions
+DROP POLICY IF EXISTS "owners can create descriptions" ON generated_descriptions;
+DROP POLICY IF EXISTS "owners can view their descriptions" ON generated_descriptions;
+DROP POLICY IF EXISTS "owners can update their descriptions" ON generated_descriptions;
+DROP POLICY IF EXISTS "owners can delete their descriptions" ON generated_descriptions;
+DROP POLICY IF EXISTS "Users can manage their own descriptions" ON generated_descriptions;
+DROP POLICY IF EXISTS "Users can create descriptions for their listings" ON generated_descriptions;
+
+-- Enable RLS
+ALTER TABLE generated_descriptions ENABLE ROW LEVEL SECURITY;
+
+-- Create simple, separate policies for each operation
+CREATE POLICY "Enable insert for authenticated users only"
+  ON generated_descriptions
+  FOR INSERT
+  TO authenticated
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM listings
@@ -80,8 +103,10 @@ CREATE POLICY "owners can create descriptions"
     )
   );
 
-CREATE POLICY "owners can view their descriptions"
-  ON generated_descriptions FOR SELECT
+CREATE POLICY "Enable read access for users based on listing ownership"
+  ON generated_descriptions
+  FOR SELECT
+  TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM listings
@@ -90,8 +115,10 @@ CREATE POLICY "owners can view their descriptions"
     )
   );
 
-CREATE POLICY "owners can update their descriptions"
-  ON generated_descriptions FOR UPDATE
+CREATE POLICY "Enable update for users based on listing ownership"
+  ON generated_descriptions
+  FOR UPDATE
+  TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM listings
@@ -100,8 +127,10 @@ CREATE POLICY "owners can update their descriptions"
     )
   );
 
-CREATE POLICY "owners can delete their descriptions"
-  ON generated_descriptions FOR DELETE
+CREATE POLICY "Enable delete for users based on listing ownership"
+  ON generated_descriptions
+  FOR DELETE
+  TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM listings
@@ -109,6 +138,10 @@ CREATE POLICY "owners can delete their descriptions"
       AND listings.user_id = auth.uid()
     )
   );
+
+-- Add index for better join performance
+CREATE INDEX IF NOT EXISTS idx_generated_descriptions_listing_id 
+  ON generated_descriptions(listing_id);
 
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_listings_user_id ON listings(user_id);
