@@ -17,12 +17,14 @@ interface GenerationOptions {
   includeCallToAction: boolean
   targetAudience: string[]
   customInstructions?: string
+  locale: 'us' | 'au' | 'uk' | 'ca' | 'nz'
   naturalness: {
     useColloquialisms: boolean
     includeLocalReferences: boolean
     varyPhrasing: boolean
     avoidBuzzwords: boolean
     useSpecificDetails: boolean
+    strictFactChecking: boolean
   }
   emphasis: {
     uniqueFeatures: boolean
@@ -46,12 +48,14 @@ const defaultOptions: GenerationOptions = {
   focus: [],
   includeCallToAction: true,
   targetAudience: ['buyers'],
+  locale: 'au',
   naturalness: {
     useColloquialisms: true,
     includeLocalReferences: true,
     varyPhrasing: true,
     avoidBuzzwords: true,
-    useSpecificDetails: true
+    useSpecificDetails: true,
+    strictFactChecking: true
   },
   emphasis: {
     uniqueFeatures: true,
@@ -60,8 +64,70 @@ const defaultOptions: GenerationOptions = {
   }
 }
 
+const detectRegionFromAddress = (address: string): 'us' | 'au' | 'uk' | 'ca' | 'nz' => {
+  const lowerAddress = address.toLowerCase()
+  
+  // Australian states/territories
+  if (
+    lowerAddress.includes('nsw') || 
+    lowerAddress.includes('vic') || 
+    lowerAddress.includes('qld') || 
+    lowerAddress.includes('wa') || 
+    lowerAddress.includes('sa') || 
+    lowerAddress.includes('tas') || 
+    lowerAddress.includes('act') || 
+    lowerAddress.includes('nt') ||
+    lowerAddress.includes('australia')
+  ) {
+    return 'au'
+  }
+  
+  // US states/zip codes
+  if (
+    /\b\d{5}(-\d{4})?\b/.test(lowerAddress) || // US ZIP code
+    lowerAddress.includes('united states') ||
+    lowerAddress.includes('usa')
+  ) {
+    return 'us'
+  }
+  
+  // UK postcodes
+  if (
+    /^[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}$/i.test(lowerAddress) ||
+    lowerAddress.includes('united kingdom') ||
+    lowerAddress.includes('england') ||
+    lowerAddress.includes('scotland') ||
+    lowerAddress.includes('wales')
+  ) {
+    return 'uk'
+  }
+  
+  // Canadian postal codes
+  if (
+    /[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z] ?\d[ABCEGHJ-NPRSTV-Z]\d/i.test(lowerAddress) ||
+    lowerAddress.includes('canada')
+  ) {
+    return 'ca'
+  }
+  
+  // New Zealand postcodes and identifiers
+  if (
+    /\b\d{4}\b/.test(lowerAddress) && (
+      lowerAddress.includes('new zealand') ||
+      lowerAddress.includes('nz')
+    )
+  ) {
+    return 'nz'
+  }
+  
+  return 'au' // Default to Australian if no match found
+}
+
 export function DescriptionGenerator({ listing, onComplete }: DescriptionGeneratorProps) {
-  const [options, setOptions] = useState<GenerationOptions>(defaultOptions)
+  const [options, setOptions] = useState<GenerationOptions>({
+    ...defaultOptions,
+    locale: detectRegionFromAddress(listing.address)
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showNaturalness, setShowNaturalness] = useState(false)
@@ -121,7 +187,14 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
       const { error: fnError } = await supabase.functions.invoke('generate-description', {
         body: {
           listingId: listing.id,
-          options: options,
+          options: {
+            ...options,
+            // Ensure strict fact checking if not explicitly disabled
+            naturalness: {
+              ...options.naturalness,
+              strictFactChecking: options.naturalness.strictFactChecking !== false
+            }
+          },
           listingData: {
             propertyType: listing.property_type,
             listingType: listing.listing_type,
@@ -134,7 +207,16 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
             propertyHighlights: listing.property_highlights,
             locationHighlights: listing.location_highlights,
             locationNotes: listing.location_notes,
-            otherDetails: listing.other_details
+            otherDetails: listing.other_details,
+            verifiedAmenities: listing.verified_amenities,
+            verifiedFeatures: listing.verified_features,
+            verifiedMeasurements: {
+              lotSize: listing.lot_size,
+              interiorSize: listing.interior_size,
+              bedrooms: listing.bedrooms,
+              bathrooms: listing.bathrooms,
+              parking: listing.parking
+            }
           }
         }
       })
@@ -279,6 +361,26 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
               </select>
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Language & Region
+            </label>
+            <select
+              value={options.locale}
+              onChange={(e) => setOptions(prev => ({ ...prev, locale: e.target.value as any }))}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="au">Australian English {options.locale === 'au' && '(Auto-detected)'}</option>
+              <option value="us">American English {options.locale === 'us' && '(Auto-detected)'}</option>
+              <option value="uk">British English {options.locale === 'uk' && '(Auto-detected)'}</option>
+              <option value="ca">Canadian English {options.locale === 'ca' && '(Auto-detected)'}</option>
+              <option value="nz">New Zealand English {options.locale === 'nz' && '(Auto-detected)'}</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Region auto-detected from address. You can change this if needed.
+            </p>
+          </div>
         </div>
 
         {/* Advanced Options */}
@@ -422,6 +524,25 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
                 <span className="ml-2">
                   <span className="text-sm font-medium text-gray-700">Include Specific Details</span>
                   <p className="text-xs text-gray-500">Mention unique features and exact measurements</p>
+                </span>
+              </label>
+
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={options.naturalness.strictFactChecking}
+                  onChange={(e) => setOptions(prev => ({
+                    ...prev,
+                    naturalness: {
+                      ...prev.naturalness,
+                      strictFactChecking: e.target.checked
+                    }
+                  }))}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2">
+                  <span className="text-sm font-medium text-gray-700">Strict Fact Checking</span>
+                  <p className="text-xs text-gray-500">Only include verified information from the listing data</p>
                 </span>
               </label>
             </div>
