@@ -61,7 +61,7 @@ export function ListingActions({ listingId, statuses }: ListingActionsProps) {
             className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             <DocumentTextIcon className="w-4 h-4 mr-2" />
-            Generate Description
+            Listing Description
           </button>
 
           <button
