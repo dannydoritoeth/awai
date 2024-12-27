@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { ChevronLeftIcon, ChevronRightIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
 
 interface DescriptionViewerProps {
@@ -173,7 +173,7 @@ export function DescriptionViewer({
         </div>
       </div>
 
-      {/* Show generating status */}
+      {/* Content area with edit functionality */}
       {isGenerating ? (
         <div className="animate-pulse space-y-4">
           <div className="h-4 bg-gray-200 rounded w-3/4"></div>
@@ -182,8 +182,52 @@ export function DescriptionViewer({
           <div className="text-gray-500 mt-4">Generating Description...</div>
         </div>
       ) : (
-        <div className="text-gray-700 whitespace-pre-wrap">
-          {currentDescription?.content || 'No description available'}
+        <div className="space-y-4">
+          {editing ? (
+            <div className="space-y-4">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="w-full h-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setContent(currentDescription.content)
+                    setEditing(false)
+                  }}
+                  className="px-3 py-1 text-gray-600 hover:text-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-gray-700 whitespace-pre-wrap">
+                {currentDescription?.content || 'No description available'}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent 
+                    text-sm font-medium rounded-md shadow-sm 
+                    text-white bg-blue-600 hover:bg-blue-700 
+                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <PencilIcon className="w-4 h-4 mr-2" />
+                  Edit Description
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
