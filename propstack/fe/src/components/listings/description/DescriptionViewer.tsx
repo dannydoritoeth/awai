@@ -12,6 +12,7 @@ interface DescriptionViewerProps {
   }>
   currentIndex: number
   onIndexChange: (index: number) => void
+  onComplete: () => void
 }
 
 const PORTALS = [
@@ -26,7 +27,8 @@ export function DescriptionViewer({
   listing, 
   descriptions, 
   currentIndex,
-  onIndexChange 
+  onIndexChange,
+  onComplete 
 }: DescriptionViewerProps) {
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState('')
@@ -48,7 +50,20 @@ export function DescriptionViewer({
     }
   }, [descriptions, currentIndex])
 
-  const currentDescription = descriptions[currentIndex]
+  // Sort descriptions by created_at in ascending order
+  const sortedDescriptions = [...descriptions].sort((a, b) => 
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  )
+
+  // When a new description is added, automatically show it
+  useEffect(() => {
+    if (descriptions.length > 0) {
+      // Set index to the latest description (last in the sorted array)
+      onIndexChange(descriptions.length - 1)
+    }
+  }, [descriptions.length])
+
+  const currentDescription = sortedDescriptions[currentIndex]
   const isApproved = currentDescription?.status === 'approved'
   const isProcessing = currentDescription?.status === 'processing'
   const isGenerating = currentDescription?.status === 'generating'
@@ -101,14 +116,29 @@ export function DescriptionViewer({
     }
   }
 
-  // Sort descriptions by created_at in ascending order
-  const sortedDescriptions = [...descriptions].sort((a, b) => 
-    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  )
-
-  // Update version display calculation
   const currentVersion = currentIndex + 1
-  const totalVersions = descriptions.length
+  const totalVersions = sortedDescriptions.length
+
+  // Add polling for generating status
+  useEffect(() => {
+    if (!currentDescription || currentDescription.status !== 'generating') return
+
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('generated_descriptions')
+        .select('*')
+        .eq('id', currentDescription.id)
+        .single()
+
+      if (data && data.status !== 'generating') {
+        // Refresh the full list when status changes
+        onComplete()
+        clearInterval(interval)
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [currentDescription?.id, currentDescription?.status, onComplete])
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
@@ -133,8 +163,8 @@ export function DescriptionViewer({
               <ChevronLeftIcon className="w-5 h-5" />
             </button>
             <button
-              onClick={() => onIndexChange(Math.min(descriptions.length - 1, currentIndex + 1))}
-              disabled={currentIndex === descriptions.length - 1}
+              onClick={() => onIndexChange(Math.min(sortedDescriptions.length - 1, currentIndex + 1))}
+              disabled={currentIndex === sortedDescriptions.length - 1}
               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
             >
               <ChevronRightIcon className="w-5 h-5" />

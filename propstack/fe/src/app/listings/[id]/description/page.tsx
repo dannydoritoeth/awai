@@ -97,6 +97,17 @@ export default function DescriptionPage({ params }: PageParams) {
                   console.log('Changing index to:', index) // Debug log
                   setCurrentIndex(index)
                 }}
+                onComplete={() => {
+                  // Refresh descriptions
+                  supabase
+                    .from('generated_descriptions')
+                    .select('*')
+                    .eq('listing_id', id)
+                    .order('created_at', { ascending: false })
+                    .then(({ data }) => {
+                      if (data) setDescriptions(data)
+                    })
+                }}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm p-6">

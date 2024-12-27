@@ -191,7 +191,10 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
 
       if (insertError) throw insertError
 
-      // Create the payload for the edge function
+      // Refresh the list immediately after creating the record
+      await onComplete()
+
+      // Then call the edge function
       const payload = {
         listingId: listing.id,
         descriptionId: descriptionRecord.id,
@@ -227,9 +230,6 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
       )
 
       if (fnError) throw fnError
-
-      // Call onComplete to refresh the list
-      await onComplete()
 
     } catch (err) {
       console.error('Error generating description:', err)
