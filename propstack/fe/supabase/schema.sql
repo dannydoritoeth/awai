@@ -207,4 +207,24 @@ CREATE POLICY "Users can manage their title checks"
 -- Add indexes for the new tables
 CREATE INDEX idx_listing_images_listing_id ON listing_images(listing_id);
 CREATE INDEX idx_social_media_content_listing_id ON social_media_content(listing_id);
-CREATE INDEX idx_title_checks_listing_id ON title_checks(listing_id); 
+CREATE INDEX idx_title_checks_listing_id ON title_checks(listing_id);
+
+-- Add portal sync tracking
+CREATE TABLE IF NOT EXISTS description_portal_sync (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  description_id UUID REFERENCES generated_descriptions(id) ON DELETE CASCADE,
+  portal_id TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'synced', 'failed')) DEFAULT 'pending',
+  error_message TEXT,
+  synced_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Update generated descriptions table
+ALTER TABLE generated_descriptions 
+ADD COLUMN IF NOT EXISTS status TEXT CHECK (status IN ('draft', 'approved')) DEFAULT 'draft',
+ADD COLUMN IF NOT EXISTS version INTEGER;
+
+-- Add index for better query performance
+CREATE INDEX IF NOT EXISTS idx_description_portal_sync_description_id 
+  ON description_portal_sync(description_id); 
