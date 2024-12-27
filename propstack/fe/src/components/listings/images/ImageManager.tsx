@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { ImageUploader } from './ImageUploader'
 import { ImageGrid } from './ImageGrid'
 import { supabase } from '@/lib/supabase'
@@ -16,9 +15,10 @@ interface ImageManagerProps {
   }>
 }
 
-export function ImageManager({ listingId, images }: ImageManagerProps) {
+export function ImageManager({ listingId, images: initialImages }: ImageManagerProps) {
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
+  // Initialize state only once with initialImages
+  const [images, setImages] = useState(initialImages)
 
   const handleUpload = async (files: FileList) => {
     setLoading(true)
@@ -40,6 +40,8 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
         const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
         const fileName = `${listingId}/${Date.now()}-${cleanFileName}`
         
+        console.log('Uploading file:', fileName)
+
         // Upload to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('listing-images')
@@ -53,24 +55,33 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
           throw uploadError
         }
 
-        // Store just the file path in the database
-        const { error: dbError } = await supabase
+        // Create database record with just the file path
+        const { data, error: dbError } = await supabase
           .from('listing_images')
           .insert({
             listing_id: listingId,
-            url: fileName,  // Store just the file path
+            url: fileName, // Store just the file path
             order_index: images.length + 1
           })
+          .select()
+          .single()
 
         if (dbError) {
           console.error('Database insert error:', dbError)
           throw dbError
         }
+
+        return data
       })
 
-      await Promise.all(uploads)
+      const uploadedImages = await Promise.all(uploads)
+      // Filter out any undefined results and add all new images at once
+      const newImages = uploadedImages.filter(Boolean)
+      if (newImages.length > 0) {
+        setImages(prev => [...prev, ...newImages])
+      }
+
       toast.success('Images uploaded successfully')
-      router.refresh()
     } catch (err) {
       console.error('Error uploading images:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to upload images')
@@ -81,24 +92,38 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
 
   const handleDelete = async (imageId: string) => {
     try {
-      // First get the image record to get the file path
+      // Optimistically remove the image from UI first
+      setImages(prev => prev.filter(img => img.id !== imageId))
+
+      // Get the image record
       const { data: imageData, error: fetchError } = await supabase
         .from('listing_images')
         .select('url')
         .eq('id', imageId)
         .single()
 
-      if (fetchError) throw fetchError
+      if (fetchError) {
+        console.error('Error fetching image record:', fetchError)
+        throw fetchError
+      }
 
-      // Delete from storage if URL exists
-      if (imageData?.url) {
-        const { error: storageError } = await supabase.storage
-          .from('listing-images')
-          .remove([imageData.url])  // URL is already just the file path
+      if (!imageData?.url) {
+        console.error('No URL found for image:', imageId)
+        throw new Error('Image URL not found')
+      }
 
-        if (storageError) {
-          console.error('Storage delete error:', storageError)
-        }
+      // The URL in the database is now just the file path
+      const filePath = imageData.url
+      console.log('Attempting to delete file:', filePath)
+
+      // Delete from storage first
+      const { error: storageError } = await supabase.storage
+        .from('listing-images')
+        .remove([filePath])
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError)
+        // Continue with database deletion even if storage deletion fails
       }
 
       // Delete database record
@@ -107,12 +132,17 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
         .delete()
         .eq('id', imageId)
 
-      if (dbError) throw dbError
+      if (dbError) {
+        console.error('Database delete error:', dbError)
+        throw dbError
+      }
       
-      router.refresh()
+      toast.success('Image deleted successfully')
     } catch (err) {
       console.error('Error deleting image:', err)
       toast.error('Failed to delete image')
+      // If deletion fails, revert the optimistic update
+      setImages(initialImages)
     }
   }
 
