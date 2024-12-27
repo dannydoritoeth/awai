@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { XMarkIcon, SparklesIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
 
@@ -32,6 +32,17 @@ export function ImageSidebar({
   const [showLightbox, setShowLightbox] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-focus textarea when editing starts
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus()
+      // Move cursor to end of text
+      const length = textareaRef.current.value.length
+      textareaRef.current.setSelectionRange(length, length)
+    }
+  }, [isEditing, image?.id])
 
   // Get signed URL and update caption when image changes
   useEffect(() => {
@@ -237,6 +248,7 @@ export function ImageSidebar({
                     onChange={(e) => setCaption(e.target.value)}
                     className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter image caption..."
+                    ref={textareaRef}
                   />
                   <div className="flex justify-end space-x-2">
                     <button
