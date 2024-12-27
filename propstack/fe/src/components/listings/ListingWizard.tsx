@@ -23,8 +23,8 @@ interface ListingWizardProps {
 }
 
 export function ListingWizard({ initialData, mode = 'create', listingId }: ListingWizardProps) {
-  const [currentStep, setCurrentStep] = useState(0)
-  const [formData, setFormData] = useState(initialData || {})
+  const [formData, setFormData] = useState<ListingFormData>(initialData || {})
+  const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -109,14 +109,14 @@ export function ListingWizard({ initialData, mode = 'create', listingId }: Listi
       />
 
       <div className="bg-white rounded-lg shadow-sm">
-        {currentStep === 0 && (
+        {currentStep === 1 && (
           <BasicPropertyForm
             data={formData}
             onUpdate={handleFormUpdate}
             onNext={handleNext}
           />
         )}
-        {currentStep === 1 && (
+        {currentStep === 2 && (
           <PropertyFeaturesForm
             data={formData}
             onUpdate={handleFormUpdate}
@@ -124,7 +124,7 @@ export function ListingWizard({ initialData, mode = 'create', listingId }: Listi
             onBack={handleBack}
           />
         )}
-        {currentStep === 2 && (
+        {currentStep === 3 && (
           <HighlightsForm
             data={formData}
             onUpdate={handleFormUpdate}
@@ -132,7 +132,7 @@ export function ListingWizard({ initialData, mode = 'create', listingId }: Listi
             onBack={handleBack}
           />
         )}
-        {currentStep === 3 && (
+        {currentStep === 4 && (
           <ReviewForm
             data={formData}
             onSubmit={handleSubmit}
