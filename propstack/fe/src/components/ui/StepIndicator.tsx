@@ -7,7 +7,7 @@ interface StepIndicatorProps {
 export function StepIndicator({ steps, currentStep, className = '' }: StepIndicatorProps) {
   return (
     <nav aria-label="Progress" className={className}>
-      <ol role="list" className="flex items-center">
+      <ol className="flex items-center justify-between w-full">
         {steps.map((step, index) => {
           const stepNumber = index + 1
           const isCurrentStep = currentStep === stepNumber
@@ -15,7 +15,7 @@ export function StepIndicator({ steps, currentStep, className = '' }: StepIndica
           const isLastStep = index === steps.length - 1
 
           return (
-            <li key={step} className={`relative ${!isLastStep ? 'pr-8 sm:pr-20' : ''} ${isPreviousStep ? 'shrink-0' : ''}`}>
+            <li key={step} className="flex flex-col items-center relative flex-1">
               <div className="flex items-center">
                 <div
                   className={`relative flex h-8 w-8 items-center justify-center rounded-full
@@ -36,12 +36,14 @@ export function StepIndicator({ steps, currentStep, className = '' }: StepIndica
                   )}
                 </div>
                 {!isLastStep && (
-                  <div className={`absolute left-8 top-4 -ml-px h-0.5 w-8 sm:w-20
-                    ${isPreviousStep ? 'bg-blue-600' : 'bg-gray-300'}`}
+                  <div 
+                    className={`h-0.5 w-full
+                      ${isPreviousStep ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    style={{ width: 'calc(100% - 2rem)' }}
                   />
                 )}
               </div>
-              <span className="absolute left-1/2 top-10 -translate-x-1/2 whitespace-nowrap text-sm font-medium text-gray-500">
+              <span className="mt-2 text-sm font-medium text-gray-500 text-center">
                 {step}
               </span>
             </li>
