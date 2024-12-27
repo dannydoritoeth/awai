@@ -4,7 +4,8 @@ const nextConfig = {
   images: {
     domains: [
       'lh3.googleusercontent.com',  // Google profile pictures
-      'avatars.githubusercontent.com'  // GitHub profile pictures (if needed)
+      'avatars.githubusercontent.com',  // GitHub profile pictures (if needed)
+      'iamsccvlyhmdnkawuich.supabase.co'  // Your Supabase storage domain
     ]
   }
 }

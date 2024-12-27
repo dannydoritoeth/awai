@@ -7,6 +7,13 @@ import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 
+interface ListingImage {
+  id: string
+  url: string
+  order_index: number
+  listing_id: string
+}
+
 interface ImagesPageProps {
   params: Promise<{
     id: string
@@ -16,11 +23,13 @@ interface ImagesPageProps {
 export default function ImagesPage({ params }: ImagesPageProps) {
   const { id } = use(params)
   const [listing, setListing] = useState<any>(null)
-  const [images, setImages] = useState([])
+  const [images, setImages] = useState<ListingImage[]>([])
   const router = useRouter()
 
   useEffect(() => {
     const fetchData = async () => {
+      console.log('Fetching data for listing:', id)
+      
       const [listingRes, imagesRes] = await Promise.all([
         supabase
           .from('listings')
@@ -31,15 +40,23 @@ export default function ImagesPage({ params }: ImagesPageProps) {
           .from('listing_images')
           .select('*')
           .eq('listing_id', id)
-          .order('order')
+          .order('order_index')
       ])
       
+      console.log('Listing response:', listingRes)
+      console.log('Images response:', imagesRes)
+      
       if (listingRes.data) setListing(listingRes.data)
-      if (imagesRes.data) setImages(imagesRes.data)
+      if (imagesRes.data) {
+        console.log('Setting images:', imagesRes.data)
+        setImages(imagesRes.data)
+      }
     }
 
     fetchData()
   }, [id])
+
+  console.log('Current images state:', images)
 
   if (!listing) return null
 

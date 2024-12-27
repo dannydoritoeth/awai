@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ImageUploader } from './ImageUploader'
 import { ImageGrid } from './ImageGrid'
 import { supabase } from '@/lib/supabase'
+import toast from 'react-hot-toast'
 
 interface ImageManagerProps {
   listingId: string
@@ -22,31 +23,42 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
   const handleUpload = async (files: FileList) => {
     setLoading(true)
     try {
+      // First check if user is authenticated
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Please sign in to upload images')
+        return
+      }
+
       const uploads = Array.from(files).map(async (file) => {
-        // Create a unique file path
-        const fileName = `${listingId}/${Date.now()}-${file.name}`
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error('File size must be less than 5MB')
+        }
+
+        // Clean the file name to prevent URL issues
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+        const fileName = `${listingId}/${Date.now()}-${cleanFileName}`
         
         // Upload to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('listing-images')
-          .upload(fileName, file)
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          })
 
         if (uploadError) {
           console.error('Storage upload error:', uploadError)
           throw uploadError
         }
 
-        // Get the public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(fileName)
-
-        // Create database record
+        // Store just the file path in the database
         const { error: dbError } = await supabase
           .from('listing_images')
           .insert({
             listing_id: listingId,
-            url: publicUrl,
+            url: fileName,  // Store just the file path
             order_index: images.length + 1
           })
 
@@ -57,10 +69,11 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
       })
 
       await Promise.all(uploads)
+      toast.success('Images uploaded successfully')
       router.refresh()
     } catch (err) {
       console.error('Error uploading images:', err)
-      // You might want to show a toast or error message to the user here
+      toast.error(err instanceof Error ? err.message : 'Failed to upload images')
     } finally {
       setLoading(false)
     }
@@ -79,15 +92,12 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
 
       // Delete from storage if URL exists
       if (imageData?.url) {
-        const fileName = imageData.url.split('/').pop()
-        if (fileName) {
-          const { error: storageError } = await supabase.storage
-            .from('listing-images')
-            .remove([`${listingId}/${fileName}`])
+        const { error: storageError } = await supabase.storage
+          .from('listing-images')
+          .remove([imageData.url])  // URL is already just the file path
 
-          if (storageError) {
-            console.error('Storage delete error:', storageError)
-          }
+        if (storageError) {
+          console.error('Storage delete error:', storageError)
         }
       }
 
@@ -102,7 +112,7 @@ export function ImageManager({ listingId, images }: ImageManagerProps) {
       router.refresh()
     } catch (err) {
       console.error('Error deleting image:', err)
-      // You might want to show a toast or error message to the user here
+      toast.error('Failed to delete image')
     }
   }
 
