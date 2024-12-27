@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS generated_descriptions (
   status TEXT CHECK (status IN ('processing', 'generating', 'completed', 'error')) DEFAULT 'processing',
   options JSONB,
   error_message TEXT,
-  completed_at TIMESTAMP WITH TIME ZONE
+  completed_at TIMESTAMP WITH TIME ZONE,
+  version INTEGER DEFAULT 1
 );
 
 -- Enable RLS

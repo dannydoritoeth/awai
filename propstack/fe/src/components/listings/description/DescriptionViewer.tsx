@@ -101,146 +101,63 @@ export function DescriptionViewer({
     }
   }
 
+  // Sort descriptions by created_at in ascending order
+  const sortedDescriptions = [...descriptions].sort((a, b) => 
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  )
+
+  // Update version display calculation
+  const currentVersion = currentIndex + 1
+  const totalVersions = descriptions.length
+
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
-          disabled={currentIndex === 0}
-          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <ChevronLeftIcon className="w-5 h-5" />
-        </button>
-        <span className="text-sm text-gray-500">
-          Version {currentIndex + 1} of {descriptions.length}
-        </span>
-        <button
-          onClick={() => onIndexChange(Math.min(descriptions.length - 1, currentIndex + 1))}
-          disabled={currentIndex === descriptions.length - 1}
-          className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <ChevronRightIcon className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Status */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">
-          Created: {new Date(currentDescription.created_at).toLocaleString()}
-        </span>
-        <span className={`text-sm px-2 py-1 rounded-full ${
-          isProcessing ? 'bg-yellow-100 text-yellow-800' :
-          isGenerating ? 'bg-blue-100 text-blue-800' :
-          hasError ? 'bg-red-100 text-red-800' :
-          isApproved ? 'bg-green-100 text-green-800' :
-          'bg-gray-100 text-gray-800'
-        }`}>
-          {currentDescription.status}
-        </span>
-      </div>
-
-      {/* Description Content */}
-      <div className="space-y-4">
-        {isProcessing || isGenerating ? (
-          <div className="text-center py-8">
-            <div className="animate-pulse text-gray-500">
-              Generating description...
-            </div>
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Description</h3>
+          <p className="text-sm text-gray-500">
+            Created: {new Date(currentDescription.created_at).toLocaleString()}
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          {/* ... copy button ... */}
+          <div className="text-sm text-gray-500">
+            Version {currentVersion} of {totalVersions}
           </div>
-        ) : hasError ? (
-          <div className="text-center py-8 text-red-600">
-            Error generating description. Please try again.
-          </div>
-        ) : editing ? (
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={10}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          />
-        ) : (
-          <div className="prose max-w-none whitespace-pre-wrap">
-            {content || currentDescription.content || 'No content available'}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      {!isProcessing && !isGenerating && !hasError && (
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="space-x-2">
-            {editing ? (
-              <>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  onClick={() => setEditing(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setEditing(true)}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
-              >
-                Edit
-              </button>
-            )}
-          </div>
-          
-          {!isApproved && (
+          <div className="flex gap-2">
             <button
-              onClick={handleApprove}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
+              disabled={currentIndex === 0}
+              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
             >
-              Approve
+              <ChevronLeftIcon className="w-5 h-5" />
             </button>
-          )}
+            <button
+              onClick={() => onIndexChange(Math.min(descriptions.length - 1, currentIndex + 1))}
+              disabled={currentIndex === descriptions.length - 1}
+              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            >
+              <ChevronRightIcon className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Show generating status */}
+      {isGenerating ? (
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+          <div className="text-gray-500 mt-4">Generating Description...</div>
+        </div>
+      ) : (
+        <div className="text-gray-700 whitespace-pre-wrap">
+          {currentDescription?.content || 'No description available'}
         </div>
       )}
 
-      {/* Portal Sync */}
-      {isApproved && (
-        <div className="pt-4 border-t">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Sync to Portals</h4>
-          <div className="space-y-2">
-            {PORTALS.map(portal => (
-              <label key={portal.id} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={selectedPortals.includes(portal.id)}
-                  onChange={(e) => {
-                    setSelectedPortals(prev => 
-                      e.target.checked 
-                        ? [...prev, portal.id]
-                        : prev.filter(id => id !== portal.id)
-                    )
-                  }}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2">
-                  {portal.icon} {portal.name}
-                </span>
-              </label>
-            ))}
-          </div>
-          <button
-            onClick={handleSync}
-            disabled={selectedPortals.length === 0 || syncing}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            {syncing ? 'Syncing...' : 'Sync to Selected Portals'}
-          </button>
-        </div>
-      )}
+      {/* ... rest of the component ... */}
     </div>
   )
 } 

@@ -165,25 +165,36 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // First create the description record
+      // Get the current highest version number
+      const { data: existingDescriptions } = await supabase
+        .from('generated_descriptions')
+        .select('version')
+        .eq('listing_id', listing.id)
+        .order('version', { ascending: false })
+        .limit(1)
+
+      const nextVersion = existingDescriptions?.[0]?.version 
+        ? existingDescriptions[0].version + 1 
+        : 1
+
+      // Create new description with version
       const { data: descriptionRecord, error: insertError } = await supabase
         .from('generated_descriptions')
         .insert({
           listing_id: listing.id,
           status: 'generating',
+          version: nextVersion,
           options: options
         })
         .select()
         .single()
 
-      if (insertError) {
-        throw new Error(`Failed to create description record: ${insertError.message}`)
-      }
+      if (insertError) throw insertError
 
       // Create the payload for the edge function
       const payload = {
         listingId: listing.id,
-        descriptionId: descriptionRecord.id, // Pass the new description ID
+        descriptionId: descriptionRecord.id,
         options: {
           ...options,
           naturalness: {
@@ -210,18 +221,16 @@ export function DescriptionGenerator({ listing, onComplete }: DescriptionGenerat
       }
 
       // Call edge function
-      const { data, error: fnError } = await supabase.functions.invoke(
+      const { error: fnError } = await supabase.functions.invoke(
         'generate-description',
-        {
-          body: payload
-        }
+        { body: payload }
       )
 
-      if (fnError) {
-        throw new Error(fnError instanceof Error ? fnError.message : 'Failed to generate description')
-      }
+      if (fnError) throw fnError
 
-      onComplete()
+      // Call onComplete to refresh the list
+      await onComplete()
+
     } catch (err) {
       console.error('Error generating description:', err)
       setError(err instanceof Error ? err.message : 'Failed to generate description')
