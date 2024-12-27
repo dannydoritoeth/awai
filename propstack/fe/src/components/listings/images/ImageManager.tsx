@@ -191,6 +191,12 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       return
     }
 
+    console.log('Starting caption generation with:', {
+      listingId,
+      imageCount: images.length,
+      images: images.map(img => ({ id: img.id, url: img.url }))
+    })
+
     setGeneratingCaptions(true)
     setCaptionProgress({
       total: images.length,
@@ -200,20 +206,36 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
     })
 
     try {
-      const response = await fetch('/api/generate-image-caption', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          listingId,
-          options
-        }),
+      console.log('Sending request to generate captions:', {
+        listingId,
+        options,
+        imageCount: images.length
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate captions')
+      // Validate the payload before sending
+      if (!listingId || !options) {
+        throw new Error('Missing required parameters')
       }
+
+      const { data, error } = await supabase.functions.invoke('generate-image-caption', {
+        body: { 
+          listingId,
+          options: {
+            style: options.style,
+            focus: options.focus,
+            tone: options.tone,
+            length: options.length,
+            includeKeywords: options.includeKeywords || ''
+          }
+        }
+      })
+
+      if (error) {
+        console.error('Function error:', error)
+        throw error
+      }
+
+      console.log('Function response:', data)
 
       // Start polling for updates
       const pollInterval = setInterval(async () => {
@@ -255,7 +277,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         }
       }, 2000) // Poll every 2 seconds
 
-      // Cleanup polling if component unmounts
+    //   Cleanup polling if component unmounts
       return () => clearInterval(pollInterval)
     } catch (err) {
       console.error('Error generating captions:', err)
