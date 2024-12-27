@@ -80,8 +80,8 @@ serve(async (req: Request) => {
       throw new Error('Request body is empty')
     }
 
-    const { listingId, options } = body
-    console.log('Processing request for listing:', listingId, 'with style:', options.style)
+    const { listingId, imageIds, options } = body
+    console.log('Processing request for listing:', listingId, 'images:', imageIds)
 
     // Create Supabase client with service role key for admin access
     const supabaseClient = createClient(
@@ -95,12 +95,13 @@ serve(async (req: Request) => {
       }
     )
 
-    // Get all images for this listing
+    // Get specified images for this listing
     console.log('Fetching images for listing:', listingId)
     const { data: images, error: fetchError } = await supabaseClient
       .from('listing_images')
       .select('id, url')
       .eq('listing_id', listingId)
+      .in('id', imageIds)
       .order('order_index')
 
     if (fetchError) {
@@ -118,15 +119,14 @@ serve(async (req: Request) => {
       )
     }
 
-    console.log(`Found ${images.length} images to process`)
+    console.log(`Processing ${images.length} images`)
     const prompt = generatePrompt(options as CaptionOptions)
 
-    // Process one image at a time
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i]
-      console.log(`Processing image ${i + 1}/${images.length}`)
-
+    // Process each image
+    for (const image of images) {
       try {
+        console.log(`Processing image: ${image.id}`)
+        
         // Download and convert image
         const { data: imageData } = await supabaseClient.storage
           .from('listing-images')
@@ -192,7 +192,7 @@ serve(async (req: Request) => {
             continue
           }
 
-          console.log(`Successfully generated and saved caption for image ${i + 1}/${images.length}`)
+          console.log(`Successfully generated and saved caption for image ${image.id}`)
         }
       } catch (error) {
         console.error(`Error processing image ${image.id}:`, error)

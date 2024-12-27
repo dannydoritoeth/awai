@@ -191,97 +191,76 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       return
     }
 
-    console.log('Starting caption generation with:', {
-      listingId,
-      imageCount: images.length,
-      images: images.map(img => ({ id: img.id, url: img.url }))
-    })
-
     setGeneratingCaptions(true)
     setCaptionProgress({
       total: images.length,
       completed: 0,
       currentBatch: 0,
-      totalBatches: Math.ceil(images.length / 5)
+      totalBatches: Math.ceil(images.length / 3)
     })
 
     try {
-      console.log('Sending request to generate captions:', {
-        listingId,
-        options,
-        imageCount: images.length
-      })
+      // Process images in small batches
+      const batchSize = 3
+      for (let i = 0; i < images.length; i += batchSize) {
+        const batch = images.slice(i, i + batchSize)
+        const imageIds = batch.map(img => img.id)
+        
+        console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(images.length/batchSize)}:`, imageIds)
 
-      // Validate the payload before sending
-      if (!listingId || !options) {
-        throw new Error('Missing required parameters')
-      }
-
-      const { data, error } = await supabase.functions.invoke('generate-image-caption', {
-        body: { 
-          listingId,
-          options: {
-            style: options.style,
-            focus: options.focus,
-            tone: options.tone,
-            length: options.length,
-            includeKeywords: options.includeKeywords || ''
+        const { data, error } = await supabase.functions.invoke('generate-image-caption', {
+          body: { 
+            listingId,
+            imageIds,
+            options: {
+              style: options.style,
+              focus: options.focus,
+              tone: options.tone,
+              length: options.length,
+              includeKeywords: options.includeKeywords || ''
+            }
           }
-        }
-      })
-
-      if (error) {
-        console.error('Function error:', error)
-        throw error
-      }
-
-      console.log('Function response:', data)
-
-      // Start polling for updates
-      const pollInterval = setInterval(async () => {
-        const { data: updatedImages, error } = await supabase
-          .from('listing_images')
-          .select('id, caption')
-          .eq('listing_id', listingId)
-          .order('order_index')
+        })
 
         if (error) {
-          console.error('Error fetching updates:', error)
-          return
+          console.error('Function error:', error)
+          throw error
         }
 
-        // Count how many images have captions
-        const captionedCount = updatedImages.filter(img => img.caption).length
+        console.log('Function response:', data)
 
         // Update progress
         setCaptionProgress(prev => prev ? {
           ...prev,
-          completed: captionedCount,
-          currentBatch: Math.ceil(captionedCount / 5)
+          completed: Math.min(prev.completed + batch.length, images.length),
+          currentBatch: Math.floor(i/batchSize) + 1
         } : null)
+
+        // Fetch updated captions for this batch
+        const { data: updatedImages, error: fetchError } = await supabase
+          .from('listing_images')
+          .select('id, caption')
+          .in('id', imageIds)
+
+        if (fetchError) {
+          console.error('Error fetching updates:', fetchError)
+          continue
+        }
 
         // Update local state with new captions
         setImages(prev => 
           prev.map(img => {
-            const updated = updatedImages.find(u => u.id === img.id)
+            const updated = updatedImages?.find(u => u.id === img.id)
             return updated?.caption ? { ...img, caption: updated.caption } : img
           })
         )
+      }
 
-        // If all images have captions, we're done
-        if (captionedCount === images.length) {
-          clearInterval(pollInterval)
-          setGeneratingCaptions(false)
-          setCaptionProgress(null)
-          toast.success('Generated captions for all images')
-        }
-      }, 2000) // Poll every 2 seconds
-
-    //   Cleanup polling if component unmounts
-      return () => clearInterval(pollInterval)
+      toast.success('Generated captions for all images')
     } catch (err) {
       console.error('Error generating captions:', err)
       toast.error('Failed to generate captions')
+    } finally {
       setGeneratingCaptions(false)
       setCaptionProgress(null)
     }
