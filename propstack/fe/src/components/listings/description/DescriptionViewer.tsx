@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { supabase } from '@/lib/supabase'
+import { toast } from 'react-hot-toast'
 
 interface DescriptionViewerProps {
   listing: any
@@ -15,13 +16,17 @@ interface DescriptionViewerProps {
   onComplete: () => void
 }
 
-const PORTALS = [
-  { id: 'rea', name: 'Realestate.com.au', icon: '🏠' },
-  { id: 'domain', name: 'Domain', icon: '🏘️' },
-  { id: 'rma', name: 'RateMyAgent', icon: '⭐' },
-  { id: 'homely', name: 'Homely', icon: '🏡' },
-  { id: 'properti', name: 'Properti', icon: '🔑' }
-]
+const SYNC_OPTIONS = {
+  platforms: [
+    { id: 'rea', name: 'realestate.com.au', icon: '🏠' },
+    { id: 'domain', name: 'domain.com.au', icon: '🏘️' },
+    { id: 'rma', name: 'RateMyAgent', icon: '⭐' },
+    { id: 'free_portals', name: 'Homely, Properti, & Other Free Portals', icon: '🏡' },
+  ],
+  crms: [
+    { id: 'agentbox', name: 'AgentBox', icon: '📊' },
+  ]
+}
 
 export function DescriptionViewer({ 
   listing, 
@@ -33,6 +38,7 @@ export function DescriptionViewer({
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState('')
   const [selectedPortals, setSelectedPortals] = useState<string[]>([])
+  const [selectedSyncTargets, setSelectedSyncTargets] = useState<string[]>([])
   const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -105,12 +111,17 @@ export function DescriptionViewer({
   }
 
   const handleSync = async () => {
+    if (selectedSyncTargets.length === 0) return
+    
     setSyncing(true)
     try {
-      // TODO: Implement portal sync logic
-      console.log('Syncing to portals:', selectedPortals)
+      // TODO: Implement actual sync
+      console.log('Syncing to:', selectedSyncTargets)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      toast.success('Successfully synchronized content')
     } catch (err) {
-      console.error('Error syncing to portals:', err)
+      console.error('Error syncing:', err)
+      toast.error('Failed to synchronize content')
     } finally {
       setSyncing(false)
     }
@@ -231,7 +242,100 @@ export function DescriptionViewer({
         </div>
       )}
 
-      {/* ... rest of the component ... */}
+      {/* Sync Section */}
+      {!isGenerating && !editing && (
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="space-y-6">
+            {/* Platforms */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Synchronize To</h3>
+              
+              {/* Platforms Section */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Platforms</h4>
+                <div className="space-y-3">
+                  {SYNC_OPTIONS.platforms.map(platform => (
+                    <label key={platform.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSyncTargets.includes(platform.id)}
+                        onChange={(e) => {
+                          setSelectedSyncTargets(current => 
+                            e.target.checked
+                              ? [...current, platform.id]
+                              : current.filter(id => id !== platform.id)
+                          )
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 
+                          border-gray-300 rounded"
+                      />
+                      <span className="ml-3 flex items-center text-gray-700">
+                        <span className="mr-2">{platform.icon}</span>
+                        {platform.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* CRMs Section */}
+              <div className="mt-6 space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">CRMs</h4>
+                <div className="space-y-3">
+                  {SYNC_OPTIONS.crms.map(crm => (
+                    <label key={crm.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSyncTargets.includes(crm.id)}
+                        onChange={(e) => {
+                          setSelectedSyncTargets(current => 
+                            e.target.checked
+                              ? [...current, crm.id]
+                              : current.filter(id => id !== crm.id)
+                          )
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 
+                          border-gray-300 rounded"
+                      />
+                      <span className="ml-3 flex items-center text-gray-700">
+                        <span className="mr-2">{crm.icon}</span>
+                        {crm.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Synchronize Button */}
+              <div className="mt-6">
+                <button
+                  onClick={handleSync}
+                  disabled={selectedSyncTargets.length === 0 || syncing}
+                  className="w-full flex justify-center items-center px-4 py-2 
+                    border border-transparent text-sm font-medium rounded-md 
+                    text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 
+                    disabled:cursor-not-allowed focus:outline-none focus:ring-2 
+                    focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  {syncing ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" 
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" 
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                      Synchronizing...
+                    </>
+                  ) : (
+                    'Synchronize Content'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
