@@ -62,7 +62,8 @@ ${styleGuide}. ${toneGuide}.
 Focus on these aspects: ${focusAreas}.
 Keep the caption ${lengthGuide}.
 ${keywordInstruction}
-Make it compelling and market-ready.`
+Make it compelling and market-ready.
+Important: Do NOT use any quotation marks in your response. Write the caption directly without quotes.`
 }
 
 serve(async (req: Request) => {
@@ -178,10 +179,12 @@ serve(async (req: Request) => {
           max_tokens: 150
         })
 
-        const caption = completion.choices[0].message.content
+        const caption = completion.choices[0].message.content?.trim()
+          .replace(/^["']|["']$/g, '') // Remove quotes at start/end
+          .replace(/["""'']/g, '') // Remove any other quotes
 
         if (caption) {
-          // Update the database with the generated caption
+          // Update the database with the cleaned caption
           const { error: updateError } = await supabaseClient
             .from('listing_images')
             .update({ caption })

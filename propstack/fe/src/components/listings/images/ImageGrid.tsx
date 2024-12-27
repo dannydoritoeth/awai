@@ -13,6 +13,8 @@ interface ImageGridProps {
   }>
   onDelete: (imageId: string) => void
   onTransform?: (imageId: string, type: 'enhance' | 'relight' | 'upscale') => Promise<void>
+  onSelect?: (image: ImageGridProps['images'][0]) => void
+  selectedImageId?: string
 }
 
 interface ImageWithSignedUrl {
@@ -22,7 +24,13 @@ interface ImageWithSignedUrl {
   caption?: string
 }
 
-export function ImageGrid({ images, onDelete, onTransform }: ImageGridProps) {
+export function ImageGrid({ 
+  images, 
+  onDelete, 
+  onTransform, 
+  onSelect,
+  selectedImageId 
+}: ImageGridProps) {
   const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [transforming, setTransforming] = useState<string | null>(null)
@@ -90,14 +98,16 @@ export function ImageGrid({ images, onDelete, onTransform }: ImageGridProps) {
           if (!signedUrlData.signedUrl) return null
 
           const isTransforming = transforming === image.id
+          const isSelected = image.id === selectedImageId
 
           return (
-            <div key={image.id} className="relative group">
+            <div 
+              key={image.id} 
+              className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+              onClick={() => onSelect?.(image)}
+            >
               <div className="aspect-square">
-                <div 
-                  className="relative w-full h-full cursor-pointer"
-                  onClick={() => setLightboxImage(signedUrlData.signedUrl || null)}
-                >
+                <div className="relative w-full h-full">
                   <img
                     src={signedUrlData.signedUrl}
                     alt=""
@@ -116,101 +126,15 @@ export function ImageGrid({ images, onDelete, onTransform }: ImageGridProps) {
                 </div>
               </div>
 
-              {/* Caption */}
+              {/* Caption Preview */}
               {image.caption && (
                 <div className="mt-2 text-sm text-gray-600 line-clamp-2">
                   {image.caption}
                 </div>
               )}
               
-              {/* Action buttons */}
-              <div className="absolute top-2 right-2 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {onTransform && (
-                  <Menu as="div" className="relative">
-                    <Menu.Button
-                      className="p-1 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-75"
-                      disabled={isTransforming}
-                    >
-                      <EllipsisHorizontalIcon className="w-5 h-5" />
-                    </Menu.Button>
-                    
-                    <Transition
-                      as={Fragment}
-                      enter="transition ease-out duration-100"
-                      enterFrom="transform opacity-0 scale-95"
-                      enterTo="transform opacity-100 scale-100"
-                      leave="transition ease-in duration-75"
-                      leaveFrom="transform opacity-100 scale-100"
-                      leaveTo="transform opacity-0 scale-95"
-                    >
-                      <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                        <div className="py-1">
-                          <Menu.Item>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100' : ''
-                                } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
-                                onClick={async () => {
-                                  setTransforming(image.id)
-                                  try {
-                                    await onTransform(image.id, 'enhance')
-                                  } finally {
-                                    setTransforming(null)
-                                  }
-                                }}
-                              >
-                                <SparklesIcon className="w-4 h-4 mr-2" />
-                                Enhance Image
-                              </button>
-                            )}
-                          </Menu.Item>
-                          <Menu.Item>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100' : ''
-                                } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
-                                onClick={async () => {
-                                  setTransforming(image.id)
-                                  try {
-                                    await onTransform(image.id, 'relight')
-                                  } finally {
-                                    setTransforming(null)
-                                  }
-                                }}
-                              >
-                                <SparklesIcon className="w-4 h-4 mr-2" />
-                                Relight
-                              </button>
-                            )}
-                          </Menu.Item>
-                          <Menu.Item>
-                            {({ active }) => (
-                              <button
-                                className={`${
-                                  active ? 'bg-gray-100' : ''
-                                } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
-                                onClick={async () => {
-                                  setTransforming(image.id)
-                                  try {
-                                    await onTransform(image.id, 'upscale')
-                                  } finally {
-                                    setTransforming(null)
-                                  }
-                                }}
-                              >
-                                <SparklesIcon className="w-4 h-4 mr-2" />
-                                Upscale
-                              </button>
-                            )}
-                          </Menu.Item>
-                        </div>
-                      </Menu.Items>
-                    </Transition>
-                  </Menu>
-                )}
-
+              {/* Delete button - moved out of the menu since transform options moved to sidebar */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()

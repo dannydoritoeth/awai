@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ImageUploader } from './ImageUploader'
 import { ImageGrid } from './ImageGrid'
+import { ImageSidebar } from './ImageSidebar'
 import { CaptionDialog, CaptionOptions } from './CaptionDialog'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -44,6 +45,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   const [generatingCaptions, setGeneratingCaptions] = useState(false)
   const [captionProgress, setCaptionProgress] = useState<CaptionProgress | null>(null)
   const [showCaptionDialog, setShowCaptionDialog] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<ImageManagerProps['images'][0] | null>(null)
 
   const handleUpload = async (files: FileList) => {
     setLoading(true)
@@ -196,22 +198,19 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       total: images.length,
       completed: 0,
       currentBatch: 0,
-      totalBatches: Math.ceil(images.length / 3)
+      totalBatches: images.length
     })
 
     try {
-      // Process images in small batches
-      const batchSize = 3
-      for (let i = 0; i < images.length; i += batchSize) {
-        const batch = images.slice(i, i + batchSize)
-        const imageIds = batch.map(img => img.id)
+      // Process one image at a time
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i]
         
-        console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(images.length/batchSize)}:`, imageIds)
-
+        // Generate caption for single image
         const { data, error } = await supabase.functions.invoke('generate-image-caption', {
           body: { 
             listingId,
-            imageIds,
+            imageIds: [image.id],
             options: {
               style: options.style,
               focus: options.focus,
@@ -223,37 +222,37 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         })
 
         if (error) {
-          console.error('Function error:', error)
-          throw error
+          console.error('Error generating caption for image:', image.id, error)
+          continue // Skip this image but continue with others
         }
 
-        console.log('Function response:', data)
+        // Fetch the updated caption
+        const { data: updatedImage, error: fetchError } = await supabase
+          .from('listing_images')
+          .select('id, caption')
+          .eq('id', image.id)
+          .single()
+
+        if (fetchError) {
+          console.error('Error fetching updated caption:', fetchError)
+          continue
+        }
+
+        // Update local state with new caption
+        if (updatedImage?.caption) {
+          setImages(prev => 
+            prev.map(img => 
+              img.id === image.id ? { ...img, caption: updatedImage.caption } : img
+            )
+          )
+        }
 
         // Update progress
         setCaptionProgress(prev => prev ? {
           ...prev,
-          completed: Math.min(prev.completed + batch.length, images.length),
-          currentBatch: Math.floor(i/batchSize) + 1
+          completed: i + 1,
+          currentBatch: i + 1
         } : null)
-
-        // Fetch updated captions for this batch
-        const { data: updatedImages, error: fetchError } = await supabase
-          .from('listing_images')
-          .select('id, caption')
-          .in('id', imageIds)
-
-        if (fetchError) {
-          console.error('Error fetching updates:', fetchError)
-          continue
-        }
-
-        // Update local state with new captions
-        setImages(prev => 
-          prev.map(img => {
-            const updated = updatedImages?.find(u => u.id === img.id)
-            return updated?.caption ? { ...img, caption: updated.caption } : img
-          })
-        )
       }
 
       toast.success('Generated captions for all images')
@@ -263,6 +262,29 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
     } finally {
       setGeneratingCaptions(false)
       setCaptionProgress(null)
+    }
+  }
+
+  const handleCaptionUpdate = async (imageId: string, caption: string) => {
+    try {
+      const { error } = await supabase
+        .from('listing_images')
+        .update({ caption })
+        .eq('id', imageId)
+
+      if (error) throw error
+
+      // Update local state
+      setImages(prev => 
+        prev.map(img => 
+          img.id === imageId ? { ...img, caption } : img
+        )
+      )
+
+      toast.success('Caption updated successfully')
+    } catch (err) {
+      console.error('Error updating caption:', err)
+      toast.error('Failed to update caption')
     }
   }
 
@@ -317,7 +339,6 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-sm font-medium text-gray-700 drop-shadow-sm">
               Generating captions: {captionProgress.completed} of {captionProgress.total} 
-              (Batch {captionProgress.currentBatch} of {captionProgress.totalBatches})
             </span>
           </div>
         </div>
@@ -327,6 +348,15 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         images={images}
         onDelete={handleDelete}
         onTransform={handleTransform}
+        onSelect={setSelectedImage}
+        selectedImageId={selectedImage?.id}
+      />
+
+      <ImageSidebar
+        image={selectedImage}
+        onClose={() => setSelectedImage(null)}
+        onTransform={handleTransform}
+        onCaptionUpdate={handleCaptionUpdate}
       />
 
       <CaptionDialog
