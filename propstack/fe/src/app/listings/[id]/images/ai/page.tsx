@@ -401,34 +401,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                     )}
                   </div>
                 )}
-                <div className="mt-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Brush Size
-                      </label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min="1"
-                          max="100"
-                          value={brushSize}
-                          onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                        <span className="text-sm text-gray-600 whitespace-nowrap">
-                          {brushSize}px
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={resetMask}
-                      className="px-4 py-2 text-rose-600 hover:text-rose-700 border border-rose-200 rounded-md"
-                    >
-                      Reset mask
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -484,9 +456,35 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                 {/* Step 3: Masking */}
                 <div>
                   <h3 className="text-lg font-medium mb-4">Step 3: Mask the areas/items you want to change</h3>
-                  <p className="text-sm text-gray-600">
-                    Use the brush tool on the left to paint over the areas you want to change
+                  <p className="text-sm text-gray-600 mb-4">
+                    Use the brush tool to paint over the areas you want to change
                   </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Brush Size
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="1"
+                          max="100"
+                          value={brushSize}
+                          onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                        <span className="text-sm text-gray-600 whitespace-nowrap">
+                          {brushSize}px
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={resetMask}
+                      className="w-full px-4 py-2 text-rose-600 hover:text-rose-700 border border-rose-200 rounded-md"
+                    >
+                      Reset mask
+                    </button>
+                  </div>
                 </div>
 
                 {/* Step 4: Description */}
