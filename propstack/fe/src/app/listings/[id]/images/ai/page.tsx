@@ -35,6 +35,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   // Add state for drawing
   const [isDrawing, setIsDrawing] = useState(false)
   const [brushSize, setBrushSize] = useState(50)
+  const [scale, setScale] = useState(100)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
@@ -314,28 +315,50 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                 <div className="relative bg-gray-100 rounded-lg overflow-hidden">
                   {processedUrl && (
                     <div className="relative">
-                      <img 
-                        src={processedUrl}
-                        alt="Selected image"
-                        className="w-full h-auto"
-                        crossOrigin="anonymous"
-                      />
-                      <canvas
-                        ref={maskCanvasRef}
-                        className="absolute inset-0 cursor-crosshair"
-                        style={{
-                          width: '100%',
-                          height: '100%'
-                        }}
-                        onMouseDown={startDrawing}
-                        onMouseMove={draw}
-                        onMouseUp={stopDrawing}
-                        onMouseLeave={stopDrawing}
-                      />
+                      <div style={{ maxWidth: `${scale}%` }}>
+                        <img 
+                          src={processedUrl}
+                          alt="Selected image"
+                          className="w-full h-auto"
+                          crossOrigin="anonymous"
+                        />
+                        <canvas
+                          ref={maskCanvasRef}
+                          className="absolute inset-0 cursor-crosshair"
+                          style={{
+                            width: '100%',
+                            height: '100%'
+                          }}
+                          onMouseDown={startDrawing}
+                          onMouseMove={draw}
+                          onMouseUp={stopDrawing}
+                          onMouseLeave={stopDrawing}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Image Scale
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="10"
+                          max="100"
+                          value={scale}
+                          onChange={(e) => setScale(parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                        <span className="text-sm text-gray-600 whitespace-nowrap">
+                          {scale}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
