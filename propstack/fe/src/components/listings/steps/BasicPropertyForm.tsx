@@ -83,7 +83,6 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
             onLoad={onLoad}
             onPlaceChanged={onPlaceChanged}
             options={{
-              componentRestrictions: { country: "us" },
               types: ["address"],
               fields: ["formatted_address", "geometry", "place_id"]
             }}
