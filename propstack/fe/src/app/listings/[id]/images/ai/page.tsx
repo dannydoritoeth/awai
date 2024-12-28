@@ -495,19 +495,21 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
             {/* Left side - Image Editor (2/3) */}
             <div className="flex-grow w-2/3">
               <div className="bg-white rounded-lg shadow-sm p-6">
-                {wasImageResized && (
-                  <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg">
-                    Note: Your image has been automatically resized to optimize for AI processing.
-                  </div>
-                )}
                 {processing ? (
-                  <div className="p-8 text-center">
-                    <Spinner className="mx-auto mb-4" />
-                    <p className="text-gray-600">Processing image for AI editing...</p>
-                    <p className="text-sm text-gray-500 mt-2">This may take a few moments. The processed version will be saved for future use.</p>
+                  <div className="p-4 text-center">
+                    <div className="inline-flex items-center gap-2 text-gray-600">
+                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                      <span className="text-sm">Processing image for AI editing</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">This may take a few moments</p>
                   </div>
                 ) : (
                   <>
+                    {wasImageResized && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-100 text-sm text-blue-700 rounded-lg">
+                        Note: Your image has been automatically resized to optimize for AI processing.
+                      </div>
+                    )}
                     <div className="relative bg-gray-100 rounded-lg overflow-hidden">
                       {processedUrl && (
                         <div className="relative">
