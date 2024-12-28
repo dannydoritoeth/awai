@@ -7,6 +7,7 @@ import { CaptionDialog, CaptionOptions } from './CaptionDialog'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { SparklesIcon } from '@heroicons/react/24/outline'
+import { useRouter } from 'next/navigation'
 
 interface ImageManagerProps {
   listingId: string
@@ -38,6 +39,7 @@ interface ImageWithCaption extends ImageWithUrl {
 }
 
 export function ImageManager({ listingId, images: initialImages }: ImageManagerProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [images, setImages] = useState(initialImages)
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
@@ -334,8 +336,8 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   }
 
   const handleOpenAIEdit = (imageId: string) => {
-    // Navigate to the AI image editor page
-    window.open(`/listings/${listingId}/images/${imageId}/edit`, '_blank')
+    // Use Next.js router to navigate to the AI editor page using [id] parameter
+    router.push(`/listings/${listingId}/images/ai?imageId=${imageId}`, { scroll: false })
   }
 
   const handleCaptionUpdate = async (imageId: string, caption: string) => {
