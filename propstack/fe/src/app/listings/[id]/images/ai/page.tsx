@@ -146,11 +146,25 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
         })
 
       if (data && data.length > 0) {
+        // Try to get from cache first
+        const cacheKey = `ai-processed-${imageId}`
+        const cache = await caches.open('image-cache')
+        const cachedResponse = await cache.match(cacheKey)
+        
+        if (cachedResponse) {
+          return cachedResponse.text()
+        }
+
+        // If not in cache, get from Supabase
         const { data: urlData } = await supabase.storage
           .from('listing-images')
           .createSignedUrl(`ai_processed/${filename}`, 3600)
         
-        return urlData?.signedUrl || null
+        if (urlData?.signedUrl) {
+          // Store in cache
+          await cache.put(cacheKey, new Response(urlData.signedUrl))
+          return urlData.signedUrl
+        }
       }
       return null
     } catch (err) {
@@ -194,15 +208,29 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
         // If no processed version exists, start processing
         setProcessing(true)
         
-        // Get signed URL for the original image
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from('listing-images')
-          .createSignedUrl(imageData.url, 3600)
+        // Try to get original image URL from cache
+        const cacheKey = `original-${imageId}`
+        const cache = await caches.open('image-cache')
+        const cachedResponse = await cache.match(cacheKey)
+        
+        let originalUrl: string
+        if (cachedResponse) {
+          originalUrl = await cachedResponse.text()
+        } else {
+          // Get signed URL for the original image
+          const { data: urlData, error: urlError } = await supabase.storage
+            .from('listing-images')
+            .createSignedUrl(imageData.url, 3600)
 
-        if (urlError) throw urlError
+          if (urlError) throw urlError
+          originalUrl = urlData.signedUrl
+          
+          // Store in cache
+          await cache.put(cacheKey, new Response(originalUrl))
+        }
 
         // Process and upload the image
-        const processedPath = await processAndUploadImage(urlData.signedUrl)
+        const processedPath = await processAndUploadImage(originalUrl)
 
         // Get signed URL for the processed image
         const { data: processedUrlData, error: processedUrlError } = await supabase.storage
@@ -210,6 +238,10 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
           .createSignedUrl(processedPath, 3600)
 
         if (processedUrlError) throw processedUrlError
+
+        // Store processed URL in cache
+        const processedCacheKey = `ai-processed-${imageId}`
+        await cache.put(processedCacheKey, new Response(processedUrlData.signedUrl))
 
         setProcessedUrl(processedUrlData.signedUrl)
         setProcessing(false)

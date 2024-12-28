@@ -50,26 +50,44 @@ export function ImageGrid({
           [image.id]: { id: image.id, isLoading: true, isImageLoaded: false }
         }))
 
-        supabase.storage
-          .from('listing-images')
-          .createSignedUrl(image.url, 3600)
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('Error creating signed URL:', error)
-              return
+        // Try to get from cache first
+        const cacheKey = `image-${image.id}`
+        caches.open('image-cache').then(cache => 
+          cache.match(cacheKey).then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse.text()
             }
-            if (data?.signedUrl) {
-              setSignedUrls(prev => ({
-                ...prev,
-                [image.id]: {
-                  id: image.id,
-                  signedUrl: data.signedUrl,
-                  isLoading: false,
-                  isImageLoaded: false
+
+            // If not in cache, get from Supabase
+            return supabase.storage
+              .from('listing-images')
+              .createSignedUrl(image.url, 3600)
+              .then(({ data, error }) => {
+                if (error) {
+                  console.error('Error creating signed URL:', error)
+                  return null
                 }
-              }))
-            }
+                if (data?.signedUrl) {
+                  // Store in cache
+                  cache.put(cacheKey, new Response(data.signedUrl))
+                  return data.signedUrl
+                }
+                return null
+              })
           })
+        ).then(signedUrl => {
+          if (signedUrl) {
+            setSignedUrls(prev => ({
+              ...prev,
+              [image.id]: {
+                id: image.id,
+                signedUrl,
+                isLoading: false,
+                isImageLoaded: false
+              }
+            }))
+          }
+        })
       }
     })
 
