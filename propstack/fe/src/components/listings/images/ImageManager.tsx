@@ -50,6 +50,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
 
   const handleUpload = async (files: FileList) => {
+    console.log('Starting upload with files:', files.length)
     setLoading(true)
     setUploadProgress({ total: files.length, completed: 0 })
 
@@ -61,7 +62,11 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         return
       }
 
-      const uploads = Array.from(files).map(async (file) => {
+      // Convert FileList to array and map over it
+      const filesArray = Array.from(files)
+      console.log('Files array length:', filesArray.length)
+
+      const uploads = filesArray.map(async (file) => {
         // Validate file size (max 5MB)
         if (file.size > 5 * 1024 * 1024) {
           throw new Error('File size must be less than 5MB')
@@ -71,7 +76,13 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
         const fileName = `${listingId}/${Date.now()}-${cleanFileName}`
         
-        console.log('Uploading file:', fileName)
+        console.log('Processing file:', {
+          originalName: file.name,
+          cleanFileName,
+          fileName,
+          size: file.size,
+          type: file.type
+        })
 
         // Upload to storage
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -114,8 +125,11 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       const uploadedImages = await Promise.all(uploads)
       // Filter out any undefined results and add all new images at once
       const newImages = uploadedImages.filter(Boolean)
+      console.log('Completed uploads:', newImages.length)
+      
       if (newImages.length > 0) {
         setImages(prev => [...prev, ...newImages])
+        router.refresh()
       }
 
       toast.success('Images uploaded successfully')

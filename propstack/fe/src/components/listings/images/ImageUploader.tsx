@@ -9,8 +9,26 @@ interface ImageUploaderProps {
 
 export function ImageUploader({ onUpload, loading }: ImageUploaderProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    console.log('Accepted files:', acceptedFiles.length)
+    
+    if (acceptedFiles.length === 0) {
+      console.log('No files accepted')
+      return
+    }
+
+    // Create a new DataTransfer object
     const dataTransfer = new DataTransfer()
-    acceptedFiles.forEach(file => dataTransfer.items.add(file))
+    
+    // Add each file to the DataTransfer object
+    acceptedFiles.forEach(file => {
+      console.log('Adding file:', file.name)
+      dataTransfer.items.add(file)
+    })
+
+    // Log the final FileList
+    console.log('FileList length:', dataTransfer.files.length)
+    
+    // Call onUpload with the FileList
     onUpload(dataTransfer.files)
   }, [onUpload])
 
