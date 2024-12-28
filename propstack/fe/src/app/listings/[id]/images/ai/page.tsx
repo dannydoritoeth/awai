@@ -42,6 +42,8 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   const [alternatives, setAlternatives] = useState<any[]>([])
   const [keyImageId, setKeyImageId] = useState<string | null>(null)
 
+  const [isImageLoaded, setIsImageLoaded] = useState(false)
+
   // Process and upload image
   const processAndUploadImage = async (originalUrl: string): Promise<string> => {
     try {
@@ -169,7 +171,12 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
         // Get original image data
         const { data: imageData, error: imageError } = await supabase
           .from('listing_images')
-          .select('*')
+          .select(`
+            *,
+            listing:listings (
+              address
+            )
+          `)
           .eq('id', imageId)
           .single()
 
@@ -485,7 +492,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
       <main className="container mx-auto px-4">
         <PageHeading 
           title="AI Image Editor"
-          description="Edit your image using AI"
+          description={image?.listing?.address || 'Edit your image using AI'}
           backHref={`/listings/${listingId}/images`}
           showBackButton
         />
@@ -521,12 +528,13 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                             <img 
                               src={processedUrl}
                               alt="Selected image"
-                              className="absolute top-0 left-0 w-full h-full"
+                              className={`absolute top-0 left-0 w-full h-full transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                               crossOrigin="anonymous"
+                              onLoad={() => setIsImageLoaded(true)}
                             />
                             <canvas
                               ref={maskCanvasRef}
-                              className="absolute top-0 left-0 cursor-crosshair"
+                              className={`absolute top-0 left-0 cursor-crosshair transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                               style={{
                                 width: '100%',
                                 height: '100%'
@@ -536,6 +544,13 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                               onMouseUp={stopDrawing}
                               onMouseLeave={stopDrawing}
                             />
+                          </div>
+                        </div>
+                      )}
+                      {(!processedUrl || !isImageLoaded) && (
+                        <div className="relative w-full" style={{ paddingBottom: '75%' }}>
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">
+                            <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                           </div>
                         </div>
                       )}

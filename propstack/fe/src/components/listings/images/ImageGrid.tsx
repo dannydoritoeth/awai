@@ -22,6 +22,7 @@ interface ImageWithSignedUrl {
   signedUrl?: string
   isLoading: boolean
   caption?: string
+  isImageLoaded?: boolean
 }
 
 export function ImageGrid({ 
@@ -46,7 +47,7 @@ export function ImageGrid({
       if (!signedUrls[image.id]) {
         setSignedUrls(prev => ({
           ...prev,
-          [image.id]: { id: image.id, isLoading: true }
+          [image.id]: { id: image.id, isLoading: true, isImageLoaded: false }
         }))
 
         supabase.storage
@@ -63,7 +64,8 @@ export function ImageGrid({
                 [image.id]: {
                   id: image.id,
                   signedUrl: data.signedUrl,
-                  isLoading: false
+                  isLoading: false,
+                  isImageLoaded: false
                 }
               }))
             }
@@ -115,7 +117,11 @@ export function ImageGrid({
           if (!signedUrlData || signedUrlData.isLoading) {
             return (
               <div key={image.id} className="space-y-4">
-                <div className="relative aspect-[4/3] bg-gray-100 animate-pulse rounded-lg" />
+                <div className="relative aspect-[4/3] bg-gray-100 animate-pulse rounded-lg">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
                 <div className="h-24 bg-gray-100 animate-pulse rounded-lg" />
               </div>
             )
@@ -130,12 +136,22 @@ export function ImageGrid({
                 <img
                   src={signedUrlData.signedUrl}
                   alt=""
-                  className="w-full h-full object-cover rounded-lg"
-                  onClick={() => signedUrlData.signedUrl && setLightboxImage(signedUrlData.signedUrl)}
+                  className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${signedUrlData.isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => {
+                    setSignedUrls(prev => ({
+                      ...prev,
+                      [image.id]: { ...prev[image.id], isImageLoaded: true }
+                    }))
+                  }}
                 />
+                {!signedUrlData.isImageLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse rounded-lg">
+                    <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                )}
                 
                 {/* Overlay Controls */}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all">
+                <div className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all ${signedUrlData.isImageLoaded ? '' : 'hidden'}`}>
                   <div className="absolute top-2 right-2 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     {/* AI Controls Dropdown */}
                     <div className="relative">
