@@ -13,6 +13,7 @@ interface ImageGridProps {
   onDelete: (imageId: string) => void
   onCaptionUpdate?: (imageId: string, caption: string) => Promise<void>
   onOpenAIEdit?: (imageId: string) => void
+  onGenerateCaption?: (imageId: string) => void
 }
 
 interface ImageWithSignedUrl {
@@ -26,7 +27,8 @@ export function ImageGrid({
   images, 
   onDelete,
   onCaptionUpdate,
-  onOpenAIEdit
+  onOpenAIEdit,
+  onGenerateCaption
 }: ImageGridProps) {
   const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -129,15 +131,51 @@ export function ImageGrid({
               {/* Overlay Controls */}
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all">
                 <div className="absolute top-2 right-2 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* AI Controls Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const menu = e.currentTarget.nextElementSibling
+                        if (menu) {
+                          menu.classList.toggle('hidden')
+                        }
+                      }}
+                      className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 relative"
+                      title="AI Options"
+                    >
+                      <SparklesIcon className="w-5 h-5 text-blue-500" />
+                    </button>
+                    <div className="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.currentTarget.parentElement?.classList.add('hidden')
+                          onGenerateCaption?.(image.id)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      >
+                        <SparklesIcon className="w-4 h-4 mr-2 text-blue-500" />
+                        Generate AI Caption
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.currentTarget.parentElement?.classList.add('hidden')
+                          onOpenAIEdit?.(image.id)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      >
+                        <SparklesIcon className="w-4 h-4 mr-2 text-blue-500" />
+                        Edit Image with AI
+                      </button>
+                    </div>
+                  </div>
                   <button
-                    onClick={() => onOpenAIEdit?.(image.id)}
-                    className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
-                    title="Edit with AI"
-                  >
-                    <SparklesIcon className="w-5 h-5 text-blue-500" />
-                  </button>
-                  <button
-                    onClick={() => onDelete(image.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(image.id)
+                    }}
                     className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
                   >
                     <XMarkIcon className="w-5 h-5 text-red-500" />

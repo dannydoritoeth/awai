@@ -9,27 +9,43 @@ interface CaptionDialogProps {
   imageCount: number
 }
 
+export type CaptionStyle = 'professional' | 'casual' | 'luxury'
+export type CaptionFocus = 'features' | 'atmosphere' | 'selling_points'
+export type CaptionTone = 'neutral' | 'enthusiastic' | 'sophisticated'
+export type CaptionLength = 'short' | 'medium' | 'long'
+
 export interface CaptionOptions {
-  style: 'professional' | 'casual' | 'luxury'
-  focus: ('features' | 'atmosphere' | 'selling_points')[]
-  tone: 'neutral' | 'enthusiastic' | 'sophisticated'
-  length: 'short' | 'medium' | 'long'
-  includeKeywords: string
+  style: CaptionStyle
+  focus: CaptionFocus[]
+  tone: CaptionTone
+  length: CaptionLength
+  includeKeywords?: string
 }
 
 export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: CaptionDialogProps) {
-  const [options, setOptions] = useState<CaptionOptions>({
-    style: 'professional',
-    focus: ['features'],
-    tone: 'neutral',
-    length: 'medium',
-    includeKeywords: ''
-  })
+  const [style, setStyle] = useState<CaptionStyle>('professional')
+  const [focus, setFocus] = useState<CaptionFocus[]>(['features', 'atmosphere'])
+  const [tone, setTone] = useState<CaptionTone>('enthusiastic')
+  const [length, setLength] = useState<CaptionLength>('medium')
+  const [includeKeywords, setIncludeKeywords] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onGenerate(options)
+    setIsSubmitting(true)
     onClose()
+    
+    try {
+      await onGenerate({
+        style,
+        focus,
+        tone,
+        length,
+        includeKeywords
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -59,9 +75,21 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 shadow-xl transition-all">
-                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                  Generate Image Captions
+                <Dialog.Title
+                  as="h3"
+                  className="text-lg font-medium leading-6 text-gray-900"
+                >
+                  {imageCount === 1 ? 'Generate Image Caption' : 'Generate Image Captions'}
                 </Dialog.Title>
+
+                <div className="mt-2">
+                  <p className="text-sm text-gray-500">
+                    {imageCount === 1 
+                      ? 'Generate an AI caption for this image.' 
+                      : `Generate AI captions for ${imageCount} images.`
+                    }
+                  </p>
+                </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
@@ -70,12 +98,12 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
                     </label>
                     <select
                       className="w-full rounded-md border border-gray-300 py-2 px-3"
-                      value={options.style}
-                      onChange={e => setOptions(prev => ({ ...prev, style: e.target.value as any }))}
+                      value={style}
+                      onChange={e => setStyle(e.target.value as CaptionStyle)}
                     >
                       <option value="professional">Professional</option>
-                      <option value="casual">Casual & Friendly</option>
-                      <option value="luxury">Luxury & Upscale</option>
+                      <option value="casual">Casual</option>
+                      <option value="luxury">Luxury</option>
                     </select>
                   </div>
 
@@ -84,26 +112,26 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
                       Focus Areas (select multiple)
                     </label>
                     <div className="space-y-2">
-                      {(['features', 'atmosphere', 'selling_points'] as const).map(focus => (
-                        <label key={focus} className="flex items-center">
+                      {[
+                        { value: 'features', label: 'Property Features' },
+                        { value: 'atmosphere', label: 'Atmosphere & Feel' },
+                        { value: 'selling_points', label: 'Key Selling Points' }
+                      ].map(({ value, label }) => (
+                        <label key={value} className="flex items-center space-x-2">
                           <input
                             type="checkbox"
                             className="rounded border-gray-300 text-blue-600"
-                            checked={options.focus.includes(focus)}
+                            checked={focus.includes(value as CaptionFocus)}
                             onChange={e => {
-                              setOptions(prev => ({
-                                ...prev,
-                                focus: e.target.checked
-                                  ? [...prev.focus, focus]
-                                  : prev.focus.filter(f => f !== focus)
-                              }))
+                              setFocus(prev => {
+                                const newFocus = e.target.checked
+                                  ? [...prev, value as CaptionFocus]
+                                  : prev.filter(f => f !== value)
+                                return newFocus
+                              })
                             }}
                           />
-                          <span className="ml-2 text-sm text-gray-600">
-                            {focus === 'features' && 'Physical Features & Details'}
-                            {focus === 'atmosphere' && 'Mood & Atmosphere'}
-                            {focus === 'selling_points' && 'Key Selling Points'}
-                          </span>
+                          <span>{label}</span>
                         </label>
                       ))}
                     </div>
@@ -115,12 +143,12 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
                     </label>
                     <select
                       className="w-full rounded-md border border-gray-300 py-2 px-3"
-                      value={options.tone}
-                      onChange={e => setOptions(prev => ({ ...prev, tone: e.target.value as any }))}
+                      value={tone}
+                      onChange={e => setTone(e.target.value as CaptionTone)}
                     >
                       <option value="neutral">Neutral & Factual</option>
-                      <option value="enthusiastic">Enthusiastic & Engaging</option>
-                      <option value="sophisticated">Sophisticated & Refined</option>
+                      <option value="enthusiastic">Enthusiastic</option>
+                      <option value="sophisticated">Sophisticated</option>
                     </select>
                   </div>
 
@@ -130,12 +158,12 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
                     </label>
                     <select
                       className="w-full rounded-md border border-gray-300 py-2 px-3"
-                      value={options.length}
-                      onChange={e => setOptions(prev => ({ ...prev, length: e.target.value as any }))}
+                      value={length}
+                      onChange={e => setLength(e.target.value as CaptionLength)}
                     >
                       <option value="short">Short (under 50 characters)</option>
                       <option value="medium">Medium (50-100 characters)</option>
-                      <option value="long">Long (100-150 characters)</option>
+                      <option value="long">Long (100+ characters)</option>
                     </select>
                   </div>
 
@@ -147,25 +175,30 @@ export function CaptionDialog({ isOpen, onClose, onGenerate, imageCount }: Capti
                       type="text"
                       className="w-full rounded-md border border-gray-300 py-2 px-3"
                       placeholder="e.g., modern, spacious, renovated"
-                      value={options.includeKeywords}
-                      onChange={e => setOptions(prev => ({ ...prev, includeKeywords: e.target.value }))}
+                      value={includeKeywords}
+                      onChange={e => setIncludeKeywords(e.target.value)}
                     />
                   </div>
 
                   <div className="mt-6 flex justify-end space-x-3">
                     <button
                       type="button"
-                      className="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                       onClick={onClose}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      disabled={isSubmitting}
                     >
-                      <SparklesIcon className="w-4 h-4 mr-2" />
-                      Generate {imageCount} Captions
+                      {isSubmitting 
+                        ? 'Generating...' 
+                        : imageCount === 1 
+                          ? 'Generate Caption' 
+                          : 'Generate Captions'
+                      }
                     </button>
                   </div>
                 </form>

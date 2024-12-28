@@ -45,6 +45,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   const [captionProgress, setCaptionProgress] = useState<CaptionProgress | null>(null)
   const [showCaptionDialog, setShowCaptionDialog] = useState(false)
   const [selectedImage, setSelectedImage] = useState<ImageManagerProps['images'][0] | null>(null)
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null)
 
   const handleUpload = async (files: FileList) => {
     setLoading(true)
@@ -187,81 +188,154 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
   }
 
   const handleGenerateCaptions = async (options: CaptionOptions) => {
-    if (images.length === 0) {
-      toast.error('No images to generate captions for')
-      return
-    }
+    if (selectedImageId) {
+      // Single image generation
+      await handleGenerateSingleCaptionWithOptions(selectedImageId, options)
+      setSelectedImageId(null)
+    } else {
+      // Bulk generation
+      if (images.length === 0) {
+        toast.error('No images to generate captions for')
+        return
+      }
 
+      setGeneratingCaptions(true)
+      setCaptionProgress({
+        total: images.length,
+        completed: 0,
+        currentBatch: 0,
+        totalBatches: images.length
+      })
+
+      try {
+        // Process one image at a time
+        for (let i = 0; i < images.length; i++) {
+          const image = images[i]
+          
+          // Generate caption for single image
+          const { data, error } = await supabase.functions.invoke('generate-image-caption', {
+            body: { 
+              listingId,
+              imageIds: [image.id],
+              options: {
+                style: options.style,
+                focus: options.focus,
+                tone: options.tone,
+                length: options.length,
+                includeKeywords: options.includeKeywords || ''
+              }
+            }
+          })
+
+          if (error) {
+            console.error('Error generating caption for image:', image.id, error)
+            continue // Skip this image but continue with others
+          }
+
+          // Fetch the updated caption
+          const { data: updatedImage, error: fetchError } = await supabase
+            .from('listing_images')
+            .select('id, caption')
+            .eq('id', image.id)
+            .single()
+
+          if (fetchError) {
+            console.error('Error fetching updated caption:', fetchError)
+            continue
+          }
+
+          // Update local state with new caption
+          if (updatedImage?.caption) {
+            setImages(prev => 
+              prev.map(img => 
+                img.id === image.id ? { ...img, caption: updatedImage.caption } : img
+              )
+            )
+          }
+
+          // Update progress
+          setCaptionProgress(prev => prev ? {
+            ...prev,
+            completed: i + 1,
+            currentBatch: i + 1
+          } : null)
+        }
+
+        toast.success('Generated captions for all images')
+      } catch (err) {
+        console.error('Error generating captions:', err)
+        toast.error('Failed to generate captions')
+      } finally {
+        setGeneratingCaptions(false)
+        setCaptionProgress(null)
+      }
+    }
+  }
+
+  const handleGenerateSingleCaptionWithOptions = async (imageId: string, options: CaptionOptions) => {
     setGeneratingCaptions(true)
     setCaptionProgress({
-      total: images.length,
+      total: 1,
       completed: 0,
       currentBatch: 0,
-      totalBatches: images.length
+      totalBatches: 1
     })
 
     try {
-      // Process one image at a time
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i]
-        
-        // Generate caption for single image
-        const { data, error } = await supabase.functions.invoke('generate-image-caption', {
-          body: { 
-            listingId,
-            imageIds: [image.id],
-            options: {
-              style: options.style,
-              focus: options.focus,
-              tone: options.tone,
-              length: options.length,
-              includeKeywords: options.includeKeywords || ''
-            }
+      // Generate caption for single image
+      const { data, error } = await supabase.functions.invoke('generate-image-caption', {
+        body: { 
+          listingId,
+          imageIds: [imageId],
+          options: {
+            style: options.style,
+            focus: options.focus,
+            tone: options.tone,
+            length: options.length,
+            includeKeywords: options.includeKeywords || ''
           }
-        })
-
-        if (error) {
-          console.error('Error generating caption for image:', image.id, error)
-          continue // Skip this image but continue with others
         }
+      })
 
-        // Fetch the updated caption
-        const { data: updatedImage, error: fetchError } = await supabase
-          .from('listing_images')
-          .select('id, caption')
-          .eq('id', image.id)
-          .single()
-
-        if (fetchError) {
-          console.error('Error fetching updated caption:', fetchError)
-          continue
-        }
-
-        // Update local state with new caption
-        if (updatedImage?.caption) {
-          setImages(prev => 
-            prev.map(img => 
-              img.id === image.id ? { ...img, caption: updatedImage.caption } : img
-            )
-          )
-        }
-
-        // Update progress
-        setCaptionProgress(prev => prev ? {
-          ...prev,
-          completed: i + 1,
-          currentBatch: i + 1
-        } : null)
+      if (error) {
+        console.error('Error generating caption for image:', imageId, error)
+        throw error
       }
 
-      toast.success('Generated captions for all images')
+      // Fetch the updated caption
+      const { data: updatedImage, error: fetchError } = await supabase
+        .from('listing_images')
+        .select('id, caption')
+        .eq('id', imageId)
+        .single()
+
+      if (fetchError) {
+        console.error('Error fetching updated caption:', fetchError)
+        throw fetchError
+      }
+
+      // Update local state with new caption
+      if (updatedImage?.caption) {
+        setImages(prev => 
+          prev.map(img => 
+            img.id === imageId ? { ...img, caption: updatedImage.caption } : img
+          )
+        )
+      }
+
+      toast.success('Generated caption successfully')
     } catch (err) {
-      console.error('Error generating captions:', err)
-      toast.error('Failed to generate captions')
+      console.error('Error generating caption:', err)
+      toast.error('Failed to generate caption')
     } finally {
       setGeneratingCaptions(false)
       setCaptionProgress(null)
     }
+  }
+
+  const handleOpenAIEdit = (imageId: string) => {
+    // Navigate to the AI image editor page
+    window.open(`/listings/${listingId}/images/${imageId}/edit`, '_blank')
   }
 
   const handleCaptionUpdate = async (imageId: string, caption: string) => {
@@ -323,7 +397,7 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
           <SparklesIcon className="w-4 h-4 mr-2" />
           {generatingCaptions 
             ? `Generating Captions (${captionProgress?.completed || 0}/${captionProgress?.total || 0})`
-            : 'Generate AI Captions'
+            : 'Generate All Captions'
           }
         </button>
       </div>
@@ -365,14 +439,21 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
         images={images}
         onDelete={handleDelete}
         onCaptionUpdate={handleCaptionUpdate}
-        onOpenAIEdit={() => setShowCaptionDialog(true)}
+        onOpenAIEdit={handleOpenAIEdit}
+        onGenerateCaption={(imageId) => {
+          setSelectedImageId(imageId)
+          setShowCaptionDialog(true)
+        }}
       />
 
       <CaptionDialog
         isOpen={showCaptionDialog}
-        onClose={() => setShowCaptionDialog(false)}
+        onClose={() => {
+          setShowCaptionDialog(false)
+          setSelectedImageId(null)
+        }}
         onGenerate={handleGenerateCaptions}
-        imageCount={images.length}
+        imageCount={selectedImageId ? 1 : images.length}
       />
     </div>
   )
