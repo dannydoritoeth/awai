@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { ImageUploader } from './ImageUploader'
 import { ImageGrid } from './ImageGrid'
-import { ImageSidebar } from './ImageSidebar'
 import { CaptionDialog, CaptionOptions } from './CaptionDialog'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -365,19 +364,8 @@ export function ImageManager({ listingId, images: initialImages }: ImageManagerP
       <ImageGrid 
         images={images}
         onDelete={handleDelete}
-        onTransform={handleTransform}
-        onSelect={setSelectedImage}
-        selectedImageId={selectedImage?.id}
-      />
-
-      <ImageSidebar
-        image={selectedImage}
-        onClose={() => setSelectedImage(null)}
-        onTransform={handleTransform}
         onCaptionUpdate={handleCaptionUpdate}
-        onNavigate={handleNavigate}
-        hasPrevious={selectedImage ? images.findIndex(img => img.id === selectedImage.id) > 0 : false}
-        hasNext={selectedImage ? images.findIndex(img => img.id === selectedImage.id) < images.length - 1 : false}
+        onOpenAIEdit={() => setShowCaptionDialog(true)}
       />
 
       <CaptionDialog

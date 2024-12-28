@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { XMarkIcon, EllipsisHorizontalIcon, SparklesIcon } from '@heroicons/react/24/outline'
-import { Menu, Transition } from '@headlessui/react'
-import { Fragment } from 'react'
+import { XMarkIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import debounce from 'lodash/debounce'
 
 interface ImageGridProps {
   images: Array<{
@@ -12,9 +11,8 @@ interface ImageGridProps {
     caption?: string
   }>
   onDelete: (imageId: string) => void
-  onTransform?: (imageId: string, type: 'enhance' | 'relight' | 'upscale') => Promise<void>
-  onSelect?: (image: ImageGridProps['images'][0]) => void
-  selectedImageId?: string
+  onCaptionUpdate?: (imageId: string, caption: string) => Promise<void>
+  onOpenAIEdit?: (imageId: string) => void
 }
 
 interface ImageWithSignedUrl {
@@ -26,20 +24,19 @@ interface ImageWithSignedUrl {
 
 export function ImageGrid({ 
   images, 
-  onDelete, 
-  onTransform, 
-  onSelect,
-  selectedImageId 
+  onDelete,
+  onCaptionUpdate,
+  onOpenAIEdit
 }: ImageGridProps) {
   const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
-  const [transforming, setTransforming] = useState<string | null>(null)
+  const [editingCaptions, setEditingCaptions] = useState<Record<string, string>>({})
+  const [savingStates, setSavingStates] = useState<Record<string, boolean>>({})
 
   // Initialize or update signed URLs for new images only
   useEffect(() => {
     images.forEach(image => {
       if (!signedUrls[image.id]) {
-        // Only fetch signed URL if we don't already have it
         setSignedUrls(prev => ({
           ...prev,
           [image.id]: { id: image.id, isLoading: true }
@@ -64,9 +61,6 @@ export function ImageGrid({
               }))
             }
           })
-          .catch(error => {
-            console.error('Error getting signed URL:', error)
-          })
       }
     })
 
@@ -83,72 +77,96 @@ export function ImageGrid({
     })
   }, [images])
 
+  // Create a debounced save function for each image
+  const debouncedSave = useRef(
+    debounce(async (imageId: string, caption: string) => {
+      if (!onCaptionUpdate) return
+      
+      setSavingStates(prev => ({ ...prev, [imageId]: true }))
+      try {
+        await onCaptionUpdate(imageId, caption)
+      } finally {
+        setSavingStates(prev => ({ ...prev, [imageId]: false }))
+      }
+    }, 1000)
+  ).current
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel()
+    }
+  }, [debouncedSave])
+
   return (
-    <>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {images.map((image) => {
-          const signedUrlData = signedUrls[image.id]
-          
-          if (!signedUrlData || signedUrlData.isLoading) {
-            return (
-              <div key={image.id} className="relative group aspect-square bg-gray-100 animate-pulse rounded-lg" />
-            )
-          }
-
-          if (!signedUrlData.signedUrl) return null
-
-          const isTransforming = transforming === image.id
-          const isSelected = image.id === selectedImageId
-
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {images.map((image) => {
+        const signedUrlData = signedUrls[image.id]
+        const isSaving = savingStates[image.id]
+        
+        if (!signedUrlData || signedUrlData.isLoading) {
           return (
-            <div 
-              key={image.id} 
-              className={`relative group cursor-pointer ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
-              onClick={() => onSelect?.(image)}
-            >
-              <div className="aspect-square">
-                <div className="relative w-full h-full">
-                  <img
-                    src={signedUrlData.signedUrl}
-                    alt=""
-                    className={`absolute inset-0 w-full h-full object-cover rounded-lg ${isTransforming ? 'opacity-50' : ''}`}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null
-                      console.error('Image failed to load:', signedUrlData.signedUrl)
-                    }}
-                  />
-                  
-                  {isTransforming && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Caption Preview */}
-              {image.caption && (
-                <div className="mt-2 text-sm text-gray-600 line-clamp-2">
-                  {image.caption}
-                </div>
-              )}
-              
-              {/* Delete button - moved out of the menu since transform options moved to sidebar */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDelete(image.id)
-                  }}
-                  className="p-1 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-75"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              </div>
+            <div key={image.id} className="space-y-4">
+              <div className="relative aspect-[4/3] bg-gray-100 animate-pulse rounded-lg" />
+              <div className="h-24 bg-gray-100 animate-pulse rounded-lg" />
             </div>
           )
-        })}
-      </div>
+        }
+
+        if (!signedUrlData.signedUrl) return null
+
+        return (
+          <div key={image.id} className="space-y-4">
+            {/* Image Container */}
+            <div className="relative aspect-[4/3] group">
+              <img
+                src={signedUrlData.signedUrl}
+                alt=""
+                className="w-full h-full object-cover rounded-lg"
+                onClick={() => signedUrlData.signedUrl && setLightboxImage(signedUrlData.signedUrl)}
+              />
+              
+              {/* Overlay Controls */}
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all">
+                <div className="absolute top-2 right-2 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => onOpenAIEdit?.(image.id)}
+                    className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
+                    title="Edit with AI"
+                  >
+                    <SparklesIcon className="w-5 h-5 text-blue-500" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(image.id)}
+                    className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-red-500" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Caption Area */}
+            <div className="relative">
+              <textarea
+                value={editingCaptions[image.id] ?? image.caption ?? ''}
+                onChange={(e) => {
+                  const newCaption = e.target.value
+                  setEditingCaptions(prev => ({ ...prev, [image.id]: newCaption }))
+                  debouncedSave(image.id, newCaption)
+                }}
+                className="w-full min-h-[6rem] p-3 text-gray-700 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                placeholder="Add a caption..."
+              />
+              {isSaving && (
+                <div className="absolute right-2 top-2 text-sm text-gray-500">
+                  Saving...
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
 
       {/* Lightbox */}
       {lightboxImage && (
@@ -170,6 +188,6 @@ export function ImageGrid({
           />
         </div>
       )}
-    </>
+    </div>
   )
 } 
