@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, use, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { use } from 'react'
 import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Spinner } from '@/components/ui/Spinner'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
+import toast from 'react-hot-toast'
 
 interface AIImageEditorPageProps {
   params: Promise<{
@@ -16,27 +18,68 @@ interface AIImageEditorPageProps {
 
 type EditMode = 'inpaint' | 'erase'
 
-const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
+export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   const { id: listingId } = use(params)
   const searchParams = useSearchParams()
   const imageId = searchParams.get('imageId')
   const [image, setImage] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
+  const [processedUrl, setProcessedUrl] = useState<string | null>(null)
+  const [wasImageResized, setWasImageResized] = useState(false)
   const [editMode, setEditMode] = useState<EditMode>('inpaint')
-  const [brushSize, setBrushSize] = useState(50)
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [isDrawing, setIsDrawing] = useState(false)
   const router = useRouter()
 
-  // Canvas refs
-  const imageRef = useRef<HTMLImageElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Add state for drawing
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [brushSize, setBrushSize] = useState(50)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
-  // Initialize canvas when image loads
+  // Drawing functions
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDrawing(true)
+    draw(e)
+  }
+
+  const stopDrawing = () => {
+    setIsDrawing(false)
+  }
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !maskCanvasRef.current) return
+
+    const canvas = maskCanvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    const x = (e.clientX - rect.left) * scaleX
+    const y = (e.clientY - rect.top) * scaleY
+
+    ctx.fillStyle = editMode === 'inpaint' ? 'rgba(0, 0, 255, 0.3)' : 'rgba(255, 0, 0, 0.3)'
+    ctx.beginPath()
+    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  const resetMask = () => {
+    if (!maskCanvasRef.current) return
+    const ctx = maskCanvasRef.current.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height)
+  }
+
+  const getMaskDataUrl = () => {
+    if (!maskCanvasRef.current) return null
+    return maskCanvasRef.current.toDataURL('image/png')
+  }
+
+  // Initialize image processing
   useEffect(() => {
     if (!imageId) {
       router.push(`/listings/${listingId}/images`)
@@ -79,114 +122,110 @@ const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
     fetchImage()
   }, [imageId, listingId, router])
 
-  // Initialize canvas when image loads
+  // Process image when signedUrl changes
   useEffect(() => {
-    console.log('SignedUrl changed:', signedUrl)
     if (!signedUrl) return
 
+    const loadAndProcessImage = async () => {
+      try {
+        // Load the original image
+        const img = new Image()
+        const imgLoaded = new Promise((resolve, reject) => {
+          img.onload = resolve
+          img.onerror = reject
+        })
+        img.crossOrigin = 'anonymous'
+        img.src = signedUrl
+        await imgLoaded
+
+        console.log('Original image loaded:', img.width, 'x', img.height)
+
+        // Create canvas for conversion/resizing
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+
+        // Scale down if needed while maintaining aspect ratio
+        const MAX_WIDTH = 2048
+        const MAX_HEIGHT = 2048
+        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+          const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+          setWasImageResized(true)
+          console.log('Image resized to:', width, 'x', height)
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('Failed to get canvas context')
+
+        // Draw image on canvas
+        ctx.drawImage(img, 0, 0, width, height)
+
+        // Convert to PNG and check size
+        const pngBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (blob) => {
+              if (blob) resolve(blob)
+              else reject(new Error('Failed to convert image'))
+            },
+            'image/png',
+            1.0
+          )
+        })
+
+        console.log('Converted PNG size:', Math.round(pngBlob.size / 1024 / 1024 * 100) / 100, 'MB')
+
+        // Check if size is over 4MB
+        if (pngBlob.size > 4 * 1024 * 1024) {
+          throw new Error('Image is too large for AI editing (max 4MB). Please try a smaller image.')
+        }
+
+        // Create object URL for the processed image
+        const processedImageUrl = URL.createObjectURL(pngBlob)
+        setProcessedUrl(processedImageUrl)
+        setLoading(false)
+
+        console.log('Image processed and ready')
+      } catch (err) {
+        console.error('Error processing image:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to process image')
+        router.push(`/listings/${listingId}/images`)
+      }
+    }
+
+    loadAndProcessImage()
+  }, [signedUrl, listingId, router])
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (processedUrl) {
+        URL.revokeObjectURL(processedUrl)
+      }
+    }
+  }, [processedUrl])
+
+  // Add canvas setup when image loads
+  useEffect(() => {
+    if (!processedUrl || !maskCanvasRef.current) return
+
     const img = new Image()
-    img.crossOrigin = 'anonymous' // Set crossOrigin before src
-    img.src = signedUrl
-    
-    console.log('Loading image...')
     img.onload = () => {
-      console.log('Image loaded:', img.width, 'x', img.height)
-      if (!canvasRef.current || !maskCanvasRef.current) {
-        console.error('Canvas refs not ready')
-        return
+      setCanvasSize({
+        width: img.width,
+        height: img.height
+      })
+
+      if (maskCanvasRef.current) {
+        maskCanvasRef.current.width = img.width
+        maskCanvasRef.current.height = img.height
       }
-
-      // Calculate size to maintain aspect ratio and fit container
-      const maxWidth = 800
-      const maxHeight = 600
-      const containerWidth = canvasRef.current.parentElement?.clientWidth || maxWidth
-      
-      let width = img.width
-      let height = img.height
-      const aspectRatio = width / height
-
-      // Scale down if image is too large
-      if (width > containerWidth) {
-        width = containerWidth
-        height = width / aspectRatio
-      }
-      if (height > maxHeight) {
-        height = maxHeight
-        width = height * aspectRatio
-      }
-
-      console.log('Canvas size:', width, 'x', height)
-
-      // Set canvas sizes
-      setCanvasSize({ width, height })
-      canvasRef.current.width = width
-      canvasRef.current.height = height
-      maskCanvasRef.current.width = width
-      maskCanvasRef.current.height = height
-
-      // Initialize both canvases
-      const ctx = canvasRef.current.getContext('2d')
-      const maskCtx = maskCanvasRef.current.getContext('2d')
-
-      if (!ctx || !maskCtx) {
-        console.error('Could not get canvas contexts')
-        return
-      }
-
-      // Clear both canvases
-      ctx.clearRect(0, 0, width, height)
-      maskCtx.clearRect(0, 0, width, height)
-
-      // Draw image on main canvas
-      ctx.drawImage(img, 0, 0, width, height)
-      console.log('Image drawn on canvas')
     }
-
-    img.onerror = (e) => {
-      console.error('Error loading image:', e)
-    }
-  }, [signedUrl])
-
-  // Drawing functions
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true)
-    draw(e)
-  }
-
-  const stopDrawing = () => {
-    setIsDrawing(false)
-  }
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !maskCanvasRef.current) return
-
-    const canvas = maskCanvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
-    const x = (e.clientX - rect.left) * scaleX
-    const y = (e.clientY - rect.top) * scaleY
-
-    ctx.fillStyle = editMode === 'inpaint' ? 'rgba(0, 0, 255, 0.3)' : 'rgba(255, 0, 0, 0.3)'
-    ctx.beginPath()
-    ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  const resetMask = () => {
-    if (!maskCanvasRef.current) return
-    const ctx = maskCanvasRef.current.getContext('2d')
-    if (!ctx) return
-    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height)
-  }
-
-  const getMaskDataUrl = () => {
-    if (!maskCanvasRef.current) return null
-    return maskCanvasRef.current.toDataURL('image/png')
-  }
+    img.src = processedUrl
+  }, [processedUrl])
 
   const handleGenerate = async () => {
     if (!description) {
@@ -238,7 +277,7 @@ const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
     )
   }
 
-  if (!image || !signedUrl) {
+  if (!image || !processedUrl) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -267,29 +306,24 @@ const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
             {/* Left side - Image Editor (2/3) */}
             <div className="flex-grow w-2/3">
               <div className="bg-white rounded-lg shadow-sm p-6">
+                {wasImageResized && (
+                  <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg">
+                    Note: Your image has been automatically resized to optimize for AI processing.
+                  </div>
+                )}
                 <div className="relative bg-gray-100 rounded-lg overflow-hidden">
-                  {signedUrl && (
-                    <>
+                  {processedUrl && (
+                    <div className="relative">
                       <img 
-                        ref={imageRef}
-                        src={signedUrl}
+                        src={processedUrl}
                         alt="Selected image"
                         className="w-full h-auto"
                         crossOrigin="anonymous"
-                        onLoad={(e) => {
-                          const img = e.currentTarget;
-                          setCanvasSize({ 
-                            width: img.clientWidth, 
-                            height: img.clientHeight 
-                          });
-                        }}
                       />
                       <canvas
                         ref={maskCanvasRef}
-                        width={canvasSize.width}
-                        height={canvasSize.height}
                         className="absolute inset-0 cursor-crosshair"
-                        style={{ 
+                        style={{
                           width: '100%',
                           height: '100%'
                         }}
@@ -298,7 +332,7 @@ const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
                         onMouseUp={stopDrawing}
                         onMouseLeave={stopDrawing}
                       />
-                    </>
+                    </div>
                   )}
                 </div>
                 <div className="mt-4">
@@ -427,6 +461,4 @@ const AIImageEditorPage = ({ params }: AIImageEditorPageProps) => {
       </main>
     </div>
   )
-}
-
-export default AIImageEditorPage 
+} 

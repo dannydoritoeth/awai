@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+import OpenAI from 'https://esm.sh/openai@4.24.1'
 
 console.log('Edit Image function started')
 
@@ -19,10 +20,24 @@ serve(async (req) => {
       throw new Error('Missing required fields')
     }
 
+    // Get environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+
+    if (!supabaseUrl || !supabaseServiceKey || !openaiApiKey) {
+      throw new Error('Missing environment variables')
+    }
+
+    // Create OpenAI client
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    })
+
     // Create Supabase client
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      supabaseServiceKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -51,66 +66,45 @@ serve(async (req) => {
       throw new Error('Failed to get signed URL')
     }
 
-    // Call Replicate API for image editing
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${Deno.env.get('REPLICATE_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: "c11bac58203367db93a3c552bd49a25a5418458ddffb7e90dae55780765e26d6",
-        input: {
-          image: signedUrlData.signedUrl,
-          mask: mask,
-          prompt: description,
-          num_outputs: 1,
-          guidance_scale: 7.5,
-          num_inference_steps: 50,
-        },
-      }),
+    console.log('Making request to OpenAI API...')
+
+    // Download the original image
+    const imageResponse = await fetch(signedUrlData.signedUrl)
+    const imageArrayBuffer = await imageResponse.arrayBuffer()
+    const imageFile = new File([imageArrayBuffer], 'image.png', { type: 'image/png' })
+
+    // Convert mask from data URL to File
+    const maskBase64 = mask.split(',')[1] // Remove the data:image/png;base64, prefix
+    const maskBuffer = Uint8Array.from(atob(maskBase64), c => c.charCodeAt(0))
+    const maskFile = new File([maskBuffer], 'mask.png', { type: 'image/png' })
+
+    console.log('Calling OpenAI API with image and mask...')
+
+    // Call OpenAI API for image editing
+    const response = await openai.images.edit({
+      image: imageFile,
+      mask: maskFile,
+      prompt: description,
+      n: 1,
+      size: '1024x1024',
+      response_format: 'b64_json'
     })
 
-    const prediction = await response.json()
-
-    // Poll for completion
-    const startTime = Date.now()
-    const timeoutDuration = 5 * 60 * 1000 // 5 minutes
-    let result = null
-
-    while (Date.now() - startTime < timeoutDuration) {
-      const pollResponse = await fetch(prediction.urls.get, {
-        headers: {
-          'Authorization': `Token ${Deno.env.get('REPLICATE_API_KEY')}`,
-        },
-      })
-      
-      const pollResult = await pollResponse.json()
-      
-      if (pollResult.status === 'succeeded') {
-        result = pollResult.output[0]
-        break
-      } else if (pollResult.status === 'failed') {
-        throw new Error('Image generation failed')
-      }
-      
-      // Wait before polling again
-      await new Promise(resolve => setTimeout(resolve, 1000))
+    if (!response.data?.[0]?.b64_json) {
+      throw new Error('Failed to generate image')
     }
 
-    if (!result) {
-      throw new Error('Generation timed out')
-    }
-
-    // Download the generated image
-    const imageResponse = await fetch(result)
-    const imageBlob = await imageResponse.blob()
+    // Convert base64 to blob
+    const generatedImageBase64 = response.data[0].b64_json
+    const generatedImageBlob = await (await fetch(
+      `data:image/png;base64,${generatedImageBase64}`
+    )).blob()
 
     // Upload to Supabase Storage
     const fileName = `${listingId}/${Date.now()}-edited.png`
     const { error: uploadError } = await supabaseAdmin.storage
       .from('listing-images')
-      .upload(fileName, imageBlob, {
+      .upload(fileName, generatedImageBlob, {
         contentType: 'image/png',
         cacheControl: '3600',
       })
