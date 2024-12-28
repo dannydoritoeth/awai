@@ -38,6 +38,10 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
+  // Add state for alternatives
+  const [alternatives, setAlternatives] = useState<any[]>([])
+  const [keyImageId, setKeyImageId] = useState<string | null>(null)
+
   // Process and upload image
   const processAndUploadImage = async (originalUrl: string): Promise<string> => {
     try {
@@ -306,15 +310,105 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
       if (error) throw error
 
-      router.refresh()
-      router.push(`/listings/${listingId}/images`)
+      // Get the new image's signed URL
+      const { data: urlData } = await supabase.storage
+        .from('listing-images')
+        .createSignedUrl(data.image.url, 3600)
+
+      if (urlData?.signedUrl) {
+        // Add the new image to alternatives
+        setAlternatives(prev => [...prev, {
+          ...data.image,
+          signedUrl: urlData.signedUrl
+        }])
+        
+        // Reset the mask
+        resetMask()
+        
+        // Clear the description
+        setDescription('')
+        
+        toast.success('Image generated successfully!')
+      }
     } catch (err) {
       console.error('Error generating image:', err)
-      alert('Failed to generate image. Please try again.')
+      toast.error('Failed to generate image. Please try again.')
     } finally {
       setGenerating(false)
     }
   }
+
+  // Fetch alternatives on load
+  useEffect(() => {
+    if (!imageId || !processedUrl) return
+
+    const fetchAlternatives = async () => {
+      const { data, error } = await supabase
+        .from('listing_images')
+        .select('*')
+        .eq('listing_id', listingId)
+        .order('order_index')
+
+      if (!error && data) {
+        // Get signed URLs for all images except the processed one
+        const imagesWithUrls = await Promise.all(
+          data.map(async (img) => {
+            // If this is the current image, use the processed URL
+            if (img.id === imageId) {
+              return {
+                ...img,
+                signedUrl: processedUrl
+              }
+            }
+            // Otherwise get a signed URL for the original image
+            const { data: urlData } = await supabase.storage
+              .from('listing-images')
+              .createSignedUrl(img.url, 3600)
+            return {
+              ...img,
+              signedUrl: urlData?.signedUrl
+            }
+          })
+        )
+        setAlternatives(imagesWithUrls)
+        setKeyImageId(imageId)
+      }
+    }
+
+    fetchAlternatives()
+  }, [imageId, listingId, processedUrl])
+
+  // Handle setting key image
+  const handleSetKeyImage = async (id: string) => {
+    setKeyImageId(id)
+    // Update the UI immediately
+    setAlternatives(prev => 
+      prev.map(img => ({
+        ...img,
+        is_key: img.id === id
+      }))
+    )
+  }
+
+  // Update alternatives after generation
+  useEffect(() => {
+    if (!generating) {
+      // Refresh alternatives list after generation
+      const fetchAlternatives = async () => {
+        const { data, error } = await supabase
+          .from('listing_images')
+          .select('*')
+          .eq('listing_id', listingId)
+          .order('order_index')
+
+        if (!error && data) {
+          setAlternatives(data)
+        }
+      }
+
+      fetchAlternatives()
+    }
+  }, [generating, listingId])
 
   if (loading) {
     return (
@@ -370,36 +464,79 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                     <p className="text-sm text-gray-500 mt-2">This may take a few moments. The processed version will be saved for future use.</p>
                   </div>
                 ) : (
-                  <div className="relative bg-gray-100 rounded-lg overflow-hidden">
-                    {processedUrl && (
-                      <div className="relative">
-                        <div style={{ 
-                          width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
-                          height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
-                          maxHeight: '800px',
-                        }}>
-                          <img 
-                            src={processedUrl}
-                            alt="Selected image"
-                            className="absolute top-0 left-0 w-full h-full"
-                            crossOrigin="anonymous"
-                          />
-                          <canvas
-                            ref={maskCanvasRef}
-                            className="absolute top-0 left-0 cursor-crosshair"
-                            style={{
-                              width: '100%',
-                              height: '100%'
-                            }}
-                            onMouseDown={startDrawing}
-                            onMouseMove={draw}
-                            onMouseUp={stopDrawing}
-                            onMouseLeave={stopDrawing}
-                          />
+                  <>
+                    <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+                      {processedUrl && (
+                        <div className="relative">
+                          <div style={{ 
+                            width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
+                            height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
+                            maxHeight: '800px',
+                          }}>
+                            <img 
+                              src={processedUrl}
+                              alt="Selected image"
+                              className="absolute top-0 left-0 w-full h-full"
+                              crossOrigin="anonymous"
+                            />
+                            <canvas
+                              ref={maskCanvasRef}
+                              className="absolute top-0 left-0 cursor-crosshair"
+                              style={{
+                                width: '100%',
+                                height: '100%'
+                              }}
+                              onMouseDown={startDrawing}
+                              onMouseMove={draw}
+                              onMouseUp={stopDrawing}
+                              onMouseLeave={stopDrawing}
+                            />
+                          </div>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Alternatives List */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Alternative Versions</h4>
+                      <div className="flex items-start gap-4 overflow-x-auto pb-4">
+                        {alternatives.map((alt) => {
+                          const isKeyImage = alt.id === keyImageId
+                          return (
+                            <div 
+                              key={alt.id} 
+                              className={`relative flex-shrink-0 group ${
+                                isKeyImage ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                              }`}
+                            >
+                              <div className="w-32 h-32 relative bg-gray-100 rounded-lg">
+                                {alt.signedUrl && (
+                                  <img
+                                    src={alt.signedUrl}
+                                    alt={isKeyImage ? "Key image" : "Alternative version"}
+                                    className="w-full h-full object-cover rounded-lg"
+                                  />
+                                )}
+                                {isKeyImage && (
+                                  <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                                    Key Image
+                                  </div>
+                                )}
+                              </div>
+                              {!isKeyImage && (
+                                <button
+                                  onClick={() => handleSetKeyImage(alt.id)}
+                                  className="absolute inset-x-0 bottom-0 p-2 bg-black bg-opacity-50 text-white text-xs rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  Set as key
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
