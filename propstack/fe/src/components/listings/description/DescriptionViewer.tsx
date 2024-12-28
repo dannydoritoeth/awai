@@ -21,7 +21,8 @@ const SYNC_OPTIONS = {
     { id: 'rea', name: 'realestate.com.au', icon: '🏠' },
     { id: 'domain', name: 'domain.com.au', icon: '🏘️' },
     { id: 'rma', name: 'RateMyAgent', icon: '⭐' },
-    { id: 'free_portals', name: 'Homely, Properti, & Other Free Portals', icon: '🏡' },
+    { id: 'homely', name: 'Homely', icon: '🏡' },
+    { id: 'properti', name: 'Properti', icon: '🏡' },
   ],
   crms: [
     { id: 'agentbox', name: 'AgentBox', icon: '📊' },
