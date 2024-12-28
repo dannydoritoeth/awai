@@ -5,6 +5,24 @@ import OpenAI from 'https://esm.sh/openai@4.24.1'
 
 console.log('Edit Image function started')
 
+// Helper functions for blob/base64 conversion
+const blobToBase64 = async (blob: Blob): Promise<string> => {
+  const arrayBuffer = await blob.arrayBuffer()
+  const uint8Array = new Uint8Array(arrayBuffer)
+  const base64 = btoa(Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join(''))
+  return base64
+}
+
+const base64ToBlob = async (base64: string): Promise<Blob> => {
+  const base64Data = base64.split(',')[1] // Remove the data:image/png;base64, prefix
+  const byteString = atob(base64Data)
+  const byteArray = new Uint8Array(byteString.length)
+  for (let i = 0; i < byteString.length; i++) {
+    byteArray[i] = byteString.charCodeAt(i)
+  }
+  return new Blob([byteArray], { type: 'image/png' })
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -46,30 +64,29 @@ serve(async (req) => {
       }
     )
 
-    // Get original image
-    const { data: imageData } = await supabaseAdmin
+    // Get the image URL
+    const { data: imageData, error: imageError } = await supabaseAdmin
       .from('listing_images')
       .select('url')
       .eq('id', imageId)
       .single()
 
-    if (!imageData) {
+    if (imageError) {
       throw new Error('Image not found')
     }
 
-    // Get signed URL for the original image
-    const { data: signedUrlData } = await supabaseAdmin.storage
+    // Get the processed image URL
+    const processedImagePath = `ai_processed/${imageId}_processed.png`
+    const { data: processedUrlData, error: processedUrlError } = await supabaseAdmin.storage
       .from('listing-images')
-      .createSignedUrl(imageData.url, 3600)
+      .createSignedUrl(processedImagePath, 60)
 
-    if (!signedUrlData?.signedUrl) {
-      throw new Error('Failed to get signed URL')
+    if (processedUrlError) {
+      throw new Error('Processed image not found')
     }
 
-    console.log('Making request to OpenAI API...')
-
-    // Download the original image
-    const imageResponse = await fetch(signedUrlData.signedUrl)
+    // Download the processed image
+    const imageResponse = await fetch(processedUrlData.signedUrl)
     const imageArrayBuffer = await imageResponse.arrayBuffer()
     const imageFile = new File([imageArrayBuffer], 'image.png', { type: 'image/png' })
 

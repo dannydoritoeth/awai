@@ -24,7 +24,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   const imageId = searchParams.get('imageId')
   const [image, setImage] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [signedUrl, setSignedUrl] = useState<string | null>(null)
+  const [processing, setProcessing] = useState(false)
   const [processedUrl, setProcessedUrl] = useState<string | null>(null)
   const [wasImageResized, setWasImageResized] = useState(false)
   const [editMode, setEditMode] = useState<EditMode>('inpaint')
@@ -32,11 +32,185 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   const [generating, setGenerating] = useState(false)
   const router = useRouter()
 
-  // Add state for drawing
+  // Drawing state
   const [isDrawing, setIsDrawing] = useState(false)
   const [brushSize, setBrushSize] = useState(50)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+
+  // Process and upload image
+  const processAndUploadImage = async (originalUrl: string): Promise<string> => {
+    try {
+      // Load the original image
+      const response = await fetch(originalUrl)
+      const blob = await response.blob()
+      
+      // Create an image element
+      const img = new Image()
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = URL.createObjectURL(blob)
+      })
+
+      // Create canvas for processing
+      const canvas = document.createElement('canvas')
+      let width = img.width
+      let height = img.height
+
+      // Scale down if needed while maintaining aspect ratio
+      const MAX_SIZE = 2048
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+        setWasImageResized(true)
+      }
+
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('Failed to get canvas context')
+
+      // Draw image
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // Try different quality levels until we get under 4MB
+      let quality = 1.0
+      let pngBlob: Blob | null = null
+      const MAX_SIZE_BYTES = 4 * 1024 * 1024
+
+      while (quality >= 0.1) {
+        // Convert to PNG with current quality
+        pngBlob = await new Promise<Blob>((resolve) => {
+          canvas.toBlob(
+            (blob) => resolve(blob!),
+            'image/png',
+            quality
+          )
+        })
+
+        if (pngBlob.size <= MAX_SIZE_BYTES) break
+
+        // If still too large, reduce dimensions by 10%
+        if (quality === 0.1) {
+          width = Math.round(width * 0.9)
+          height = Math.round(height * 0.9)
+          canvas.width = width
+          canvas.height = height
+          ctx.drawImage(img, 0, 0, width, height)
+          quality = 1.0 // Reset quality and try again with smaller dimensions
+          setWasImageResized(true)
+        } else {
+          // Reduce quality by 0.1
+          quality = Math.max(0.1, quality - 0.1)
+        }
+      }
+
+      if (!pngBlob || pngBlob.size > MAX_SIZE_BYTES) {
+        throw new Error('Unable to process image to under 4MB while maintaining quality')
+      }
+
+      // Upload to Supabase
+      const filename = `${imageId}_processed.png`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('listing-images')
+        .upload(`ai_processed/${filename}`, pngBlob, {
+          contentType: 'image/png',
+          upsert: true
+        })
+
+      if (uploadError) throw uploadError
+
+      return uploadData.path
+    } catch (err) {
+      console.error('Error processing image:', err)
+      throw err
+    }
+  }
+
+  // Check if processed version exists
+  const checkProcessedImage = async (imageId: string): Promise<string | null> => {
+    try {
+      const filename = `${imageId}_processed.png`
+      const { data } = await supabase.storage
+        .from('listing-images')
+        .list('ai_processed', {
+          search: filename
+        })
+
+      if (data && data.length > 0) {
+        const { data: urlData } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrl(`ai_processed/${filename}`, 3600)
+        
+        return urlData?.signedUrl || null
+      }
+      return null
+    } catch (err) {
+      console.error('Error checking processed image:', err)
+      return null
+    }
+  }
+
+  // Initialize image
+  useEffect(() => {
+    if (!imageId) {
+      router.push(`/listings/${listingId}/images`)
+      return
+    }
+
+    const initImage = async () => {
+      try {
+        // Get original image data
+        const { data: imageData, error: imageError } = await supabase
+          .from('listing_images')
+          .select('*')
+          .eq('id', imageId)
+          .single()
+
+        if (imageError) throw imageError
+        setImage(imageData)
+        setLoading(false)
+
+        // Check for existing processed version
+        const existingProcessedUrl = await checkProcessedImage(imageId)
+        if (existingProcessedUrl) {
+          setProcessedUrl(existingProcessedUrl)
+          return
+        }
+
+        // If no processed version exists, start processing
+        setProcessing(true)
+        
+        // Get signed URL for the original image
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrl(imageData.url, 3600)
+
+        if (urlError) throw urlError
+
+        // Process and upload the image
+        const processedPath = await processAndUploadImage(urlData.signedUrl)
+
+        // Get signed URL for the processed image
+        const { data: processedUrlData, error: processedUrlError } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrl(processedPath, 3600)
+
+        if (processedUrlError) throw processedUrlError
+
+        setProcessedUrl(processedUrlData.signedUrl)
+        setProcessing(false)
+      } catch (err) {
+        console.error('Error initializing image:', err)
+        toast.error('Failed to prepare image for editing')
+        router.push(`/listings/${listingId}/images`)
+      }
+    }
+
+    initImage()
+  }, [imageId, listingId, router])
 
   // Drawing functions
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -79,142 +253,12 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
     return maskCanvasRef.current.toDataURL('image/png')
   }
 
-  // Initialize image processing
-  useEffect(() => {
-    if (!imageId) {
-      router.push(`/listings/${listingId}/images`)
-      return
-    }
-
-    const fetchImage = async () => {
-      console.log('Fetching image data...')
-      const { data, error } = await supabase
-        .from('listing_images')
-        .select('*')
-        .eq('id', imageId)
-        .single()
-
-      if (error) {
-        console.error('Error fetching image:', error)
-        router.push(`/listings/${listingId}/images`)
-        return
-      }
-
-      console.log('Image data:', data)
-      setImage(data)
-
-      // Get signed URL for the image
-      console.log('Getting signed URL for:', data.url)
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from('listing-images')
-        .createSignedUrl(data.url, 3600)
-
-      if (signedUrlError) {
-        console.error('Error getting signed URL:', signedUrlError)
-        return
-      }
-
-      console.log('Signed URL:', signedUrlData.signedUrl)
-      setSignedUrl(signedUrlData.signedUrl)
-      setLoading(false)
-    }
-
-    fetchImage()
-  }, [imageId, listingId, router])
-
-  // Process image when signedUrl changes
-  useEffect(() => {
-    if (!signedUrl) return
-
-    const loadAndProcessImage = async () => {
-      try {
-        // Load the original image
-        const img = new Image()
-        const imgLoaded = new Promise((resolve, reject) => {
-          img.onload = resolve
-          img.onerror = reject
-        })
-        img.crossOrigin = 'anonymous'
-        img.src = signedUrl
-        await imgLoaded
-
-        console.log('Original image loaded:', img.width, 'x', img.height)
-
-        // Create canvas for conversion/resizing
-        const canvas = document.createElement('canvas')
-        let width = img.width
-        let height = img.height
-
-        // Scale down if needed while maintaining aspect ratio
-        const MAX_WIDTH = 2048
-        const MAX_HEIGHT = 2048
-        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-          const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height)
-          width = Math.round(width * ratio)
-          height = Math.round(height * ratio)
-          setWasImageResized(true)
-          console.log('Image resized to:', width, 'x', height)
-        }
-
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
-        if (!ctx) throw new Error('Failed to get canvas context')
-
-        // Draw image on canvas
-        ctx.drawImage(img, 0, 0, width, height)
-
-        // Convert to PNG and check size
-        const pngBlob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob(
-            (blob) => {
-              if (blob) resolve(blob)
-              else reject(new Error('Failed to convert image'))
-            },
-            'image/png',
-            1.0
-          )
-        })
-
-        console.log('Converted PNG size:', Math.round(pngBlob.size / 1024 / 1024 * 100) / 100, 'MB')
-
-        // Check if size is over 4MB
-        if (pngBlob.size > 4 * 1024 * 1024) {
-          throw new Error('Image is too large for AI editing (max 4MB). Please try a smaller image.')
-        }
-
-        // Create object URL for the processed image
-        const processedImageUrl = URL.createObjectURL(pngBlob)
-        setProcessedUrl(processedImageUrl)
-        setLoading(false)
-
-        console.log('Image processed and ready')
-      } catch (err) {
-        console.error('Error processing image:', err)
-        toast.error(err instanceof Error ? err.message : 'Failed to process image')
-        router.push(`/listings/${listingId}/images`)
-      }
-    }
-
-    loadAndProcessImage()
-  }, [signedUrl, listingId, router])
-
-  // Clean up object URLs on unmount
-  useEffect(() => {
-    return () => {
-      if (processedUrl) {
-        URL.revokeObjectURL(processedUrl)
-      }
-    }
-  }, [processedUrl])
-
-  // Add canvas setup when image loads
+  // Set up canvas when processed image is ready
   useEffect(() => {
     if (!processedUrl || !maskCanvasRef.current) return
 
     const img = new Image()
     img.onload = () => {
-      // Calculate dimensions to fit within a reasonable size (800px height max)
       const MAX_HEIGHT = 800
       let width = img.width
       let height = img.height
@@ -225,10 +269,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
         width = Math.round(height * aspectRatio)
       }
 
-      setCanvasSize({
-        width,
-        height
-      })
+      setCanvasSize({ width, height })
 
       if (maskCanvasRef.current) {
         maskCanvasRef.current.width = img.width
@@ -238,6 +279,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
     img.src = processedUrl
   }, [processedUrl])
 
+  // Handle generate
   const handleGenerate = async () => {
     if (!description) {
       alert('Please describe the changes you want to make')
@@ -264,7 +306,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
       if (error) throw error
 
-      // Refresh the image list
       router.refresh()
       router.push(`/listings/${listingId}/images`)
     } catch (err) {
@@ -288,7 +329,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
     )
   }
 
-  if (!image || !processedUrl) {
+  if (!image) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -322,36 +363,44 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                     Note: Your image has been automatically resized to optimize for AI processing.
                   </div>
                 )}
-                <div className="relative bg-gray-100 rounded-lg overflow-hidden">
-                  {processedUrl && (
-                    <div className="relative">
-                      <div style={{ 
-                        width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
-                        height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
-                        maxHeight: '800px',
-                      }}>
-                        <img 
-                          src={processedUrl}
-                          alt="Selected image"
-                          className="absolute top-0 left-0 w-full h-full"
-                          crossOrigin="anonymous"
-                        />
-                        <canvas
-                          ref={maskCanvasRef}
-                          className="absolute top-0 left-0 cursor-crosshair"
-                          style={{
-                            width: '100%',
-                            height: '100%'
-                          }}
-                          onMouseDown={startDrawing}
-                          onMouseMove={draw}
-                          onMouseUp={stopDrawing}
-                          onMouseLeave={stopDrawing}
-                        />
+                {processing ? (
+                  <div className="p-8 text-center">
+                    <Spinner className="mx-auto mb-4" />
+                    <p className="text-gray-600">Processing image for AI editing...</p>
+                    <p className="text-sm text-gray-500 mt-2">This may take a few moments. The processed version will be saved for future use.</p>
+                  </div>
+                ) : (
+                  <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+                    {processedUrl && (
+                      <div className="relative">
+                        <div style={{ 
+                          width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
+                          height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
+                          maxHeight: '800px',
+                        }}>
+                          <img 
+                            src={processedUrl}
+                            alt="Selected image"
+                            className="absolute top-0 left-0 w-full h-full"
+                            crossOrigin="anonymous"
+                          />
+                          <canvas
+                            ref={maskCanvasRef}
+                            className="absolute top-0 left-0 cursor-crosshair"
+                            style={{
+                              width: '100%',
+                              height: '100%'
+                            }}
+                            onMouseDown={startDrawing}
+                            onMouseMove={draw}
+                            onMouseUp={stopDrawing}
+                            onMouseLeave={stopDrawing}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
                 <div className="mt-4">
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
