@@ -588,29 +588,10 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
             {/* Right side - Controls (1/3) */}
             <div className="w-1/3 space-y-6">
-              {/* Credits Counter */}
-              <div className="text-sm text-gray-600 text-right">
-                ⚡ 961 image credits remaining
-              </div>
-
               <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
-                {/* Step 1: Image Selection */}
+                {/* Step 1: Edit Mode */}
                 <div>
-                  <h3 className="text-lg font-medium mb-4">Step 1: Select the image you want to edit</h3>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center text-green-600">
-                      <CheckCircleIcon className="w-5 h-5 mr-2" />
-                      Ready to edit
-                    </div>
-                    <button className="text-sm text-blue-600 hover:text-blue-700">
-                      Change Image
-                    </button>
-                  </div>
-                </div>
-
-                {/* Step 2: Edit Mode */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Step 2: Choose your edit mode</h3>
+                  <h3 className="text-lg font-medium mb-4">Step 1: Choose your edit mode</h3>
                   <div className="flex gap-4">
                     <button
                       onClick={() => setEditMode('inpaint')}
@@ -620,7 +601,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                           : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      Inpaint (3 credits)
+                      Inpaint
                     </button>
                     <button
                       onClick={() => setEditMode('erase')}
@@ -630,14 +611,14 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                           : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      Erase (3 credits)
+                      Erase
                     </button>
                   </div>
                 </div>
 
-                {/* Step 3: Masking */}
+                {/* Step 2: Masking */}
                 <div>
-                  <h3 className="text-lg font-medium mb-4">Step 3: Mask the areas/items you want to change</h3>
+                  <h3 className="text-lg font-medium mb-4">Step 2: Mask the areas/items you want to change</h3>
                   <p className="text-sm text-gray-600 mb-4">
                     Use the brush tool to paint over the areas you want to change
                   </p>
@@ -669,10 +650,10 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                   </div>
                 </div>
 
-                {/* Step 4: Description */}
+                {/* Step 3: Description */}
                 {editMode === 'inpaint' && (
                   <div>
-                    <h3 className="text-lg font-medium mb-4">Step 4: Describe the changes you want AI to make</h3>
+                    <h3 className="text-lg font-medium mb-4">Step 3: Describe the changes you want AI to make</h3>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Change description <span className="text-rose-600">(Draw on image first)</span>
@@ -687,10 +668,10 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                   </div>
                 )}
 
-                {/* Step 5: Generate */}
+                {/* Step 4: Generate */}
                 <div>
                   <h3 className="text-lg font-medium mb-4">
-                    Step {editMode === 'inpaint' ? '5' : '4'}: Generate your image
+                    Step {editMode === 'inpaint' ? '4' : '3'}: Generate your image
                   </h3>
                   <button
                     onClick={handleGenerate}
