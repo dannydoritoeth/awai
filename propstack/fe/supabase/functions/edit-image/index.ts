@@ -34,8 +34,13 @@ serve(async (req) => {
     const { imageId, listingId, mask, mode, description } = await req.json()
 
     // Validate inputs
-    if (!imageId || !listingId || !mask || !mode || !description) {
+    if (!imageId || !listingId || !mask || !mode) {
       throw new Error('Missing required fields')
+    }
+
+    // Description is only required for inpaint mode
+    if (mode === 'inpaint' && !description) {
+      throw new Error('Description is required for inpaint mode')
     }
 
     // Get environment variables
@@ -101,7 +106,7 @@ serve(async (req) => {
     const response = await openai.images.edit({
       image: imageFile,
       mask: maskFile,
-      prompt: description,
+      prompt: mode === 'erase' ? 'Remove the selected area and fill with surrounding content' : description,
       n: 1,
       size: '1024x1024',
       response_format: 'b64_json'
@@ -117,11 +122,11 @@ serve(async (req) => {
       `data:image/png;base64,${generatedImageBase64}`
     )).blob()
 
-    // Upload to Supabase Storage
-    const fileName = `${listingId}/${Date.now()}-edited.png`
+    // Upload to Supabase Storage with a temporary name
+    const tempFileName = `temp/${listingId}/${Date.now()}-edited.png`
     const { error: uploadError } = await supabaseAdmin.storage
       .from('listing-images')
-      .upload(fileName, generatedImageBlob, {
+      .upload(tempFileName, generatedImageBlob, {
         contentType: 'image/png',
         cacheControl: '3600',
       })
@@ -130,23 +135,22 @@ serve(async (req) => {
       throw uploadError
     }
 
-    // Create new image record
-    const { data: newImage, error: dbError } = await supabaseAdmin
-      .from('listing_images')
-      .insert({
-        listing_id: listingId,
-        url: fileName,
-        order_index: 999, // Add to end
-      })
-      .select()
-      .single()
+    // Get a signed URL for the uploaded image
+    const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+      .from('listing-images')
+      .createSignedUrl(tempFileName, 3600)
 
-    if (dbError) {
-      throw dbError
+    if (signedUrlError) {
+      throw signedUrlError
     }
 
     return new Response(
-      JSON.stringify({ success: true, image: newImage }),
+      JSON.stringify({ 
+        success: true, 
+        image: {
+          signedUrl: signedUrlData.signedUrl
+        }
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

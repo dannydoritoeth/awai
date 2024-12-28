@@ -285,7 +285,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
   // Handle generate
   const handleGenerate = async () => {
-    if (!description) {
+    if (editMode === 'inpaint' && !description) {
       alert('Please describe the changes you want to make')
       return
     }
@@ -304,32 +304,28 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
           listingId,
           mask: maskDataUrl,
           mode: editMode,
-          description,
+          description: editMode === 'inpaint' ? description : undefined,
         }
       })
 
       if (error) throw error
 
-      // Get the new image's signed URL
-      const { data: urlData } = await supabase.storage
-        .from('listing-images')
-        .createSignedUrl(data.image.url, 3600)
-
-      if (urlData?.signedUrl) {
-        // Add the new image to alternatives
-        setAlternatives(prev => [...prev, {
-          ...data.image,
-          signedUrl: urlData.signedUrl
-        }])
-        
-        // Reset the mask
-        resetMask()
-        
-        // Clear the description
+      // Add the new image to alternatives without creating a record
+      setAlternatives(prev => [...prev, {
+        signedUrl: data.image.signedUrl,
+        listing_id: listingId,
+        is_generated: true
+      }])
+      
+      // Reset the mask
+      resetMask()
+      
+      // Clear the description if in inpaint mode
+      if (editMode === 'inpaint') {
         setDescription('')
-        
-        toast.success('Image generated successfully!')
       }
+      
+      toast.success('Image generated successfully!')
     } catch (err) {
       console.error('Error generating image:', err)
       toast.error('Failed to generate image. Please try again.')
@@ -379,15 +375,62 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   }, [imageId, listingId, processedUrl])
 
   // Handle setting key image
-  const handleSetKeyImage = async (id: string) => {
-    setKeyImageId(id)
-    // Update the UI immediately
-    setAlternatives(prev => 
-      prev.map(img => ({
-        ...img,
-        is_key: img.id === id
-      }))
-    )
+  const handleSetKeyImage = async (alt: any) => {
+    setKeyImageId(alt.id)
+    
+    try {
+      // If this is a generated image that hasn't been saved yet
+      if (!alt.id) {
+        // Upload to Supabase Storage
+        const response = await fetch(alt.signedUrl)
+        const blob = await response.blob()
+        const fileName = `${listingId}/${Date.now()}-edited.png`
+        
+        const { error: uploadError } = await supabase.storage
+          .from('listing-images')
+          .upload(fileName, blob, {
+            contentType: 'image/png',
+            cacheControl: '3600',
+          })
+
+        if (uploadError) throw uploadError
+
+        // Create new image record
+        const { data: newImage, error: dbError } = await supabase
+          .from('listing_images')
+          .insert({
+            listing_id: listingId,
+            url: fileName,
+            order_index: 999, // Add to end
+          })
+          .select()
+          .single()
+
+        if (dbError) throw dbError
+
+        // Update alternatives list with the new image
+        setAlternatives(prev => 
+          prev.map(img => 
+            img.signedUrl === alt.signedUrl 
+              ? { ...newImage, signedUrl: alt.signedUrl, is_key: true }
+              : { ...img, is_key: false }
+          )
+        )
+
+        toast.success('Image saved successfully!')
+      } else {
+        // Just update the UI for existing images
+        setAlternatives(prev => 
+          prev.map(img => ({
+            ...img,
+            is_key: img.id === alt.id
+          }))
+        )
+      }
+    } catch (err) {
+      console.error('Error saving image:', err)
+      toast.error('Failed to save image. Please try again.')
+    }
   }
 
   // Update alternatives after generation
@@ -525,7 +568,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                               </div>
                               {!isKeyImage && (
                                 <button
-                                  onClick={() => handleSetKeyImage(alt.id)}
+                                  onClick={() => handleSetKeyImage(alt)}
                                   className="absolute inset-x-0 bottom-0 p-2 bg-black bg-opacity-50 text-white text-xs rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
                                   Set as key
@@ -625,29 +668,33 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                 </div>
 
                 {/* Step 4: Description */}
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Step 4: Describe the changes you want AI to make</h3>
+                {editMode === 'inpaint' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Change description <span className="text-rose-600">(Draw on image first)</span>
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="For best results describe colors, materials, style, etc."
-                      className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md"
-                    />
+                    <h3 className="text-lg font-medium mb-4">Step 4: Describe the changes you want AI to make</h3>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Change description <span className="text-rose-600">(Draw on image first)</span>
+                      </label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="For best results describe colors, materials, style, etc."
+                        className="w-full h-24 px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Step 5: Generate */}
                 <div>
-                  <h3 className="text-lg font-medium mb-4">Step 5: Generate your image</h3>
+                  <h3 className="text-lg font-medium mb-4">
+                    Step {editMode === 'inpaint' ? '5' : '4'}: Generate your image
+                  </h3>
                   <button
                     onClick={handleGenerate}
-                    disabled={generating || !description}
+                    disabled={generating || (editMode === 'inpaint' && !description)}
                     className={`w-full py-3 rounded-md text-white ${
-                      generating || !description
+                      generating || (editMode === 'inpaint' && !description)
                         ? 'bg-gray-400 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700'
                     }`}
