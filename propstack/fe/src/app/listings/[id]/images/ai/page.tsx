@@ -35,7 +35,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   // Add state for drawing
   const [isDrawing, setIsDrawing] = useState(false)
   const [brushSize, setBrushSize] = useState(50)
-  const [scale, setScale] = useState(100)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
@@ -72,7 +71,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
     if (!maskCanvasRef.current) return
     const ctx = maskCanvasRef.current.getContext('2d')
     if (!ctx) return
-    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height)
+    ctx.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height)
   }
 
   const getMaskDataUrl = () => {
@@ -215,9 +214,20 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
     const img = new Image()
     img.onload = () => {
+      // Calculate dimensions to fit within a reasonable size (800px height max)
+      const MAX_HEIGHT = 800
+      let width = img.width
+      let height = img.height
+
+      if (height > MAX_HEIGHT) {
+        const aspectRatio = width / height
+        height = MAX_HEIGHT
+        width = Math.round(height * aspectRatio)
+      }
+
       setCanvasSize({
-        width: img.width,
-        height: img.height
+        width,
+        height
       })
 
       if (maskCanvasRef.current) {
@@ -315,16 +325,20 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                 <div className="relative bg-gray-100 rounded-lg overflow-hidden">
                   {processedUrl && (
                     <div className="relative">
-                      <div style={{ maxWidth: `${scale}%` }}>
+                      <div style={{ 
+                        width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
+                        height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
+                        maxHeight: '800px',
+                      }}>
                         <img 
                           src={processedUrl}
                           alt="Selected image"
-                          className="w-full h-auto"
+                          className="absolute top-0 left-0 w-full h-full"
                           crossOrigin="anonymous"
                         />
                         <canvas
                           ref={maskCanvasRef}
-                          className="absolute inset-0 cursor-crosshair"
+                          className="absolute top-0 left-0 cursor-crosshair"
                           style={{
                             width: '100%',
                             height: '100%'
@@ -338,27 +352,7 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Image Scale
-                      </label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min="10"
-                          max="100"
-                          value={scale}
-                          onChange={(e) => setScale(parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                        <span className="text-sm text-gray-600 whitespace-nowrap">
-                          {scale}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="mt-4">
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
