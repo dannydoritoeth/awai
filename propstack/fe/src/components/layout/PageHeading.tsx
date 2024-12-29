@@ -9,6 +9,7 @@ interface PageHeadingProps {
   showBackButton?: boolean
   backHref?: string
   backPath?: string
+  children?: React.ReactNode
 }
 
 export function PageHeading({ 
@@ -16,7 +17,8 @@ export function PageHeading({
   description,
   showBackButton,
   backHref,
-  backPath
+  backPath,
+  children
 }: PageHeadingProps) {
   return (
     <div className="mb-8">
@@ -30,6 +32,9 @@ export function PageHeading({
       </div>
       {description && (
         <p className="text-gray-600">{description}</p>
+      )}
+      {children && (
+        <p className="text-gray-600 mt-1">{children}</p>
       )}
     </div>
   )

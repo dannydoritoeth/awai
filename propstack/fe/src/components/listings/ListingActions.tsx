@@ -58,7 +58,7 @@ export function ListingActions({ listingId, statuses }: ListingActionsProps) {
           </button>
 
           <button
-            onClick={() => router.push(`/listings/${listingId}/social`)}
+            onClick={() => router.push(`/listings/${listingId}/social-media`)}
             className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             <ShareIcon className="w-4 h-4 mr-2" />

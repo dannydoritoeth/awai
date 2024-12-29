@@ -166,11 +166,48 @@ CREATE TABLE IF NOT EXISTS listing_images (
 CREATE TABLE IF NOT EXISTS social_media_content (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   listing_id UUID REFERENCES listings(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  title TEXT NOT NULL,
+  post_type TEXT NOT NULL, -- e.g., 'new_listing', 'price_update', 'open_house', etc.
+  custom_context TEXT, -- Context for custom posts
+  content_options JSONB, -- Stores AI generation options like emojis, style, etc.
+  generated_content JSONB, -- Stores generated content for each platform
+  selected_images UUID[], -- Array of listing_image IDs
+  content TEXT, -- The final edited content
   platform TEXT CHECK (platform IN ('facebook', 'instagram', 'twitter', 'linkedin')),
-  content TEXT,
-  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'published'))
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'ready', 'scheduled', 'published')),
+  scheduled_for TIMESTAMP WITH TIME ZONE,
+  published_at TIMESTAMP WITH TIME ZONE,
+  error_message TEXT
 );
+
+-- Create trigger for updating timestamp
+DROP TRIGGER IF EXISTS set_timestamp ON social_media_content;
+CREATE TRIGGER set_timestamp
+  BEFORE UPDATE ON social_media_content
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_timestamp();
+
+-- Enable RLS on social_media_content table
+ALTER TABLE social_media_content ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first
+DROP POLICY IF EXISTS "Users can manage their social_media_content" ON social_media_content;
+
+-- Add RLS policies for social_media_content table
+CREATE POLICY "Users can manage their social_media_content"
+  ON social_media_content FOR ALL
+  USING (auth.uid() = user_id);
+
+-- Drop existing indexes first
+DROP INDEX IF EXISTS idx_social_media_content_listing_id;
+DROP INDEX IF EXISTS idx_social_media_content_user_id;
+
+-- Add index for social_media_content table
+CREATE INDEX idx_social_media_content_listing_id ON social_media_content(listing_id);
+CREATE INDEX idx_social_media_content_user_id ON social_media_content(user_id);
 
 -- Create title_checks table
 CREATE TABLE IF NOT EXISTS title_checks (
@@ -208,7 +245,6 @@ CREATE POLICY "Users can manage their title checks"
 
 -- Add indexes for the new tables
 CREATE INDEX idx_listing_images_listing_id ON listing_images(listing_id);
-CREATE INDEX idx_social_media_content_listing_id ON social_media_content(listing_id);
 CREATE INDEX idx_title_checks_listing_id ON title_checks(listing_id);
 
 -- Add portal sync tracking
@@ -230,6 +266,112 @@ ADD COLUMN IF NOT EXISTS version INTEGER;
 -- Add index for better query performance
 CREATE INDEX IF NOT EXISTS idx_description_portal_sync_description_id 
   ON description_portal_sync(description_id);
+
+-- Create storage bucket for listing images if it doesn't exist
+insert into storage.buckets (id, name, public)
+values ('listing-images', 'listing-images', true)
+on conflict (id) do nothing;
+
+-- Storage Policies
+-- Drop existing policies first
+drop policy if exists "Allow public access to listing images" on storage.objects;
+drop policy if exists "Allow authenticated users to upload images" on storage.objects;
+drop policy if exists "Allow users to delete their own images" on storage.objects;
+
+-- Recreate policies
+create policy "Allow public access to listing images"
+on storage.objects for select
+using (bucket_id = 'listing-images');
+
+create policy "Allow authenticated users to upload images"
+on storage.objects for insert
+with check (
+  bucket_id = 'listing-images' 
+  and auth.role() = 'authenticated'
+);
+
+create policy "Allow users to delete their own images"
+on storage.objects for delete
+using (
+  bucket_id = 'listing-images' 
+  and auth.role() = 'authenticated'
+);
+
+-- Update listing_images table to use order_index consistently
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'listing_images'
+        AND column_name = 'order'
+    ) THEN
+        ALTER TABLE listing_images RENAME COLUMN "order" TO order_index;
+    END IF;
+END $$;
+
+-- Add index for order_index
+create index if not exists idx_listing_images_order_index 
+on listing_images(order_index);
+
+-- Drop existing tables if they exist
+DROP TABLE IF EXISTS content CASCADE;
+
+-- Create timestamp trigger function if it doesn't exist
+CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create content table
+CREATE TABLE IF NOT EXISTS content (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  listing_id UUID REFERENCES listings(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  title TEXT NOT NULL,
+  post_type TEXT NOT NULL, -- e.g., 'new_listing', 'price_update', 'open_house', etc.
+  custom_context TEXT, -- Context for custom posts
+  content_options JSONB, -- Stores AI generation options like emojis, style, etc.
+  generated_content JSONB, -- Stores generated content for each platform
+  selected_images UUID[], -- Array of listing_image IDs
+  content TEXT, -- The final edited content
+  platform TEXT CHECK (platform IN ('facebook', 'instagram', 'twitter', 'linkedin')),
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'ready', 'scheduled', 'published')),
+  scheduled_for TIMESTAMP WITH TIME ZONE,
+  published_at TIMESTAMP WITH TIME ZONE,
+  error_message TEXT
+);
+
+-- Create trigger for updating timestamp
+DROP TRIGGER IF EXISTS set_timestamp ON content;
+CREATE TRIGGER set_timestamp
+  BEFORE UPDATE ON content
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_set_timestamp();
+
+-- Enable RLS on content table
+ALTER TABLE content ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first
+DROP POLICY IF EXISTS "Users can manage their content" ON content;
+
+-- Add RLS policies for content table
+CREATE POLICY "Users can manage their content"
+  ON content FOR ALL
+  USING (auth.uid() = user_id);
+
+-- Drop existing indexes first
+DROP INDEX IF EXISTS idx_content_listing_id;
+DROP INDEX IF EXISTS idx_content_user_id;
+
+-- Add index for content table
+CREATE INDEX idx_content_listing_id ON content(listing_id);
+CREATE INDEX idx_content_user_id ON content(user_id);
 
 -- Create storage bucket for listing images if it doesn't exist
 insert into storage.buckets (id, name, public)
