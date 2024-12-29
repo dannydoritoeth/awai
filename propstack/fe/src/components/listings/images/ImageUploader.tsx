@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline'
+import toast from 'react-hot-toast'
 
 interface ImageUploaderProps {
   onUpload: (files: FileList) => Promise<void>
@@ -8,8 +9,9 @@ interface ImageUploaderProps {
 }
 
 export function ImageUploader({ onUpload, loading }: ImageUploaderProps) {
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     console.log('Accepted files:', acceptedFiles.length)
+    console.log('Rejected files:', rejectedFiles.length)
     
     if (acceptedFiles.length === 0) {
       console.log('No files accepted')
@@ -38,7 +40,14 @@ export function ImageUploader({ onUpload, loading }: ImageUploaderProps) {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp']
     },
     disabled: loading,
-    maxSize: 5 * 1024 * 1024 // 5MB
+    maxSize: 5 * 1024 * 1024, // 5MB
+    onDropRejected: (rejectedFiles) => {
+      rejectedFiles.forEach(rejection => {
+        if (rejection.errors[0]?.code === 'file-too-large') {
+          toast.error(`${rejection.file.name} is too large. Maximum size is 5MB.`)
+        }
+      })
+    }
   })
 
   return (
