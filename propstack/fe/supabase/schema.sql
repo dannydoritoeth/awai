@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS social_media_content CASCADE;
 DROP TABLE IF EXISTS title_checks CASCADE;
 DROP TABLE IF EXISTS generated_descriptions CASCADE;
 DROP TABLE IF EXISTS listings CASCADE;
+DROP TABLE IF EXISTS content CASCADE;
 
 -- Create listings table
 CREATE TABLE IF NOT EXISTS listings (
@@ -315,7 +316,6 @@ create index if not exists idx_listing_images_order_index
 on listing_images(order_index);
 
 -- Drop existing tables if they exist
-DROP TABLE IF EXISTS content CASCADE;
 
 -- Create timestamp trigger function if it doesn't exist
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
@@ -373,49 +373,14 @@ DROP INDEX IF EXISTS idx_content_user_id;
 CREATE INDEX idx_content_listing_id ON content(listing_id);
 CREATE INDEX idx_content_user_id ON content(user_id);
 
--- Create storage bucket for listing images if it doesn't exist
-insert into storage.buckets (id, name, public)
-values ('listing-images', 'listing-images', true)
-on conflict (id) do nothing;
-
--- Storage Policies
--- Drop existing policies first
-drop policy if exists "Allow public access to listing images" on storage.objects;
-drop policy if exists "Allow authenticated users to upload images" on storage.objects;
-drop policy if exists "Allow users to delete their own images" on storage.objects;
-
--- Recreate policies
-create policy "Allow public access to listing images"
-on storage.objects for select
-using (bucket_id = 'listing-images');
-
-create policy "Allow authenticated users to upload images"
-on storage.objects for insert
-with check (
-  bucket_id = 'listing-images' 
-  and auth.role() = 'authenticated'
-);
-
-create policy "Allow users to delete their own images"
-on storage.objects for delete
-using (
-  bucket_id = 'listing-images' 
-  and auth.role() = 'authenticated'
-);
-
--- Update listing_images table to use order_index consistently
+-- Add new columns to social_media_content table if they don't exist
 DO $$
 BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'listing_images'
-        AND column_name = 'order'
-    ) THEN
-        ALTER TABLE listing_images RENAME COLUMN "order" TO order_index;
-    END IF;
-END $$;
-
--- Add index for order_index
-create index if not exists idx_listing_images_order_index 
-on listing_images(order_index); 
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'social_media_content' AND column_name = 'selected_images') THEN
+    ALTER TABLE social_media_content ADD COLUMN selected_images uuid[] DEFAULT '{}';
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'social_media_content' AND column_name = 'hero_image') THEN
+    ALTER TABLE social_media_content ADD COLUMN hero_image uuid REFERENCES listing_images(id);
+  END IF;
+END $$; 
