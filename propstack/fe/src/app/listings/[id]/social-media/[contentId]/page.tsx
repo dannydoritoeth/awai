@@ -483,10 +483,10 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                       onChange={(e) => setGenerationOptions(prev => ({ ...prev, agentContext: e.target.value }))}
                       rows={3}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      placeholder="Add any specific directions or context for the AI (e.g., highlight specific features, target audience, unique selling points)"
+                      placeholder="Share your unique perspective on this property - what stands out to you? What excites you about it? Your authentic take will make the content more genuine."
                     />
                     <p className="mt-1 text-sm text-gray-500">
-                      This helps guide the AI in generating more targeted and effective content
+                      Add your personal touch to make the content authentic and uniquely yours
                     </p>
                   </div>
 

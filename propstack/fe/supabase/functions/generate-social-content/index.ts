@@ -47,6 +47,49 @@ const PLATFORM_LIMITS = {
   linkedin: 3000
 }
 
+// Add content length guidelines to the prompt
+const getContentLengthGuideline = (length: string) => {
+  switch (length) {
+    case 'short':
+      return 'Keep the response to 1-2 concise sentences.'
+    case 'medium':
+      return 'Keep the response to 2-3 sentences.'
+    case 'long':
+      return 'Write 3-4 detailed sentences.'
+    default:
+      return 'Keep the response to 2-3 sentences.'
+  }
+}
+
+const generatePrompt = (listing: any, options: any) => {
+  const lengthGuideline = getContentLengthGuideline(options.contentLength)
+  const toneGuideline = `Use a ${options.tone} tone.`
+  const emojiGuideline = options.useEmojis ? 'Include relevant emojis.' : 'Do not use emojis.'
+  const ctaGuideline = options.callToAction.type !== 'none' 
+    ? `Include a call to action: ${options.callToAction.type === 'custom' ? options.callToAction.customText : options.callToAction.type}.` 
+    : ''
+  
+  let prompt = `Write a ${options.post_type} post for a real estate property.
+${lengthGuideline}
+${toneGuideline}
+${emojiGuideline}
+${ctaGuideline}
+
+Property details:
+- Address: ${listing.address}
+- Price: ${listing.price}
+- Bedrooms: ${listing.bedrooms}
+- Bathrooms: ${listing.bathrooms}
+- Square Feet: ${listing.square_feet}
+
+${options.agentContext ? `Agent's perspective: ${options.agentContext}` : ''}
+${options.customContext ? `Additional context: ${options.customContext}` : ''}
+
+Generate ONLY the post content, without any explanations or formatting.`
+
+  return prompt
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -118,24 +161,17 @@ serve(async (req: Request) => {
       try {
         // Generate organic post if selected
         if (settings.organic) {
-          const prompt = `Generate a ${platform} post for a real estate listing with the following details:
-        
-Address: ${listing.address}
-Price: ${listing.price}
-Bedrooms: ${listing.bedrooms}
-Bathrooms: ${listing.bathrooms}
-Square Feet: ${listing.interior_size}
-Description: ${listing.description || ''}
-
-Post Type: ${content.post_type}${content.post_type === 'custom' ? `\nCustom Post Context: ${content.custom_context}` : ''}
-Writing Tone: ${options.tone}
-${options.useEmojis ? 'Include relevant emojis' : 'Do not use emojis'}
-
-${options.agentContext ? `Additional Context: ${options.agentContext}` : ''}
-
-Character Limit: ${PLATFORM_LIMITS[platform]}
-
-Generate a compelling and engaging organic post that highlights the key features and benefits of this property${content.post_type === 'custom' ? ' based on the provided custom context' : ''}.`
+          const prompt = generatePrompt(listing, {
+            post_type: content.post_type,
+            customContext: content.custom_context,
+            agentContext: options.agentContext,
+            tone: options.tone,
+            useEmojis: options.useEmojis,
+            contentLength: 'medium',
+            callToAction: {
+              type: 'none'
+            }
+          })
 
           const completion = await openai.chat.completions.create({
             model: 'gpt-4',
@@ -158,24 +194,17 @@ Generate a compelling and engaging organic post that highlights the key features
 
         // Generate ad copy if selected
         if (settings.ad) {
-          const prompt = `Generate ${platform} ad copy for a real estate listing with the following details:
-        
-Address: ${listing.address}
-Price: ${listing.price}
-Bedrooms: ${listing.bedrooms}
-Bathrooms: ${listing.bathrooms}
-Square Feet: ${listing.interior_size}
-Description: ${listing.description || ''}
-
-Post Type: ${content.post_type}${content.post_type === 'custom' ? `\nCustom Post Context: ${content.custom_context}` : ''}
-Writing Tone: ${options.tone}
-${options.useEmojis ? 'Include relevant emojis' : 'Do not use emojis'}
-
-${options.agentContext ? `Additional Context: ${options.agentContext}` : ''}
-
-Character Limit: ${PLATFORM_LIMITS[platform]}
-
-Generate compelling ad copy that drives engagement and interest in this property. Focus on creating a sense of urgency and highlighting unique value propositions${content.post_type === 'custom' ? ' while incorporating the provided custom context' : ''}.`
+          const prompt = generatePrompt(listing, {
+            post_type: content.post_type,
+            customContext: content.custom_context,
+            agentContext: options.agentContext,
+            tone: options.tone,
+            useEmojis: options.useEmojis,
+            contentLength: 'medium',
+            callToAction: {
+              type: 'none'
+            }
+          })
 
           const completion = await openai.chat.completions.create({
             model: 'gpt-4',
