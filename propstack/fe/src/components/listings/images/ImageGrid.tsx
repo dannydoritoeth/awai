@@ -52,8 +52,8 @@ export function ImageGrid({
 
         // Try to get from cache first
         const cacheKey = `image-${image.id}`
-        caches.open('image-cache').then(cache => 
-          cache.match(cacheKey).then(cachedResponse => {
+        caches.open('image-cache').then(cache => {
+          return cache.match(cacheKey).then(cachedResponse => {
             if (cachedResponse) {
               return cachedResponse.text()
             }
@@ -61,21 +61,20 @@ export function ImageGrid({
             // If not in cache, get from Supabase
             return supabase.storage
               .from('listing-images')
-              .createSignedUrl(image.url, 3600)
+              .createSignedUrl(image.url, 900) // 15 minutes
               .then(({ data, error }) => {
                 if (error) {
                   console.error('Error creating signed URL:', error)
                   return null
                 }
                 if (data?.signedUrl) {
-                  // Store in cache
                   cache.put(cacheKey, new Response(data.signedUrl))
                   return data.signedUrl
                 }
                 return null
               })
           })
-        ).then(signedUrl => {
+        }).then(signedUrl => {
           if (signedUrl) {
             setSignedUrls(prev => ({
               ...prev,
@@ -89,18 +88,6 @@ export function ImageGrid({
           }
         })
       }
-    })
-
-    // Clean up any signed URLs for images that no longer exist
-    setSignedUrls(prev => {
-      const currentImageIds = new Set(images.map(img => img.id))
-      const updated = { ...prev }
-      Object.keys(updated).forEach(id => {
-        if (!currentImageIds.has(id)) {
-          delete updated[id]
-        }
-      })
-      return updated
     })
   }, [images])
 
@@ -132,7 +119,7 @@ export function ImageGrid({
           const signedUrlData = signedUrls[image.id]
           const isSaving = savingStates[image.id]
           
-          if (!signedUrlData || signedUrlData.isLoading) {
+          if (!signedUrlData?.signedUrl) {
             return (
               <div key={image.id} className="space-y-4">
                 <div className="relative aspect-[4/3] bg-gray-100 animate-pulse rounded-lg">
@@ -145,8 +132,6 @@ export function ImageGrid({
             )
           }
 
-          if (!signedUrlData.signedUrl) return null
-
           return (
             <div key={image.id} className="space-y-4">
               {/* Image Container */}
@@ -154,19 +139,29 @@ export function ImageGrid({
                 <img
                   src={signedUrlData.signedUrl}
                   alt=""
-                  className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${signedUrlData.isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  className="w-full h-full object-cover rounded-lg"
                   onLoad={() => {
                     setSignedUrls(prev => ({
                       ...prev,
-                      [image.id]: { ...prev[image.id], isImageLoaded: true }
+                      [image.id]: { ...signedUrlData, isImageLoaded: true }
                     }))
                   }}
+                  onError={(e) => {
+                    console.error('Image failed to load:', {
+                      imageId: image.id,
+                      error: e
+                    })
+                    // Clear the cached URL and trigger a refresh
+                    caches.open('image-cache').then(cache => {
+                      cache.delete(`image-${image.id}`).then(() => {
+                        setSignedUrls(prev => ({
+                          ...prev,
+                          [image.id]: { id: image.id, isLoading: true, isImageLoaded: false }
+                        }))
+                      })
+                    })
+                  }}
                 />
-                {!signedUrlData.isImageLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse rounded-lg">
-                    <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                  </div>
-                )}
                 
                 {/* Overlay Controls */}
                 <div className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all ${signedUrlData.isImageLoaded ? '' : 'hidden'}`}>
