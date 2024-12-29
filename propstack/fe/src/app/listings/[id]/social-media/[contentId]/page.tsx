@@ -23,18 +23,46 @@ const POST_TYPES = [
   { value: "custom", label: "Custom" }
 ]
 
+interface PlatformOptions {
+  organic: boolean
+  ad: boolean
+}
+
+type Platform = "facebook" | "instagram" | "twitter" | "linkedin"
+
+interface GenerationOptions {
+  post_type: string
+  customContext: string
+  agentContext: string
+  tone: string
+  useEmojis: boolean
+  platforms: Platform[]
+  generateAdCopy: boolean
+  selectedPlatforms: {
+    [key in Platform]: PlatformOptions
+  }
+}
+
 export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const { id, contentId } = use(params)
   const router = useRouter()
   const [listing, setListing] = useState<any>(null)
   const [content, setContent] = useState<any>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generationOptions, setGenerationOptions] = useState({
+  const [generationOptions, setGenerationOptions] = useState<GenerationOptions>({
     post_type: "new_listing",
     customContext: "",
+    agentContext: "",
     tone: "professional",
     useEmojis: true,
-    platforms: ["facebook", "instagram", "twitter", "linkedin"]
+    platforms: ["facebook", "instagram", "twitter", "linkedin"],
+    generateAdCopy: false,
+    selectedPlatforms: {
+      facebook: { organic: true, ad: false },
+      instagram: { organic: true, ad: false },
+      twitter: { organic: true, ad: false },
+      linkedin: { organic: true, ad: false }
+    }
   })
 
   useEffect(() => {
@@ -75,17 +103,21 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const handleGenerate = async () => {
     setIsGenerating(true)
     try {
-      const response = await fetch("/api/generate-social-content", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          listingId: id,
-          contentId: contentId,
-          options: generationOptions
-        })
-      })
+      const { error: fnError } = await supabase.functions.invoke(
+        'generate-social-content',
+        {
+          body: {
+            listingId: id,
+            contentId: contentId,
+            options: generationOptions
+          }
+        }
+      )
 
-      if (!response.ok) throw new Error("Failed to generate content")
+      if (fnError) {
+        console.error("Generation error:", fnError)
+        throw fnError
+      }
 
       const { data: updatedContent, error } = await supabase
         .from("social_media_content")
@@ -97,7 +129,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       if (updatedContent) setContent(updatedContent)
     } catch (error) {
       console.error("Error generating content:", error)
-      alert("Failed to generate content. Please try again.")
+      alert(error instanceof Error ? error.message : "Failed to generate content. Please try again.")
     } finally {
       setIsGenerating(false)
     }
@@ -173,6 +205,22 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Agent Context & Direction
+                    </label>
+                    <textarea
+                      value={generationOptions.agentContext}
+                      onChange={(e) => setGenerationOptions(prev => ({ ...prev, agentContext: e.target.value }))}
+                      rows={3}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      placeholder="Add any specific directions or context for the AI (e.g., highlight specific features, target audience, unique selling points)"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      This helps guide the AI in generating more targeted and effective content
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Writing Tone
                     </label>
                     <select
@@ -201,33 +249,71 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Target Platforms
+                      Target Platforms & Content Type
                     </label>
-                    <div className="space-y-2">
-                      {["facebook", "instagram", "twitter", "linkedin"].map(platform => (
-                        <label key={platform} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={generationOptions.platforms.includes(platform)}
-                            onChange={(e) => {
-                              setGenerationOptions(prev => ({
-                                ...prev,
-                                platforms: e.target.checked
-                                  ? [...prev.platforms, platform]
-                                  : prev.platforms.filter(p => p !== platform)
-                              }))
-                            }}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-sm text-gray-700 capitalize">{platform}</span>
-                        </label>
+                    <div className="space-y-3">
+                      {(["facebook", "instagram", "twitter", "linkedin"] as Platform[]).map(platform => (
+                        <div key={platform} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
+                          </div>
+                          <div className="flex gap-4 ml-4">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={generationOptions.selectedPlatforms[platform].organic}
+                                onChange={(e) => {
+                                  setGenerationOptions(prev => ({
+                                    ...prev,
+                                    selectedPlatforms: {
+                                      ...prev.selectedPlatforms,
+                                      [platform]: {
+                                        ...prev.selectedPlatforms[platform],
+                                        organic: e.target.checked
+                                      }
+                                    },
+                                    platforms: e.target.checked 
+                                      ? Array.from(new Set([...prev.platforms, platform]))
+                                      : prev.platforms.filter(p => p !== platform)
+                                  }))
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">Organic Post</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={generationOptions.selectedPlatforms[platform].ad}
+                                onChange={(e) => {
+                                  setGenerationOptions(prev => ({
+                                    ...prev,
+                                    selectedPlatforms: {
+                                      ...prev.selectedPlatforms,
+                                      [platform]: {
+                                        ...prev.selectedPlatforms[platform],
+                                        ad: e.target.checked
+                                      }
+                                    }
+                                  }))
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">Ad Copy</span>
+                            </label>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
 
                   <button
                     onClick={handleGenerate}
-                    disabled={isGenerating || generationOptions.platforms.length === 0 || (generationOptions.post_type === "custom" && !generationOptions.customContext)}
+                    disabled={
+                      isGenerating || 
+                      Object.values(generationOptions.selectedPlatforms).every(p => !p.organic && !p.ad) ||
+                      (generationOptions.post_type === "custom" && !generationOptions.customContext)
+                    }
                     className="w-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
                   >
                     {isGenerating ? "Generating..." : "Generate Content"}
