@@ -7,6 +7,10 @@ import { supabase } from "@/lib/supabase"
 import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
 import { Header } from "@/components/layout/Header"
+import { ImageGrid } from "@/components/listings/images/ImageGrid"
+import { RadioGroup } from "@headlessui/react"
+import { CheckCircleIcon } from "@heroicons/react/24/solid"
+import debounce from 'lodash/debounce'
 
 interface ContentDetailPageProps {
   params: Promise<{
@@ -43,6 +47,20 @@ interface GenerationOptions {
   }
 }
 
+interface ListingImage {
+  id: string
+  url: string
+  order_index: number
+  caption?: string
+}
+
+interface ImageWithSignedUrl {
+  id: string
+  signedUrl?: string
+  isLoading: boolean
+  isImageLoaded?: boolean
+}
+
 export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const { id, contentId } = use(params)
   const router = useRouter()
@@ -64,11 +82,15 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       linkedin: { organic: true, ad: false }
     }
   })
+  const [listingImages, setListingImages] = useState<ListingImage[]>([])
+  const [selectedImages, setSelectedImages] = useState<string[]>([])
+  const [heroImage, setHeroImage] = useState<string | null>(null)
+  const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [listingRes, contentRes] = await Promise.all([
+        const [listingRes, contentRes, imagesRes] = await Promise.all([
           supabase
             .from("listings")
             .select("*")
@@ -78,7 +100,12 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
             .from("social_media_content")
             .select("*")
             .eq("id", contentId)
-            .single()
+            .single(),
+          supabase
+            .from("listing_images")
+            .select("*")
+            .eq("listing_id", id)
+            .order("order_index")
         ])
 
         if (listingRes.error) {
@@ -89,9 +116,20 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
           console.error("Error fetching content:", contentRes.error)
           return
         }
+        if (imagesRes.error) {
+          console.error("Error fetching images:", imagesRes.error)
+          return
+        }
 
         setListing(listingRes.data)
         setContent(contentRes.data)
+        setListingImages(imagesRes.data)
+
+        // If content already has selected images, set them
+        if (contentRes.data.selected_images) {
+          setSelectedImages(contentRes.data.selected_images)
+          setHeroImage(contentRes.data.hero_image)
+        }
       } catch (error) {
         console.error("Error fetching data:", error)
       }
@@ -99,6 +137,68 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
 
     fetchData()
   }, [id, contentId])
+
+  useEffect(() => {
+    listingImages.forEach(image => {
+      if (!signedUrls[image.id]) {
+        setSignedUrls(prev => ({
+          ...prev,
+          [image.id]: { id: image.id, isLoading: true, isImageLoaded: false }
+        }))
+
+        // Try to get from cache first
+        const cacheKey = `image-${image.id}`
+        caches.open('image-cache').then(cache => 
+          cache.match(cacheKey).then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse.text()
+            }
+
+            // If not in cache, get from Supabase
+            return supabase.storage
+              .from('listing-images')
+              .createSignedUrl(image.url, 3600)
+              .then(({ data, error }) => {
+                if (error) {
+                  console.error('Error creating signed URL:', error)
+                  return null
+                }
+                if (data?.signedUrl) {
+                  // Store in cache
+                  cache.put(cacheKey, new Response(data.signedUrl))
+                  return data.signedUrl
+                }
+                return null
+              })
+          })
+        ).then(signedUrl => {
+          if (signedUrl) {
+            setSignedUrls(prev => ({
+              ...prev,
+              [image.id]: {
+                id: image.id,
+                signedUrl,
+                isLoading: false,
+                isImageLoaded: false
+              }
+            }))
+          }
+        })
+      }
+    })
+
+    // Clean up any signed URLs for images that no longer exist
+    setSignedUrls(prev => {
+      const currentImageIds = new Set(listingImages.map(img => img.id))
+      const updated = { ...prev }
+      Object.keys(updated).forEach(id => {
+        if (!currentImageIds.has(id)) {
+          delete updated[id]
+        }
+      })
+      return updated
+    })
+  }, [listingImages])
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -132,6 +232,59 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       alert(error instanceof Error ? error.message : "Failed to generate content. Please try again.")
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  const handleImageSelection = async (imageId: string) => {
+    setSelectedImages(prev => {
+      const isSelected = prev.includes(imageId)
+      if (isSelected) {
+        // If removing the hero image, clear it
+        if (heroImage === imageId) {
+          setHeroImage(null)
+        }
+        return prev.filter(id => id !== imageId)
+      } else {
+        // If this is the first image being selected, make it the hero
+        if (prev.length === 0) {
+          setHeroImage(imageId)
+        }
+        return [...prev, imageId]
+      }
+    })
+
+    // Update the content record with the new selection
+    const { error } = await supabase
+      .from("social_media_content")
+      .update({
+        selected_images: selectedImages,
+        hero_image: heroImage
+      })
+      .eq("id", contentId)
+
+    if (error) {
+      console.error("Error updating image selection:", error)
+    }
+  }
+
+  const handleHeroImageChange = async (imageId: string) => {
+    // Ensure the hero image is also in selectedImages
+    if (!selectedImages.includes(imageId)) {
+      setSelectedImages(prev => [...prev, imageId])
+    }
+    setHeroImage(imageId)
+
+    // Update the content record with the new hero image
+    const { error } = await supabase
+      .from("social_media_content")
+      .update({
+        selected_images: selectedImages,
+        hero_image: imageId
+      })
+      .eq("id", contentId)
+
+    if (error) {
+      console.error("Error updating hero image:", error)
     }
   }
 
@@ -365,8 +518,98 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
           </TabsContent>
 
           <TabsContent value="media" className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              {/* Add image selection grid */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-lg font-medium mb-4">Select Images</h3>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  {listingImages.map((image) => {
+                    const signedUrlData = signedUrls[image.id]
+                    
+                    if (!signedUrlData || signedUrlData.isLoading) {
+                      return (
+                        <div key={image.id} className="relative aspect-[4/3] bg-gray-100 animate-pulse rounded-lg">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    if (!signedUrlData.signedUrl) return null
+
+                    return (
+                      <div key={image.id} className="relative group">
+                        <div 
+                          className={`relative aspect-[4/3] rounded-lg overflow-hidden border-2 ${
+                            selectedImages.includes(image.id) 
+                              ? 'border-blue-500' 
+                              : 'border-transparent'
+                          }`}
+                        >
+                          <img
+                            src={signedUrlData.signedUrl}
+                            alt={image.caption || ''}
+                            className={`w-full h-full object-cover transition-opacity duration-300 ${signedUrlData.isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            onLoad={() => {
+                              setSignedUrls(prev => ({
+                                ...prev,
+                                [image.id]: { ...prev[image.id], isImageLoaded: true }
+                              }))
+                            }}
+                          />
+                          {!signedUrlData.isImageLoaded && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse rounded-lg">
+                              <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                            </div>
+                          )}
+                          <div 
+                            className={`absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 transition-opacity ${
+                              selectedImages.includes(image.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <button
+                              onClick={() => handleImageSelection(image.id)}
+                              className="p-2 bg-white rounded-full"
+                            >
+                              <CheckCircleIcon 
+                                className={`w-6 h-6 ${
+                                  selectedImages.includes(image.id) 
+                                    ? 'text-blue-500' 
+                                    : 'text-gray-400'
+                                }`} 
+                              />
+                            </button>
+                          </div>
+                        </div>
+                        {selectedImages.includes(image.id) && (
+                          <div className="mt-2">
+                            <RadioGroup value={heroImage} onChange={handleHeroImageChange}>
+                              <RadioGroup.Option value={image.id}>
+                                {({ checked }) => (
+                                  <div className={`flex items-center space-x-2 cursor-pointer ${checked ? 'text-blue-500' : 'text-gray-500'}`}>
+                                    <div className={`w-4 h-4 rounded-full border ${checked ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                                      {checked && <div className="w-2 h-2 mx-auto mt-0.5 rounded-full bg-white" />}
+                                    </div>
+                                    <span className="text-sm">Set as hero image</span>
+                                  </div>
+                                )}
+                              </RadioGroup.Option>
+                            </RadioGroup>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-4">
+                  <p className="text-sm text-gray-500">
+                    {selectedImages.length === 0 
+                      ? "Select at least one image for your social media posts." 
+                      : `Selected ${selectedImages.length} image${selectedImages.length === 1 ? '' : 's'}${heroImage ? ', with hero image set' : ''}.`
+                    }
+                  </p>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
