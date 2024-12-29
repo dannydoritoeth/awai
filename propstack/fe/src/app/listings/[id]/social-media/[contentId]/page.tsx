@@ -12,6 +12,8 @@ import { RadioGroup } from "@headlessui/react"
 import { CheckCircleIcon } from "@heroicons/react/24/solid"
 import debounce from 'lodash/debounce'
 import toast from 'react-hot-toast'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 interface ContentDetailPageProps {
   params: Promise<{
@@ -33,7 +35,7 @@ interface PlatformOptions {
   ad: boolean
 }
 
-type Platform = "facebook" | "instagram" | "twitter" | "linkedin"
+type Platform = "facebook" | "instagram" | "linkedin"
 
 interface GenerationOptions {
   post_type: string
@@ -43,7 +45,7 @@ interface GenerationOptions {
   useEmojis: boolean
   contentLength: "short" | "medium" | "long"
   callToAction: {
-    type: "learn_more" | "contact" | "schedule" | "custom"
+    type: "none" | "learn_more" | "contact" | "schedule" | "custom"
     customText?: string
     link?: string
   }
@@ -72,7 +74,6 @@ interface ImageWithSignedUrl {
 const PLATFORM_IMAGE_SIZES = {
   facebook: { width: 1200, height: 630 },
   instagram: { width: 1080, height: 1080 },
-  twitter: { width: 1200, height: 675 },
   linkedin: { width: 1200, height: 627 }
 } as const
 
@@ -80,62 +81,55 @@ const PLATFORM_IMAGE_SIZES = {
 const resizeImageForPlatform = async (imageUrl: string, platform: Platform): Promise<string> => {
   const { width: targetWidth, height: targetHeight } = PLATFORM_IMAGE_SIZES[platform]
   
-  // Load the image
-  const img = new Image()
-  await new Promise((resolve, reject) => {
-    img.onload = resolve
-    img.onerror = reject
+  return new Promise((resolve, reject) => {
+    const img = new Image()
     img.crossOrigin = "anonymous"
+    
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = targetWidth
+        canvas.height = targetHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'))
+          return
+        }
+
+        // Calculate dimensions preserving aspect ratio
+        const targetRatio = targetWidth / targetHeight
+        const imageRatio = img.width / img.height
+        let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height
+
+        if (imageRatio > targetRatio) {
+          // Image is wider than target: crop width
+          sWidth = img.height * targetRatio
+          sx = (img.width - sWidth) / 2
+        } else {
+          // Image is taller than target: crop height
+          sHeight = img.width / targetRatio
+          sy = (img.height - sHeight) / 2
+        }
+
+        // Fill background
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, targetWidth, targetHeight)
+
+        // Draw image with high quality
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight)
+
+        // Convert to data URL instead of Blob
+        resolve(canvas.toDataURL('image/jpeg', 0.95))
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    img.onerror = () => reject(new Error('Failed to load image'))
     img.src = imageUrl
   })
-
-  // Create canvas with device pixel ratio for better quality
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Could not get canvas context')
-
-  // Set canvas size to target dimensions
-  canvas.width = targetWidth
-  canvas.height = targetHeight
-
-  // Calculate dimensions preserving aspect ratio
-  let scaledWidth = img.width
-  let scaledHeight = img.height
-  let x = 0
-  let y = 0
-
-  const targetRatio = targetWidth / targetHeight
-  const imageRatio = img.width / img.height
-
-  if (imageRatio > targetRatio) {
-    // Image is wider than target: scale to target height
-    scaledHeight = targetHeight
-    scaledWidth = scaledHeight * imageRatio
-    x = -(scaledWidth - targetWidth) / 2
-  } else {
-    // Image is taller than target: scale to target width
-    scaledWidth = targetWidth
-    scaledHeight = scaledWidth / imageRatio
-    y = -(scaledHeight - targetHeight) / 2
-  }
-
-  // Fill background with white
-  ctx.fillStyle = '#FFFFFF'
-  ctx.fillRect(0, 0, targetWidth, targetHeight)
-
-  // Draw image with high-quality settings
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-  
-  // Draw the image centered
-  ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
-
-  // Convert to blob with high quality
-  const blob = await new Promise<Blob>((resolve) => {
-    canvas.toBlob(blob => resolve(blob!), 'image/jpeg', 0.95)
-  })
-
-  return URL.createObjectURL(blob)
 }
 
 export default function ContentDetailPage({ params }: ContentDetailPageProps) {
@@ -156,12 +150,11 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       customText: "",
       link: ""
     },
-    platforms: ["facebook", "instagram", "twitter", "linkedin"],
+    platforms: ["facebook", "instagram", "linkedin"],
     generateAdCopy: false,
     selectedPlatforms: {
       facebook: { organic: true, ad: false },
       instagram: { organic: true, ad: false },
-      twitter: { organic: true, ad: false },
       linkedin: { organic: true, ad: false }
     }
   })
@@ -170,6 +163,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const [heroImage, setHeroImage] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
   const [editedContent, setEditedContent] = useState<Record<string, string>>({})
+  const [showClearConfirmation, setShowClearConfirmation] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -391,6 +385,27 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     }
   }, 1000)
 
+  const handleClearContent = async () => {
+    try {
+      const { error } = await supabase
+        .from('social_media_content')
+        .update({
+          generated_content: null
+        })
+        .eq('id', contentId)
+
+      if (error) throw error
+
+      setContent(prev => ({ ...prev, generated_content: null }))
+      setEditedContent({})
+      setShowClearConfirmation(false)
+      toast.success('Content cleared successfully')
+    } catch (err) {
+      console.error('Error clearing content:', err)
+      toast.error('Failed to clear content')
+    }
+  }
+
   if (!listing || !content) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -531,59 +546,64 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                         ...prev, 
                         callToAction: {
                           ...prev.callToAction,
-                          type: e.target.value as "learn_more" | "contact" | "schedule" | "custom"
+                          type: e.target.value as "none" | "learn_more" | "contact" | "schedule" | "custom"
                         }
                       }))}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     >
+                      <option value="none">No Call to Action</option>
                       <option value="learn_more">Learn More</option>
                       <option value="contact">Contact Us</option>
                       <option value="schedule">Schedule Viewing</option>
                       <option value="custom">Custom CTA</option>
                     </select>
 
-                    {generationOptions.callToAction.type === "custom" && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Custom Call to Action Text
-                        </label>
-                        <input
-                          type="text"
-                          value={generationOptions.callToAction.customText}
-                          onChange={(e) => setGenerationOptions(prev => ({
-                            ...prev,
-                            callToAction: {
-                              ...prev.callToAction,
-                              customText: e.target.value
-                            }
-                          }))}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          placeholder="Enter custom call to action text..."
-                        />
-                      </div>
-                    )}
+                    {generationOptions.callToAction.type !== "none" && (
+                      <>
+                        {generationOptions.callToAction.type === "custom" && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Custom Call to Action Text
+                            </label>
+                            <input
+                              type="text"
+                              value={generationOptions.callToAction.customText}
+                              onChange={(e) => setGenerationOptions(prev => ({
+                                ...prev,
+                                callToAction: {
+                                  ...prev.callToAction,
+                                  customText: e.target.value
+                                }
+                              }))}
+                              className="mt-1 block w-full h-[38px] px-3 py-2 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              placeholder="Enter custom call to action text..."
+                            />
+                          </div>
+                        )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Landing Page URL
-                      </label>
-                      <input
-                        type="url"
-                        value={generationOptions.callToAction.link}
-                        onChange={(e) => setGenerationOptions(prev => ({
-                          ...prev,
-                          callToAction: {
-                            ...prev.callToAction,
-                            link: e.target.value
-                          }
-                        }))}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        placeholder="https://..."
-                      />
-                      <p className="mt-1 text-sm text-gray-500">
-                        Where should users be directed when they click your call to action?
-                      </p>
-                    </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            Landing Page URL
+                          </label>
+                          <input
+                            type="url"
+                            value={generationOptions.callToAction.link}
+                            onChange={(e) => setGenerationOptions(prev => ({
+                              ...prev,
+                              callToAction: {
+                                ...prev.callToAction,
+                                link: e.target.value
+                              }
+                            }))}
+                            className="mt-1 block w-full h-[38px] px-3 py-2 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder="https://..."
+                          />
+                          <p className="mt-1 text-sm text-gray-500">
+                            Where should users be directed when they click your call to action?
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div>
@@ -591,7 +611,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                       Target Platforms & Content Type
                     </label>
                     <div className="space-y-3">
-                      {(["facebook", "instagram", "twitter", "linkedin"] as Platform[]).map(platform => (
+                      {(["facebook", "instagram", "linkedin"] as Platform[]).map(platform => (
                         <div key={platform} className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
@@ -661,21 +681,30 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
               </div>
 
               <div className="p-4 border rounded-lg">
-                <h3 className="text-lg font-medium mb-4">Generated Content</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium">Generated Content</h3>
+                  {content.generated_content && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowClearConfirmation(true)}
+                    >
+                      Clear Content
+                    </Button>
+                  )}
+                </div>
                 {content.generated_content ? (
                   <div className="space-y-4">
                     {Object.entries(content.generated_content).map(([platform, text]) => {
                       const [basePlatform, type] = platform.split('_')
                       const Icon = {
                         facebook: FacebookIcon,
-                        twitter: TwitterIcon,
                         instagram: InstagramIcon,
                         linkedin: LinkedinIcon
                       }[basePlatform]
 
                       const iconColors = {
                         facebook: 'text-blue-600',
-                        twitter: 'text-blue-400',
                         instagram: 'text-pink-600',
                         linkedin: 'text-blue-700'
                       }[basePlatform]
@@ -806,17 +835,15 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                   const [basePlatform, type] = platform.split('_')
                   const Icon = {
                     facebook: FacebookIcon,
-                    twitter: TwitterIcon,
                     instagram: InstagramIcon,
                     linkedin: LinkedinIcon
-                  }[basePlatform as Platform]
+                  }[basePlatform]
 
                   const iconColors = {
                     facebook: 'text-blue-600',
-                    twitter: 'text-blue-400',
                     instagram: 'text-pink-600',
                     linkedin: 'text-blue-700'
-                  }[basePlatform as Platform]
+                  }[basePlatform]
 
                   return (
                     <div key={platform} className="p-4 border rounded-lg">
@@ -865,15 +892,17 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                                   className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
                                   onLoad={async (e) => {
                                     try {
+                                      const target = e.target as HTMLImageElement
                                       const resizedUrl = await resizeImageForPlatform(
                                         signedUrlData.signedUrl!,
                                         basePlatform as Platform
                                       )
-                                      const target = e.target as HTMLImageElement
                                       target.src = resizedUrl
                                       target.classList.remove('opacity-0')
                                     } catch (error) {
                                       console.error('Error resizing image:', error)
+                                      // Keep original image if resize fails
+                                      target.classList.remove('opacity-0')
                                     }
                                   }}
                                 />
@@ -910,6 +939,24 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
           </TabsContent>
         </Tabs>
       </main>
+      <Dialog open={showClearConfirmation} onOpenChange={setShowClearConfirmation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear Generated Content</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to clear all generated content? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClearConfirmation(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleClearContent}>
+              Clear Content
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
