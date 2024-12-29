@@ -325,12 +325,37 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                 <h3 className="text-lg font-medium mb-4">Generated Content</h3>
                 {content.generated_content ? (
                   <div className="space-y-4">
-                    {Object.entries(content.generated_content).map(([platform, text]) => (
-                      <div key={platform} className="p-4 border rounded-lg">
-                        <h4 className="text-sm font-medium text-gray-900 capitalize mb-2">{platform}</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{text as string}</p>
-                      </div>
-                    ))}
+                    {Object.entries(content.generated_content).map(([platform, text]) => {
+                      const [basePlatform, type] = platform.split('_')
+                      const Icon = {
+                        facebook: FacebookIcon,
+                        twitter: TwitterIcon,
+                        instagram: InstagramIcon,
+                        linkedin: LinkedinIcon
+                      }[basePlatform]
+
+                      const iconColors = {
+                        facebook: 'text-blue-600',
+                        twitter: 'text-blue-400',
+                        instagram: 'text-pink-600',
+                        linkedin: 'text-blue-700'
+                      }[basePlatform]
+
+                      return (
+                        <div key={platform} className="p-4 border rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className={`w-5 h-5 ${iconColors}`} />
+                            <h4 className="text-sm font-medium text-gray-900">
+                              <span className="capitalize">{basePlatform}</span>
+                              <span className="text-gray-500 ml-1">
+                                ({type === 'organic' ? 'Organic Post' : 'Ad Copy'})
+                              </span>
+                            </h4>
+                          </div>
+                          <p className="text-gray-700 whitespace-pre-wrap">{text as string}</p>
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-500">No content generated yet. Configure your options and click Generate Content to get started.</p>
