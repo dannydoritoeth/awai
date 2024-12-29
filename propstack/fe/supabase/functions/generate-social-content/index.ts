@@ -27,6 +27,12 @@ interface GenerationOptions {
   agentContext: string
   tone: string
   useEmojis: boolean
+  contentLength: "short" | "medium" | "long"
+  callToAction: {
+    type: "none" | "learn_more" | "contact" | "schedule" | "custom"
+    customText?: string
+    link?: string
+  }
   platforms: Platform[]
   generateAdCopy: boolean
   selectedPlatforms: {
@@ -61,18 +67,45 @@ const getContentLengthGuideline = (length: string) => {
   }
 }
 
-const generatePrompt = (listing: any, options: any) => {
+const generatePrompt = (listing: any, options: any, platform: string) => {
   const lengthGuideline = getContentLengthGuideline(options.contentLength)
   const toneGuideline = `Use a ${options.tone} tone.`
   const emojiGuideline = options.useEmojis ? 'Include relevant emojis.' : 'Do not use emojis.'
-  const ctaGuideline = options.callToAction.type !== 'none' 
-    ? `Include a call to action: ${options.callToAction.type === 'custom' ? options.callToAction.customText : options.callToAction.type}.` 
-    : ''
   
-  let prompt = `Write a ${options.post_type} post for a real estate property.
+  // More explicit CTA handling
+  let ctaGuideline = ''
+  if (options.callToAction.type !== 'none') {
+    const ctaType = options.callToAction.type === 'custom' 
+      ? options.callToAction.customText 
+      : {
+          'learn_more': 'Learn more about this property',
+          'contact': 'Contact us for more information',
+          'schedule': 'Schedule a viewing today'
+        }[options.callToAction.type]
+    
+    ctaGuideline = `End with this specific call to action: "${ctaType}"${options.callToAction.link ? ` and direct users to ${options.callToAction.link}` : ''}.`
+  }
+
+  // Platform-specific formatting guidelines
+  const formatGuidelines = {
+    facebook: `Format the content with clear line breaks between sections.
+Use emojis (if enabled) at the start of key points.
+If including a link, place it at the end after the call to action.`,
+    instagram: `Format with line breaks between sections.
+Use emojis (if enabled) strategically throughout.
+Add 3-5 relevant hashtags at the end (e.g., #RealEstate #LuxuryHomes #PropertyForSale).
+Keep hashtags separate from the main content with a line break.`,
+    linkedin: `Format with professional line breaks between sections.
+Use bullet points for key features.
+Keep the tone more formal and business-focused.
+If including a link, place it at the end after the call to action.`
+  }[platform]
+  
+  let prompt = `Write a ${options.post_type} post for a real estate property, formatted specifically for ${platform}.
 ${lengthGuideline}
 ${toneGuideline}
 ${emojiGuideline}
+${formatGuidelines}
 ${ctaGuideline}
 
 Property details:
@@ -85,9 +118,34 @@ Property details:
 ${options.agentContext ? `Agent's perspective: ${options.agentContext}` : ''}
 ${options.customContext ? `Additional context: ${options.customContext}` : ''}
 
-Generate ONLY the post content, without any explanations or formatting.`
+Generate the post with appropriate formatting and line breaks. Do not include any explanations.`
 
   return prompt
+}
+
+// Update the content generation to pass the platform
+const generateContent = async (listing: any, options: any, platform: string, isAd: boolean) => {
+  const prompt = generatePrompt(listing, options, platform)
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [
+      {
+        role: 'system',
+        content: isAd 
+          ? `You are a professional real estate advertising copywriter. Create compelling ad copy for ${platform}, using appropriate formatting and structure for the platform. Focus on creating urgency and highlighting unique value propositions${options.post_type === 'custom' ? ' while incorporating the provided custom context' : ''}.`
+          : `You are a professional real estate social media manager. Create engaging ${platform} content with appropriate formatting and structure. Write in a ${options.tone} tone and focus on the unique selling points${options.post_type === 'custom' ? ' while incorporating the provided custom context' : ''}.`
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 0.7,
+    max_tokens: 500
+  })
+
+  return completion.choices[0].message.content || ''
 }
 
 serve(async (req: Request) => {
@@ -161,68 +219,12 @@ serve(async (req: Request) => {
       try {
         // Generate organic post if selected
         if (settings.organic) {
-          const prompt = generatePrompt(listing, {
-            post_type: content.post_type,
-            customContext: content.custom_context,
-            agentContext: options.agentContext,
-            tone: options.tone,
-            useEmojis: options.useEmojis,
-            contentLength: 'medium',
-            callToAction: {
-              type: 'none'
-            }
-          })
-
-          const completion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: [
-              {
-                role: 'system',
-                content: `You are a professional real estate social media manager. Your task is to create engaging social media content for real estate listings. Write in a ${options.tone} tone and focus on the unique selling points of the property${content.post_type === 'custom' ? ' while incorporating the provided custom context' : ''}.`
-              },
-              {
-                role: 'user',
-                content: prompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 500
-          })
-
-          generatedContent[`${platform}_organic`] = completion.choices[0].message.content || ''
+          generatedContent[`${platform}_organic`] = await generateContent(listing, options, platform, false)
         }
 
         // Generate ad copy if selected
         if (settings.ad) {
-          const prompt = generatePrompt(listing, {
-            post_type: content.post_type,
-            customContext: content.custom_context,
-            agentContext: options.agentContext,
-            tone: options.tone,
-            useEmojis: options.useEmojis,
-            contentLength: 'medium',
-            callToAction: {
-              type: 'none'
-            }
-          })
-
-          const completion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: [
-              {
-                role: 'system',
-                content: `You are a professional real estate advertising copywriter. Your task is to create compelling ad copy for real estate listings. Write in a ${options.tone} tone and focus on creating urgency and highlighting unique value propositions${content.post_type === 'custom' ? ' while incorporating the provided custom context' : ''}.`
-              },
-              {
-                role: 'user',
-                content: prompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 500
-          })
-
-          generatedContent[`${platform}_ad`] = completion.choices[0].message.content || ''
+          generatedContent[`${platform}_ad`] = await generateContent(listing, options, platform, true)
         }
       } catch (error) {
         console.error(`Error generating content for ${platform}:`, error)

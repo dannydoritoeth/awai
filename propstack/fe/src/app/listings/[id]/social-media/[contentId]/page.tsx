@@ -726,7 +726,16 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                     })}
                   </div>
                 ) : (
-                  <p className="text-gray-500">No content generated yet. Configure your options and click Generate Content to get started.</p>
+                  <div className="text-center py-8">
+                    {isGenerating ? (
+                      <div className="flex flex-col items-center space-y-3">
+                        <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                        <p className="text-gray-500">Generating content for your selected platforms...</p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">No content generated yet. Configure your options and click Generate Content to get started.</p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
