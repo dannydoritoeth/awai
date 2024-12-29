@@ -41,6 +41,12 @@ interface GenerationOptions {
   agentContext: string
   tone: string
   useEmojis: boolean
+  contentLength: "short" | "medium" | "long"
+  callToAction: {
+    type: "learn_more" | "contact" | "schedule" | "custom"
+    customText?: string
+    link?: string
+  }
   platforms: Platform[]
   generateAdCopy: boolean
   selectedPlatforms: {
@@ -144,6 +150,12 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
     agentContext: "",
     tone: "professional",
     useEmojis: true,
+    contentLength: "medium",
+    callToAction: {
+      type: "learn_more",
+      customText: "",
+      link: ""
+    },
     platforms: ["facebook", "instagram", "twitter", "linkedin"],
     generateAdCopy: false,
     selectedPlatforms: {
@@ -489,6 +501,89 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
                       />
                       <span className="text-sm text-gray-700">Include emojis in generated content</span>
                     </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Content Length
+                    </label>
+                    <select
+                      value={generationOptions.contentLength}
+                      onChange={(e) => setGenerationOptions(prev => ({ 
+                        ...prev, 
+                        contentLength: e.target.value as "short" | "medium" | "long" 
+                      }))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    >
+                      <option value="short">Short (1-2 sentences)</option>
+                      <option value="medium">Medium (2-3 sentences)</option>
+                      <option value="long">Long (3-4 sentences)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Call to Action
+                    </label>
+                    <select
+                      value={generationOptions.callToAction.type}
+                      onChange={(e) => setGenerationOptions(prev => ({ 
+                        ...prev, 
+                        callToAction: {
+                          ...prev.callToAction,
+                          type: e.target.value as "learn_more" | "contact" | "schedule" | "custom"
+                        }
+                      }))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    >
+                      <option value="learn_more">Learn More</option>
+                      <option value="contact">Contact Us</option>
+                      <option value="schedule">Schedule Viewing</option>
+                      <option value="custom">Custom CTA</option>
+                    </select>
+
+                    {generationOptions.callToAction.type === "custom" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom Call to Action Text
+                        </label>
+                        <input
+                          type="text"
+                          value={generationOptions.callToAction.customText}
+                          onChange={(e) => setGenerationOptions(prev => ({
+                            ...prev,
+                            callToAction: {
+                              ...prev.callToAction,
+                              customText: e.target.value
+                            }
+                          }))}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Enter custom call to action text..."
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Landing Page URL
+                      </label>
+                      <input
+                        type="url"
+                        value={generationOptions.callToAction.link}
+                        onChange={(e) => setGenerationOptions(prev => ({
+                          ...prev,
+                          callToAction: {
+                            ...prev.callToAction,
+                            link: e.target.value
+                          }
+                        }))}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="https://..."
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        Where should users be directed when they click your call to action?
+                      </p>
+                    </div>
                   </div>
 
                   <div>
