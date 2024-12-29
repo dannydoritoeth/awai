@@ -11,6 +11,7 @@ import { ImageGrid } from "@/components/listings/images/ImageGrid"
 import { RadioGroup } from "@headlessui/react"
 import { CheckCircleIcon } from "@heroicons/react/24/solid"
 import debounce from 'lodash/debounce'
+import toast from 'react-hot-toast'
 
 interface ContentDetailPageProps {
   params: Promise<{
@@ -61,6 +62,76 @@ interface ImageWithSignedUrl {
   isImageLoaded?: boolean
 }
 
+// Add platform-specific image dimensions
+const PLATFORM_IMAGE_SIZES = {
+  facebook: { width: 1200, height: 630 },
+  instagram: { width: 1080, height: 1080 },
+  twitter: { width: 1200, height: 675 },
+  linkedin: { width: 1200, height: 627 }
+} as const
+
+// Add function to resize image for platform
+const resizeImageForPlatform = async (imageUrl: string, platform: Platform): Promise<string> => {
+  const { width: targetWidth, height: targetHeight } = PLATFORM_IMAGE_SIZES[platform]
+  
+  // Load the image
+  const img = new Image()
+  await new Promise((resolve, reject) => {
+    img.onload = resolve
+    img.onerror = reject
+    img.crossOrigin = "anonymous"
+    img.src = imageUrl
+  })
+
+  // Create canvas with device pixel ratio for better quality
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Could not get canvas context')
+
+  // Set canvas size to target dimensions
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  // Calculate dimensions preserving aspect ratio
+  let scaledWidth = img.width
+  let scaledHeight = img.height
+  let x = 0
+  let y = 0
+
+  const targetRatio = targetWidth / targetHeight
+  const imageRatio = img.width / img.height
+
+  if (imageRatio > targetRatio) {
+    // Image is wider than target: scale to target height
+    scaledHeight = targetHeight
+    scaledWidth = scaledHeight * imageRatio
+    x = -(scaledWidth - targetWidth) / 2
+  } else {
+    // Image is taller than target: scale to target width
+    scaledWidth = targetWidth
+    scaledHeight = scaledWidth / imageRatio
+    y = -(scaledHeight - targetHeight) / 2
+  }
+
+  // Fill background with white
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, targetWidth, targetHeight)
+
+  // Draw image with high-quality settings
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  
+  // Draw the image centered
+  ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
+
+  // Convert to blob with high quality
+  const blob = await new Promise<Blob>((resolve) => {
+    canvas.toBlob(blob => resolve(blob!), 'image/jpeg', 0.95)
+  })
+
+  return URL.createObjectURL(blob)
+}
+
 export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const { id, contentId } = use(params)
   const router = useRouter()
@@ -86,6 +157,7 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [heroImage, setHeroImage] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, ImageWithSignedUrl>>({})
+  const [editedContent, setEditedContent] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const fetchData = async () => {
@@ -287,6 +359,25 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
       console.error("Error updating hero image:", error)
     }
   }
+
+  const debouncedSaveContent = debounce(async (platform: string, text: string) => {
+    try {
+      const { error } = await supabase
+        .from('social_media_content')
+        .update({
+          generated_content: {
+            ...content.generated_content,
+            [platform]: text
+          }
+        })
+        .eq('id', contentId)
+
+      if (error) throw error
+    } catch (err) {
+      console.error('Error saving content:', err)
+      toast.error('Failed to save changes')
+    }
+  }, 1000)
 
   if (!listing || !content) {
     return (
@@ -616,36 +707,103 @@ export default function ContentDetailPage({ params }: ContentDetailPageProps) {
           <TabsContent value="review" className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-4">
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FacebookIcon className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-medium">Facebook</h3>
-                  </div>
-                  {/* Add Facebook content editor */}
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TwitterIcon className="w-5 h-5 text-blue-400" />
-                    <h3 className="text-lg font-medium">Twitter</h3>
-                  </div>
-                  {/* Add Twitter content editor */}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <InstagramIcon className="w-5 h-5 text-pink-600" />
-                    <h3 className="text-lg font-medium">Instagram</h3>
-                  </div>
-                  {/* Add Instagram content editor */}
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <LinkedinIcon className="w-5 h-5 text-blue-700" />
-                    <h3 className="text-lg font-medium">LinkedIn</h3>
-                  </div>
-                  {/* Add LinkedIn content editor */}
-                </div>
+                {Object.entries(content.generated_content || {}).map(([platform, text]) => {
+                  const [basePlatform, type] = platform.split('_')
+                  const Icon = {
+                    facebook: FacebookIcon,
+                    twitter: TwitterIcon,
+                    instagram: InstagramIcon,
+                    linkedin: LinkedinIcon
+                  }[basePlatform as Platform]
+
+                  const iconColors = {
+                    facebook: 'text-blue-600',
+                    twitter: 'text-blue-400',
+                    instagram: 'text-pink-600',
+                    linkedin: 'text-blue-700'
+                  }[basePlatform as Platform]
+
+                  return (
+                    <div key={platform} className="p-4 border rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={`w-5 h-5 ${iconColors}`} />
+                        <h3 className="text-lg font-medium">
+                          <span className="capitalize">{basePlatform}</span>
+                          <span className="text-gray-500 ml-1">
+                            ({type === 'organic' ? 'Organic Post' : 'Ad Copy'})
+                          </span>
+                        </h3>
+                      </div>
+                      
+                      {/* Preview all selected images */}
+                      <div className="mb-4 space-y-4">
+                        {selectedImages.map((imageId, index) => {
+                          const signedUrlData = signedUrls[imageId]
+                          if (!signedUrlData?.signedUrl) return null
+
+                          return (
+                            <div key={imageId} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-700">
+                                  {imageId === heroImage ? 'Hero Image' : `Additional Image ${index + 1}`}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                  {PLATFORM_IMAGE_SIZES[basePlatform as Platform].width}x
+                                  {PLATFORM_IMAGE_SIZES[basePlatform as Platform].height}
+                                </span>
+                              </div>
+                              <div 
+                                className="relative aspect-[16/9] bg-gray-100 rounded-lg overflow-hidden"
+                                style={{
+                                  aspectRatio: `${PLATFORM_IMAGE_SIZES[basePlatform as Platform].width}/${PLATFORM_IMAGE_SIZES[basePlatform as Platform].height}`
+                                }}
+                              >
+                                {/* Loading state */}
+                                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                                  <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                </div>
+                                
+                                {/* Image with proper sizing */}
+                                <img
+                                  src={signedUrlData.signedUrl}
+                                  alt={`Preview ${index + 1}`}
+                                  className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+                                  onLoad={async (e) => {
+                                    try {
+                                      const resizedUrl = await resizeImageForPlatform(
+                                        signedUrlData.signedUrl!,
+                                        basePlatform as Platform
+                                      )
+                                      const target = e.target as HTMLImageElement
+                                      target.src = resizedUrl
+                                      target.classList.remove('opacity-0')
+                                    } catch (error) {
+                                      console.error('Error resizing image:', error)
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Editable content */}
+                      <textarea
+                        value={editedContent[platform] ?? text}
+                        onChange={(e) => {
+                          setEditedContent(prev => ({
+                            ...prev,
+                            [platform]: e.target.value
+                          }))
+                          debouncedSaveContent(platform, e.target.value)
+                        }}
+                        rows={6}
+                        className="mt-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      />
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </TabsContent>
