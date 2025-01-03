@@ -276,7 +276,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
           onSubmit={handleSubmit}
           onBack={handleBack}
           loading={loading}
-          mode={id ? 'view' : 'create'}
+          mode={id ? 'edit' : 'create'}
         />
       )}
 

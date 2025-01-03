@@ -1,9 +1,17 @@
 import { ListingDetailPage } from '@/components/listings/ListingDetailPage'
 
-export default function ListingPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: Promise<{
+    id: string
+  }>
+}
+
+export default async function ListingPage({ params }: PageProps) {
+  const { id } = await params
+  
   return (
     <div className="h-full">
-      <ListingDetailPage id={params.id} />
+      <ListingDetailPage id={id} />
     </div>
   )
 } 

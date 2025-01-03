@@ -1,9 +1,17 @@
 import { EngagementDetailPage } from '@/components/transactions/agent-engagement/EngagementDetailPage'
 
-export default function AgentEngagementPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: Promise<{
+    id: string
+  }>
+}
+
+export default async function AgentEngagementPage({ params }: PageProps) {
+  const { id } = await params
+  
   return (
     <div className="h-full">
-      <EngagementDetailPage id={params.id} />
+      <EngagementDetailPage id={id} />
     </div>
   )
 } 
