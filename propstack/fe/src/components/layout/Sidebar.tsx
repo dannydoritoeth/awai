@@ -48,24 +48,9 @@ const menuItems: MenuItem[] = [
     ]
   },
   {
-    name: 'Finance',
-    href: '/finance',
-    icon: BanknotesIcon
-  },
-  {
     name: 'Messages',
     href: '/messages',
     icon: EnvelopeIcon
-  },
-  {
-    name: 'Calendar',
-    href: '/calendar',
-    icon: CalendarIcon
-  },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: Cog8ToothIcon
   }
 ]
 
