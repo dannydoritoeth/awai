@@ -149,16 +149,28 @@ export function ImageGrid({
                   onError={(e) => {
                     console.error('Image failed to load:', {
                       imageId: image.id,
-                      error: e
+                      error: e,
+                      signedUrl: signedUrlData.signedUrl
                     })
+                    
                     // Clear the cached URL and trigger a refresh
                     caches.open('image-cache').then(cache => {
                       cache.delete(`image-${image.id}`).then(() => {
+                        // Mark the image as failed and not loading
                         setSignedUrls(prev => ({
                           ...prev,
-                          [image.id]: { id: image.id, isLoading: true, isImageLoaded: false }
+                          [image.id]: { 
+                            id: image.id, 
+                            isLoading: false, 
+                            isImageLoaded: false,
+                            signedUrl: undefined // Clear the signed URL to trigger a reload
+                          }
                         }))
+                      }).catch(err => {
+                        console.error('Failed to clear image cache:', err)
                       })
+                    }).catch(err => {
+                      console.error('Failed to open image cache:', err)
                     })
                   }}
                 />
