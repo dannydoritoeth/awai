@@ -41,7 +41,10 @@ const menuItems: MenuItem[] = [
   {
     name: 'Agent Engagements',
     href: '/transactions/agent-engagement',
-    icon: DocumentTextIcon
+    icon: DocumentTextIcon,
+    items: [
+      { name: 'All Engagements', href: '/transactions/agent-engagement' },
+    ]
   },
   {
     name: 'Messages',
