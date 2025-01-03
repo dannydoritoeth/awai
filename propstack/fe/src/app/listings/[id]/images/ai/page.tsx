@@ -552,30 +552,53 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
                     <div className="relative bg-gray-100 rounded-lg overflow-hidden">
                       {processedUrl && (
                         <div className="relative">
-                          <div style={{ 
-                            width: canvasSize.width ? `${canvasSize.width}px` : 'auto',
-                            height: canvasSize.height ? `${canvasSize.height}px` : 'auto',
-                            maxHeight: '800px',
-                          }}>
-                            <img 
-                              src={processedUrl}
-                              alt="Selected image"
-                              className={`absolute top-0 left-0 w-full h-full transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                              crossOrigin="anonymous"
-                              onLoad={() => setIsImageLoaded(true)}
-                            />
-                            <canvas
-                              ref={maskCanvasRef}
-                              className={`absolute top-0 left-0 cursor-crosshair transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                              style={{
-                                width: '100%',
-                                height: '100%'
-                              }}
-                              onMouseDown={startDrawing}
-                              onMouseMove={draw}
-                              onMouseUp={stopDrawing}
-                              onMouseLeave={stopDrawing}
-                            />
+                          <div 
+                            style={{ 
+                              position: 'relative',
+                              width: '100%',
+                              paddingBottom: '75%', // 4:3 aspect ratio
+                              maxHeight: '800px',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            <div style={{
+                              position: 'absolute',
+                              top: '0',
+                              left: '0',
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <div style={{
+                                position: 'relative',
+                                width: canvasSize.width ? `${canvasSize.width}px` : '100%',
+                                height: canvasSize.height ? `${canvasSize.height}px` : '100%',
+                                maxWidth: '100%',
+                                maxHeight: '100%'
+                              }}>
+                                <img 
+                                  src={processedUrl}
+                                  alt="Selected image"
+                                  className={`absolute top-0 left-0 w-full h-full object-contain transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                  crossOrigin="anonymous"
+                                  onLoad={() => setIsImageLoaded(true)}
+                                />
+                                <canvas
+                                  ref={maskCanvasRef}
+                                  className={`absolute top-0 left-0 cursor-crosshair transition-opacity duration-300 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%'
+                                  }}
+                                  onMouseDown={startDrawing}
+                                  onMouseMove={draw}
+                                  onMouseUp={stopDrawing}
+                                  onMouseLeave={stopDrawing}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
