@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { InfoIcon } from 'lucide-react'
 import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
-import { StandaloneSearchBox } from '@react-google-maps/api'
-import { useGoogleMaps } from '@/components/maps/GoogleMapsProvider'
+import { Autocomplete } from '@react-google-maps/api'
+import { useMaps } from '@/contexts/MapsContext'
 
 interface PropertyDetailsFormProps {
   formData: AgentEngagementData
@@ -21,15 +21,18 @@ export function PropertyDetailsForm({
   isFirstStep 
 }: PropertyDetailsFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [searchBox, setSearchBox] = useState<google.maps.places.SearchBox | null>(null)
-  const { isLoaded } = useGoogleMaps()
+  const { isLoaded } = useMaps()
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null)
 
-  const handlePlaceSelect = () => {
-    if (searchBox) {
-      const places = searchBox.getPlaces()
-      if (places && places.length > 0) {
-        const place = places[0]
-        onChange({ propertyAddress: place.formatted_address || '' })
+  const onLoad = (autocomplete: google.maps.places.Autocomplete) => {
+    setAutocomplete(autocomplete)
+  }
+
+  const onPlaceChanged = () => {
+    if (autocomplete) {
+      const place = autocomplete.getPlace()
+      if (place.formatted_address) {
+        onChange({ propertyAddress: place.formatted_address })
       }
     }
   }
@@ -75,9 +78,9 @@ export function PropertyDetailsForm({
             Address of Property
             <div className="mt-1">
               {isLoaded ? (
-                <StandaloneSearchBox
-                  onLoad={ref => setSearchBox(ref)}
-                  onPlacesChanged={handlePlaceSelect}
+                <Autocomplete
+                  onLoad={onLoad}
+                  onPlaceChanged={onPlaceChanged}
                 >
                   <input
                     type="text"
@@ -86,7 +89,7 @@ export function PropertyDetailsForm({
                     className="form-input"
                     placeholder="Start typing to search..."
                   />
-                </StandaloneSearchBox>
+                </Autocomplete>
               ) : (
                 <input
                   type="text"
@@ -176,10 +179,10 @@ export function PropertyDetailsForm({
           )}
         </div>
 
-        {/* 5. Required By */}
+        {/* 5. Required Date/Time */}
         <div>
           <label className="block text-sm font-medium text-gray-500">
-            Required By
+            Required Date/Time
             <div className="mt-1">
               <input
                 type="datetime-local"
@@ -193,26 +196,28 @@ export function PropertyDetailsForm({
             <p className="mt-1 text-sm text-red-600">{errors.requiredDateTime}</p>
           )}
         </div>
+      </div>
 
-        {/* Navigation */}
-        <div className="flex justify-between">
-          {!isFirstStep && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900"
-            >
-              <ChevronLeftIcon className="w-5 h-5" />
-              Back
-            </button>
-          )}
+      {/* Navigation Buttons */}
+      <div className="mt-8 flex justify-between">
+        {!isFirstStep && (
           <button
-            onClick={handleNext}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
           >
-            Next
-            <ChevronRightIcon className="w-5 h-5" />
+            <ChevronLeftIcon className="w-5 h-5 mr-2" />
+            Back
           </button>
-        </div>
+        )}
+        <button
+          type="button"
+          onClick={handleNext}
+          className="inline-flex items-center px-4 py-2 text-sm text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 ml-auto"
+        >
+          Next
+          <ChevronRightIcon className="w-5 h-5 ml-2" />
+        </button>
       </div>
     </div>
   )
