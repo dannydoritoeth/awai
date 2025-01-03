@@ -4,11 +4,43 @@ import { AgentEngagementData } from '@/components/transactions/agent-engagement/
 interface ReviewFormProps {
   formData: AgentEngagementData
   onSubmit: () => void
-  onBack: () => void
+  onBack?: () => void
   loading?: boolean
+  readOnly?: boolean
+  mode: 'view' | 'create' | 'edit'
 }
 
-export function ReviewForm({ formData, onSubmit, onBack, loading }: ReviewFormProps) {
+export function ReviewForm({ formData, onSubmit, onBack, loading, readOnly = false, mode = 'create' }: ReviewFormProps) {
+  const renderDetailRow = (label: string, value: any) => {
+    if (value === undefined || value === null || value === '') {
+      return null
+    }
+
+    let displayValue = value
+    if (typeof value === 'boolean') {
+      displayValue = value ? 'Yes' : 'No'
+    }
+
+    return (
+      <div className="py-2 flex justify-between">
+        <dt className="text-sm text-gray-600">{label}</dt>
+        <dd className="text-sm text-gray-900 text-right">{displayValue}</dd>
+      </div>
+    )
+  }
+
+  const getSubmitButtonText = () => {
+    if (loading) return 'Saving...'
+    switch (mode) {
+      case 'create':
+        return 'Create Engagement'
+      case 'edit':
+        return 'Save Changes'
+      default:
+        return 'Submit'
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm p-6">
       <h2 className="text-xl font-semibold mb-6">Review Details</h2>
@@ -17,55 +49,38 @@ export function ReviewForm({ formData, onSubmit, onBack, loading }: ReviewFormPr
         {/* Delivery Details */}
         <section>
           <h3 className="font-medium text-gray-900 mb-4">Delivery Details</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Delivery Method</dt>
-            <dd className="text-gray-900">{formData.deliveryMethod}</dd>
-            <dt className="text-gray-500">Required By</dt>
-            <dd className="text-gray-900">{new Date(formData.requiredDateTime).toLocaleString()}</dd>
+          <dl className="divide-y divide-gray-100">
+            {renderDetailRow('Delivery Method', formData.deliveryMethod)}
+            {renderDetailRow('Required By', formData.requiredDateTime && new Date(formData.requiredDateTime).toLocaleString())}
           </dl>
         </section>
 
         {/* Seller Information */}
         <section>
           <h3 className="font-medium text-gray-900 mb-4">Seller Information</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Name</dt>
-            <dd className="text-gray-900">{formData.sellerName}</dd>
-            <dt className="text-gray-500">Address</dt>
-            <dd className="text-gray-900">{formData.sellerAddress}</dd>
-            <dt className="text-gray-500">Phone</dt>
-            <dd className="text-gray-900">{formData.sellerPhone}</dd>
-            <dt className="text-gray-500">Email</dt>
-            <dd className="text-gray-900">{formData.sellerEmail}</dd>
+          <dl className="divide-y divide-gray-100">
+            {renderDetailRow('Name', formData.sellerName)}
+            {renderDetailRow('Address', formData.sellerAddress)}
+            {renderDetailRow('Phone', formData.sellerPhone)}
+            {renderDetailRow('Email', formData.sellerEmail)}
           </dl>
         </section>
 
         {/* Property Details */}
         <section>
           <h3 className="font-medium text-gray-900 mb-4">Property Details</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Property Address</dt>
-            <dd className="text-gray-900">{formData.propertyAddress}</dd>
-            <dt className="text-gray-500">SP Number</dt>
-            <dd className="text-gray-900">{formData.spNumber}</dd>
-            <dt className="text-gray-500">Survey Plan Number</dt>
-            <dd className="text-gray-900">{formData.surveyPlanNumber}</dd>
-            <dt className="text-gray-500">Title Reference</dt>
-            <dd className="text-gray-900">{formData.titleReference}</dd>
-            <dt className="text-gray-500">Sale Method</dt>
-            <dd className="text-gray-900">{formData.saleMethod}</dd>
-            {formData.saleMethod === 'private' ? (
+          <dl className="divide-y divide-gray-100">
+            {renderDetailRow('Property Address', formData.propertyAddress)}
+            {renderDetailRow('SP Number', formData.spNumber)}
+            {renderDetailRow('Survey Plan Number', formData.surveyPlanNumber)}
+            {renderDetailRow('Title Reference', formData.titleReference)}
+            {renderDetailRow('Sale Method', formData.saleMethod)}
+            {formData.saleMethod === 'private' && renderDetailRow('List Price', formData.listPrice)}
+            {formData.saleMethod === 'auction' && formData.auctionDetails && (
               <>
-                <dt className="text-gray-500">List Price</dt>
-                <dd className="text-gray-900">{formData.listPrice}</dd>
-              </>
-            ) : (
-              <>
-                <dt className="text-gray-500">Auction Details</dt>
-                <dd className="text-gray-900">
-                  {formData.auctionDetails?.date} at {formData.auctionDetails?.time}<br />
-                  Venue: {formData.auctionDetails?.venue}
-                </dd>
+                {renderDetailRow('Auction Date', formData.auctionDetails.date)}
+                {renderDetailRow('Auction Time', formData.auctionDetails.time)}
+                {renderDetailRow('Auction Venue', formData.auctionDetails.venue)}
               </>
             )}
           </dl>
@@ -74,75 +89,60 @@ export function ReviewForm({ formData, onSubmit, onBack, loading }: ReviewFormPr
         {/* Property Features */}
         <section>
           <h3 className="font-medium text-gray-900 mb-4">Property Features</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Property Type</dt>
-            <dd className="text-gray-900">{formData.propertyType}</dd>
-            <dt className="text-gray-500">Bedrooms</dt>
-            <dd className="text-gray-900">{formData.bedrooms}</dd>
-            <dt className="text-gray-500">Bathrooms</dt>
-            <dd className="text-gray-900">{formData.bathrooms}</dd>
-            <dt className="text-gray-500">Car Spaces</dt>
-            <dd className="text-gray-900">{formData.carSpaces}</dd>
-            <dt className="text-gray-500">Features</dt>
-            <dd className="text-gray-900">
-              {[
-                formData.pool && 'Pool',
-                formData.bodyCorp && 'Body Corp',
-                formData.electricalSafetySwitch && 'Electrical Safety Switch',
-                formData.smokeAlarms && 'Smoke Alarms'
-              ].filter(Boolean).join(', ') || 'None'}
-            </dd>
+          <dl className="divide-y divide-gray-100">
+            {renderDetailRow('Property Type', formData.propertyType)}
+            {renderDetailRow('Bedrooms', formData.bedrooms)}
+            {renderDetailRow('Bathrooms', formData.bathrooms)}
+            {renderDetailRow('Car Spaces', formData.carSpaces)}
+            {renderDetailRow('Pool', formData.pool)}
+            {renderDetailRow('Body Corp', formData.bodyCorp)}
+            {renderDetailRow('Electrical Safety Switch', formData.electricalSafetySwitch)}
+            {renderDetailRow('Smoke Alarms', formData.smokeAlarms)}
+            {renderDetailRow('Advice to Market Price', formData.adviceToMarketPrice)}
           </dl>
         </section>
 
         {/* Legal & Compliance */}
         <section>
           <h3 className="font-medium text-gray-900 mb-4">Legal & Compliance</h3>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Seller Warranties</dt>
-            <dd className="text-gray-900">{formData.sellerWarranties}</dd>
-            <dt className="text-gray-500">Heritage Listed</dt>
-            <dd className="text-gray-900">{formData.heritageListed}</dd>
-            <dt className="text-gray-500">Contaminated Land</dt>
-            <dd className="text-gray-900">{formData.contaminatedLand}</dd>
-            <dt className="text-gray-500">Environment Management</dt>
-            <dd className="text-gray-900">{formData.environmentManagement}</dd>
-            <dt className="text-gray-500">Present Land Use</dt>
-            <dd className="text-gray-900">{formData.presentLandUse}</dd>
-            <dt className="text-gray-500">Neighbourhood Disputes</dt>
-            <dd className="text-gray-900">{formData.neighbourhoodDisputes}</dd>
-            <dt className="text-gray-500">Encumbrances</dt>
-            <dd className="text-gray-900">{formData.encumbrances}</dd>
-            <dt className="text-gray-500">GST Applicable</dt>
-            <dd className="text-gray-900">{formData.gstApplicable}</dd>
-            <dt className="text-gray-500">Authorised Marketing</dt>
-            <dd className="text-gray-900">{formData.authorisedMarketing}</dd>
-            <dt className="text-gray-500">Commission</dt>
-            <dd className="text-gray-900">{formData.commission}%</dd>
+          <dl className="divide-y divide-gray-100">
+            {renderDetailRow('Seller Warranties', formData.sellerWarranties)}
+            {renderDetailRow('Heritage Listed', formData.heritageListed)}
+            {renderDetailRow('Contaminated Land', formData.contaminatedLand)}
+            {renderDetailRow('Environment Management', formData.environmentManagement)}
+            {renderDetailRow('Present Land Use', formData.presentLandUse)}
+            {renderDetailRow('Neighbourhood Disputes', formData.neighbourhoodDisputes)}
+            {renderDetailRow('Encumbrances', formData.encumbrances)}
+            {renderDetailRow('GST Applicable', formData.gstApplicable)}
+            {renderDetailRow('Authorised Marketing', formData.authorisedMarketing)}
+            {renderDetailRow('Commission', `${formData.commission}%`)}
           </dl>
         </section>
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-8 pt-6 border-t">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900"
-        >
-          <ChevronLeftIcon className="w-5 h-5" />
-          Back
-        </button>
-        <button
-          onClick={onSubmit}
-          disabled={loading}
-          className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
-            loading ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {loading ? 'Saving...' : 'Submit'}
-          {!loading && <ChevronRightIcon className="w-5 h-5" />}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-between mt-8 pt-6 border-t">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900"
+            >
+              <ChevronLeftIcon className="w-5 h-5" />
+              Back
+            </button>
+          )}
+          <button
+            onClick={onSubmit}
+            disabled={loading}
+            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
+              loading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {getSubmitButtonText()}
+            {!loading && <ChevronRightIcon className="w-5 h-5" />}
+          </button>
+        </div>
+      )}
     </div>
   )
 } 

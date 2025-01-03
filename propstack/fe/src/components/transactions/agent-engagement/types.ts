@@ -1,6 +1,10 @@
 export type EngagementStatus = 'new' | 'title_search' | 'review' | 'agreement'
+export type YesNoNa = 'yes' | 'no' | 'na'
 
 export interface AgentEngagementData {
+  // Status
+  status: EngagementStatus
+
   // Delivery Details
   deliveryMethod: 'email' | 'hardcopy'
   requiredDateTime: string

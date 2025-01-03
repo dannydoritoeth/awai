@@ -16,6 +16,9 @@ import { EngagementAuthModal } from './EngagementAuthModal'
 import { toast } from 'react-hot-toast'
 
 const initialFormData: AgentEngagementData = {
+  // Status
+  status: 'new',
+  
   // Delivery Details
   deliveryMethod: 'email',
   requiredDateTime: '',
@@ -46,11 +49,11 @@ const initialFormData: AgentEngagementData = {
   adviceToMarketPrice: false,
   
   // Compliance & Legal
-  sellerWarranties: '',
-  heritageListed: '',
-  contaminatedLand: '',
-  environmentManagement: '',
-  presentLandUse: '',
+  sellerWarranties: 'na',
+  heritageListed: 'na',
+  contaminatedLand: 'na',
+  environmentManagement: 'na',
+  presentLandUse: 'na',
   neighbourhoodDisputes: '',
   encumbrances: '',
   gstApplicable: '',
@@ -69,45 +72,36 @@ const steps = [
 const FORM_STORAGE_KEY = 'agent-engagement-draft'
 
 export function AgentEngagementWizard({ id }: { id?: string }) {
-  const { user } = useAuth()
-  const router = useRouter()
+  const [formData, setFormData] = useState<AgentEngagementData>(initialFormData)
+  const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [step, setStep] = useState(id ? 5 : 1)
-  const [formData, setFormData] = useState<AgentEngagementData>(() => {
-    // Try to load saved draft on initial mount
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(FORM_STORAGE_KEY)
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          setStep(5) // Set to review step when restoring data
-          return parsed
-        } catch (e) {
-          console.error('Error parsing saved form data:', e)
-        }
-      }
-    }
-    return initialFormData
-  })
+  const { user } = useAuth()
+  const router = useRouter()
 
-  // Check for auth return
+  // Load saved draft from localStorage
   useEffect(() => {
-    if (user) {
-      const saved = localStorage.getItem(FORM_STORAGE_KEY)
-      if (saved) {
+    if (!id) {
+      const savedData = localStorage.getItem(FORM_STORAGE_KEY)
+      const savedStep = localStorage.getItem('currentStep')
+      
+      if (savedData) {
         try {
-          const parsed = JSON.parse(saved)
-          setFormData(parsed)
-          setStep(5) // Set to review step
-        } catch (e) {
-          console.error('Error parsing saved form data:', e)
+          setFormData(JSON.parse(savedData))
+          if (savedStep) {
+            setStep(parseInt(savedStep))
+          }
+        } catch (err) {
+          console.error('Error parsing saved data:', err)
+          localStorage.removeItem(FORM_STORAGE_KEY)
+          localStorage.removeItem('currentStep')
         }
       }
     }
-  }, [user])
+  }, [id])
 
+  // Load existing engagement data when in edit mode
   useEffect(() => {
     if (id) {
       loadEngagement()
@@ -117,6 +111,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   async function loadEngagement() {
     try {
       setError(null)
+      setLoading(true)
       const data = await getEngagement(id!)
       
       if (!data) {
@@ -125,6 +120,7 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
 
       // Map database fields (snake_case) to form data (camelCase)
       setFormData({
+        status: data.status,
         deliveryMethod: data.delivery_method as 'email' | 'hardcopy',
         requiredDateTime: data.required_date_time,
         sellerName: data.seller_name,
@@ -146,11 +142,13 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
         bodyCorp: data.body_corp,
         electricalSafetySwitch: data.electrical_safety_switch,
         smokeAlarms: data.smoke_alarms,
-        sellerWarranties: data.seller_warranties as YesNoNa,
-        heritageListed: data.heritage_listed as YesNoNa,
-        contaminatedLand: data.contaminated_land as YesNoNa,
-        environmentManagement: data.environment_management as YesNoNa,
-        presentLandUse: data.present_land_use as YesNoNa,
+        adviceToMarketPrice: data.advice_to_market_price,
+        tenancyDetails: data.tenancy_details,
+        sellerWarranties: data.seller_warranties,
+        heritageListed: data.heritage_listed,
+        contaminatedLand: data.contaminated_land,
+        environmentManagement: data.environment_management,
+        presentLandUse: data.present_land_use,
         neighbourhoodDisputes: data.neighbourhood_disputes,
         encumbrances: data.encumbrances,
         gstApplicable: data.gst_applicable,
@@ -161,6 +159,8 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       const error = err as Error | PostgrestError
       console.error('Error loading engagement:', error)
       setError(error.message || 'Failed to load engagement')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -197,14 +197,13 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
       if (id) {
         await updateEngagement(id, formData)
         toast.success('Changes saved successfully')
-        return
+        router.push(`/transactions/agent-engagement/${id}`)
       } else {
         const newEngagement = await createEngagement(formData)
         localStorage.removeItem(FORM_STORAGE_KEY)
         localStorage.removeItem('currentStep')
         toast.success('Engagement created successfully')
         router.push(`/transactions/agent-engagement/${newEngagement.id}?new=true`)
-        return
       }
     } catch (err) {
       const error = err as Error | PostgrestError
@@ -217,8 +216,15 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
   }
 
   const handleAuthSuccess = () => {
-    // Will trigger the useEffect above when user becomes available
     setShowAuthModal(false)
+  }
+
+  if (loading && id) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    )
   }
 
   return (
@@ -269,7 +275,8 @@ export function AgentEngagementWizard({ id }: { id?: string }) {
           formData={formData}
           onSubmit={handleSubmit}
           onBack={handleBack}
-          onEditStep={handleEditStep}
+          loading={loading}
+          mode={id ? 'view' : 'create'}
         />
       )}
 
