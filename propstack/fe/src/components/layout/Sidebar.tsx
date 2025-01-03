@@ -39,13 +39,9 @@ const menuItems: MenuItem[] = [
     ]
   },
   {
-    name: 'Transactions',
-    href: '/transactions',
-    icon: DocumentTextIcon,
-    items: [
-      { name: 'Agent Engagement', href: '/transactions/agent-engagement' },
-      { name: 'Contracts', href: '/transactions/contracts' },
-    ]
+    name: 'Agent Engagements',
+    href: '/transactions/agent-engagement',
+    icon: DocumentTextIcon
   },
   {
     name: 'Messages',
@@ -112,7 +108,11 @@ export function Sidebar() {
       >
         {/* Logo Area */}
         <div className="flex items-center justify-between p-4 border-b border-indigo-800">
-          {isExpanded && <span className="text-xl font-semibold">PropStack</span>}
+          {isExpanded && (
+            <Link href="/" className="text-xl font-semibold hover:text-indigo-200 transition-colors">
+              PropStack
+            </Link>
+          )}
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-1 hover:bg-indigo-800 rounded-md"
