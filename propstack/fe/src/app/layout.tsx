@@ -27,14 +27,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full text-gray-900 bg-gray-50">
+      <body className={`${inter.variable} font-sans h-full text-gray-900 bg-gray-50`}>
         <AuthProvider>
           <MapsProvider>
-            <div className="flex">
+            <div className="flex h-full">
               <Sidebar />
-              <div className="flex-1">
+              <main className="flex-1 overflow-y-auto">
                 {children}
-              </div>
+              </main>
             </div>
             <AuthReturnHandler />
           </MapsProvider>

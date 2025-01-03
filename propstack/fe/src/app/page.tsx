@@ -1,22 +1,24 @@
 "use client"
 
-import { DashboardGrid } from '@/components/dashboard/DashboardGrid'
-import { Header } from '@/components/layout/Header'
-import { PageHeading } from '@/components/layout/PageHeading'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 
-export const dynamic = 'force-dynamic'
+export default function HomePage() {
+  const { user } = useAuth()
+  const router = useRouter()
 
-export default function Home() {
+  useEffect(() => {
+    if (user) {
+      router.push('/listings')
+    }
+  }, [user, router])
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <main className="container mx-auto px-4">
-        <PageHeading 
-          title="Dashboard" 
-          description="Welcome to PropStack IO - your AI powered real estate assistant"
-        />
-        <DashboardGrid />
-      </main>
+    <div className="h-full p-8">
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">
+        Welcome to PropStack IO
+      </h1>
     </div>
   )
 }
