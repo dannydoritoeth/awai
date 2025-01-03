@@ -7,8 +7,16 @@ import {
   Users,
   ClipboardList,
 } from 'lucide-react';
+import { DashboardCard } from '@/types/dashboard';
 
 const features: DashboardCard[] = [
+  {
+    title: 'Transactions',
+    subtitle: 'Manage Workflow',
+    icon: ClipboardList,
+    color: 'bg-orange-50',
+    href: '/transactions',
+  },
   {
     title: 'Listings',
     subtitle: 'Manage your property listings',
@@ -29,13 +37,6 @@ const features: DashboardCard[] = [
     icon: Lightbulb,
     color: 'bg-yellow-50',
     href: '/strategy',
-  },
-  {
-    title: 'Transactions',
-    subtitle: 'Manage Workflow',
-    icon: ClipboardList,
-    color: 'bg-orange-50',
-    href: '/transactions',
   },
 ];
 

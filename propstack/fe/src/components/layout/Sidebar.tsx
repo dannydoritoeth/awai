@@ -31,19 +31,19 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    name: 'Listings',
-    href: '/listings',
-    icon: MegaphoneIcon,
-    items: [
-      { name: 'All Listings', href: '/listings' },
-    ]
-  },
-  {
     name: 'Agent Engagements',
     href: '/transactions/agent-engagement',
     icon: DocumentTextIcon,
     items: [
       { name: 'All Engagements', href: '/transactions/agent-engagement' },
+    ]
+  },
+  {
+    name: 'Listings',
+    href: '/listings',
+    icon: MegaphoneIcon,
+    items: [
+      { name: 'All Listings', href: '/listings' },
     ]
   },
   {
