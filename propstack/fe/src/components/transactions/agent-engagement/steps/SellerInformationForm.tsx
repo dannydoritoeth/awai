@@ -1,8 +1,10 @@
+"use client"
+
 import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { AgentEngagementData } from '@/components/transactions/agent-engagement/types'
-import { StandaloneSearchBox } from '@react-google-maps/api'
-import { useGoogleMaps } from '@/components/maps/GoogleMapsProvider'
+import { Autocomplete } from '@react-google-maps/api'
+import { useMaps } from '@/contexts/MapsContext'
 
 interface SellerInformationFormProps {
   formData: AgentEngagementData
@@ -13,8 +15,8 @@ interface SellerInformationFormProps {
 
 export function SellerInformationForm({ formData, onChange, onNext, onBack }: SellerInformationFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [searchBox, setSearchBox] = useState<google.maps.places.SearchBox | null>(null)
-  const { isLoaded } = useGoogleMaps()
+  const { isLoaded } = useMaps()
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null)
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
@@ -44,12 +46,15 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
     }
   }
 
-  const handlePlaceSelect = () => {
-    if (searchBox) {
-      const places = searchBox.getPlaces()
-      if (places && places.length > 0) {
-        const place = places[0]
-        onChange({ sellerAddress: place.formatted_address || '' })
+  const onLoad = (autocomplete: google.maps.places.Autocomplete) => {
+    setAutocomplete(autocomplete)
+  }
+
+  const onPlaceChanged = () => {
+    if (autocomplete) {
+      const place = autocomplete.getPlace()
+      if (place.formatted_address) {
+        onChange({ sellerAddress: place.formatted_address })
       }
     }
   }
@@ -83,9 +88,9 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
             Seller Address
             <div className="mt-1">
               {isLoaded ? (
-                <StandaloneSearchBox
-                  onLoad={ref => setSearchBox(ref)}
-                  onPlacesChanged={handlePlaceSelect}
+                <Autocomplete
+                  onLoad={onLoad}
+                  onPlaceChanged={onPlaceChanged}
                 >
                   <input
                     type="text"
@@ -95,7 +100,7 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
                     placeholder="Start typing to search..."
                     autoComplete="off"
                   />
-                </StandaloneSearchBox>
+                </Autocomplete>
               ) : (
                 <input
                   type="text"
