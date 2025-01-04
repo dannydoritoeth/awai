@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, use } from 'react'
-import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { ListingWizard } from '@/components/listings/ListingWizard'
 import { supabase } from '@/lib/supabase'
@@ -59,7 +58,6 @@ export default function EditListingPage({ params }: EditListingPageProps) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <main className="container mx-auto px-4 py-8">
           <div className="flex justify-center">
             <Spinner />
@@ -72,7 +70,6 @@ export default function EditListingPage({ params }: EditListingPageProps) {
   if (!listing) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <main className="container mx-auto px-4 py-8">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900">Listing not found</h2>
@@ -84,7 +81,6 @@ export default function EditListingPage({ params }: EditListingPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <main className="container mx-auto px-4">
         <PageHeading 
           title="Edit Listing"

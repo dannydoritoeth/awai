@@ -5,7 +5,6 @@ import { ImageManager } from '@/components/listings/images/ImageManager'
 import { supabase } from '@/lib/supabase'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
-import { Header } from '@/components/layout/Header'
 
 interface ListingImage {
   id: string
@@ -62,7 +61,6 @@ export default function ImagesPage({ params }: ImagesPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">

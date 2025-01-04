@@ -6,7 +6,6 @@ import { DescriptionViewer } from '@/components/listings/description/Description
 import { supabase } from '@/lib/supabase'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
-import { Header } from '@/components/layout/Header'
 
 interface PageParams {
   params: Promise<{
@@ -52,7 +51,6 @@ export default function DescriptionPage({ params }: PageParams) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">

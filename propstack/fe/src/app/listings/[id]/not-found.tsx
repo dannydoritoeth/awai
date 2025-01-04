@@ -1,10 +1,8 @@
 import Link from 'next/link'
-import { Header } from '@/components/layout/Header'
 
 export default function ListingNotFound() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <main className="container mx-auto px-4 py-16">
         <div className="bg-white rounded-lg shadow-sm p-8 text-center">
           <h1 className="text-3xl font-semibold text-gray-900 mb-4">

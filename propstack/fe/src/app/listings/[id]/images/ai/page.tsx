@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { use } from 'react'
-import { Header } from '@/components/layout/Header'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -495,7 +494,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <main className="container mx-auto px-4 py-8">
           <div className="flex justify-center">
             <Spinner />
@@ -508,7 +506,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
   if (!image) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <main className="container mx-auto px-4 py-8">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900">Image not found</h2>
@@ -520,7 +517,6 @@ export default function AIImageEditorPage({ params }: AIImageEditorPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
       <main className="container mx-auto px-4">
         <PageHeading 
           title="AI Image Editor"
