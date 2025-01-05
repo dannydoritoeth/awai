@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from 'react'
 import { 
   PencilIcon, 
   DocumentTextIcon,
@@ -6,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
 import { StatusBadge } from './StatusBadge'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 
 interface ListingActionsProps {
   listingId: string
@@ -18,15 +22,19 @@ interface ListingActionsProps {
 }
 
 export function ListingActions({ listingId, statuses }: ListingActionsProps) {
+  const [isOpen, setIsOpen] = useState(true)
   const router = useRouter()
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      <div className="p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Actions</h2>
-        
+    <CollapsibleSection
+      title="Actions"
+      description="Quick actions for your listing"
+      isOpen={isOpen}
+      onToggle={() => setIsOpen(!isOpen)}
+    >
+      <div className="space-y-4 pt-2">
         {/* Status Badges */}
-        <div className="space-y-2 mb-6">
+        <div className="space-y-2">
           <StatusBadge status={statuses.description} type="description" />
           <StatusBadge status={statuses.images} type="images" />
           <StatusBadge status={statuses.socialMedia} type="social" />
@@ -67,6 +75,6 @@ export function ListingActions({ listingId, statuses }: ListingActionsProps) {
           </button>
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   )
 } 

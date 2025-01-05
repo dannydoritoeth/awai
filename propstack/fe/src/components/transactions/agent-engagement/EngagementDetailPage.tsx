@@ -9,6 +9,7 @@ import { ReviewForm } from '@/components/transactions/agent-engagement/steps/Rev
 import { EngagementActions } from './EngagementActions'
 import { AgentEngagementData, EngagementStatus } from './types'
 import Link from 'next/link'
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 
 interface EngagementDetailPageProps {
   id: string
@@ -145,6 +146,20 @@ export function EngagementDetailPage({ id }: EngagementDetailPageProps) {
 
         {/* Right column - Actions */}
         <div className="space-y-6">
+          {/* Workflow Panel */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Workflow</h2>
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push(`/transactions/agent-engagement/${id}/appraisal`)}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
+                Prepare Appraisal
+              </button>
+            </div>
+          </div>
+
           <EngagementActions 
             engagementId={id}
             status={engagement.status}

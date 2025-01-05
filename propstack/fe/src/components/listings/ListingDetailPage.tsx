@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { Spinner } from '@/components/ui/Spinner'
 import { ListingActions } from '@/components/listings/ListingActions'
-import Link from 'next/link'
+import { ListingWorkflowPanel } from '@/components/listings/ListingWorkflowPanel'
+import { ListingChecklistPanel } from '@/components/listings/ListingChecklistPanel'
+import { ListingAgentEngagement } from '@/components/listings/ListingAgentEngagement'
 
 interface ListingDetailPageProps {
   id: string
@@ -88,6 +90,13 @@ export function ListingDetailPage({ id }: ListingDetailPageProps) {
 
         {/* Right column - Actions */}
         <div className="space-y-6">
+          {/* Checklist Panel */}
+          <ListingChecklistPanel listingId={id} />
+
+          {/* Workflow Panel */}
+          <ListingWorkflowPanel listingId={id} />
+
+          {/* Actions Panel */}
           <ListingActions 
             listingId={id}
             statuses={{
@@ -98,21 +107,9 @@ export function ListingDetailPage({ id }: ListingDetailPageProps) {
             }}
           />
 
-          {/* Agent Engagement Link */}
+          {/* Agent Engagement Panel */}
           {listing.agent_engagements && (
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Agent Engagement</h3>
-              <Link
-                href={`/transactions/agent-engagement/${listing.agent_engagements.id}`}
-                className="text-blue-600 hover:text-blue-800 text-sm"
-              >
-                View Agent Engagement
-              </Link>
-              <div className="mt-2 text-sm text-gray-600">
-                <div>Property: {listing.agent_engagements.property_address}</div>
-                <div>Seller: {listing.agent_engagements.seller_name}</div>
-              </div>
-            </div>
+            <ListingAgentEngagement agentEngagement={listing.agent_engagements} />
           )}
         </div>
       </div>
