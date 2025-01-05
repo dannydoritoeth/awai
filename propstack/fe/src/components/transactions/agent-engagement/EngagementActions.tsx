@@ -1,7 +1,13 @@
 "use client"
 
 import { useRouter } from 'next/navigation'
-import { PencilIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { 
+  PencilIcon, 
+  MagnifyingGlassIcon, 
+  ClipboardDocumentCheckIcon,
+  ArrowPathIcon,
+  PlusCircleIcon
+} from '@heroicons/react/24/outline'
 import { EngagementStatus } from './types'
 
 interface EngagementActionsProps {
@@ -30,6 +36,18 @@ export function EngagementActions({ engagementId, status }: EngagementActionsPro
     router.push(`/transactions/agent-engagement/${engagementId}/title-search`)
   }
 
+  const handleComplianceCheck = () => {
+    router.push(`/transactions/agent-engagement/${engagementId}/compliance`)
+  }
+
+  const handleSyncToAgentBox = () => {
+    router.push(`/transactions/agent-engagement/${engagementId}/sync-agentbox`)
+  }
+
+  const handleCreateListing = () => {
+    router.push(`/transactions/agent-engagement/${engagementId}/create-listing`)
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-6">
@@ -55,13 +73,39 @@ export function EngagementActions({ engagementId, status }: EngagementActionsPro
           </button>
 
           {status === 'new' && (
-            <button
-              onClick={handleTitleSearch}
-              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <MagnifyingGlassIcon className="w-4 h-4 mr-2" />
-              Title Search
-            </button>
+            <>
+              <button
+                onClick={handleTitleSearch}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <MagnifyingGlassIcon className="w-4 h-4 mr-2" />
+                Title Search
+              </button>
+
+              <button
+                onClick={handleComplianceCheck}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <ClipboardDocumentCheckIcon className="w-4 h-4 mr-2" />
+                Compliance Check
+              </button>
+
+              <button
+                onClick={handleSyncToAgentBox}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <ArrowPathIcon className="w-4 h-4 mr-2" />
+                Sync to Agent Box
+              </button>
+
+              <button
+                onClick={handleCreateListing}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <PlusCircleIcon className="w-4 h-4 mr-2" />
+                Create Listing
+              </button>
+            </>
           )}
         </div>
       </div>
