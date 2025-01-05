@@ -22,6 +22,30 @@ interface ListingWizardProps {
   listingId?: string
 }
 
+interface ListingFormData {
+  address: string
+  latitude?: number
+  longitude?: number
+  placeId?: string
+  addressSelected?: boolean
+  propertyType: string
+  listingType: string
+  price?: string
+  currency?: string
+  bedrooms?: string
+  bathrooms?: string
+  parking?: string
+  lotSize?: string
+  lotSizeUnit?: string
+  interiorSize?: string
+  interiorSizeUnit?: string
+  propertyHighlights?: string[]
+  locationHighlights?: string[]
+  locationNotes?: string
+  otherDetails?: string
+  agent_engagement_id?: string
+}
+
 export function ListingWizard({ initialData, mode = 'create', listingId }: ListingWizardProps) {
   const [formData, setFormData] = useState<ListingFormData>(initialData || {})
   const [currentStep, setCurrentStep] = useState(1)
@@ -68,7 +92,8 @@ export function ListingWizard({ initialData, mode = 'create', listingId }: Listi
         location_highlights: formData.locationHighlights || [],
         location_notes: formData.locationNotes,
         other_details: formData.otherDetails,
-        status: 'draft'
+        status: 'draft',
+        agent_engagement_id: formData.agent_engagement_id || null
       }
 
       let error

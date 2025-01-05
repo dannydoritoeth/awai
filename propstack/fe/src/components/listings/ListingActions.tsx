@@ -11,6 +11,7 @@ interface ListingActionsProps {
   listingId: string
   statuses: {
     description: string
+    titleCheck: string
     socialMedia: string
     images: string
   }

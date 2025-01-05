@@ -5,6 +5,86 @@ DROP TABLE IF EXISTS title_checks CASCADE;
 DROP TABLE IF EXISTS generated_descriptions CASCADE;
 DROP TABLE IF EXISTS listings CASCADE;
 DROP TABLE IF EXISTS content CASCADE;
+DROP TABLE IF EXISTS agent_engagements CASCADE;
+
+-- Drop existing types
+DROP TYPE IF EXISTS engagement_status CASCADE;
+
+-- Create enum for engagement status
+CREATE TYPE engagement_status AS ENUM (
+  'new',
+  'title_search',
+  'review',
+  'agreement'
+);
+
+-- Create agent engagements table
+CREATE TABLE IF NOT EXISTS agent_engagements (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  status engagement_status DEFAULT 'new',
+  
+  -- Delivery Details
+  delivery_method TEXT,
+  required_date_time TIMESTAMP WITH TIME ZONE,
+  
+  -- Seller Details
+  seller_name TEXT,
+  seller_address TEXT,
+  seller_phone TEXT,
+  seller_email TEXT,
+  
+  -- Property Details
+  property_address TEXT,
+  sp_number TEXT,
+  survey_plan_number TEXT,
+  title_reference TEXT,
+  sale_method TEXT,
+  list_price TEXT,
+  auction_details JSONB,
+  
+  -- Property Features
+  property_type TEXT,
+  bedrooms INTEGER,
+  bathrooms INTEGER,
+  car_spaces INTEGER,
+  pool BOOLEAN,
+  body_corp BOOLEAN,
+  electrical_safety_switch BOOLEAN,
+  smoke_alarms BOOLEAN,
+  
+  -- Legal & Compliance
+  seller_warranties TEXT,
+  heritage_listed TEXT,
+  contaminated_land TEXT,
+  environment_management TEXT,
+  present_land_use TEXT,
+  neighbourhood_disputes TEXT,
+  encumbrances TEXT,
+  gst_applicable TEXT,
+  authorised_marketing TEXT,
+  commission DECIMAL(5,2)
+);
+
+-- Add RLS policies for agent_engagements
+ALTER TABLE agent_engagements ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own engagements"
+  ON agent_engagements
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create engagements"
+  ON agent_engagements
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their engagements"
+  ON agent_engagements
+  FOR UPDATE
+  USING (auth.uid() = user_id);
 
 -- Create listings table
 CREATE TABLE IF NOT EXISTS listings (
@@ -19,6 +99,7 @@ CREATE TABLE IF NOT EXISTS listings (
   longitude DECIMAL,
   property_type TEXT,
   listing_type TEXT,
+  agent_engagement_id UUID REFERENCES agent_engagements(id),
   
   -- Property Features
   price TEXT,
@@ -150,6 +231,7 @@ CREATE INDEX IF NOT EXISTS idx_listings_user_id ON listings(user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_property_type ON listings(property_type);
 CREATE INDEX IF NOT EXISTS idx_listings_listing_type ON listings(listing_type);
 CREATE INDEX IF NOT EXISTS idx_listings_created_at ON listings(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_listings_agent_engagement_id ON listings(agent_engagement_id);
 
 -- Create listing_images table
 CREATE TABLE IF NOT EXISTS listing_images (

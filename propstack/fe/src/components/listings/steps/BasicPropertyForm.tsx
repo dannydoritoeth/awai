@@ -14,27 +14,37 @@ interface BasicPropertyFormProps {
 export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormProps) {
   const { isLoaded, loadError } = useMaps()
   const [inputValue, setInputValue] = useState(data.address || '')
-  const [addressSelected, setAddressSelected] = useState(Boolean(data.address && data.latitude && data.longitude))
+  const [addressSelected, setAddressSelected] = useState(false)
   const [validationError, setValidationError] = useState('')
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const initialLoadRef = useRef(true)
 
+  // Handle initial pre-filled address
   useEffect(() => {
-    if (data.address && data.latitude && data.longitude) {
+    if (initialLoadRef.current && isLoaded && data.address && data.latitude && data.longitude) {
+      initialLoadRef.current = false
       setAddressSelected(true)
       setInputValue(data.address)
       setValidationError('')
+      
+      // Simulate a place selection with the existing data
+      onUpdate({
+        ...data,
+        address: data.address,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        addressSelected: true
+      })
     }
-  }, [data])
+  }, [isLoaded, data, onUpdate])
 
   const onLoad = useCallback((autocomplete: google.maps.places.Autocomplete) => {
-    console.log('Autocomplete loaded:', autocomplete)
     autocompleteRef.current = autocomplete
   }, [])
 
   const onPlaceChanged = useCallback(() => {
     if (autocompleteRef.current) {
       const place = autocompleteRef.current.getPlace()
-      console.log('Selected place:', place)
       
       if (place.geometry && place.formatted_address) {
         onUpdate({
@@ -42,6 +52,7 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
           address: place.formatted_address,
           latitude: place.geometry.location?.lat(),
           longitude: place.geometry.location?.lng(),
+          addressSelected: true
         })
         setInputValue(place.formatted_address)
         setAddressSelected(true)
@@ -53,12 +64,29 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!addressSelected) {
+    if (!addressSelected && !data.addressSelected) {
       setValidationError('Please select a valid address from the dropdown')
       return
     }
 
     onNext()
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setInputValue(value)
+    if (!value) {
+      setAddressSelected(false)
+      onUpdate({
+        ...data,
+        address: '',
+        latitude: null,
+        longitude: null,
+        addressSelected: false
+      })
+    } else if (value !== data.address) {
+      setAddressSelected(false)
+    }
   }
 
   if (loadError) {
@@ -91,10 +119,7 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
               type="text"
               id="address"
               value={inputValue}
-              onChange={(e) => {
-                setInputValue(e.target.value)
-                setAddressSelected(false)
-              }}
+              onChange={handleInputChange}
               className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 
                 ${validationError ? 'border-red-300' : 'border-gray-300'}`}
               placeholder="Enter address"
@@ -116,15 +141,15 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
           <select
             id="propertyType"
             value={data.propertyType || ''}
-            onChange={(e) => onUpdate({ propertyType: e.target.value })}
+            onChange={(e) => onUpdate({ ...data, propertyType: e.target.value })}
             className="form-select mt-1"
             required
           >
             <option value="">Select type</option>
             <option value="house">House</option>
             <option value="apartment">Apartment</option>
-            <option value="condo">Condo</option>
-            <option value="townhouse">Townhouse</option>
+            <option value="land">Land</option>
+            <option value="other">Other</option>
           </select>
         </div>
 
@@ -136,13 +161,13 @@ export function BasicPropertyForm({ data, onUpdate, onNext }: BasicPropertyFormP
           <select
             id="listingType"
             value={data.listingType || ''}
-            onChange={(e) => onUpdate({ listingType: e.target.value })}
+            onChange={(e) => onUpdate({ ...data, listingType: e.target.value })}
             className="form-select mt-1"
             required
           >
             <option value="">Select type</option>
             <option value="sale">For Sale</option>
-            <option value="rent">For Rent</option>
+            <option value="auction">For Auction</option>
           </select>
         </div>
       </div>
