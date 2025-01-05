@@ -1,24 +1,36 @@
 "use client"
 
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
 import { MegaphoneIcon, DocumentTextIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
 export default function HomePage() {
-  const { user } = useAuth()
-  const router = useRouter()
+  const { user, loading } = useAuth()
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="h-full p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    )
+  }
+
+  // Show welcome message for non-authenticated users
   if (!user) {
     return (
       <div className="h-full p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">
           Welcome to PropStack IO
         </h1>
+        <p className="text-gray-600">
+          Please <Link href="/auth/login" className="text-indigo-600 hover:text-indigo-500">sign in</Link> to access your dashboard.
+        </p>
       </div>
     )
   }
 
+  // Show dashboard for authenticated users
   const dashboardItems = [
     {
       name: 'Listings',

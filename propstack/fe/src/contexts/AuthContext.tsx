@@ -21,13 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  // Function to force logout and redirect
+  // Function to force logout without redirect
   const forceLogout = async () => {
-    const currentPath = window.location.pathname
-    localStorage.setItem('authReturnPath', currentPath)
     await supabase.auth.signOut()
     setUser(null)
-    router.push('/auth/login')
   }
 
   useEffect(() => {
@@ -35,22 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
-        if (error) throw error
-        if (!session) {
-          await forceLogout()
-          return
+        if (session?.user) {
+          setUser(session.user)
+        } else {
+          setUser(null)
         }
-
-        // Check if token is expired
-        if (session.expires_at && session.expires_at * 1000 < Date.now()) {
-          await forceLogout()
-          return
-        }
-
-        setUser(session.user)
       } catch (error) {
         console.error('Session check error:', error)
-        await forceLogout()
+        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -64,26 +53,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         setUser(null)
-        router.push('/auth/login')
       } else if (session?.user) {
-        // Check if token is expired
-        if (session.expires_at && session.expires_at * 1000 < Date.now()) {
-          await forceLogout()
-          return
-        }
         setUser(session.user)
       }
       setLoading(false)
     })
 
-    // Check session periodically
-    const intervalId = setInterval(checkSession, 60000) // Check every minute
-
     return () => {
       subscription.unsubscribe()
-      clearInterval(intervalId)
     }
-  }, [router])
+  }, [])
 
   const signInWithGoogle = async (redirectTo?: string) => {
     await supabase.auth.signInWithOAuth({
