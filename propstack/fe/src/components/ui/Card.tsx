@@ -8,6 +8,7 @@ interface CardProps {
   icon: LucideIcon;
   color: string;
   href: string;
+  className?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -16,11 +17,13 @@ export const Card: React.FC<CardProps> = ({
   icon: Icon,
   color,
   href,
+  className = '',
 }) => (
   <Link 
     href={href}
     className={`
       ${color} 
+      ${className}
       p-6 
       rounded-xl 
       shadow-lg 

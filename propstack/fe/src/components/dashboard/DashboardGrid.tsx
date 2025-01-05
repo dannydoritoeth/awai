@@ -11,11 +11,11 @@ import { DashboardCard } from '@/types/dashboard';
 
 const features: DashboardCard[] = [
   {
-    title: 'Transactions',
+    title: 'Agent Engagements',
     subtitle: 'Manage Workflow',
     icon: ClipboardList,
     color: 'bg-orange-50',
-    href: '/transactions',
+    href: '/transactions/agent-engagement',
   },
   {
     title: 'Listings',
@@ -42,9 +42,9 @@ const features: DashboardCard[] = [
 
 export function DashboardGrid() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="flex flex-wrap gap-6">
       {features.map((feature) => (
-        <Card key={feature.title} {...feature} />
+        <Card key={feature.title} {...feature} className="flex-1 min-w-[300px]" />
       ))}
     </div>
   )
