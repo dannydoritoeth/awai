@@ -18,6 +18,45 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
   const { isLoaded } = useMaps()
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null)
 
+  const validateEmail = (email: string) => {
+    // Basic email format validation
+    const basicFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!basicFormat.test(email)) {
+      return 'Please enter a valid email address'
+    }
+
+    // Additional validations
+    if (email.length > 254) {
+      return 'Email address is too long'
+    }
+
+    const [localPart, domain] = email.split('@')
+    if (localPart.length > 64) {
+      return 'Email username is too long'
+    }
+
+    // Check for common typos in domain names
+    const commonDomains: { [key: string]: string } = {
+      'gmial': 'gmail',
+      'gmal': 'gmail',
+      'gamil': 'gmail',
+      'hotmal': 'hotmail',
+      'hotnail': 'hotmail',
+      'hotmai': 'hotmail',
+      'yahooo': 'yahoo',
+      'yaho': 'yahoo',
+      'outloo': 'outlook',
+      'outlok': 'outlook'
+    }
+
+    const domainPart = domain.split('.')[0].toLowerCase()
+    if (commonDomains[domainPart]) {
+      return `Did you mean ${email.replace(domainPart, commonDomains[domainPart])}?`
+    }
+
+    return ''
+  }
+
   const validate = () => {
     const newErrors: Record<string, string> = {}
     
@@ -32,12 +71,31 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
     }
     if (!formData.sellerEmail) {
       newErrors.sellerEmail = 'Seller email is required'
-    } else if (!/\S+@\S+\.\S+/.test(formData.sellerEmail)) {
-      newErrors.sellerEmail = 'Please enter a valid email'
+    } else {
+      const emailError = validateEmail(formData.sellerEmail)
+      if (emailError) {
+        newErrors.sellerEmail = emailError
+      }
     }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const handleEmailChange = (email: string) => {
+    onChange({ sellerEmail: email })
+    if (email) {
+      const emailError = validateEmail(email)
+      setErrors(prev => ({
+        ...prev,
+        sellerEmail: emailError
+      }))
+    } else {
+      setErrors(prev => ({
+        ...prev,
+        sellerEmail: 'Seller email is required'
+      }))
+    }
   }
 
   const handleNext = () => {
@@ -146,15 +204,17 @@ export function SellerInformationForm({ formData, onChange, onNext, onBack }: Se
               <input
                 type="email"
                 value={formData.sellerEmail}
-                onChange={(e) => onChange({ sellerEmail: e.target.value })}
-                className="form-input"
+                onChange={(e) => handleEmailChange(e.target.value)}
+                className={`form-input ${errors.sellerEmail?.includes('Did you mean') ? 'border-yellow-500' : ''}`}
                 placeholder="Email address"
                 autoComplete="off"
               />
             </div>
           </label>
           {errors.sellerEmail && (
-            <p className="mt-1 text-sm text-red-600">{errors.sellerEmail}</p>
+            <p className={`mt-1 text-sm ${errors.sellerEmail.includes('Did you mean') ? 'text-yellow-600' : 'text-red-600'}`}>
+              {errors.sellerEmail}
+            </p>
           )}
         </div>
 
