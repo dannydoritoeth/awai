@@ -12,6 +12,7 @@ interface SocialMediaContent {
   content_type: string
   status: string
   created_at: string
+  title: string
 }
 
 interface SocialMediaTableProps {
@@ -60,6 +61,9 @@ export function SocialMediaTable({ listingId }: SocialMediaTableProps) {
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Title
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Platform
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -80,6 +84,11 @@ export function SocialMediaTable({ listingId }: SocialMediaTableProps) {
               onClick={() => router.push(`/listings/${listingId}/social-media/${item.id}`)}
               className="hover:bg-gray-50 cursor-pointer"
             >
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm font-medium text-gray-900">
+                  {item.title}
+                </div>
+              </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium text-gray-900">
                   {item.platform}
@@ -108,7 +117,7 @@ export function SocialMediaTable({ listingId }: SocialMediaTableProps) {
           ))}
           {content.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+              <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                 No social media content found
               </td>
             </tr>
