@@ -7,9 +7,10 @@ import { Spinner } from '@/components/ui/Spinner'
 import { PageHeading } from '@/components/layout/PageHeading'
 import { ReviewForm } from '@/components/transactions/agent-engagement/steps/ReviewForm'
 import { EngagementActions } from './EngagementActions'
+import { EngagementWorkflowPanel } from './EngagementWorkflowPanel'
+import { EngagementLinkedListing } from './EngagementLinkedListing'
+import { EngagementChecklistPanel } from './EngagementChecklistPanel'
 import { AgentEngagementData, EngagementStatus } from './types'
-import Link from 'next/link'
-import { ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 
 interface EngagementDetailPageProps {
   id: string
@@ -146,20 +147,13 @@ export function EngagementDetailPage({ id }: EngagementDetailPageProps) {
 
         {/* Right column - Actions */}
         <div className="space-y-6">
-          {/* Workflow Panel */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Workflow</h2>
-            <div className="space-y-3">
-              <button
-                onClick={() => router.push(`/transactions/agent-engagement/${id}/appraisal`)}
-                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
-                <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                Prepare Appraisal
-              </button>
-            </div>
-          </div>
+          {/* Checklist Panel */}
+          <EngagementChecklistPanel engagementId={id} />
 
+          {/* Workflow Panel */}
+          <EngagementWorkflowPanel engagementId={id} />
+
+          {/* Actions Panel */}
           <EngagementActions 
             engagementId={id}
             status={engagement.status}
@@ -167,19 +161,7 @@ export function EngagementDetailPage({ id }: EngagementDetailPageProps) {
 
           {/* Linked Listing */}
           {linkedListing && (
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Linked Listing</h3>
-              <Link
-                href={`/listings/${linkedListing.id}`}
-                className="text-blue-600 hover:text-blue-800 text-sm"
-              >
-                View Listing
-              </Link>
-              <div className="mt-2 text-sm text-gray-600">
-                <div>Address: {linkedListing.address}</div>
-                <div>Status: {linkedListing.status}</div>
-              </div>
-            </div>
+            <EngagementLinkedListing listing={linkedListing} />
           )}
         </div>
       </div>

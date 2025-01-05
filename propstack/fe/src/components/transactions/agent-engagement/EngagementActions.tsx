@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { 
   PencilIcon, 
   MagnifyingGlassIcon, 
@@ -16,6 +18,7 @@ interface EngagementActionsProps {
 }
 
 export function EngagementActions({ engagementId, status }: EngagementActionsProps) {
+  const [isOpen, setIsOpen] = useState(true)
   const router = useRouter()
 
   const getStatusColor = (status: EngagementStatus) => {
@@ -49,12 +52,15 @@ export function EngagementActions({ engagementId, status }: EngagementActionsPro
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      <div className="p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Actions</h2>
-        
+    <CollapsibleSection
+      title="Actions"
+      description="Quick actions for your engagement"
+      isOpen={isOpen}
+      onToggle={() => setIsOpen(!isOpen)}
+    >
+      <div className="space-y-4 pt-2">
         {/* Status Badge */}
-        <div className="mb-6">
+        <div>
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
             ${getStatusColor(status)}`}
           >
@@ -109,6 +115,6 @@ export function EngagementActions({ engagementId, status }: EngagementActionsPro
           )}
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   )
 } 

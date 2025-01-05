@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -18,25 +19,73 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  // Function to force logout and redirect
+  const forceLogout = async () => {
+    const currentPath = window.location.pathname
+    localStorage.setItem('authReturnPath', currentPath)
+    await supabase.auth.signOut()
+    setUser(null)
+    router.push('/auth/login')
+  }
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+    // Initial session check
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) throw error
+        if (!session) {
+          await forceLogout()
+          return
+        }
+
+        // Check if token is expired
+        if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+          await forceLogout()
+          return
+        }
+
+        setUser(session.user)
+      } catch (error) {
+        console.error('Session check error:', error)
+        await forceLogout()
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkSession()
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null)
+        router.push('/auth/login')
+      } else if (session?.user) {
+        // Check if token is expired
+        if (session.expires_at && session.expires_at * 1000 < Date.now()) {
+          await forceLogout()
+          return
+        }
+        setUser(session.user)
+      }
       setLoading(false)
     })
 
-    // Listen for changes in auth state
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null)
-    })
+    // Check session periodically
+    const intervalId = setInterval(checkSession, 60000) // Check every minute
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(intervalId)
+    }
+  }, [router])
 
-  const signInWithGoogle = async ({ redirectTo }: { redirectTo?: string } = {}) => {
+  const signInWithGoogle = async (redirectTo?: string) => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -73,11 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('Error signing out:', error)
-      throw error
-    }
+    await forceLogout()
   }
 
   return (
@@ -96,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
