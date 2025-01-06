@@ -1,4 +1,10 @@
+'use client';
+
+import { useBookingModal } from '@/contexts/BookingModalContext';
+
 export function NarrativeSection() {
+  const { openModal } = useBookingModal();
+
   return (
     <section className="py-16">
       <div className="container mx-auto px-4">
@@ -66,9 +72,17 @@ export function NarrativeSection() {
           </div>
 
           {/* Call to Action */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             <p className="text-lg">Ready to build a predictable, scalable lead generation system?</p>
             <p className="text-lg">Book your strategy call to learn how we can help you dominate your market.</p>
+            <button 
+              onClick={openModal}
+              className="inline-block text-xl px-10 py-5 bg-[#0A2E4D] text-white rounded-md 
+                hover:bg-[#164875] transition-colors duration-300 
+                shadow-lg hover:shadow-xl"
+            >
+              Book Your Strategy Call
+            </button>
           </div>
         </div>
       </div>

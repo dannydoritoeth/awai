@@ -86,16 +86,16 @@ export function CTASection() {
             {/* Trust Badges */}
             <div className="flex justify-center items-center gap-8">
               <div className="text-center">
-                <p className="text-2xl font-bold text-[#9FE870]">100+</p>
-                <p className="text-sm text-gray-400">Active Agencies</p>
+                <p className="text-2xl font-bold text-[#9FE870]">Fast</p>
+                <p className="text-sm text-gray-400">Implementation</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-[#9FE870]">78%</p>
-                <p className="text-sm text-gray-400">Conversion Rate</p>
+                <p className="text-2xl font-bold text-[#9FE870]">Exclusive</p>
+                <p className="text-sm text-gray-400">Territory Rights</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-[#9FE870]">24hrs</p>
-                <p className="text-sm text-gray-400">Setup Time</p>
+                <p className="text-2xl font-bold text-[#9FE870]">Results</p>
+                <p className="text-sm text-gray-400">Based Payment</p>
               </div>
             </div>
           </div>
