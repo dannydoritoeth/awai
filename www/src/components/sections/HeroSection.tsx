@@ -21,16 +21,6 @@ export function HeroSection() {
           SALES PIPELINE
         </h1>
 
-        {/* Social Proof */}
-        <p className="text-2xl text-gray-700 mb-8">
-          Join <span className="font-bold">100+ Real Estate Agencies</span> Already Using Our System
-        </p>
-
-        {/* Specific Promise */}
-        <p className="text-[#0066FF] text-2xl font-bold mb-16">
-          Get 50+ Exclusive Listings Per Month - Guaranteed
-        </p>
-
         {/* Subheadline */}
         <p className="text-gray-700 text-lg md:text-xl mb-8 max-w-[800px] mx-auto">
           Discover how our Precision Lead Engine™ can help your agency dominate your market without upfront costs.
@@ -49,10 +39,10 @@ export function HeroSection() {
               hover:bg-[#164875] transition-colors duration-300 
               shadow-lg hover:shadow-xl"
           >
-            Claim Your Territory Now - Free Strategy Call (Worth $1,000)
+            Claim Your Territory Now - Free Strategy Call
           </button>
           <p className="text-gray-600 text-sm">
-            Only 2 Spots Left In Your Area - Book Now
+            Limited Availability - Book Now
           </p>
         </div>
       </div>

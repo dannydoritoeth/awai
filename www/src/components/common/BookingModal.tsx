@@ -7,12 +7,6 @@ interface BookingModalProps {
   onClose: () => void;
 }
 
-declare global {
-  interface Window {
-    Calendly: any;
-  }
-}
-
 export function BookingModal({ isOpen, onClose }: BookingModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const CALENDLY_URL = "https://calendly.com/scott-acceleratewith/30min";
