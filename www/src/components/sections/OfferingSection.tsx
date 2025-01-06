@@ -18,7 +18,7 @@ export function OfferingSection() {
               GUARANTEED RESULTS
             </h3>
             <p className="text-gray-300 text-xl max-w-[800px] mx-auto">
-              A proven, done-for-you lead generation and automation system that's already working for top agencies nationwide.
+              A done-for-you lead generation and automation system designed to help real estate agencies scale efficiently.
             </p>
           </div>
 
@@ -36,12 +36,12 @@ export function OfferingSection() {
                 Exclusive Territory Rights
               </h3>
               <p className="text-gray-300 text-lg">
-                Lock out your competition. Get <span className="text-[#9FE870] font-bold">50+ exclusive leads</span> monthly in your protected territory.
+                Lock out your competition with exclusive leads in your protected territory.
               </p>
               <ul className="text-gray-400 space-y-2 pl-4">
-                <li>• Pre-qualified buyers & sellers</li>
-                <li>• 78% average conversion rate</li>
-                <li>• Zero competition guarantee</li>
+                <li>• Pre-qualified prospects</li>
+                <li>• Exclusive to your agency</li>
+                <li>• Territory protection</li>
               </ul>
             </div>
 
@@ -58,12 +58,12 @@ export function OfferingSection() {
                 Risk-Free Performance Model
               </h3>
               <p className="text-gray-300 text-lg">
-                Only pay when deals close. <span className="text-[#9FE870] font-bold">Save $10,000+</span> monthly on wasted ad spend.
+                Only pay when deals close. No upfront costs or monthly fees.
               </p>
               <ul className="text-gray-400 space-y-2 pl-4">
                 <li>• No retainers or setup fees</li>
                 <li>• Pay only for results</li>
-                <li>• 90-day performance guarantee</li>
+                <li>• Performance guarantee</li>
               </ul>
             </div>
 
@@ -80,7 +80,7 @@ export function OfferingSection() {
                 Done-For-You Automation
               </h3>
               <p className="text-gray-300 text-lg">
-                Save <span className="text-[#9FE870] font-bold">20+ hours weekly</span> with our proven lead nurturing systems.
+                Streamline your lead nurturing with automated systems.
               </p>
               <ul className="text-gray-400 space-y-2 pl-4">
                 <li>• Automated follow-up sequences</li>
