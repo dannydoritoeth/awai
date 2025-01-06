@@ -1,52 +1,62 @@
 export function ProblemSection() {
   return (
-    <section className="section-padding bg-gray-50">
-      <div className="section-container">
-        <h2 className="text-4xl md:text-5xl font-bold text-center mb-12">
-          Common Challenges Sales Teams Face
+    <section className="py-16 bg-gray-50">
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+          Tired of These Common Real Estate Challenges?
         </h2>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-3 gap-8 max-w-[1100px] mx-auto">
           {/* Challenge 1 */}
           <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h3 className="text-2xl font-semibold mb-4 text-gray-900">
-              Time-Consuming Manual Tasks
+            <div className="text-[#0066FF] mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-3">
+              Costly Third-Party Platforms
             </h3>
             <p className="text-gray-700">
-              Hours wasted on data entry, follow-ups, and administrative work 
-              instead of focusing on closing deals.
+              Wasting thousands on expensive lead generation platforms with diminishing returns and increasing costs.
             </p>
           </div>
 
           {/* Challenge 2 */}
           <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h3 className="text-2xl font-semibold mb-4 text-gray-900">
+            <div className="text-[#0066FF] mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-3">
               Inconsistent Lead Quality
             </h3>
             <p className="text-gray-700">
-              Struggling with unreliable lead sources and spending valuable time 
-              on prospects that never convert.
+              Dealing with low-quality leads that waste your team's time and rarely convert into actual deals.
             </p>
           </div>
 
           {/* Challenge 3 */}
           <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h3 className="text-2xl font-semibold mb-4 text-gray-900">
-              Scaling Difficulties
+            <div className="text-[#0066FF] mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-3">
+              Scalability Struggles
             </h3>
             <p className="text-gray-700">
-              Unable to handle increased lead volume without hiring more staff 
-              or working longer hours.
+              Unable to handle increased lead volume efficiently, leading to missed opportunities and operational bottlenecks.
             </p>
           </div>
-        </div>
-
-        {/* Pain Point Summary */}
-        <div className="mt-12 text-center">
-          <p className="text-xl text-gray-700 max-w-3xl mx-auto">
-            If any of these challenges sound familiar, you're not alone. 
-            But there's a better way to run your sales operation.
-          </p>
         </div>
       </div>
     </section>

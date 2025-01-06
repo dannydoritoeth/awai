@@ -4,24 +4,23 @@ import { useEffect } from 'react';
 
 export function HeroSection() {
   return (
-    <section className="pt-32 pb-16">
+    <section className="pt-40 pb-16">
       <div className="container mx-auto px-4 text-center">
-        {/* Target Audience */}
-        <p className="text-gray-600 text-lg md:text-xl mb-16">
-          For Sales Teams Who Want to <span className="underline">Earn More</span> and <span className="underline">Work Less</span>
+        {/* Eyebrow - Target Industry */}
+        <p className="text-[#0066FF] font-semibold text-lg md:text-xl mb-8">
+          Attention Real Estate Agencies Ready to Scale Faster and Smarter!
         </p>
 
         {/* Main Headline */}
-        <h1 className="text-[2.75rem] md:text-[3.5rem] leading-[1.2] font-bold mb-6 text-gray-900 max-w-[900px] mx-auto">
-          LET US BUILD YOU A{' '}
-          <span className="text-[#0066FF]">READY-TO-USE</span>
-          {' '}AI SYSTEM FOR YOUR BUSINESS
+        <h1 className="text-[2.25rem] md:text-[3rem] leading-[1.2] font-bold mb-6 text-gray-900 max-w-[1100px] mx-auto">
+          EXPLODE YOUR SALES PIPELINE{' '}
+          <span className="text-[#0066FF]">WITH EXCLUSIVE LEADS</span>
+          {' '}AND PAY ONLY WHEN YOU CLOSE DEALS!
         </h1>
 
         {/* Subheadline */}
         <p className="text-gray-700 text-lg md:text-xl mb-16 max-w-[800px] mx-auto">
-          Discover how our AI-powered solutions can transform your business operations, 
-          boost efficiency, and drive unprecedented growth - without the complexity
+          Discover how our Precision Lead Engine™ can help your agency dominate your market without upfront costs.
         </p>
 
         {/* CTA Button */}
