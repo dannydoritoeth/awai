@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 
 export function HeroSection() {
   return (
-    <section className="pt-40 pb-16">
+    <section className="pb-16">
       <div className="container mx-auto px-4 text-center">
         {/* Eyebrow - Target Industry */}
         <p className="text-[#0066FF] font-semibold text-lg md:text-xl mb-8">
