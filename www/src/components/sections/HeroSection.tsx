@@ -12,10 +12,10 @@ export function HeroSection() {
         </p>
 
         {/* Main Headline */}
-        <h1 className="text-[2.25rem] md:text-[3rem] leading-[1.2] font-bold mb-6 text-gray-900 max-w-[1100px] mx-auto">
-          EXPLODE YOUR SALES PIPELINE{' '}
-          <span className="text-[#0066FF]">WITH EXCLUSIVE LEADS</span>
-          {' '}AND PAY ONLY WHEN YOU CLOSE DEALS!
+        <h1 className="text-[4rem] md:text-[7rem] leading-[1] font-bold mb-6 text-gray-900 max-w-[1200px] mx-auto tracking-tight">
+          EXPLODE YOUR{' '}
+          <br />
+          SALES PIPELINE
         </h1>
 
         {/* Subheadline */}
