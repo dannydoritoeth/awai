@@ -1,24 +1,26 @@
 "use client"
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function AuthCallbackPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user } = useAuth()
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
-        // Get the stored path or default to home
-        const returnPath = localStorage.getItem('authReturnPath') || '/'
-        // Clear stored path
-        localStorage.removeItem('authReturnPath')
-        // Return to previous page
-        router.push(returnPath)
-      }
-    })
-  }, [router])
+    if (user) {
+      const returnUrl = searchParams.get('returnUrl') || '/'
+      router.push(returnUrl)
+    }
+  }, [user, router, searchParams])
 
-  return <div>Loading...</div>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-gray-600">
+        Completing sign in...
+      </div>
+    </div>
+  )
 } 

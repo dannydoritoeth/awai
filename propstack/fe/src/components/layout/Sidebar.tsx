@@ -247,32 +247,28 @@ export function Sidebar() {
                 </div>
               )}
               <button
+                onClick={() => setShowAuthModal(true)}
+                className={clsx(
+                  "flex items-center justify-center gap-2 text-indigo-100 hover:bg-indigo-800 rounded-md transition-colors px-3 py-2",
+                  isExpanded ? "w-full" : "w-10 h-10"
+                )}
+              >
+                <UserCircleIcon className="w-5 h-5" />
+                {isExpanded && <span>Sign in</span>}
+              </button>
+              <button
                 onClick={() => {
-                  setIsJoining(false)
+                  setIsJoining(true)
                   setShowAuthModal(true)
                 }}
                 className={clsx(
-                  "text-indigo-100 hover:bg-indigo-800 rounded-md transition-colors",
-                  isExpanded ? "w-full px-4 py-2" : "p-2"
+                  "flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors px-3 py-2",
+                  isExpanded ? "w-full" : "w-10 h-10"
                 )}
               >
-                <UserCircleIcon className={clsx(
-                  "w-6 h-6",
-                  !isExpanded && "mx-auto"
-                )} />
-                {isExpanded && <span>Sign in</span>}
+                <BanknotesIcon className="w-5 h-5" />
+                {isExpanded && <span>Join</span>}
               </button>
-              {isExpanded && (
-                <button
-                  onClick={() => {
-                    setIsJoining(true)
-                    setShowAuthModal(true)
-                  }}
-                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  Join
-                </button>
-              )}
             </div>
           )}
         </div>
