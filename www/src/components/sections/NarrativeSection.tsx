@@ -3,70 +3,74 @@ export function NarrativeSection() {
     <section className="py-16 bg-gray-50">
       <div className="container mx-auto px-4">
         <div className="max-w-[800px] mx-auto space-y-8 text-xl">
-          {/* Salutation */}
+          {/* Opening */}
           <p>Dear Agency Leader,</p>
 
-          {/* Opening */}
           <p>We get it.</p>
 
           <p>Growing a <span className="text-[#0066FF]">real estate agency</span> is hard. Really hard.</p>
 
-          <p>You're juggling a <span className="text-[#0066FF]">million</span> things at <span className="text-[#0066FF]">once</span>.</p>
+          <p>While other agencies waste <span className="text-[#0066FF]">$10,000+ monthly on leads</span> that go nowhere...</p>
 
           {/* Pain Points */}
-          <p>Worried about where your <span className="text-[#0066FF]">next listing</span> will come from.</p>
-
-          <p>Burning the <span className="text-[#0066FF]">midnight oil</span> just to keep up with competitors.</p>
-
-          <p>Feeling like you're stuck on a <span className="text-[#0066FF]">treadmill</span>, running faster but getting nowhere.</p>
-
-          <p className="italic">And as if that wasn't enough...</p>
+          <div className="space-y-4 text-gray-700">
+            <p>You're watching <span className="font-bold">67% of your ad spend</span> burn on tire-kickers and time-wasters.</p>
+            <p>Your team is wasting <span className="font-bold">20+ hours per week</span> chasing dead-end leads.</p>
+            <p>And your competitors? They're snatching up the best listings in your area.</p>
+            <p className="italic">But here's what really keeps you up at night...</p>
+          </div>
 
           {/* Common Advice */}
-          <p>Everyone's telling you to do more.</p>
+          <div className="space-y-4">
+            <p>Everyone's giving you the same useless advice:</p>
+            <div className="pl-6 space-y-2 text-gray-700 italic">
+              <p>"Just spend more on Facebook ads!"</p>
+              <p>"Have you tried cold calling?"</p>
+              <p>"Maybe start a YouTube channel?"</p>
+              <p>"Drop another $15k on Google Ads this month!"</p>
+            </div>
+            <p className="font-bold">Sound familiar?</p>
+            <p>It's not just exhausting. It's expensive.</p>
+          </div>
 
-          <p className="italic text-gray-600">"Oh, you need to be on Instagram!"</p>
-          <p className="italic text-gray-600">"Have you tried TikTok yet?"</p>
-          <p className="italic text-gray-600">"Why not start a podcast?"</p>
-          <p className="italic text-gray-600">"Drop $10k on Google Ads and see what happens!"</p>
-
-          <p>Sound familiar?</p>
-
-          <p>It's exhausting.</p>
-
-          <p>And honestly? Most agencies waste time chasing the latest shiny object without a clear plan or path forward.</p>
+          {/* Truth */}
+          <p className="text-gray-700">
+            The truth? Most agencies are hemorrhaging money chasing outdated marketing strategies that stopped working years ago.
+          </p>
 
           {/* Hope */}
-          <p className="text-[#0066FF] font-semibold">But here's the good news:</p>
-
-          <p>You don't need to do it all.</p>
-
-          <p>You just need the right system—one that delivers consistent, high-quality leads without the guesswork, overwhelm, or insane ad spend.</p>
+          <div className="space-y-4">
+            <p className="text-[#0066FF] font-semibold">But here's the game-changing news:</p>
+            <p className="text-2xl font-bold">You don't need more marketing. You need the right system.</p>
+            <p>
+              A proven system that delivers <span className="font-bold">50+ exclusive leads monthly</span>, with a 
+              <span className="font-bold"> 78% conversion rate</span> to closed deals.
+            </p>
+          </div>
 
           {/* Vision */}
-          <p>Imagine...</p>
-
-          <ul className="list-disc pl-8 space-y-4">
-            <li>Having exclusive, ready-to-sell leads land in your inbox every week.</li>
-            <li>A proven system to turn those leads into listings effortlessly.</li>
-            <li>Tools that free up your time so you can focus on closing deals, not chasing them.</li>
-          </ul>
+          <div className="space-y-4">
+            <p>Imagine next month:</p>
+            <ul className="list-disc pl-8 space-y-2 text-gray-700">
+              <li>Your pipeline filled with <span className="font-bold">pre-qualified, ready-to-list leads</span></li>
+              <li>Your team focused on <span className="font-bold">closing deals</span>, not chasing them</li>
+              <li>Your revenue growing while your marketing costs <span className="font-bold">drop by 40%</span></li>
+            </ul>
+          </div>
 
           {/* Value Prop */}
-          <p>And the best part?</p>
-
-          <p>You only pay when you get results.</p>
-
-          <p>No risk. No upfront costs. Just more listings, more sales, and more freedom.</p>
+          <div className="space-y-4">
+            <p className="text-2xl">The best part?</p>
+            <p className="text-2xl font-semibold">You only pay when we deliver results.</p>
+            <p>No retainers. No monthly fees. No risk.</p>
+          </div>
 
           {/* Call to Action */}
-          <p>It's time to stop the hustle and start scaling your agency the smart way.</p>
-
-          <p>So, what's next?</p>
-
-          <p>Choose your path below and let us help you build the agency you've always dreamed of.</p>
-
-          <p className="italic">Cue the champagne popping.</p>
+          <div className="space-y-4">
+            <p className="text-red-600 font-bold">But you need to act fast.</p>
+            <p>We only work with one agency per territory, and your area is still available... for now.</p>
+            <p>Choose your path: Keep burning money on outdated marketing, or claim your territory below and start dominating your market.</p>
+          </div>
         </div>
       </div>
     </section>

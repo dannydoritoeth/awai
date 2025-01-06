@@ -4,6 +4,7 @@ import './globals.css';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { GoogleAnalytics } from '@/components/common/GoogleAnalytics';
+import { BookingModalProvider } from '@/contexts/BookingModalContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,9 +28,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <GoogleAnalytics />
-        {children}
-        <Footer />
+        <BookingModalProvider>
+          <GoogleAnalytics />
+          {children}
+          <Footer />
+        </BookingModalProvider>
       </body>
     </html>
   );

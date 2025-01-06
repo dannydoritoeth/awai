@@ -1,9 +1,10 @@
 import { Header } from '@/components/layout/Header';
 import { HeroSection } from '@/components/sections/HeroSection';
 import { NarrativeSection } from '@/components/sections/NarrativeSection';
-import { SolutionSection } from '@/components/sections/SolutionSection';
-import { BenefitsSection } from '@/components/sections/BenefitsSection';
-import { OfferSection } from '@/components/sections/OfferSection';
+import { OfferingSection } from '@/components/sections/OfferingSection';
+import { ProofSection } from '@/components/sections/ProofSection';
+import { GuaranteeSection } from '@/components/sections/GuaranteeSection';
+import { FAQSection } from '@/components/sections/FAQSection';
 import { CTASection } from '@/components/sections/CTASection';
 
 export default function Home() {
@@ -13,9 +14,10 @@ export default function Home() {
       <main>
         <HeroSection />
         <NarrativeSection />
-        <SolutionSection />
-        <BenefitsSection />
-        <OfferSection />
+        <OfferingSection />
+        <ProofSection />
+        <GuaranteeSection />
+        <FAQSection />
         <CTASection />
       </main>
     </>
