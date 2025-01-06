@@ -1,4 +1,10 @@
+'use client';
+
+import { useBookingModal } from '@/contexts/BookingModalContext';
+
 export function OfferingSection() {
+  const { openModal } = useBookingModal();
+
   return (
     <section className="py-16 bg-[#1A1A1A] text-white">
       <div className="container mx-auto px-4">
@@ -92,14 +98,14 @@ export function OfferingSection() {
             <p className="text-2xl font-bold mb-8">
               Lock In Your Territory Before Your Competition Does
             </p>
-            <a 
-              href="#book-call"
+            <button 
+              onClick={openModal}
               className="inline-block text-xl px-10 py-5 bg-[#9FE870] text-black rounded-md 
                 hover:bg-[#8FD860] transition-colors duration-300 
                 shadow-lg hover:shadow-xl font-bold"
             >
               Check Territory Availability Now
-            </a>
+            </button>
           </div>
         </div>
       </div>
