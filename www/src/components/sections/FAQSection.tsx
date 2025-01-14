@@ -21,9 +21,8 @@ export function FAQSection() {
               </h3>
               <p className="text-gray-700">
                 Unlike others who charge upfront fees regardless of results, we only get paid when you 
-                close deals. Plus, we guarantee territory exclusivity - meaning your competitors can't 
-                access our system in your area. You're getting <span className="font-bold">100% exclusive leads</span>, 
-                not recycled ones sold to multiple agencies.
+                close deals. Our interests are completely aligned with yours - we succeed only when you do.
+                You're getting <span className="font-bold">high-quality leads</span> that are ready to convert.
               </p>
             </div>
 
@@ -45,9 +44,7 @@ export function FAQSection() {
               </h3>
               <p className="text-gray-700">
                 We can have your system up and running within <span className="font-bold">24 hours</span>. 
-                However, we only work with <span className="font-bold">one agency per territory</span>, and 
-                territories are being claimed daily. Once your competitor locks in your area, you'll be 
-                locked out.
+                Our streamlined onboarding process ensures you can start generating leads quickly and efficiently.
               </p>
             </div>
 
@@ -56,10 +53,9 @@ export function FAQSection() {
                 "What's the catch?"
               </h3>
               <p className="text-gray-700">
-                No catch. We're so confident in our system that we offer a <span className="font-bold">triple 
-                guarantee</span>: territory exclusivity, 90-day performance guarantee, and pay-only-for-results. 
-                The only "catch" is that we can't work with everyone - we need to maintain exclusivity 
-                for our partners.
+                No catch. We're so confident in our system that we operate purely on 
+                performance. You only pay when we deliver results. It's that simple - 
+                our success is directly tied to yours.
               </p>
             </div>
           </div>

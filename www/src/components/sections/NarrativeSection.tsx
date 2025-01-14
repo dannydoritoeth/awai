@@ -59,8 +59,8 @@ export function NarrativeSection() {
             <p className="text-lg">Imagine having:</p>
             <ul className="list-disc pl-8 space-y-2 text-lg">
               <li>A predictable flow of qualified leads</li>
-              <li>Territory exclusivity protection</li>
-              <li>A system that builds your brand while generating leads</li>
+              <li>A proven system that scales with you</li>
+              <li>A partner invested in your success</li>
             </ul>
           </div>
 

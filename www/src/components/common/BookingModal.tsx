@@ -68,9 +68,39 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
           {/* Modal Content */}
           <div className="p-8">
-            <h2 className="text-2xl font-bold mb-4 text-center">
-              Book Your Free Strategy Call
-            </h2>
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-4 text-center">
+                Get Your Free Custom Marketing Plan
+              </h2>
+              
+              {/* Benefits List */}
+              <div className="bg-gray-50 p-6 rounded-lg mb-6">
+                <p className="text-gray-700 mb-4">
+                  After your free 30-minute strategy call we will go away and do some research and provide you with your custom paid marketing plan including:
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#9FE870] mt-1">✓</span>
+                    <span>Ideal client profile and pain point identification</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#9FE870] mt-1">✓</span>
+                    <span>Detailed marketing strategy for both immediate wins and long-term pipeline building</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#9FE870] mt-1">✓</span>
+                    <span>Step-by-step implementation guide - not just high-level theory</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#9FE870] mt-1">✓</span>
+                    <span>Ready for your team to execute immediately</span>
+                  </li>
+                </ul>
+                <p className="text-sm text-gray-500 mt-4 italic">
+                  Yours to keep - no strings attached, whether you work with us or not
+                </p>
+              </div>
+            </div>
             
             {/* Loading State */}
             {isLoading && (

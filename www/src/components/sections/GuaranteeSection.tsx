@@ -24,24 +24,9 @@ export function GuaranteeSection() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold mb-2">Territory Exclusivity</h3>
+                    <h3 className="text-xl font-semibold mb-2">Performance Guarantee</h3>
                     <p className="text-gray-300">
-                      We work with only ONE agency per territory. Lock out your competition completely.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="text-[#9FE870] mt-1">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold mb-2">90-Day Performance Guarantee</h3>
-                    <p className="text-gray-300">
-                      If you don't see a minimum of 30 qualified leads in your first 90 days, 
-                      we'll continue working for free until you do.
+                      We only succeed when you succeed. No upfront costs, just results-based pricing.
                     </p>
                   </div>
                 </div>
@@ -69,15 +54,15 @@ export function GuaranteeSection() {
                 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>Exclusive Territory Rights</span>
+                    <span>Lead Generation System</span>
                     <span className="text-gray-500">$5,000/mo value</span>
                   </div>
                   <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>Lead Generation System</span>
+                    <span>Automation Suite</span>
                     <span className="text-gray-500">$3,500/mo value</span>
                   </div>
                   <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>Automation Suite</span>
+                    <span>Performance Analytics</span>
                     <span className="text-gray-500">$2,500/mo value</span>
                   </div>
                   <div className="flex items-center justify-between border-b border-gray-200 pb-2">
@@ -103,7 +88,7 @@ export function GuaranteeSection() {
                     hover:bg-[#164875] transition-colors duration-300 
                     shadow-lg hover:shadow-xl mt-6"
                 >
-                  Lock In Your Territory Now
+                  Book Your Strategy Call
                 </button>
               </div>
             </div>

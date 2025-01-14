@@ -33,15 +33,15 @@ export function OfferingSection() {
                 </svg>
               </div>
               <h3 className="text-2xl font-semibold">
-                Exclusive Territory Rights
+                High-Quality Leads
               </h3>
               <p className="text-gray-300 text-lg">
-                Lock out your competition with exclusive leads in your protected territory.
+                Get access to qualified leads that are ready to convert into listings.
               </p>
               <ul className="text-gray-400 space-y-2 pl-4">
                 <li>• Pre-qualified prospects</li>
-                <li>• Exclusive to your agency</li>
-                <li>• Territory protection</li>
+                <li>• Ready to convert</li>
+                <li>• Quality focused</li>
               </ul>
             </div>
 
@@ -96,7 +96,7 @@ export function OfferingSection() {
               Limited Time Offer
             </p>
             <p className="text-2xl font-bold mb-8">
-              Lock In Your Territory Before Your Competition Does
+              Start Growing Your Agency Today
             </p>
             <button 
               onClick={openModal}
@@ -104,7 +104,7 @@ export function OfferingSection() {
                 hover:bg-[#8FD860] transition-colors duration-300 
                 shadow-lg hover:shadow-xl font-bold"
             >
-              Check Territory Availability Now
+              Book Your Strategy Call
             </button>
           </div>
         </div>
