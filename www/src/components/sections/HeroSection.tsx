@@ -18,7 +18,7 @@ export function HeroSection() {
       </div>
 
       {/* Content */}
-      <div className="relative container mx-auto px-4 text-center pt-16">
+      <div className="relative container mx-auto px-4 text-center pt-16 pb-20">
         {/* Eyebrow - Target Industry */}
         <p className="text-[#1A90FF] font-semibold text-lg md:text-xl mb-6">
           Real Estate Agencies: Scale Your Business Risk-Free
@@ -61,6 +61,10 @@ export function HeroSection() {
             </p>
             <p className="flex items-start gap-2">
               <span className="text-[#9FE870] mt-1">✓</span>
+              <span>90-day Action Plan with clear milestones and targets</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-[#9FE870] mt-1">✓</span>
               <span>Ready for your team to execute immediately</span>
             </p>
             <p className="flex items-start gap-2">
@@ -74,15 +78,14 @@ export function HeroSection() {
             <p className="text-gray-300 text-sm">
               <span className="text-[#9FE870] font-semibold">Why give away such valuable insights for free?</span>
               <br />
-              Because we practice what we preach - leading with value. Just as we'll help you do with your business, 
-              we're demonstrating our expertise by actually helping you first. It's the best way to show you we know 
-              what we're talking about.
+              Because we practice what we preach - leading with value. We're demonstrating our expertise and building trust 
+              by actually helping you first. It's the best way to show you we know what we're talking about.
             </p>
           </div>
         </div>
 
         {/* CTA Button */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           <button 
             onClick={openModal}
             className="inline-block text-xl px-10 py-5 bg-[#9FE870] text-black rounded-md 

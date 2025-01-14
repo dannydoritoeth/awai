@@ -98,6 +98,10 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-[#9FE870] mt-1">✓</span>
+                    <span>90-day Action Plan with clear milestones and targets</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#9FE870] mt-1">✓</span>
                     <span>Ready for your team to execute immediately</span>
                   </li>
                 </ul>
@@ -110,9 +114,8 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
                   <p className="text-gray-700 text-sm">
                     <span className="text-[#0A2E4D] font-semibold">Why give away such valuable insights for free?</span>
                     <br />
-                    Because we practice what we preach - leading with value. Just as we'll help you do with your business, 
-                    we're demonstrating our expertise by actually helping you first. It's the best way to show you we know 
-                    what we're talking about.
+                    Because we practice what we preach - leading with value. We're demonstrating our expertise and building trust 
+                    by actually helping you first. It's the best way to show you we know what we're talking about.
                   </p>
                 </div>
               </div>
