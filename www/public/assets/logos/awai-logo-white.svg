@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" zoomAndPan="magnify" viewBox="0 0 480 195.000001" height="260" preserveAspectRatio="xMidYMid meet" version="1.0">
+  <defs>
+    <g/>
+    <clipPath id="15964661d6"><path d="M 92 79 L 167.21875 79 L 167.21875 170.417969 L 92 170.417969 Z M 92 79 " clip-rule="nonzero"/></clipPath>
+    <clipPath id="4fd7fcc67b"><path d="M 24.699219 23.421875 L 140 23.421875 L 140 170.417969 L 24.699219 170.417969 Z M 24.699219 23.421875 " clip-rule="nonzero"/></clipPath>
+    <clipPath id="a13e221d45"><path d="M 71 53 L 143 53 L 143 170.417969 L 71 170.417969 Z M 71 53 " clip-rule="nonzero"/></clipPath>
+  </defs>
+  <g clip-path="url(#15964661d6)">
+    <path fill="white" d="M 135.84375 116.203125 L 130.445312 126.195312 L 150.484375 160.898438 L 109.046875 160.898438 L 143.574219 96.640625 L 147.816406 99.035156 L 147.632812 79.148438 L 130.5 89.25 L 135.15625 91.882812 L 92.839844 170.570312 L 167.230469 170.570312 L 135.84375 116.203125 " fill-opacity="1" fill-rule="nonzero"/>
+  </g>
+  <g clip-path="url(#4fd7fcc67b)">
+    <path fill="white" d="M 139.160156 43.304688 L 138.976562 23.417969 L 121.84375 33.519531 L 126.492188 36.144531 L 56.042969 160.898438 L 41.472656 160.898438 L 95.976562 66.492188 L 101.382812 75.851562 L 106.902344 66.078125 L 95.976562 47.15625 L 24.726562 170.570312 L 61.6875 170.570312 L 134.910156 40.902344 L 139.160156 43.304688 " fill-opacity="1" fill-rule="nonzero"/>
+  </g>
+  <g clip-path="url(#a13e221d45)">
+    <path fill="white" d="M 142.464844 53.65625 L 125.332031 63.757812 L 129.984375 66.390625 L 71.859375 170.570312 L 82.878906 170.570312 L 138.40625 71.148438 L 142.648438 73.542969 L 142.464844 53.65625 " fill-opacity="1" fill-rule="nonzero"/>
+  </g>
+  <g fill="white" fill-opacity="1">
+    <!-- Text paths all with fill="white" -->
+    <g transform="translate(181.411953, 91.395262)"><g><path d="M 18.953125 -4.578125 L 8.109375 -4.578125 L 6.3125 0 L -0.171875 0 L 10.53125 -24.8125 L 17.015625 -24.8125 L 27.46875 0 L 20.734375 0 Z M 17.109375 -9.359375 L 13.578125 -18.53125 L 9.953125 -9.359375 Z M 17.109375 -9.359375 "/></g></g>
+    <!-- ... rest of the text paths ... -->
+  </g>
+</svg> 

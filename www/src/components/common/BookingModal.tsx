@@ -70,8 +70,13 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
           <div className="p-8">
             <div className="mb-8">
               <h2 className="text-2xl font-bold mb-4 text-center">
-                Get Your Free Custom Marketing Plan
+                Get Your Free Custom Paid Marketing Strategy
               </h2>
+              <div className="flex justify-center mb-6">
+                <div className="bg-[#9FE870]/10 px-4 py-2 rounded-full border border-[#9FE870]/20">
+                  <span className="text-[#9FE870] font-bold">$2,500 Value - Yours Free</span>
+                </div>
+              </div>
               
               {/* Benefits List */}
               <div className="bg-gray-50 p-6 rounded-lg mb-6">
@@ -99,6 +104,17 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
                 <p className="text-sm text-gray-500 mt-4 italic">
                   Yours to keep - no strings attached, whether you work with us or not
                 </p>
+
+                {/* Why We Do This */}
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <p className="text-gray-700 text-sm">
+                    <span className="text-[#0A2E4D] font-semibold">Why give away such valuable insights for free?</span>
+                    <br />
+                    Because we practice what we preach - leading with value. Just as we'll help you do with your business, 
+                    we're demonstrating our expertise by actually helping you first. It's the best way to show you we know 
+                    what we're talking about.
+                  </p>
+                </div>
               </div>
             </div>
             
