@@ -158,10 +158,51 @@ const lineItemDocumentCreator = (lineItem) => {
     };
 };
 
+const leadScoreDocumentCreator = (leadScore) => {
+    const doc = createBaseDocument(leadScore, entityTypes.LEAD_SCORE);
+    
+    // Create searchable content from lead score fields
+    const content = [
+        `Lead Score: ${leadScore.score}`,
+        `Lead Fit: ${leadScore.leadFit}`,
+        `Close Probability: ${leadScore.closeProbability}%`,
+        `Next Best Action: ${leadScore.nextBestAction}`,
+        'Scoring Factors:',
+        `- Lead Fit: ${leadScore.factors.leadFitScore}`,
+        `- Engagement: ${leadScore.factors.engagementScore}`,
+        `- Outcome: ${leadScore.factors.outcomeScore}`,
+        `- Recency: ${leadScore.factors.recencyScore}`,
+        'Metadata:',
+        leadScore.metadata.industry ? `Industry: ${leadScore.metadata.industry}` : '',
+        leadScore.metadata.companySize ? `Company Size: ${leadScore.metadata.companySize}` : '',
+        leadScore.metadata.source ? `Source: ${leadScore.metadata.source}` : '',
+        leadScore.metadata.lastEngagement ? `Last Engagement: ${leadScore.metadata.lastEngagement}` : '',
+        leadScore.metadata.totalEngagements ? `Total Engagements: ${leadScore.metadata.totalEngagements}` : ''
+    ].filter(Boolean).join('\n');
+
+    return {
+        ...doc,
+        content,
+        embeddings: {
+            text: content,
+            fields: {
+                score: leadScore.score.toString(),
+                leadFit: leadScore.leadFit,
+                closeProbability: leadScore.closeProbability.toString(),
+                nextBestAction: leadScore.nextBestAction,
+                industry: leadScore.metadata.industry || '',
+                companySize: leadScore.metadata.companySize || '',
+                source: leadScore.metadata.source || ''
+            }
+        }
+    };
+};
+
 module.exports = {
     contactDocumentCreator,
     dealDocumentCreator,
     engagementDocumentCreator,
     companyDocumentCreator,
-    lineItemDocumentCreator
+    lineItemDocumentCreator,
+    leadScoreDocumentCreator
 }; 

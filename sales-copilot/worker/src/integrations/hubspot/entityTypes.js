@@ -3,13 +3,15 @@ const DEAL = 'hubspot_deal';
 const ENGAGEMENT = 'hubspot_engagement';
 const COMPANY = 'hubspot_company';
 const LINE_ITEM = 'hubspot_line_item';
+const LEAD_SCORE = 'hubspot_lead_score';
 
 const entityTypes = {
     CONTACT,
     DEAL,
     ENGAGEMENT,
     COMPANY,
-    LINE_ITEM
+    LINE_ITEM,
+    LEAD_SCORE
 };
 
 const entitySchemas = {
@@ -22,10 +24,14 @@ const entitySchemas = {
             phone: { type: 'string', required: false },
             lifecycleStage: { type: 'string', required: false },
             leadStatus: { type: 'string', required: false },
+            aiLeadScore: { type: 'number', required: false },
+            aiLeadFit: { type: 'string', required: false },
+            aiCloseProbability: { type: 'number', required: false },
+            aiNextBestAction: { type: 'string', required: false },
             createdAt: { type: 'string', required: true },
             updatedAt: { type: 'string', required: true }
         },
-        indexes: ['email', 'phone', 'firstName', 'lastName']
+        indexes: ['email', 'phone', 'firstName', 'lastName', 'aiLeadScore', 'aiLeadFit']
     },
     [DEAL]: {
         properties: {
@@ -82,6 +88,41 @@ const entitySchemas = {
             updatedAt: { type: 'string', required: true }
         },
         indexes: ['name', 'sku', 'dealId']
+    },
+    [LEAD_SCORE]: {
+        properties: {
+            id: { type: 'string', required: true },
+            contactId: { type: 'string', required: true },
+            score: { type: 'number', required: true },
+            leadFit: { type: 'string', required: true }, // High/Medium/Low
+            closeProbability: { type: 'number', required: true },
+            nextBestAction: { type: 'string', required: true },
+            factors: {
+                type: 'object',
+                required: true,
+                properties: {
+                    leadFitScore: { type: 'number', required: true },
+                    engagementScore: { type: 'number', required: true },
+                    outcomeScore: { type: 'number', required: true },
+                    recencyScore: { type: 'number', required: true }
+                }
+            },
+            metadata: {
+                type: 'object',
+                required: true,
+                properties: {
+                    industry: { type: 'string', required: false },
+                    companySize: { type: 'string', required: false },
+                    source: { type: 'string', required: false },
+                    lastEngagement: { type: 'string', required: false },
+                    totalEngagements: { type: 'number', required: false },
+                    dealHistory: { type: 'object', required: false }
+                }
+            },
+            lastUpdated: { type: 'string', required: true },
+            version: { type: 'number', required: true }
+        },
+        indexes: ['contactId', 'score', 'leadFit', 'lastUpdated']
     }
 };
 
@@ -104,6 +145,10 @@ const entityValidators = {
     },
     [LINE_ITEM]: (data) => {
         const schema = entitySchemas[LINE_ITEM];
+        return validateEntity(data, schema);
+    },
+    [LEAD_SCORE]: (data) => {
+        const schema = entitySchemas[LEAD_SCORE];
         return validateEntity(data, schema);
     }
 };

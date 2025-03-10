@@ -280,6 +280,149 @@ class HubspotClient {
             throw error;
         }
     }
+
+    async updateLeadScore(contactId, scoreData) {
+        try {
+            const properties = {
+                ai_lead_score: scoreData.score.toString(),
+                ai_lead_fit: scoreData.leadFit,
+                ai_close_probability: scoreData.closeProbability.toString(),
+                ai_next_best_action: scoreData.nextBestAction
+            };
+
+            await this.client.crm.contacts.basicApi.update(contactId, { properties });
+
+            // Trigger workflow for high priority leads
+            if (scoreData.score >= 80) {
+                await this.triggerHighPriorityLeadWorkflow(contactId);
+            }
+
+            return true;
+        } catch (error) {
+            logger.error('Error updating HubSpot lead score:', error);
+            throw error;
+        }
+    }
+
+    async getContactWithCompany(contactId) {
+        try {
+            const [contact, associations] = await Promise.all([
+                this.getContact(contactId),
+                this.client.crm.contacts.associationsApi.getAll(contactId, 'company')
+            ]);
+
+            if (associations.results.length > 0) {
+                const companyId = associations.results[0].id;
+                const company = await this.getCompany(companyId);
+                return { ...contact, company };
+            }
+
+            return contact;
+        } catch (error) {
+            logger.error('Error fetching contact with company:', error);
+            throw error;
+        }
+    }
+
+    async getContactEngagementMetrics(contactId) {
+        try {
+            const engagements = await this.client.crm.engagements.getAll(contactId);
+            
+            const metrics = {
+                totalEngagements: 0,
+                emailsOpened: 0,
+                emailsReplied: 0,
+                meetingsAttended: 0,
+                callsAnswered: 0,
+                lastEngagementDate: null
+            };
+
+            for (const engagement of engagements.results) {
+                metrics.totalEngagements++;
+
+                switch (engagement.type) {
+                    case 'EMAIL':
+                        if (engagement.properties.opened) metrics.emailsOpened++;
+                        if (engagement.properties.replied) metrics.emailsReplied++;
+                        break;
+                    case 'MEETING':
+                        if (engagement.properties.attended) metrics.meetingsAttended++;
+                        break;
+                    case 'CALL':
+                        if (engagement.properties.status === 'COMPLETED') metrics.callsAnswered++;
+                        break;
+                }
+
+                const engagementDate = new Date(engagement.createdAt);
+                if (!metrics.lastEngagementDate || engagementDate > metrics.lastEngagementDate) {
+                    metrics.lastEngagementDate = engagementDate;
+                }
+            }
+
+            return metrics;
+        } catch (error) {
+            logger.error('Error fetching contact engagement metrics:', error);
+            throw error;
+        }
+    }
+
+    async getContactDealHistory(contactId) {
+        try {
+            const deals = await this.client.crm.deals.associationsApi.getAll(contactId, 'deal');
+            
+            const history = {
+                totalDeals: 0,
+                wonDeals: 0,
+                lostDeals: 0,
+                totalValue: 0,
+                averageDealSize: 0,
+                averageSalesCycle: 0
+            };
+
+            for (const deal of deals.results) {
+                history.totalDeals++;
+                
+                if (deal.properties.dealstage === 'closedwon') {
+                    history.wonDeals++;
+                    history.totalValue += Number(deal.properties.amount) || 0;
+                } else if (deal.properties.dealstage === 'closedlost') {
+                    history.lostDeals++;
+                }
+
+                if (deal.properties.closedate && deal.properties.createdate) {
+                    const cycleTime = new Date(deal.properties.closedate) - new Date(deal.properties.createdate);
+                    history.averageSalesCycle += cycleTime;
+                }
+            }
+
+            if (history.wonDeals > 0) {
+                history.averageDealSize = history.totalValue / history.wonDeals;
+                history.averageSalesCycle = history.averageSalesCycle / history.wonDeals;
+            }
+
+            return history;
+        } catch (error) {
+            logger.error('Error fetching contact deal history:', error);
+            throw error;
+        }
+    }
+
+    async triggerHighPriorityLeadWorkflow(contactId) {
+        try {
+            const workflowId = process.env.HUBSPOT_HIGH_PRIORITY_WORKFLOW_ID;
+            if (!workflowId) {
+                throw new Error('High priority workflow ID not configured');
+            }
+
+            await this.client.automation.workflowsApi.enrollObject(workflowId, {
+                objectId: contactId,
+                objectType: 'CONTACT'
+            });
+        } catch (error) {
+            logger.error('Error triggering high priority lead workflow:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = HubspotClient; 
