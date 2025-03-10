@@ -14,7 +14,8 @@ class DataQualityService {
         // Load analyzers dynamically
         this.analyzers = {
             'agentbox': require('../../worker/src/integrations/agentbox/dataQualityAnalyzer'),
-            'pipedrive': require('../../worker/src/integrations/pipedrive/dataQualityAnalyzer')
+            'pipedrive': require('../../worker/src/integrations/pipedrive/dataQualityAnalyzer'),
+            'hubspot': require('../../worker/src/integrations/hubspot/dataQualityAnalyzer')
         };
     }
 
