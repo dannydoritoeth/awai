@@ -1,6 +1,7 @@
 const { OpenAIEmbeddings } = require("@langchain/openai");
 const { PineconeStore } = require("@langchain/pinecone");
 const HubspotClient = require('../integrations/hubspot/client');
+const getHubspotAccessToken = require('../utils/getHubspotToken');
 const logger = require('../services/logger');
 const fs = require('fs').promises;
 const path = require('path');
@@ -12,13 +13,16 @@ const path = require('path');
  * 3. Finding similar records in Pinecone
  * 4. Using ChatGPT to analyze and score
  */
-async function runBatchScoring(accessToken) {
+async function runBatchScoring(portalId) {
     try {
-        logger.info('Starting batch scoring process...');
+        logger.info(`Starting batch scoring process for portal ${portalId}`);
+        
+        // Get access token from database
+        const accessToken = await getHubspotAccessToken(portalId);
         const hubspotClient = new HubspotClient(accessToken);
         
         // Get last run timestamp
-        const lastRunTime = await getLastRunTimestamp();
+        const lastRunTime = await getLastRunTimestamp(portalId);
         logger.info(`Processing records modified since: ${lastRunTime}`);
 
         // Initialize embedding and vector store
@@ -76,7 +80,7 @@ async function runBatchScoring(accessToken) {
         }
 
         // Save current timestamp for next run
-        await saveLastRunTimestamp();
+        await saveLastRunTimestamp(portalId);
 
         logger.info('Batch scoring complete!', results);
         return results;
@@ -137,9 +141,9 @@ async function analyzeAndScore(record, similarRecords) {
 /**
  * Get the timestamp of the last successful run
  */
-async function getLastRunTimestamp() {
+async function getLastRunTimestamp(portalId) {
     try {
-        const timestampFile = path.join(__dirname, '..', 'data', 'last_run.json');
+        const timestampFile = path.join(__dirname, '..', 'data', `last_run_${portalId}.json`);
         const data = await fs.readFile(timestampFile, 'utf8');
         const { timestamp } = JSON.parse(data);
         return timestamp;
@@ -154,9 +158,9 @@ async function getLastRunTimestamp() {
 /**
  * Save the current timestamp for the next run
  */
-async function saveLastRunTimestamp() {
+async function saveLastRunTimestamp(portalId) {
     try {
-        const timestampFile = path.join(__dirname, '..', 'data', 'last_run.json');
+        const timestampFile = path.join(__dirname, '..', 'data', `last_run_${portalId}.json`);
         const data = {
             timestamp: new Date().toISOString(),
             lastRun: new Date().toISOString()
@@ -175,14 +179,17 @@ async function saveLastRunTimestamp() {
 
 // Command line execution
 if (require.main === module) {
-    const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
+    const args = process.argv.slice(2);
+    const portalIdArg = args.find(arg => arg.startsWith('--portal_id='));
     
-    if (!accessToken) {
-        logger.error('HUBSPOT_ACCESS_TOKEN is required in environment variables');
+    if (!portalIdArg) {
+        logger.error('--portal_id parameter is required');
         process.exit(1);
     }
 
-    runBatchScoring(accessToken)
+    const portalId = portalIdArg.split('=')[1];
+
+    runBatchScoring(portalId)
         .then(results => {
             logger.info('Batch scoring completed successfully:', results);
             process.exit(0);

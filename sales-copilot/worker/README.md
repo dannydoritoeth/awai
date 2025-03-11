@@ -1,10 +1,10 @@
 # Ideal Client Analysis Service
 
-This service helps analyze and categorize clients using HubSpot data and AI-powered similarity matching.
+This service analyzes and scores clients using HubSpot data, embeddings, and AI-powered similarity matching.
 
 ## Setup
 
-1. Configure your environment variables in `.env.example`:
+1. Configure your environment variables in `.env`:
 ```env
 # HubSpot OAuth Configuration
 HUBSPOT_CLIENT_ID=your_app_id        # This is your HubSpot App ID
@@ -18,17 +18,86 @@ OPENAI_API_KEY=your_openai_key
 # Pinecone Configuration
 PINECONE_API_KEY=your_pinecone_key
 PINECONE_ENVIRONMENT=your_environment
+
+# Supabase Configuration
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-Note: In HubSpot, the `client_id` is the same as your `app_id`. You can find this in your HubSpot Developer account under "Apps" → Your App → "Auth" tab.
-
-After updating `.env.example`, create your `.env` file with your actual values:
-
+2. Create your `.env` file:
 ```bash
 cp .env.example .env
 ```
 
-Would you like me to provide any additional clarification about the configuration?
+## Available Scripts
+
+### 1. Process Ideal Client Lists
+This script loads your ideal and less-ideal client lists from HubSpot and stores them in Pinecone for future matching. The script will automatically fetch the HubSpot access token from the database using the provided portal ID.
+
+```bash
+node src/scripts/processIdealClients.js --portal_id=YOUR_PORTAL_ID
+```
+
+Example:
+```bash
+node src/scripts/processIdealClients.js --portal_id=12345
+```
+
+Output will show the processing results:
+```javascript
+{
+    contacts: {
+        ideal: { processed: 50, successful: 48 },
+        lessIdeal: { processed: 30, successful: 29 }
+    },
+    companies: {
+        ideal: { processed: 20, successful: 20 },
+        lessIdeal: { processed: 15, successful: 15 }
+    }
+}
+```
+
+### 2. Run Batch Scoring
+This script scores recently modified records against your ideal client profile. The script will automatically fetch the HubSpot access token from the database using the provided portal ID.
+
+```bash
+node src/scripts/batchScoring.js --portal_id=YOUR_PORTAL_ID
+```
+
+Example:
+```bash
+node src/scripts/batchScoring.js --portal_id=12345
+```
+
+Output format:
+```javascript
+{
+    processed: 10,    // Total records processed
+    successful: 9,    // Successfully scored records
+    failed: 1,        // Failed records
+    errors: [{        // Details of any errors
+        recordId: "123",
+        error: "Error message"
+    }]
+}
+```
+
+Each scored record in HubSpot will be updated with:
+- `ideal_client_score`: 0-100 score
+- `ideal_client_classification`: Classification category
+- `ideal_client_analysis`: Detailed analysis
+- `ideal_client_last_scored`: Timestamp
+
+## Running on a Schedule
+
+To run the scoring process automatically, you can set up a cron job:
+
+```bash
+# Run daily at midnight for specific portal
+0 0 * * * cd /path/to/worker && node src/scripts/batchScoring.js --portal_id=12345
+```
+
+The script maintains a timestamp of its last run and will only process records modified since then.
 
 ## Usage Examples
 
