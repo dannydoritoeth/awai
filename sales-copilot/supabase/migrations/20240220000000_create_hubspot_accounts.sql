@@ -42,71 +42,8 @@ CREATE TABLE user_hubspot_portals (
     PRIMARY KEY (user_id, portal_id)
 );
 
--- Add RLS policies for junction table
-ALTER TABLE user_hubspot_portals ENABLE ROW LEVEL SECURITY;
-
--- Users can view their own portal associations
-CREATE POLICY "Users can view their own portal associations"
-    ON user_hubspot_portals
-    FOR SELECT
-    TO authenticated
-    USING (user_id = auth.uid());
-
--- Only admins can manage portal associations
-CREATE POLICY "Admins can manage portal associations"
-    ON user_hubspot_portals
-    FOR ALL
-    TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1
-            FROM user_hubspot_portals
-            WHERE user_id = auth.uid()
-            AND role = 'admin'
-            AND portal_id = user_hubspot_portals.portal_id
-        )
-    );
-
--- Add RLS policies for hubspot_accounts
-ALTER TABLE hubspot_accounts ENABLE ROW LEVEL SECURITY;
-
--- Allow service role full access
-CREATE POLICY "Service role has full access"
-    ON hubspot_accounts
-    FOR ALL
-    TO service_role
-    USING (true)
-    WITH CHECK (true);
-
--- Allow initial account creation
-CREATE POLICY "Allow initial account creation"
-    ON hubspot_accounts
-    FOR INSERT
-    TO authenticated
-    WITH CHECK (true);
-
--- Only allow authenticated users to view their own portal data
-CREATE POLICY "Users can view their own portal data"
-    ON hubspot_accounts
-    FOR SELECT
-    TO authenticated
-    USING (
-        portal_id IN (
-            SELECT portal_id
-            FROM user_hubspot_portals
-            WHERE user_id = auth.uid()
-        )
-    );
-
--- Only allow authenticated users to update their own portal data
-CREATE POLICY "Users can update their own portal data"
-    ON hubspot_accounts
-    FOR UPDATE
-    TO authenticated
-    USING (
-        portal_id IN (
-            SELECT portal_id
-            FROM user_hubspot_portals
-            WHERE user_id = auth.uid()
-        )
-    ); 
+-- Grant necessary permissions to authenticated users and service role
+GRANT ALL ON TABLE hubspot_accounts TO authenticated;
+GRANT ALL ON TABLE hubspot_accounts TO service_role;
+GRANT ALL ON TABLE user_hubspot_portals TO authenticated;
+GRANT ALL ON TABLE user_hubspot_portals TO service_role; 
