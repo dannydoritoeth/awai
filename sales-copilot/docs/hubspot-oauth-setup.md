@@ -18,6 +18,9 @@
    Scopes: crm.objects.contacts.read crm.objects.contacts.write 
           crm.objects.deals.read crm.objects.deals.write
    ```
+   https://app-na2.hubspot.com/oauth/authorize?client_id=1a625962-e7a0-40e8-a54c-863a24acd1f0&redirect_uri=https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth&scope=timeline%20oauth%20crm.objects.companies.read%20crm.objects.deals.read%20crm.objects.contacts.read
+
+   https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth?code=na2-ec29-f2c1-4fad-9548-55bc0c3f70cf
 
 ## 2. Supabase Setup
 

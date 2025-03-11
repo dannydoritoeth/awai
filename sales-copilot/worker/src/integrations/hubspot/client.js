@@ -423,6 +423,336 @@ class HubspotClient {
             throw error;
         }
     }
+
+    async findListByName(listName) {
+        try {
+            const response = await this.client.crm.lists.searchApi.doSearch({
+                filterGroups: [{
+                    filters: [{
+                        propertyName: 'name',
+                        operator: 'EQ',
+                        value: listName
+                    }]
+                }]
+            });
+
+            if (response.results.length === 0) {
+                throw new Error(`No list found with name: ${listName}`);
+            }
+
+            return response.results[0];
+        } catch (error) {
+            logger.error('Error finding HubSpot list:', error);
+            throw error;
+        }
+    }
+
+    async getContactsFromList(listId, properties = [
+        'email',
+        'firstname',
+        'lastname',
+        'phone',
+        'company',
+        'industry',
+        'lifecyclestage',
+        'hs_lead_status'
+    ]) {
+        try {
+            const contacts = await this.client.crm.lists.getAll(listId, { properties });
+            
+            return contacts.results.map(contact => ({
+                id: contact.id,
+                email: contact.properties.email,
+                firstName: contact.properties.firstname,
+                lastName: contact.properties.lastname,
+                phone: contact.properties.phone,
+                company: contact.properties.company,
+                industry: contact.properties.industry,
+                lifecycleStage: contact.properties.lifecyclestage,
+                leadStatus: contact.properties.hs_lead_status
+            }));
+        } catch (error) {
+            logger.error('Error getting contacts from HubSpot list:', error);
+            throw error;
+        }
+    }
+
+    async getCompaniesFromList(listId, properties = [
+        'name',
+        'domain',
+        'industry',
+        'type',
+        'city',
+        'state',
+        'country',
+        'phone',
+        'lifecyclestage'
+    ]) {
+        try {
+            const companies = await this.client.crm.lists.getAll(listId, { properties });
+            
+            return companies.results.map(company => ({
+                id: company.id,
+                name: company.properties.name,
+                domain: company.properties.domain,
+                industry: company.properties.industry,
+                type: company.properties.type,
+                city: company.properties.city,
+                state: company.properties.state,
+                country: company.properties.country,
+                phone: company.properties.phone,
+                lifecycleStage: company.properties.lifecyclestage
+            }));
+        } catch (error) {
+            logger.error('Error getting companies from HubSpot list:', error);
+            throw error;
+        }
+    }
+
+    async getDetailedCompanyInfo(companyId) {
+        try {
+            // Fetch all information in parallel
+            const [
+                companyDetails,
+                associatedContacts,
+                associatedDeals,
+                recentActivity
+            ] = await Promise.all([
+                this.getCompany(companyId),
+                this.client.crm.companies.associationsApi.getAll(companyId, 'contacts'),
+                this.client.crm.companies.associationsApi.getAll(companyId, 'deals'),
+                this.getRecentActivity('company', companyId, 10)
+            ]);
+
+            // Get full deal details
+            const deals = await Promise.all(
+                associatedDeals.results.map(deal => this.getDeal(deal.id))
+            );
+
+            // Calculate company-level metrics
+            const metrics = {
+                totalRevenue: deals.reduce((sum, deal) => 
+                    sum + (Number(deal.amount) || 0), 0),
+                dealCount: deals.length,
+                wonDeals: deals.filter(deal => 
+                    deal.dealStage === 'closedwon').length,
+                contactCount: associatedContacts.results.length,
+                averageDealSize: 0,
+                averageSalesCycle: 0
+            };
+
+            // Calculate average deal size and sales cycle
+            const wonDealsData = deals.filter(deal => deal.dealStage === 'closedwon');
+            if (wonDealsData.length > 0) {
+                metrics.averageDealSize = metrics.totalRevenue / wonDealsData.length;
+                metrics.averageSalesCycle = wonDealsData.reduce((sum, deal) => {
+                    const cycleTime = new Date(deal.closeDate) - new Date(deal.createdAt);
+                    return sum + cycleTime;
+                }, 0) / wonDealsData.length;
+            }
+
+            return {
+                ...companyDetails,
+                metrics,
+                deals,
+                recentActivity
+            };
+        } catch (error) {
+            logger.error('Error getting detailed company info:', error);
+            throw error;
+        }
+    }
+
+    async getIdealAndLessIdealData(type = 'contacts') {
+        try {
+            const isCompanyType = type.toLowerCase() === 'companies';
+            const listSuffix = isCompanyType ? 'Companies' : 'Contacts';
+            
+            // Find both lists
+            const [idealList, lessIdealList] = await Promise.all([
+                this.findListByName(`Ideal-${listSuffix}`),
+                this.findListByName(`Less-Ideal-${listSuffix}`)
+            ]);
+
+            if (isCompanyType) {
+                // Get companies from both lists
+                const [idealCompanies, lessIdealCompanies] = await Promise.all([
+                    this.getCompaniesFromList(idealList.id),
+                    this.getCompaniesFromList(lessIdealList.id)
+                ]);
+
+                return {
+                    ideal: idealCompanies,
+                    lessIdeal: lessIdealCompanies,
+                    type: 'companies'
+                };
+            } else {
+                // Get contacts from both lists
+                const [idealContacts, lessIdealContacts] = await Promise.all([
+                    this.getContactsFromList(idealList.id),
+                    this.getContactsFromList(lessIdealList.id)
+                ]);
+
+                return {
+                    ideal: idealContacts,
+                    lessIdeal: lessIdealContacts,
+                    type: 'contacts'
+                };
+            }
+        } catch (error) {
+            logger.error(`Error getting ideal and less-ideal ${type}:`, error);
+            throw error;
+        }
+    }
+
+    async getDetailedIdealAndLessIdealData(type = 'contacts') {
+        try {
+            // First get basic info from lists
+            const basicData = await this.getIdealAndLessIdealData(type);
+            const isCompanyType = type.toLowerCase() === 'companies';
+
+            // Get detailed info for each record
+            const [detailedIdeal, detailedLessIdeal] = await Promise.all([
+                Promise.all(basicData.ideal.map(record => 
+                    isCompanyType ? 
+                    this.getDetailedCompanyInfo(record.id) : 
+                    this.getDetailedContactInfo(record.id)
+                )),
+                Promise.all(basicData.lessIdeal.map(record => 
+                    isCompanyType ? 
+                    this.getDetailedCompanyInfo(record.id) : 
+                    this.getDetailedContactInfo(record.id)
+                ))
+            ]);
+
+            return {
+                ideal: detailedIdeal,
+                lessIdeal: detailedLessIdeal,
+                type: basicData.type,
+                summary: {
+                    idealCount: detailedIdeal.length,
+                    lessIdealCount: detailedLessIdeal.length,
+                    idealMetrics: isCompanyType ? 
+                        this.calculateCompanyGroupMetrics(detailedIdeal) : 
+                        this.calculateContactGroupMetrics(detailedIdeal),
+                    lessIdealMetrics: isCompanyType ? 
+                        this.calculateCompanyGroupMetrics(detailedLessIdeal) : 
+                        this.calculateContactGroupMetrics(detailedLessIdeal)
+                }
+            };
+        } catch (error) {
+            logger.error(`Error getting detailed ideal and less-ideal ${type}:`, error);
+            throw error;
+        }
+    }
+
+    calculateContactGroupMetrics(contacts) {
+        const metrics = {
+            totalDeals: 0,
+            totalWonDeals: 0,
+            totalLostDeals: 0,
+            totalDealValue: 0,
+            averageDealSize: 0,
+            averageEngagementRate: 0,
+            commonIndustries: {},
+            averageEmailOpenRate: 0,
+            averageEmailReplyRate: 0,
+            totalEngagements: 0
+        };
+
+        contacts.forEach(contact => {
+            // Deal metrics
+            metrics.totalDeals += contact.dealHistory.totalDeals;
+            metrics.totalWonDeals += contact.dealHistory.wonDeals;
+            metrics.totalLostDeals += contact.dealHistory.lostDeals;
+            metrics.totalDealValue += contact.dealHistory.totalValue;
+
+            // Engagement metrics
+            metrics.totalEngagements += contact.engagementMetrics.totalEngagements;
+            
+            // Industry tracking
+            if (contact.company?.industry) {
+                metrics.commonIndustries[contact.company.industry] = 
+                    (metrics.commonIndustries[contact.company.industry] || 0) + 1;
+            }
+        });
+
+        // Calculate averages
+        const contactCount = contacts.length;
+        if (contactCount > 0) {
+            metrics.averageDealSize = metrics.totalDealValue / metrics.totalWonDeals || 0;
+            metrics.averageEngagementRate = metrics.totalEngagements / contactCount;
+        }
+
+        // Sort and limit industries to top 5
+        metrics.commonIndustries = Object.entries(metrics.commonIndustries)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5)
+            .reduce((obj, [key, value]) => ({
+                ...obj,
+                [key]: value
+            }), {});
+
+        return metrics;
+    }
+
+    calculateCompanyGroupMetrics(companies) {
+        const metrics = {
+            totalRevenue: 0,
+            totalDeals: 0,
+            wonDeals: 0,
+            lostDeals: 0,
+            averageDealSize: 0,
+            averageSalesCycle: 0,
+            totalContacts: 0,
+            commonIndustries: {},
+            companySizes: {},
+            averageDealsPerCompany: 0
+        };
+
+        companies.forEach(company => {
+            // Revenue and deal metrics
+            metrics.totalRevenue += company.metrics.totalRevenue;
+            metrics.totalDeals += company.metrics.dealCount;
+            metrics.wonDeals += company.metrics.wonDeals;
+            metrics.totalContacts += company.metrics.contactCount;
+
+            // Industry tracking
+            if (company.industry) {
+                metrics.commonIndustries[company.industry] = 
+                    (metrics.commonIndustries[company.industry] || 0) + 1;
+            }
+
+            // Company size tracking (if available)
+            if (company.size) {
+                metrics.companySizes[company.size] = 
+                    (metrics.companySizes[company.size] || 0) + 1;
+            }
+        });
+
+        // Calculate averages
+        const companyCount = companies.length;
+        if (companyCount > 0) {
+            metrics.averageDealSize = metrics.totalRevenue / metrics.wonDeals || 0;
+            metrics.averageDealsPerCompany = metrics.totalDeals / companyCount;
+        }
+
+        // Sort and limit industries and company sizes to top 5
+        metrics.commonIndustries = this.getTopCategories(metrics.commonIndustries);
+        metrics.companySizes = this.getTopCategories(metrics.companySizes);
+
+        return metrics;
+    }
+
+    getTopCategories(categories, limit = 5) {
+        return Object.entries(categories)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, limit)
+            .reduce((obj, [key, value]) => ({
+                ...obj,
+                [key]: value
+            }), {});
+    }
 }
 
 module.exports = HubspotClient; 
