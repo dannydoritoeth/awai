@@ -1,6 +1,6 @@
 const CONTACT = 'hubspot_contact';
 const DEAL = 'hubspot_deal';
-const ENGAGEMENT = 'hubspot_engagement';
+const ACTIVITY = 'hubspot_activity';
 const COMPANY = 'hubspot_company';
 const LINE_ITEM = 'hubspot_line_item';
 const LEAD_SCORE = 'hubspot_lead_score';
@@ -8,7 +8,7 @@ const LEAD_SCORE = 'hubspot_lead_score';
 const entityTypes = {
     CONTACT,
     DEAL,
-    ENGAGEMENT,
+    ACTIVITY,
     COMPANY,
     LINE_ITEM,
     LEAD_SCORE
@@ -46,16 +46,23 @@ const entitySchemas = {
         },
         indexes: ['name', 'dealStage', 'pipeline']
     },
-    [ENGAGEMENT]: {
+    [ACTIVITY]: {
         properties: {
             id: { type: 'string', required: true },
-            type: { type: 'string', required: true },
+            type: { type: 'string', required: true }, // call, email, meeting, note, task, linkedin_message, whatsapp, sms, postal_mail
             source: { type: 'string', required: false },
             sourceId: { type: 'string', required: false },
             timestamp: { type: 'string', required: true },
-            message: { type: 'string', required: false }
+            message: { type: 'string', required: false },
+            subject: { type: 'string', required: false },
+            status: { type: 'string', required: false },
+            dueDate: { type: 'string', required: false },
+            completedAt: { type: 'string', required: false },
+            associatedObjectId: { type: 'string', required: false },
+            associatedObjectType: { type: 'string', required: false }, // contact, company, deal
+            ownerId: { type: 'string', required: false }
         },
-        indexes: ['type', 'source']
+        indexes: ['type', 'source', 'associatedObjectId', 'associatedObjectType', 'ownerId']
     },
     [COMPANY]: {
         properties: {
@@ -135,8 +142,8 @@ const entityValidators = {
         const schema = entitySchemas[DEAL];
         return validateEntity(data, schema);
     },
-    [ENGAGEMENT]: (data) => {
-        const schema = entitySchemas[ENGAGEMENT];
+    [ACTIVITY]: (data) => {
+        const schema = entitySchemas[ACTIVITY];
         return validateEntity(data, schema);
     },
     [COMPANY]: (data) => {
