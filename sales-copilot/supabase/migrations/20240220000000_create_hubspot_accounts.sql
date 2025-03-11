@@ -8,6 +8,7 @@ CREATE TABLE hubspot_accounts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'error')),
+    token_type TEXT NOT NULL DEFAULT 'bearer',
     last_sync_at TIMESTAMP WITH TIME ZONE,
     error_message TEXT,
     metadata JSONB DEFAULT '{}'::jsonb
@@ -31,35 +32,6 @@ CREATE TRIGGER update_hubspot_accounts_updated_at
     BEFORE UPDATE ON hubspot_accounts
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
--- Add RLS policies
-ALTER TABLE hubspot_accounts ENABLE ROW LEVEL SECURITY;
-
--- Only allow authenticated users to view their own portal data
-CREATE POLICY "Users can view their own portal data"
-    ON hubspot_accounts
-    FOR SELECT
-    TO authenticated
-    USING (
-        portal_id IN (
-            SELECT portal_id
-            FROM user_hubspot_portals
-            WHERE user_id = auth.uid()
-        )
-    );
-
--- Only allow authenticated users to update their own portal data
-CREATE POLICY "Users can update their own portal data"
-    ON hubspot_accounts
-    FOR UPDATE
-    TO authenticated
-    USING (
-        portal_id IN (
-            SELECT portal_id
-            FROM user_hubspot_portals
-            WHERE user_id = auth.uid()
-        )
-    );
 
 -- Create junction table for user-portal relationships
 CREATE TABLE user_hubspot_portals (
@@ -92,5 +64,49 @@ CREATE POLICY "Admins can manage portal associations"
             WHERE user_id = auth.uid()
             AND role = 'admin'
             AND portal_id = user_hubspot_portals.portal_id
+        )
+    );
+
+-- Add RLS policies for hubspot_accounts
+ALTER TABLE hubspot_accounts ENABLE ROW LEVEL SECURITY;
+
+-- Allow service role full access
+CREATE POLICY "Service role has full access"
+    ON hubspot_accounts
+    FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+-- Allow initial account creation
+CREATE POLICY "Allow initial account creation"
+    ON hubspot_accounts
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
+-- Only allow authenticated users to view their own portal data
+CREATE POLICY "Users can view their own portal data"
+    ON hubspot_accounts
+    FOR SELECT
+    TO authenticated
+    USING (
+        portal_id IN (
+            SELECT portal_id
+            FROM user_hubspot_portals
+            WHERE user_id = auth.uid()
+        )
+    );
+
+-- Only allow authenticated users to update their own portal data
+CREATE POLICY "Users can update their own portal data"
+    ON hubspot_accounts
+    FOR UPDATE
+    TO authenticated
+    USING (
+        portal_id IN (
+            SELECT portal_id
+            FROM user_hubspot_portals
+            WHERE user_id = auth.uid()
         )
     ); 

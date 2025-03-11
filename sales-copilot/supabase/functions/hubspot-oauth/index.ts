@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { encrypt } from '../_shared/encryption.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY')!;
 
 const corsHeaders = {
@@ -12,7 +12,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Supabase client with service role key
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 interface HubSpotTokenResponse {
   access_token: string;
@@ -41,146 +47,178 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
-    const portalId = url.searchParams.get('portalId');
     const error = url.searchParams.get('error');
-    const errorDescription = url.searchParams.get('error_description');
+    const state = url.searchParams.get('state');
+    
+    // Log all request information
+    console.log('Incoming request:', {
+      url: req.url,
+      method: req.method,
+      headers: Object.fromEntries(req.headers),
+      searchParams: Object.fromEntries(url.searchParams),
+    });
 
     // Handle OAuth errors
     if (error) {
-      console.error('HubSpot OAuth error:', {
-        error,
-        description: errorDescription,
-        portalId
-      });
+      console.error('HubSpot OAuth error:', error);
       return new Response(
-        `Authentication failed: ${errorDescription || error}`,
+        JSON.stringify({ error: 'OAuth error', details: error }),
         { 
           status: 400,
-          headers: corsHeaders
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
         }
       );
     }
 
+    // Check for authorization code
     if (!code) {
-      return new Response('Missing authorization code', { 
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    if (!portalId) {
-      return new Response('Missing portal ID', { 
-        status: 400,
-        headers: corsHeaders
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing code parameter' }),
+        { 
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
 
     // Exchange code for tokens
+    const tokenRequestParams = {
+      grant_type: 'authorization_code',
+      client_id: '1a625962-e7a0-40e8-a54c-863a24acd1f0',
+      client_secret: Deno.env.get('HUBSPOT_CLIENT_SECRET'),
+      redirect_uri: 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth',
+      code: code
+    };
+
+    console.log('Token request parameters:', tokenRequestParams);
+
     const tokenResponse = await fetch('https://api.hubapi.com/oauth/v1/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: Deno.env.get('HUBSPOT_CLIENT_ID')!,
-        client_secret: Deno.env.get('HUBSPOT_CLIENT_SECRET')!,
-        redirect_uri: Deno.env.get('HUBSPOT_REDIRECT_URI')!,
-        code,
-      }),
+      body: new URLSearchParams(tokenRequestParams),
     });
 
-    const responseData = await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
+    console.log('Token response:', {
+      status: tokenResponse.status,
+      statusText: tokenResponse.statusText,
+      headers: Object.fromEntries(tokenResponse.headers),
+      data: tokenData
+    });
 
     if (!tokenResponse.ok) {
-      const error = responseData as HubSpotErrorResponse;
-      console.error('HubSpot token exchange failed:', {
-        status: tokenResponse.status,
-        error: error.error,
-        description: error.error_description,
-        correlationId: error.correlationId
-      });
       return new Response(
-        `Failed to exchange authorization code: ${error.error_description || error.message}`,
-        { 
-          status: 500,
-          headers: corsHeaders
+        JSON.stringify({ 
+          error: 'Token exchange failed', 
+          details: tokenData,
+          requestParams: tokenRequestParams 
+        }, null, 2),
+        {
+          status: tokenResponse.status,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
         }
       );
     }
 
-    const tokens = responseData as HubSpotTokenResponse;
-
-    // Verify HubSpot account access
+    // Get HubSpot account info
     const accountResponse = await fetch('https://api.hubapi.com/account-info/v3/details', {
       headers: {
-        'Authorization': `Bearer ${tokens.access_token}`,
+        'Authorization': `Bearer ${tokenData.access_token}`,
         'Accept': 'application/json',
       },
     });
 
-    if (!accountResponse.ok) {
-      console.error('Failed to verify HubSpot account:', await accountResponse.text());
-      return new Response('Failed to verify HubSpot account access', { 
-        status: 500,
-        headers: corsHeaders
-      });
-    }
+    const accountInfo = await accountResponse.json();
+    console.log('Account info:', accountInfo);
 
-    // Encrypt sensitive data
-    const encryptedAccessToken = await encrypt(tokens.access_token, ENCRYPTION_KEY);
-    const encryptedRefreshToken = await encrypt(tokens.refresh_token, ENCRYPTION_KEY);
-
-    // Store in Supabase with encryption
-    const { error: upsertError } = await supabase
+    // Store in Supabase
+    const { data: hubspotAccount, error: upsertError } = await supabase
       .from('hubspot_accounts')
       .upsert({
-        portal_id: portalId,
-        access_token: encryptedAccessToken,
-        refresh_token: encryptedRefreshToken,
-        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        portal_id: accountInfo.portalId.toString(),
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'active',
-        token_type: tokens.token_type,
-        last_verified: new Date().toISOString()
-      });
+        token_type: tokenData.token_type,
+        metadata: {
+          accountType: accountInfo.accountType,
+          timeZone: accountInfo.timeZone,
+          currency: accountInfo.companyCurrency,
+          uiDomain: accountInfo.uiDomain,
+          dataHostingLocation: accountInfo.dataHostingLocation
+        }
+      })
+      .select()
+      .single();
 
     if (upsertError) {
-      console.error('Failed to store tokens:', upsertError);
-      return new Response('Failed to store authentication data', { 
-        status: 500,
-        headers: corsHeaders
-      });
+      console.error('Failed to store account:', upsertError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Database error', 
+          details: upsertError 
+        }, null, 2),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
 
-    // Create success URL with state if provided
-    const state = url.searchParams.get('state');
-    const successUrl = new URL(`${Deno.env.get('APP_URL')}/hubspot/setup-success`);
-    successUrl.searchParams.set('portal_id', portalId);
-    if (state) {
-      successUrl.searchParams.set('state', state);
-    }
-
-    // Redirect to success page
-    return new Response(null, {
-      status: 302,
-      headers: {
-        ...corsHeaders,
-        'Location': successUrl.toString(),
-        'Cache-Control': 'no-store',
-      },
-    });
+    // Return success with stored data
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        message: 'HubSpot account connected successfully',
+        account: {
+          portal_id: hubspotAccount.portal_id,
+          status: hubspotAccount.status,
+          created_at: hubspotAccount.created_at,
+          metadata: hubspotAccount.metadata
+        }
+      }, null, 2),
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
   } catch (error) {
-    console.error('OAuth callback error:', error);
-    return new Response('Internal server error', { 
-      status: 500,
-      headers: {
-        ...corsHeaders,
-        'Cache-Control': 'no-store'
+    console.error('Error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.message,
+        stack: error.stack
+      }, null, 2),
+      { 
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
-    });
+    );
   }
 }); 
