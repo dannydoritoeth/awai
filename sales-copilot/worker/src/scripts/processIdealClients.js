@@ -1,8 +1,14 @@
 require('dotenv').config();
+const { OpenAIEmbeddings } = require("@langchain/openai");
+const { PineconeStore } = require("@langchain/pinecone");
+const { Pinecone } = require("@pinecone-database/pinecone");
 const HubspotClient = require('../integrations/hubspot/client');
 const idealClientService = require('../services/idealClientService');
 const getHubspotAccessToken = require('../utils/getHubspotToken');
-const logger = require('../services/logger');
+const Logger = require('../services/logger');
+
+// Initialize logger
+const logger = new Logger();
 
 /**
  * Process ideal and less-ideal clients from HubSpot lists
@@ -19,7 +25,24 @@ async function processIdealClients(portalId) {
         // Get access token from database
         const accessToken = await getHubspotAccessToken(portalId);
         const hubspotClient = new HubspotClient(accessToken);
-        
+
+        // Initialize Pinecone client
+        const pc = new Pinecone({
+            apiKey: process.env.PINECONE_API_KEY,
+        });
+
+        // Initialize embedding
+        const embeddings = new OpenAIEmbeddings({
+            openAIApiKey: process.env.OPENAI_API_KEY,
+        });
+
+        // Get Pinecone index and initialize vector store
+        const pineconeIndex = pc.Index("ideal-clients");
+        const vectorStore = new PineconeStore(embeddings, { pineconeIndex });
+
+        // Update idealClientService with the vector store
+        idealClientService.setVectorStore(vectorStore);
+
         // Process contacts
         logger.info('Processing contacts...');
         const contactResults = await idealClientService.processHubSpotLists(

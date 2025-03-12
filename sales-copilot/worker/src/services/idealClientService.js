@@ -1,20 +1,22 @@
 const { OpenAIEmbeddings } = require("@langchain/openai");
 const { PineconeStore } = require("@langchain/pinecone");
 const { Document } = require("@langchain/core/documents");
-const logger = require('./logger');
+const Logger = require('./logger');
+
+// Initialize logger
+const logger = new Logger();
 
 class IdealClientService {
     constructor() {
+        this.vectorStore = null;
         this.embeddings = new OpenAIEmbeddings({
             openAIApiKey: process.env.OPENAI_API_KEY,
             modelName: "text-embedding-ada-002"
         });
+    }
 
-        this.vectorStore = new PineconeStore(this.embeddings, {
-            pineconeApiKey: process.env.PINECONE_API_KEY,
-            environment: process.env.PINECONE_ENVIRONMENT,
-            index: "ideal-clients"
-        });
+    setVectorStore(vectorStore) {
+        this.vectorStore = vectorStore;
     }
 
     // Validate label values

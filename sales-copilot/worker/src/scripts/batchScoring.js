@@ -1,10 +1,14 @@
 const { OpenAIEmbeddings } = require("@langchain/openai");
 const { PineconeStore } = require("@langchain/pinecone");
+const { Pinecone } = require("@pinecone-database/pinecone");
 const HubspotClient = require('../integrations/hubspot/client');
 const getHubspotAccessToken = require('../utils/getHubspotToken');
-const logger = require('../services/logger');
+const Logger = require('../services/logger');
 const fs = require('fs').promises;
 const path = require('path');
+
+// Initialize logger
+const logger = new Logger();
 
 /**
  * Process and score recently modified records by:
@@ -25,13 +29,20 @@ async function runBatchScoring(portalId) {
         const lastRunTime = await getLastRunTimestamp(portalId);
         logger.info(`Processing records modified since: ${lastRunTime}`);
 
-        // Initialize embedding and vector store
-        const embeddings = new OpenAIEmbeddings();
-        const vectorStore = new PineconeStore(embeddings, {
-            pineconeApiKey: process.env.PINECONE_API_KEY,
+        // Initialize Pinecone client
+        const pinecone = new Pinecone({
+            apiKey: process.env.PINECONE_API_KEY,
             environment: process.env.PINECONE_ENVIRONMENT,
-            index: "ideal-clients"
         });
+
+        // Initialize embedding
+        const embeddings = new OpenAIEmbeddings({
+            openAIApiKey: process.env.OPENAI_API_KEY,
+        });
+
+        // Get Pinecone index and initialize vector store
+        const pineconeIndex = pinecone.Index("ideal-clients");
+        const vectorStore = new PineconeStore(embeddings, { pineconeIndex });
 
         // Get modified records from HubSpot
         const modifiedRecords = await hubspotClient.getModifiedRecords(lastRunTime);

@@ -1,5 +1,8 @@
 const { Client } = require('@hubspot/api-client');
-const logger = require('../../services/logger');
+const Logger = require('../../services/logger');
+
+// Initialize logger
+const logger = new Logger();
 
 class HubspotClient {
     constructor(accessToken) {
@@ -7,7 +10,13 @@ class HubspotClient {
             throw new Error('HubSpot access token is required');
         }
         
-        this.client = new Client({ accessToken });
+        this.client = new Client({
+            accessToken,
+            basePath: 'https://api.hubapi.com',
+            defaultHeaders: {
+                'Content-Type': 'application/json'
+            }
+        });
     }
 
     async getContact(contactId) {
@@ -426,7 +435,7 @@ class HubspotClient {
 
     async findListByName(listName) {
         try {
-            const response = await this.client.crm.lists.searchApi.doSearch({
+            const response = await this.client.marketing.lists.searchStaticLists({
                 filterGroups: [{
                     filters: [{
                         propertyName: 'name',
@@ -458,7 +467,7 @@ class HubspotClient {
         'hs_lead_status'
     ]) {
         try {
-            const contacts = await this.client.crm.lists.getAll(listId, { properties });
+            const contacts = await this.client.marketing.lists.getStaticListContacts(listId, { properties });
             
             return contacts.results.map(contact => ({
                 id: contact.id,
@@ -489,7 +498,7 @@ class HubspotClient {
         'lifecyclestage'
     ]) {
         try {
-            const companies = await this.client.crm.lists.getAll(listId, { properties });
+            const companies = await this.client.marketing.lists.getStaticListCompanies(listId, { properties });
             
             return companies.results.map(company => ({
                 id: company.id,

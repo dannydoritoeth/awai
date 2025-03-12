@@ -1,5 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
-const logger = require('../services/logger');
+const Logger = require('../services/logger');
+
+// Initialize logger
+const logger = new Logger();
 
 async function getHubspotAccessToken(portalId) {
     try {
@@ -9,9 +12,9 @@ async function getHubspotAccessToken(portalId) {
             process.env.SUPABASE_ANON_KEY
         );
 
-        // Query the user_hubspot_portals table
+        // Query the hubspot_accounts table
         const { data, error } = await supabase
-            .from('user_hubspot_portals')
+            .from('hubspot_accounts')
             .select('access_token')
             .eq('portal_id', portalId)
             .single();
