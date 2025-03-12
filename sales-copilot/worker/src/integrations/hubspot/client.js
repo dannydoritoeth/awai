@@ -435,14 +435,17 @@ class HubspotClient {
 
     async findListByName(listName) {
         try {
-            const response = await this.client.marketing.lists.searchStaticLists({
+            // Search for lists using the search API
+            const response = await this.client.crm.objects.searchApi.doSearch('lists', {
                 filterGroups: [{
                     filters: [{
                         propertyName: 'name',
                         operator: 'EQ',
                         value: listName
                     }]
-                }]
+                }],
+                properties: ['name'],
+                limit: 1
             });
 
             if (response.results.length === 0) {
@@ -467,9 +470,21 @@ class HubspotClient {
         'hs_lead_status'
     ]) {
         try {
-            const contacts = await this.client.marketing.lists.getStaticListContacts(listId, { properties });
+            // Get list members using associations API
+            const contacts = await this.client.crm.objects.associationsApi.getAll(
+                'lists',
+                listId,
+                'contacts'
+            );
+
+            // Get full contact details for each member
+            const detailedContacts = await Promise.all(
+                contacts.results.map(contact => 
+                    this.client.crm.contacts.basicApi.getById(contact.id, properties)
+                )
+            );
             
-            return contacts.results.map(contact => ({
+            return detailedContacts.map(contact => ({
                 id: contact.id,
                 email: contact.properties.email,
                 firstName: contact.properties.firstname,
@@ -498,9 +513,21 @@ class HubspotClient {
         'lifecyclestage'
     ]) {
         try {
-            const companies = await this.client.marketing.lists.getStaticListCompanies(listId, { properties });
+            // Get list members using associations API
+            const companies = await this.client.crm.objects.associationsApi.getAll(
+                'lists',
+                listId,
+                'companies'
+            );
+
+            // Get full company details for each member
+            const detailedCompanies = await Promise.all(
+                companies.results.map(company => 
+                    this.client.crm.companies.basicApi.getById(company.id, properties)
+                )
+            );
             
-            return companies.results.map(company => ({
+            return detailedCompanies.map(company => ({
                 id: company.id,
                 name: company.properties.name,
                 domain: company.properties.domain,
