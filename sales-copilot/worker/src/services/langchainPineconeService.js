@@ -34,6 +34,18 @@ class LangchainPineconeService {
         }
     }
 
+    async deleteNamespace(namespace) {
+        try {
+            await this.pineconeIndex.deleteAll({
+                namespace: namespace
+            });
+            this.log(LOG_LEVELS.INFO, `Successfully cleared namespace ${namespace}`);
+        } catch (error) {
+            this.log(LOG_LEVELS.ERROR, `Failed to clear namespace ${namespace}:`, error);
+            throw error;
+        }
+    }
+
     async addDocuments(documents, namespace) {
         if (!documents || documents.length === 0) return;
 

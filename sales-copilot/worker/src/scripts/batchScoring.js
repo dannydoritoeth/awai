@@ -42,6 +42,14 @@ async function runBatchScoring(portalId) {
 
         // Get Pinecone index and initialize vector store
         const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+        
+        // Clear existing vectors in the namespace
+        logger.info(`Clearing existing vectors in namespace ${portalId}`);
+        await pineconeIndex.deleteAll({
+            namespace: portalId.toString()
+        });
+        logger.info(`Successfully cleared namespace ${portalId}`);
+
         const vectorStore = new PineconeStore(embeddings, { 
             pineconeIndex,
             namespace: portalId.toString()
