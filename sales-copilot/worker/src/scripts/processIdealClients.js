@@ -18,7 +18,7 @@ const logger = new Logger();
  * node src/scripts/processIdealClients.js --type=companies
  */
 
-async function processIdealClients(portalId) {
+async function processIdealClients(portalId, type = 'contacts') {
     try {
         logger.info(`Starting ideal clients processing for portal ${portalId}`);
 
@@ -43,25 +43,17 @@ async function processIdealClients(portalId) {
         // Update idealClientService with the vector store
         idealClientService.setVectorStore(vectorStore);
 
-        // Process contacts
-        logger.info('Processing contacts...');
-        const contactResults = await idealClientService.processHubSpotLists(
+        // Process the requested type
+        logger.info(`Processing ${type}...`);
+        const results = await idealClientService.processHubSpotLists(
             hubspotClient, 
-            'contacts'
+            type
         );
-        logger.info('Contact processing complete:', contactResults.summary);
-
-        // Process companies
-        logger.info('Processing companies...');
-        const companyResults = await idealClientService.processHubSpotLists(
-            hubspotClient, 
-            'companies'
-        );
-        logger.info('Company processing complete:', companyResults.summary);
+        logger.info(`${type} processing complete:`, results.summary);
 
         return {
-            contacts: contactResults.summary,
-            companies: companyResults.summary
+            type,
+            summary: results.summary
         };
 
     } catch (error) {
@@ -72,9 +64,10 @@ async function processIdealClients(portalId) {
 
 // Command line execution
 if (require.main === module) {
-    // Parse portal_id from command line arguments
+    // Parse portal_id and type from command line arguments
     const args = process.argv.slice(2);
     const portalIdArg = args.find(arg => arg.startsWith('--portal_id='));
+    const typeArg = args.find(arg => arg.startsWith('--type='));
     
     if (!portalIdArg) {
         logger.error('--portal_id parameter is required');
@@ -82,8 +75,15 @@ if (require.main === module) {
     }
 
     const portalId = portalIdArg.split('=')[1];
+    const type = typeArg ? typeArg.split('=')[1] : 'contacts';
 
-    processIdealClients(portalId)
+    // Validate type
+    if (!['contacts', 'companies'].includes(type)) {
+        logger.error('Invalid type. Must be either "contacts" or "companies"');
+        process.exit(1);
+    }
+
+    processIdealClients(portalId, type)
         .then(results => {
             logger.info('Process completed successfully:', results);
             process.exit(0);

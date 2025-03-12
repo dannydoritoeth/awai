@@ -435,31 +435,43 @@ class HubspotClient {
 
     async findListByName(listName) {
         try {
-            // Get all lists using the direct API request
+            // Search for lists using the search endpoint
             const response = await this.client.apiRequest({
-                method: 'GET',
-                path: '/crm/v3/lists',
-                qs: {
-                    name: listName,
-                    archived: false
+                method: 'POST',
+                path: '/crm/v3/lists/search',
+                body: {
+                    query: listName,
+                    processingTypes: ["MANUAL", "DYNAMIC"]
                 }
             });
 
             const data = await response.json();
-            logger.info('HubSpot lists response:', JSON.stringify(data, null, 2));
+            logger.info('HubSpot lists response:', {
+                requestedName: listName,
+                responseData: data,
+                availableLists: data.lists ? data.lists.map(l => l.name) : []
+            });
 
-            if (!data.results || data.results.length === 0) {
+            if (!data.lists || data.lists.length === 0) {
                 throw new Error(`No list found with name: ${listName}`);
             }
 
-            const matchingList = data.results.find(list => list.name === listName);
+            const matchingList = data.lists.find(list => list.name === listName);
             if (!matchingList) {
                 throw new Error(`No list found with name: ${listName}`);
             }
 
-            return matchingList;
+            return {
+                id: matchingList.listId,
+                name: matchingList.name,
+                size: matchingList.additionalProperties?.hs_list_size || 0
+            };
         } catch (error) {
-            logger.error('Error finding HubSpot list:', error);
+            logger.error('Error finding HubSpot list:', {
+                requestedName: listName,
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -475,33 +487,42 @@ class HubspotClient {
         'hs_lead_status'
     ]) {
         try {
-            // Get list members using associations API
-            const contacts = await this.client.crm.objects.associationsApi.getAll(
-                'lists',
-                listId,
-                'contacts'
-            );
+            // Get list members using the list membership endpoint
+            const response = await this.client.apiRequest({
+                method: 'GET',
+                path: `/contacts/v1/lists/${listId}/contacts/all`,
+                qs: {
+                    property: properties
+                }
+            });
 
-            // Get full contact details for each member
-            const detailedContacts = await Promise.all(
-                contacts.results.map(contact => 
-                    this.client.crm.contacts.basicApi.getById(contact.id, properties)
-                )
-            );
+            const data = await response.json();
+            logger.info('HubSpot list contacts response:', {
+                listId,
+                contactCount: data.contacts ? data.contacts.length : 0
+            });
+
+            if (!data.contacts) {
+                return [];
+            }
             
-            return detailedContacts.map(contact => ({
-                id: contact.id,
-                email: contact.properties.email,
-                firstName: contact.properties.firstname,
-                lastName: contact.properties.lastname,
-                phone: contact.properties.phone,
-                company: contact.properties.company,
-                industry: contact.properties.industry,
-                lifecycleStage: contact.properties.lifecyclestage,
-                leadStatus: contact.properties.hs_lead_status
+            return data.contacts.map(contact => ({
+                id: contact.vid,
+                email: contact.properties.email?.value,
+                firstName: contact.properties.firstname?.value,
+                lastName: contact.properties.lastname?.value,
+                phone: contact.properties.phone?.value,
+                company: contact.properties.company?.value,
+                industry: contact.properties.industry?.value,
+                lifecycleStage: contact.properties.lifecyclestage?.value,
+                leadStatus: contact.properties.hs_lead_status?.value
             }));
         } catch (error) {
-            logger.error('Error getting contacts from HubSpot list:', error);
+            logger.error('Error getting contacts from HubSpot list:', {
+                listId,
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
