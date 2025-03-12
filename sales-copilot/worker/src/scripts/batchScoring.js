@@ -31,18 +31,21 @@ async function runBatchScoring(portalId) {
 
         // Initialize Pinecone client
         const pinecone = new Pinecone({
-            apiKey: process.env.PINECONE_API_KEY,
-            environment: process.env.PINECONE_ENVIRONMENT,
+            apiKey: process.env.PINECONE_API_KEY
         });
 
         // Initialize embedding
         const embeddings = new OpenAIEmbeddings({
             openAIApiKey: process.env.OPENAI_API_KEY,
+            modelName: 'text-embedding-3-large'
         });
 
         // Get Pinecone index and initialize vector store
-        const pineconeIndex = pinecone.Index("ideal-clients");
-        const vectorStore = new PineconeStore(embeddings, { pineconeIndex });
+        const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+        const vectorStore = new PineconeStore(embeddings, { 
+            pineconeIndex,
+            namespace: portalId.toString()
+        });
 
         // Get modified records from HubSpot
         const modifiedRecords = await hubspotClient.getModifiedRecords(lastRunTime);

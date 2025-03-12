@@ -9,14 +9,16 @@ const logger = new Logger();
 class IdealClientService {
     constructor() {
         this.vectorStore = null;
+        this.namespace = null;
         this.embeddings = new OpenAIEmbeddings({
             openAIApiKey: process.env.OPENAI_API_KEY,
             modelName: "text-embedding-ada-002"
         });
     }
 
-    setVectorStore(vectorStore) {
+    setVectorStore(vectorStore, namespace) {
         this.vectorStore = vectorStore;
+        this.namespace = namespace;
     }
 
     // Validate label values
@@ -44,14 +46,15 @@ class IdealClientService {
             label = this.validateLabel(label);
 
             const document = await this.createDocument(data, type, label);
-            await this.vectorStore.addDocuments([document]);
+            await this.vectorStore.addDocuments([document], { namespace: this.namespace });
 
             return {
                 stored: true,
                 type,
                 label,
                 id: data.id,
-                vectorId: document.metadata.vectorId
+                vectorId: document.metadata.vectorId,
+                namespace: this.namespace
             };
         } catch (error) {
             logger.error('Error storing ideal client data:', error);

@@ -14,7 +14,7 @@ class LangchainPineconeService {
         });
 
         this.embeddings = embeddingService;
-        this.pineconeIndex = client.Index("sales-copilot");
+        this.pineconeIndex = client.Index(process.env.PINECONE_INDEX_NAME);
         this.logLevel = logLevel;
     }
 
@@ -45,14 +45,30 @@ class LangchainPineconeService {
                 this.embeddings,
                 {
                     pineconeIndex: this.pineconeIndex,
-                    namespace: namespace,
+                    namespace: namespace
                 }
             );
             
-            this.log(LOG_LEVELS.INFO, `Successfully stored ${documents.length} documents`);
+            this.log(LOG_LEVELS.INFO, `Successfully stored ${documents.length} documents in namespace ${namespace}`);
             return vectorStore;
         } catch (error) {
-            this.log(LOG_LEVELS.ERROR, 'Failed to store documents:', error);
+            this.log(LOG_LEVELS.ERROR, `Failed to store documents in namespace ${namespace}:`, error);
+            throw error;
+        }
+    }
+
+    async similaritySearch(text, k = 5, namespace) {
+        try {
+            const vectorStore = new PineconeStore(this.embeddings, {
+                pineconeIndex: this.pineconeIndex,
+                namespace: namespace
+            });
+
+            const results = await vectorStore.similaritySearch(text, k);
+            this.log(LOG_LEVELS.INFO, `Found ${results.length} similar documents in namespace ${namespace}`);
+            return results;
+        } catch (error) {
+            this.log(LOG_LEVELS.ERROR, `Failed to search documents in namespace ${namespace}:`, error);
             throw error;
         }
     }

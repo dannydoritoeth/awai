@@ -28,20 +28,21 @@ async function processIdealClients(portalId, type = 'contacts') {
 
         // Initialize Pinecone client
         const pc = new Pinecone({
-            apiKey: process.env.PINECONE_API_KEY,
+            apiKey: process.env.PINECONE_API_KEY
         });
 
-        // Initialize embedding
+        // Initialize OpenAI embeddings
         const embeddings = new OpenAIEmbeddings({
             openAIApiKey: process.env.OPENAI_API_KEY,
+            modelName: 'text-embedding-3-large'
         });
 
         // Get Pinecone index and initialize vector store
-        const pineconeIndex = pc.Index("ideal-clients");
+        const pineconeIndex = pc.Index(process.env.PINECONE_INDEX_NAME);
         const vectorStore = new PineconeStore(embeddings, { pineconeIndex });
 
-        // Update idealClientService with the vector store
-        idealClientService.setVectorStore(vectorStore);
+        // Update idealClientService with the vector store and namespace
+        idealClientService.setVectorStore(vectorStore, portalId.toString());
 
         // Process the requested type
         logger.info(`Processing ${type}...`);
@@ -53,7 +54,8 @@ async function processIdealClients(portalId, type = 'contacts') {
 
         return {
             type,
-            summary: results.summary
+            summary: results.summary,
+            namespace: portalId.toString()
         };
 
     } catch (error) {

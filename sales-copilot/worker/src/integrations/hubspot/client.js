@@ -17,36 +17,81 @@ class HubspotClient {
                 'Content-Type': 'application/json'
             }
         });
+
+        // Initialize rate limiting
+        this.rateLimitQueue = [];
+        this.isProcessingQueue = false;
+    }
+
+    async rateLimit() {
+        return new Promise((resolve) => {
+            const now = Date.now();
+            
+            // Clean up old requests from the queue
+            this.rateLimitQueue = this.rateLimitQueue.filter(
+                timestamp => now - timestamp < 10000
+            );
+
+            if (this.rateLimitQueue.length >= 10) {
+                // If we've made 10 requests in the last 10 seconds, wait
+                const oldestRequest = this.rateLimitQueue[0];
+                const waitTime = Math.max(0, 10000 - (now - oldestRequest));
+                setTimeout(resolve, waitTime);
+            } else {
+                resolve();
+            }
+
+            // Add this request to the queue
+            this.rateLimitQueue.push(now);
+        });
+    }
+
+    async makeRequest(requestFn) {
+        try {
+            await this.rateLimit();
+            return await requestFn();
+        } catch (error) {
+            if (error.code === 429) {
+                // If we hit the rate limit, wait and try again
+                const retryAfter = parseInt(error.headers['x-hubspot-ratelimit-interval-milliseconds'] || '10000');
+                logger.info(`Rate limited, waiting ${retryAfter}ms before retrying...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter));
+                return this.makeRequest(requestFn);
+            }
+            throw error;
+        }
     }
 
     async getContact(contactId) {
-        try {
-            const apiResponse = await this.client.crm.contacts.basicApi.getById(contactId, [
-                'email',
-                'firstname',
-                'lastname',
-                'phone',
-                'lifecyclestage',
-                'hs_lead_status',
-                'createdate',
-                'lastmodifieddate'
-            ]);
-            
-            return {
-                id: apiResponse.id,
-                email: apiResponse.properties.email,
-                firstName: apiResponse.properties.firstname,
-                lastName: apiResponse.properties.lastname,
-                phone: apiResponse.properties.phone,
-                lifecycleStage: apiResponse.properties.lifecyclestage,
-                leadStatus: apiResponse.properties.hs_lead_status,
-                createdAt: apiResponse.properties.createdate,
-                updatedAt: apiResponse.properties.lastmodifieddate
-            };
-        } catch (error) {
-            logger.error('Error fetching HubSpot contact:', error);
-            throw error;
-        }
+        return this.makeRequest(async () => {
+            try {
+                const apiResponse = await this.client.crm.contacts.basicApi.getById(contactId, [
+                    'email',
+                    'firstname',
+                    'lastname',
+                    'phone',
+                    'lifecyclestage',
+                    'hs_lead_status',
+                    'createdate',
+                    'lastmodifieddate'
+                ]);
+                
+                return {
+                    id: apiResponse.id,
+                    email: apiResponse.properties.email,
+                    firstName: apiResponse.properties.firstname,
+                    lastName: apiResponse.properties.lastname,
+                    phone: apiResponse.properties.phone,
+                    lifecycleStage: apiResponse.properties.lifecyclestage,
+                    leadStatus: apiResponse.properties.hs_lead_status,
+                    createdAt: apiResponse.properties.createdate,
+                    updatedAt: apiResponse.properties.lastmodifieddate
+                };
+            } catch (error) {
+                logger.error('Error fetching HubSpot contact:', error);
+                throw error;
+            }
+        });
     }
 
     async getDeal(dealId) {
@@ -314,23 +359,29 @@ class HubspotClient {
     }
 
     async getContactWithCompany(contactId) {
-        try {
-            const [contact, associations] = await Promise.all([
-                this.getContact(contactId),
-                this.client.crm.contacts.associationsApi.getAll(contactId, 'company')
-            ]);
+        return this.makeRequest(async () => {
+            try {
+                const [contact, associations] = await Promise.all([
+                    this.getContact(contactId),
+                    this.client.apiRequest({
+                        method: 'GET',
+                        path: `/crm/v3/objects/contacts/${contactId}/associations/companies`
+                    })
+                ]);
 
-            if (associations.results.length > 0) {
-                const companyId = associations.results[0].id;
-                const company = await this.getCompany(companyId);
-                return { ...contact, company };
+                const data = await associations.json();
+                if (data.results && data.results.length > 0) {
+                    const companyId = data.results[0].id;
+                    const company = await this.getCompany(companyId);
+                    return { ...contact, company };
+                }
+
+                return contact;
+            } catch (error) {
+                logger.error('Error fetching contact with company:', error);
+                throw error;
             }
-
-            return contact;
-        } catch (error) {
-            logger.error('Error fetching contact with company:', error);
-            throw error;
-        }
+        });
     }
 
     async getContactEngagementMetrics(contactId) {
@@ -434,46 +485,48 @@ class HubspotClient {
     }
 
     async findListByName(listName) {
-        try {
-            // Search for lists using the search endpoint
-            const response = await this.client.apiRequest({
-                method: 'POST',
-                path: '/crm/v3/lists/search',
-                body: {
-                    query: listName,
-                    processingTypes: ["MANUAL", "DYNAMIC"]
+        return this.makeRequest(async () => {
+            try {
+                // Search for lists using the search endpoint
+                const response = await this.client.apiRequest({
+                    method: 'POST',
+                    path: '/crm/v3/lists/search',
+                    body: {
+                        query: listName,
+                        processingTypes: ["MANUAL", "DYNAMIC"]
+                    }
+                });
+
+                const data = await response.json();
+                logger.info('HubSpot lists response:', {
+                    requestedName: listName,
+                    responseData: data,
+                    availableLists: data.lists ? data.lists.map(l => l.name) : []
+                });
+
+                if (!data.lists || data.lists.length === 0) {
+                    throw new Error(`No list found with name: ${listName}`);
                 }
-            });
 
-            const data = await response.json();
-            logger.info('HubSpot lists response:', {
-                requestedName: listName,
-                responseData: data,
-                availableLists: data.lists ? data.lists.map(l => l.name) : []
-            });
+                const matchingList = data.lists.find(list => list.name === listName);
+                if (!matchingList) {
+                    throw new Error(`No list found with name: ${listName}`);
+                }
 
-            if (!data.lists || data.lists.length === 0) {
-                throw new Error(`No list found with name: ${listName}`);
+                return {
+                    id: matchingList.listId,
+                    name: matchingList.name,
+                    size: matchingList.additionalProperties?.hs_list_size || 0
+                };
+            } catch (error) {
+                logger.error('Error finding HubSpot list:', {
+                    requestedName: listName,
+                    error: error.message,
+                    stack: error.stack
+                });
+                throw error;
             }
-
-            const matchingList = data.lists.find(list => list.name === listName);
-            if (!matchingList) {
-                throw new Error(`No list found with name: ${listName}`);
-            }
-
-            return {
-                id: matchingList.listId,
-                name: matchingList.name,
-                size: matchingList.additionalProperties?.hs_list_size || 0
-            };
-        } catch (error) {
-            logger.error('Error finding HubSpot list:', {
-                requestedName: listName,
-                error: error.message,
-                stack: error.stack
-            });
-            throw error;
-        }
+        });
     }
 
     async getContactsFromList(listId, properties = [
@@ -486,45 +539,44 @@ class HubspotClient {
         'lifecyclestage',
         'hs_lead_status'
     ]) {
-        try {
-            // Get list members using the list membership endpoint
-            const response = await this.client.apiRequest({
-                method: 'GET',
-                path: `/contacts/v1/lists/${listId}/contacts/all`,
-                qs: {
-                    property: properties
+        return this.makeRequest(async () => {
+            try {
+                // Get list members using the CRM API endpoint
+                const response = await this.client.apiRequest({
+                    method: 'GET',
+                    path: `/crm/v3/lists/${listId}/memberships`,
+                    qs: {
+                        limit: 100
+                    }
+                });
+
+                const data = await response.json();
+                logger.info('HubSpot list contacts response:', {
+                    listId,
+                    contactCount: data.results ? data.results.length : 0,
+                    response: data
+                });
+
+                if (!data.results || data.results.length === 0) {
+                    return [];
                 }
-            });
 
-            const data = await response.json();
-            logger.info('HubSpot list contacts response:', {
-                listId,
-                contactCount: data.contacts ? data.contacts.length : 0
-            });
-
-            if (!data.contacts) {
-                return [];
+                // Get full contact details for each member
+                const contactIds = data.results.map(result => result.recordId);
+                const contacts = await Promise.all(
+                    contactIds.map(id => this.getContact(id))
+                );
+                
+                return contacts;
+            } catch (error) {
+                logger.error('Error getting contacts from HubSpot list:', {
+                    listId,
+                    error: error.message,
+                    stack: error.stack
+                });
+                throw error;
             }
-            
-            return data.contacts.map(contact => ({
-                id: contact.vid,
-                email: contact.properties.email?.value,
-                firstName: contact.properties.firstname?.value,
-                lastName: contact.properties.lastname?.value,
-                phone: contact.properties.phone?.value,
-                company: contact.properties.company?.value,
-                industry: contact.properties.industry?.value,
-                lifecycleStage: contact.properties.lifecyclestage?.value,
-                leadStatus: contact.properties.hs_lead_status?.value
-            }));
-        } catch (error) {
-            logger.error('Error getting contacts from HubSpot list:', {
-                listId,
-                error: error.message,
-                stack: error.stack
-            });
-            throw error;
-        }
+        });
     }
 
     async getCompaniesFromList(listId, properties = [
@@ -669,41 +721,50 @@ class HubspotClient {
 
     async getDetailedIdealAndLessIdealData(type = 'contacts') {
         try {
-            // First get basic info from lists
-            const basicData = await this.getIdealAndLessIdealData(type);
-            const isCompanyType = type.toLowerCase() === 'companies';
-
-            // Get detailed info for each record
-            const [detailedIdeal, detailedLessIdeal] = await Promise.all([
-                Promise.all(basicData.ideal.map(record => 
-                    isCompanyType ? 
-                    this.getDetailedCompanyInfo(record.id) : 
-                    this.getDetailedContactInfo(record.id)
-                )),
-                Promise.all(basicData.lessIdeal.map(record => 
-                    isCompanyType ? 
-                    this.getDetailedCompanyInfo(record.id) : 
-                    this.getDetailedContactInfo(record.id)
-                ))
+            // Get the lists
+            const [idealList, lessIdealList] = await Promise.all([
+                this.findListByName('Ideal-Contacts'),
+                this.findListByName('Less-Ideal-Contacts')
             ]);
 
+            // Get contacts from both lists
+            const [idealContacts, lessIdealContacts] = await Promise.all([
+                this.getContactsFromList(idealList.id),
+                this.getContactsFromList(lessIdealList.id)
+            ]);
+
+            // Calculate metrics for both groups
+            const idealMetrics = {
+                totalContacts: idealContacts.length,
+                totalDeals: 0,
+                totalRevenue: 0,
+                averageDealSize: 0,
+                averageDealsPerContact: 0,
+                contactsWithDeals: 0
+            };
+
+            const lessIdealMetrics = {
+                totalContacts: lessIdealContacts.length,
+                totalDeals: 0,
+                totalRevenue: 0,
+                averageDealSize: 0,
+                averageDealsPerContact: 0,
+                contactsWithDeals: 0
+            };
+
             return {
-                ideal: detailedIdeal,
-                lessIdeal: detailedLessIdeal,
-                type: basicData.type,
+                ideal: idealContacts,
+                lessIdeal: lessIdealContacts,
+                type: 'contacts',
                 summary: {
-                    idealCount: detailedIdeal.length,
-                    lessIdealCount: detailedLessIdeal.length,
-                    idealMetrics: isCompanyType ? 
-                        this.calculateCompanyGroupMetrics(detailedIdeal) : 
-                        this.calculateContactGroupMetrics(detailedIdeal),
-                    lessIdealMetrics: isCompanyType ? 
-                        this.calculateCompanyGroupMetrics(detailedLessIdeal) : 
-                        this.calculateContactGroupMetrics(detailedLessIdeal)
+                    idealCount: idealContacts.length,
+                    lessIdealCount: lessIdealContacts.length,
+                    idealMetrics,
+                    lessIdealMetrics
                 }
             };
         } catch (error) {
-            logger.error(`Error getting detailed ideal and less-ideal ${type}:`, error);
+            logger.error('Error getting detailed ideal and less-ideal contacts:', error);
             throw error;
         }
     }
