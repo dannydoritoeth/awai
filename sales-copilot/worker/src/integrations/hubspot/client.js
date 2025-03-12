@@ -435,24 +435,29 @@ class HubspotClient {
 
     async findListByName(listName) {
         try {
-            // Search for lists using the search API
-            const response = await this.client.crm.objects.searchApi.doSearch('lists', {
-                filterGroups: [{
-                    filters: [{
-                        propertyName: 'name',
-                        operator: 'EQ',
-                        value: listName
-                    }]
-                }],
-                properties: ['name'],
-                limit: 1
+            // Get all lists using the direct API request
+            const response = await this.client.apiRequest({
+                method: 'GET',
+                path: '/crm/v3/lists',
+                qs: {
+                    name: listName,
+                    archived: false
+                }
             });
 
-            if (response.results.length === 0) {
+            const data = await response.json();
+            logger.info('HubSpot lists response:', JSON.stringify(data, null, 2));
+
+            if (!data.results || data.results.length === 0) {
                 throw new Error(`No list found with name: ${listName}`);
             }
 
-            return response.results[0];
+            const matchingList = data.results.find(list => list.name === listName);
+            if (!matchingList) {
+                throw new Error(`No list found with name: ${listName}`);
+            }
+
+            return matchingList;
         } catch (error) {
             logger.error('Error finding HubSpot list:', error);
             throw error;
