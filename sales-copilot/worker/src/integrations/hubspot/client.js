@@ -537,7 +537,10 @@ class HubspotClient {
         'company',
         'industry',
         'lifecyclestage',
-        'hs_lead_status'
+        'hs_lead_status',
+        'jobtitle',
+        'createdate',
+        'lastmodifieddate'
     ]) {
         return this.makeRequest(async () => {
             try {
@@ -561,13 +564,88 @@ class HubspotClient {
                     return [];
                 }
 
-                // Get full contact details for each member
+                // Get full contact details with associations for each member
                 const contactIds = data.results.map(result => result.recordId);
                 const contacts = await Promise.all(
-                    contactIds.map(id => this.getContact(id))
+                    contactIds.map(async (id) => {
+                        try {
+                            // Get contact with associations
+                            const contactResponse = await this.client.apiRequest({
+                                method: 'GET',
+                                path: `/crm/v3/objects/contacts/${id}`,
+                                query: {
+                                    properties: properties,
+                                    associations: ['companies', 'deals']
+                                }
+                            });
+                            
+                            const contact = await contactResponse.json();
+                            
+                            // Get associated company details if any exist
+                            let companies = [];
+                            if (contact.associations?.companies?.results?.length > 0) {
+                                companies = await Promise.all(
+                                    contact.associations.companies.results.map(async (company) => {
+                                        const companyResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/companies/${company.id}`,
+                                            query: {
+                                                properties: [
+                                                    'name',
+                                                    'domain',
+                                                    'industry',
+                                                    'numberofemployees',
+                                                    'annualrevenue',
+                                                    'type',
+                                                    'description'
+                                                ]
+                                            }
+                                        });
+                                        return companyResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Get associated deal details if any exist
+                            let deals = [];
+                            if (contact.associations?.deals?.results?.length > 0) {
+                                deals = await Promise.all(
+                                    contact.associations.deals.results.map(async (deal) => {
+                                        const dealResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/deals/${deal.id}`,
+                                            query: {
+                                                properties: [
+                                                    'dealname',
+                                                    'dealstage',
+                                                    'amount',
+                                                    'closedate',
+                                                    'pipeline',
+                                                    'dealtype'
+                                                ]
+                                            }
+                                        });
+                                        return dealResponse.json();
+                                    })
+                                );
+                            }
+
+                            return {
+                                ...contact,
+                                enriched: {
+                                    companies,
+                                    deals
+                                }
+                            };
+                        } catch (error) {
+                            logger.error(`Error fetching details for contact ${id}:`, error);
+                            return null;
+                        }
+                    })
                 );
                 
-                return contacts;
+                // Filter out any null results from failed fetches
+                return contacts.filter(contact => contact !== null);
             } catch (error) {
                 logger.error('Error getting contacts from HubSpot list:', {
                     listId,
@@ -588,39 +666,142 @@ class HubspotClient {
         'state',
         'country',
         'phone',
-        'lifecyclestage'
+        'lifecyclestage',
+        'numberofemployees',
+        'annualrevenue',
+        'description',
+        'createdate',
+        'hs_lastmodifieddate'
     ]) {
-        try {
-            // Get list members using associations API
-            const companies = await this.client.crm.objects.associationsApi.getAll(
-                'lists',
-                listId,
-                'companies'
-            );
+        return this.makeRequest(async () => {
+            try {
+                // Get list members using the CRM API endpoint
+                const response = await this.client.apiRequest({
+                    method: 'GET',
+                    path: `/crm/v3/lists/${listId}/memberships`,
+                    qs: {
+                        limit: 100
+                    }
+                });
 
-            // Get full company details for each member
-            const detailedCompanies = await Promise.all(
-                companies.results.map(company => 
-                    this.client.crm.companies.basicApi.getById(company.id, properties)
-                )
-            );
-            
-            return detailedCompanies.map(company => ({
-                id: company.id,
-                name: company.properties.name,
-                domain: company.properties.domain,
-                industry: company.properties.industry,
-                type: company.properties.type,
-                city: company.properties.city,
-                state: company.properties.state,
-                country: company.properties.country,
-                phone: company.properties.phone,
-                lifecycleStage: company.properties.lifecyclestage
-            }));
-        } catch (error) {
-            logger.error('Error getting companies from HubSpot list:', error);
-            throw error;
-        }
+                const data = await response.json();
+                logger.info('HubSpot list companies response:', {
+                    listId,
+                    companyCount: data.results ? data.results.length : 0,
+                    response: data
+                });
+
+                if (!data.results || data.results.length === 0) {
+                    return [];
+                }
+
+                // Get full company details with associations for each member
+                const companyIds = data.results.map(result => result.recordId);
+                const companies = await Promise.all(
+                    companyIds.map(async (id) => {
+                        try {
+                            // Get company with associations
+                            const companyResponse = await this.client.apiRequest({
+                                method: 'GET',
+                                path: `/crm/v3/objects/companies/${id}`,
+                                query: {
+                                    properties: properties,
+                                    associations: ['contacts', 'deals']
+                                }
+                            });
+                            
+                            const company = await companyResponse.json();
+                            
+                            // Get associated contact details if any exist
+                            let contacts = [];
+                            if (company.associations?.contacts?.results?.length > 0) {
+                                contacts = await Promise.all(
+                                    company.associations.contacts.results.map(async (contact) => {
+                                        const contactResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/contacts/${contact.id}`,
+                                            query: {
+                                                properties: [
+                                                    'email',
+                                                    'firstname',
+                                                    'lastname',
+                                                    'jobtitle',
+                                                    'lifecyclestage',
+                                                    'hs_lead_status',
+                                                    'createdate',
+                                                    'lastmodifieddate'
+                                                ]
+                                            }
+                                        });
+                                        return contactResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Get associated deal details if any exist
+                            let deals = [];
+                            if (company.associations?.deals?.results?.length > 0) {
+                                deals = await Promise.all(
+                                    company.associations.deals.results.map(async (deal) => {
+                                        const dealResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/deals/${deal.id}`,
+                                            query: {
+                                                properties: [
+                                                    'dealname',
+                                                    'dealstage',
+                                                    'amount',
+                                                    'closedate',
+                                                    'pipeline',
+                                                    'dealtype',
+                                                    'createdate',
+                                                    'hs_lastmodifieddate'
+                                                ]
+                                            }
+                                        });
+                                        return dealResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Calculate company metrics
+                            const metrics = {
+                                totalRevenue: deals.reduce((sum, deal) => 
+                                    sum + (Number(deal.properties?.amount) || 0), 0),
+                                totalDeals: deals.length,
+                                wonDeals: deals.filter(deal => 
+                                    deal.properties?.dealstage === 'closedwon').length,
+                                activeContacts: contacts.filter(contact => 
+                                    contact.properties?.hs_lead_status === 'active').length,
+                                totalContacts: contacts.length
+                            };
+
+                            return {
+                                ...company,
+                                enriched: {
+                                    contacts,
+                                    deals,
+                                    metrics
+                                }
+                            };
+                        } catch (error) {
+                            logger.error(`Error fetching details for company ${id}:`, error);
+                            return null;
+                        }
+                    })
+                );
+                
+                // Filter out any null results from failed fetches
+                return companies.filter(company => company !== null);
+            } catch (error) {
+                logger.error('Error getting companies from HubSpot list:', {
+                    listId,
+                    error: error.message,
+                    stack: error.stack
+                });
+                throw error;
+            }
+        });
     }
 
     async getDetailedCompanyInfo(companyId) {
