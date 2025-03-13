@@ -32,7 +32,7 @@ class IdealClientService {
 
     // Validate type values
     validateType(type) {
-        const validTypes = ['contacts', 'companies'];
+        const validTypes = ['contacts', 'companies', 'deals'];
         if (!validTypes.includes(type.toLowerCase())) {
             throw new Error(`Invalid type: ${type}. Must be one of: ${validTypes.join(', ')}`);
         }
@@ -66,7 +66,9 @@ class IdealClientService {
         // Create text content based on type
         const content = type === 'contacts' ? 
             this.createContactContent(data) : 
-            this.createCompanyContent(data);
+            type === 'companies' ?
+            this.createCompanyContent(data) :
+            this.createDealContent(data);
 
         // Create metadata
         const metadata = {
@@ -76,19 +78,7 @@ class IdealClientService {
             created_at: new Date().toISOString(),
             vectorId: `${type}_${data.id}_${label}`,
             // Type-specific metadata
-            ...(type === 'contacts' ? {
-                email_domain: data.email?.split('@')[1] || '',
-                industry: data.company?.industry || '',
-                lifecycle_stage: data.lifecycleStage || '',
-                engagement_score: this.calculateEngagementScore(data),
-                deal_success_rate: this.calculateDealSuccessRate(data)
-            } : {
-                domain: data.domain || '',
-                industry: data.industry || '',
-                company_type: data.type || '',
-                total_revenue: data.metrics?.totalRevenue || 0,
-                deal_success_rate: this.calculateCompanyDealRate(data)
-            })
+            ...(this.createTypeSpecificMetadata(data, type))
         };
 
         return new Document({
@@ -97,49 +87,211 @@ class IdealClientService {
         });
     }
 
+    createTypeSpecificMetadata(data, type) {
+        switch(type) {
+            case 'contacts':
+                return {
+                    email_domain: data.properties?.email?.split('@')[1] || '',
+                    industry: data.enriched?.companies?.[0]?.properties?.industry || '',
+                    lifecycle_stage: data.properties?.lifecyclestage || '',
+                    job_title: data.properties?.jobtitle || '',
+                    has_company: data.enriched?.companies?.length > 0,
+                    has_deals: data.enriched?.deals?.length > 0,
+                    deal_count: data.enriched?.deals?.length || 0,
+                    company_count: data.enriched?.companies?.length || 0,
+                    related_company_ids: data.enriched?.companies?.map(c => c.id) || [],
+                    related_deal_ids: data.enriched?.deals?.map(d => d.id) || []
+                };
+            case 'companies':
+                return {
+                    domain: data.properties?.domain || '',
+                    industry: data.properties?.industry || '',
+                    company_type: data.properties?.type || '',
+                    company_size: data.properties?.numberofemployees || '',
+                    annual_revenue: data.properties?.annualrevenue || '',
+                    contact_count: data.enriched?.contacts?.length || 0,
+                    deal_count: data.enriched?.deals?.length || 0,
+                    total_revenue: data.enriched?.metrics?.totalRevenue || 0,
+                    related_contact_ids: data.enriched?.contacts?.map(c => c.id) || [],
+                    related_deal_ids: data.enriched?.deals?.map(d => d.id) || []
+                };
+            case 'deals':
+                return {
+                    deal_stage: data.properties?.dealstage || '',
+                    deal_type: data.properties?.dealtype || '',
+                    amount: data.properties?.amount || '',
+                    pipeline: data.properties?.pipeline || '',
+                    sales_cycle_days: data.enriched?.metrics?.salesCycleDays || '',
+                    contact_count: data.enriched?.contacts?.length || 0,
+                    company_count: data.enriched?.companies?.length || 0,
+                    line_item_count: data.enriched?.lineItems?.length || 0,
+                    related_contact_ids: data.enriched?.contacts?.map(c => c.id) || [],
+                    related_company_ids: data.enriched?.companies?.map(c => c.id) || []
+                };
+            default:
+                return {};
+        }
+    }
+
     createContactContent(contact) {
-        return `
-            Contact Profile:
-            Name: ${contact.firstName || ''} ${contact.lastName || ''}
-            Company: ${contact.company?.name || 'Unknown'}
-            Industry: ${contact.company?.industry || 'Unknown'}
-            
-            Engagement History:
-            Total Interactions: ${contact.engagementMetrics?.totalEngagements || 0}
-            Email Opens: ${contact.engagementMetrics?.emailsOpened || 0}
-            Meetings Attended: ${contact.engagementMetrics?.meetingsAttended || 0}
-            
-            Deal History:
-            Total Deals: ${contact.dealHistory?.totalDeals || 0}
-            Won Deals: ${contact.dealHistory?.wonDeals || 0}
-            Average Deal Size: ${contact.dealHistory?.averageDealSize || 0}
-            
-            Key Metrics:
-            Lifecycle Stage: ${contact.lifecycleStage || 'Unknown'}
-            Lead Status: ${contact.leadStatus || 'Unknown'}
-            Last Activity: ${contact.engagementMetrics?.lastEngagementDate || 'Unknown'}
+        // Base contact information
+        let content = `
+        Contact Profile:
+        Name: ${contact.properties?.firstname || ''} ${contact.properties?.lastname || ''}
+        Job Title: ${contact.properties?.jobtitle || 'Unknown'}
+        Email: ${contact.properties?.email || 'Unknown'}
+        Lifecycle Stage: ${contact.properties?.lifecyclestage || 'Unknown'}
+        Lead Status: ${contact.properties?.hs_lead_status || 'Unknown'}
         `.trim();
+        
+        // Add company information if available
+        if (contact.enriched?.companies?.length > 0) {
+            const company = contact.enriched.companies[0];
+            content += `\n\nCompany Information:
+            Company: ${company.properties?.name || 'Unknown'}
+            Industry: ${company.properties?.industry || 'Unknown'}
+            Size: ${company.properties?.numberofemployees || 'Unknown'} employees
+            Revenue: ${company.properties?.annualrevenue || 'Unknown'}
+            Type: ${company.properties?.type || 'Unknown'}
+            `.trim();
+        }
+        
+        // Add deal information if available
+        if (contact.enriched?.deals?.length > 0) {
+            content += '\n\nDeal History:';
+            contact.enriched.deals.forEach((deal, index) => {
+                content += `
+                Deal ${index + 1}:
+                Name: ${deal.properties?.dealname || 'Unknown'}
+                Stage: ${deal.properties?.dealstage || 'Unknown'}
+                Amount: ${deal.properties?.amount || 'Unknown'}
+                Type: ${deal.properties?.dealtype || 'Unknown'}
+                `.trim();
+            });
+        }
+        
+        return content;
     }
 
     createCompanyContent(company) {
-        return `
-            Company Profile:
-            Name: ${company.name || 'Unknown'}
-            Industry: ${company.industry || 'Unknown'}
-            Type: ${company.type || 'Unknown'}
-            Location: ${[company.city, company.state, company.country].filter(Boolean).join(', ')}
-            
-            Business Metrics:
-            Total Revenue: ${company.metrics?.totalRevenue || 0}
-            Total Deals: ${company.metrics?.dealCount || 0}
-            Won Deals: ${company.metrics?.wonDeals || 0}
-            Average Deal Size: ${company.metrics?.averageDealSize || 0}
-            
-            Engagement:
-            Total Contacts: ${company.metrics?.contactCount || 0}
-            Active Contacts: ${company.metrics?.activeContactCount || 0}
-            Recent Activities: ${company.recentActivity?.length || 0}
+        // Base company information
+        let content = `
+        Company Profile:
+        Name: ${company.properties?.name || 'Unknown'}
+        Industry: ${company.properties?.industry || 'Unknown'}
+        Type: ${company.properties?.type || 'Unknown'}
+        Size: ${company.properties?.numberofemployees || 'Unknown'} employees
+        Revenue: ${company.properties?.annualrevenue || 'Unknown'}
+        Location: ${[company.properties?.city, company.properties?.state, company.properties?.country].filter(Boolean).join(', ')}
+        Description: ${company.properties?.description || 'No description available'}
         `.trim();
+        
+        // Add key contacts if available
+        if (company.enriched?.contacts?.length > 0) {
+            content += '\n\nKey Contacts:';
+            company.enriched.contacts.slice(0, 5).forEach((contact, index) => {
+                content += `
+                Contact ${index + 1}:
+                Name: ${contact.properties?.firstname || ''} ${contact.properties?.lastname || ''}
+                Title: ${contact.properties?.jobtitle || 'Unknown'}
+                Status: ${contact.properties?.hs_lead_status || 'Unknown'}
+                `.trim();
+            });
+        }
+        
+        // Add deal information if available
+        if (company.enriched?.deals?.length > 0) {
+            content += '\n\nDeal History:';
+            company.enriched.deals.forEach((deal, index) => {
+                content += `
+                Deal ${index + 1}:
+                Name: ${deal.properties?.dealname || 'Unknown'}
+                Stage: ${deal.properties?.dealstage || 'Unknown'}
+                Amount: ${deal.properties?.amount || 'Unknown'}
+                Type: ${deal.properties?.dealtype || 'Unknown'}
+                `.trim();
+            });
+        }
+        
+        // Add metrics
+        if (company.enriched?.metrics) {
+            const metrics = company.enriched.metrics;
+            content += `\n\nBusiness Metrics:
+            Total Revenue: ${metrics.totalRevenue || 0}
+            Total Deals: ${metrics.totalDeals || 0}
+            Won Deals: ${metrics.wonDeals || 0}
+            Active Contacts: ${metrics.activeContacts || 0}
+            `.trim();
+        }
+        
+        return content;
+    }
+
+    createDealContent(deal) {
+        // Base deal information
+        let content = `
+        Deal Profile:
+        Name: ${deal.properties?.dealname || 'Unknown'}
+        Stage: ${deal.properties?.dealstage || 'Unknown'}
+        Amount: ${deal.properties?.amount || 'Unknown'}
+        Type: ${deal.properties?.dealtype || 'Unknown'}
+        Pipeline: ${deal.properties?.pipeline || 'Unknown'}
+        Priority: ${deal.properties?.hs_priority || 'Unknown'}
+        Description: ${deal.properties?.description || 'No description available'}
+        Created: ${deal.properties?.createdate || 'Unknown'}
+        Closed: ${deal.properties?.closedate || 'Not closed'}
+        `.trim();
+        
+        // Add company information if available
+        if (deal.enriched?.companies?.length > 0) {
+            const company = deal.enriched.companies[0];
+            content += `\n\nCompany Information:
+            Company: ${company.properties?.name || 'Unknown'}
+            Industry: ${company.properties?.industry || 'Unknown'}
+            Size: ${company.properties?.numberofemployees || 'Unknown'} employees
+            Revenue: ${company.properties?.annualrevenue || 'Unknown'}
+            `.trim();
+        }
+        
+        // Add contact information if available
+        if (deal.enriched?.contacts?.length > 0) {
+            content += '\n\nKey Contacts:';
+            deal.enriched.contacts.slice(0, 3).forEach((contact, index) => {
+                content += `
+                Contact ${index + 1}:
+                Name: ${contact.properties?.firstname || ''} ${contact.properties?.lastname || ''}
+                Title: ${contact.properties?.jobtitle || 'Unknown'}
+                Status: ${contact.properties?.hs_lead_status || 'Unknown'}
+                `.trim();
+            });
+        }
+        
+        // Add line items if available
+        if (deal.enriched?.lineItems?.length > 0) {
+            content += '\n\nProducts/Services:';
+            deal.enriched.lineItems.forEach((item, index) => {
+                content += `
+                Item ${index + 1}:
+                Name: ${item.properties?.name || 'Unknown'}
+                Quantity: ${item.properties?.quantity || '1'}
+                Price: ${item.properties?.price || 'Unknown'}
+                Description: ${item.properties?.description || 'No description'}
+                `.trim();
+            });
+        }
+        
+        // Add metrics
+        if (deal.enriched?.metrics) {
+            const metrics = deal.enriched.metrics;
+            content += `\n\nDeal Metrics:
+            Total Value: ${metrics.totalValue || 0}
+            Sales Cycle: ${metrics.salesCycleDays || 'Unknown'} days
+            Contact Count: ${metrics.contactCount || 0}
+            Line Item Count: ${metrics.lineItemCount || 0}
+            `.trim();
+        }
+        
+        return content;
     }
 
     // Helper method to store multiple clients
@@ -248,7 +400,7 @@ class IdealClientService {
             type = this.validateType(type);
             
             // Get data from both lists
-            const data = await hubspotClient.getDetailedIdealAndLessIdealData(type);
+            const data = await hubspotClient.getIdealAndLessIdealData(type);
             
             // Process ideal clients
             const idealResults = await Promise.all(
@@ -320,43 +472,102 @@ class IdealClientService {
         const metadata = example.metadata;
         const type = metadata.type;
         
-        return type === 'contacts' ?
-            `${metadata.industry} contact with ${metadata.engagement_score} engagement score and ${metadata.deal_success_rate}% deal success rate` :
-            `${metadata.industry} company with ${metadata.total_revenue} revenue and ${metadata.deal_success_rate}% deal success rate`;
-    }
-
-    // Helper methods for calculating metrics
-    calculateEngagementScore(contact) {
-        if (!contact.engagementMetrics) return 0;
+        if (type === 'contacts') {
+            return `${metadata.industry || 'Unknown industry'} contact with ${metadata.job_title || 'Unknown role'}, ${metadata.deal_count || 0} deals`;
+        } else if (type === 'companies') {
+            return `${metadata.industry || 'Unknown industry'} company with ${metadata.company_size || 'Unknown size'}, ${metadata.total_revenue || 0} revenue`;
+        } else if (type === 'deals') {
+            return `${metadata.deal_type || 'Unknown type'} deal worth ${metadata.amount || 'Unknown amount'}, ${metadata.deal_stage || 'Unknown stage'} stage`;
+        }
         
-        const weights = {
-            emailsOpened: 1,
-            emailsReplied: 2,
-            meetingsAttended: 3,
-            callsAnswered: 2
-        };
+        return 'Unknown characteristics';
+    }
 
-        let totalScore = 0;
-        let totalWeight = 0;
+    async scoreNewLead(leadData) {
+        try {
+            // Create a query document from the lead
+            const queryDoc = await this.createDocument(leadData, 'contacts', 'query');
+            
+            // Search for similar ideal clients
+            const results = await this.vectorStore.similaritySearch(
+                queryDoc.pageContent,
+                10,
+                { namespace: this.namespace }
+            );
+            
+            // Extract the most relevant context
+            const context = results.map(result => ({
+                content: result.pageContent,
+                metadata: result.metadata,
+                score: result.score
+            }));
+            
+            // Use the context for AI scoring
+            return this.generateAIScore(leadData, context);
+        } catch (error) {
+            logger.error('Error scoring new lead:', error);
+            throw error;
+        }
+    }
 
-        Object.entries(weights).forEach(([metric, weight]) => {
-            if (contact.engagementMetrics[metric]) {
-                totalScore += contact.engagementMetrics[metric] * weight;
-                totalWeight += weight;
+    async generateAIScore(leadData, context) {
+        try {
+            // Format the context for the AI
+            const formattedContext = context.map(item => 
+                `--- ${item.metadata.label.toUpperCase()} ${item.metadata.type.toUpperCase()} EXAMPLE ---\n${item.content}`
+            ).join('\n\n');
+            
+            // Create the prompt
+            const prompt = `
+            You are analyzing a new lead to determine how well they match with ideal client profiles.
+            
+            NEW LEAD INFORMATION:
+            ${this.createContactContent(leadData)}
+            
+            SIMILAR EXAMPLES FROM OUR DATABASE:
+            ${formattedContext}
+            
+            Based on the above information, please:
+            1. Score this lead from 0-100 on how well they match our ideal client profile
+            2. Explain the key factors that influenced your score
+            3. Identify any potential red flags or opportunities
+            4. Recommend next steps for engaging with this lead
+            
+            Format your response as JSON with the following structure:
+            {
+              "score": number,
+              "explanation": string,
+              "keyFactors": string[],
+              "redFlags": string[],
+              "opportunities": string[],
+              "nextSteps": string[]
             }
+            `;
+            
+            // Call the AI with the prompt
+            // This is a placeholder - you'll need to implement the actual AI call
+            const response = await this.callAI(prompt);
+            
+            // Parse and return the result
+            return JSON.parse(response);
+        } catch (error) {
+            logger.error('Error generating AI score:', error);
+            throw error;
+        }
+    }
+
+    // Placeholder for AI call - implement with your preferred AI service
+    async callAI(prompt) {
+        // This is a placeholder - replace with actual implementation
+        logger.info('AI prompt:', prompt);
+        return JSON.stringify({
+            score: 75,
+            explanation: "This is a placeholder score. Implement actual AI scoring.",
+            keyFactors: ["Placeholder factor 1", "Placeholder factor 2"],
+            redFlags: ["Placeholder red flag"],
+            opportunities: ["Placeholder opportunity"],
+            nextSteps: ["Placeholder next step"]
         });
-
-        return totalWeight > 0 ? totalScore / totalWeight : 0;
-    }
-
-    calculateDealSuccessRate(contact) {
-        if (!contact.dealHistory?.totalDeals) return 0;
-        return (contact.dealHistory.wonDeals / contact.dealHistory.totalDeals) * 100;
-    }
-
-    calculateCompanyDealRate(company) {
-        if (!company.metrics?.dealCount) return 0;
-        return (company.metrics.wonDeals / company.metrics.dealCount) * 100;
     }
 }
 
