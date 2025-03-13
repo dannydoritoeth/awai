@@ -860,8 +860,14 @@ class HubspotClient {
 
     async getIdealAndLessIdealData(type = 'contacts') {
         try {
-            const isCompanyType = type.toLowerCase() === 'companies';
-            const listSuffix = isCompanyType ? 'Companies' : 'Contacts';
+            // Validate type
+            const validTypes = ['contacts', 'companies', 'deals'];
+            if (!validTypes.includes(type.toLowerCase())) {
+                throw new Error(`Invalid type: ${type}. Must be one of: ${validTypes.join(', ')}`);
+            }
+            
+            type = type.toLowerCase();
+            const listSuffix = type.charAt(0).toUpperCase() + type.slice(1);
             
             // Find both lists
             const [idealList, lessIdealList] = await Promise.all([
@@ -869,85 +875,198 @@ class HubspotClient {
                 this.findListByName(`Less-Ideal-${listSuffix}`)
             ]);
 
-            if (isCompanyType) {
-                // Get companies from both lists
-                const [idealCompanies, lessIdealCompanies] = await Promise.all([
-                    this.getCompaniesFromList(idealList.id),
-                    this.getCompaniesFromList(lessIdealList.id)
-                ]);
-
-                return {
-                    ideal: idealCompanies,
-                    lessIdeal: lessIdealCompanies,
-                    type: 'companies'
-                };
-            } else {
-                // Get contacts from both lists
-                const [idealContacts, lessIdealContacts] = await Promise.all([
+            // Get records from both lists based on type
+            let idealRecords, lessIdealRecords;
+            
+            if (type === 'contacts') {
+                [idealRecords, lessIdealRecords] = await Promise.all([
                     this.getContactsFromList(idealList.id),
                     this.getContactsFromList(lessIdealList.id)
                 ]);
-
-                return {
-                    ideal: idealContacts,
-                    lessIdeal: lessIdealContacts,
-                    type: 'contacts'
-                };
+            } else if (type === 'companies') {
+                [idealRecords, lessIdealRecords] = await Promise.all([
+                    this.getCompaniesFromList(idealList.id),
+                    this.getCompaniesFromList(lessIdealList.id)
+                ]);
+            } else if (type === 'deals') {
+                [idealRecords, lessIdealRecords] = await Promise.all([
+                    this.getDealsFromList(idealList.id),
+                    this.getDealsFromList(lessIdealList.id)
+                ]);
             }
+
+            return {
+                ideal: idealRecords,
+                lessIdeal: lessIdealRecords,
+                type: type
+            };
         } catch (error) {
             logger.error(`Error getting ideal and less-ideal ${type}:`, error);
             throw error;
         }
     }
 
-    async getDetailedIdealAndLessIdealData(type = 'contacts') {
-        try {
-            // Get the lists
-            const [idealList, lessIdealList] = await Promise.all([
-                this.findListByName('Ideal-Contacts'),
-                this.findListByName('Less-Ideal-Contacts')
-            ]);
+    async getDealsFromList(listId, properties = [
+        'dealname',
+        'dealstage',
+        'amount',
+        'closedate',
+        'pipeline',
+        'dealtype',
+        'createdate',
+        'hs_lastmodifieddate',
+        'description',
+        'hs_priority'
+    ]) {
+        return this.makeRequest(async () => {
+            try {
+                // Get list members using the CRM API endpoint
+                const response = await this.client.apiRequest({
+                    method: 'GET',
+                    path: `/crm/v3/lists/${listId}/memberships`,
+                    qs: {
+                        limit: 100
+                    }
+                });
 
-            // Get contacts from both lists
-            const [idealContacts, lessIdealContacts] = await Promise.all([
-                this.getContactsFromList(idealList.id),
-                this.getContactsFromList(lessIdealList.id)
-            ]);
+                const data = await response.json();
+                logger.info('HubSpot list deals response:', {
+                    listId,
+                    dealCount: data.results ? data.results.length : 0,
+                    response: data
+                });
 
-            // Calculate metrics for both groups
-            const idealMetrics = {
-                totalContacts: idealContacts.length,
-                totalDeals: 0,
-                totalRevenue: 0,
-                averageDealSize: 0,
-                averageDealsPerContact: 0,
-                contactsWithDeals: 0
-            };
-
-            const lessIdealMetrics = {
-                totalContacts: lessIdealContacts.length,
-                totalDeals: 0,
-                totalRevenue: 0,
-                averageDealSize: 0,
-                averageDealsPerContact: 0,
-                contactsWithDeals: 0
-            };
-
-            return {
-                ideal: idealContacts,
-                lessIdeal: lessIdealContacts,
-                type: 'contacts',
-                summary: {
-                    idealCount: idealContacts.length,
-                    lessIdealCount: lessIdealContacts.length,
-                    idealMetrics,
-                    lessIdealMetrics
+                if (!data.results || data.results.length === 0) {
+                    return [];
                 }
-            };
-        } catch (error) {
-            logger.error('Error getting detailed ideal and less-ideal contacts:', error);
-            throw error;
-        }
+
+                // Get full deal details with associations for each member
+                const dealIds = data.results.map(result => result.recordId);
+                const deals = await Promise.all(
+                    dealIds.map(async (id) => {
+                        try {
+                            // Get deal with associations
+                            const dealResponse = await this.client.apiRequest({
+                                method: 'GET',
+                                path: `/crm/v3/objects/deals/${id}`,
+                                query: {
+                                    properties: properties,
+                                    associations: ['contacts', 'companies', 'line_items']
+                                }
+                            });
+                            
+                            const deal = await dealResponse.json();
+                            
+                            // Get associated contact details if any exist
+                            let contacts = [];
+                            if (deal.associations?.contacts?.results?.length > 0) {
+                                contacts = await Promise.all(
+                                    deal.associations.contacts.results.map(async (contact) => {
+                                        const contactResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/contacts/${contact.id}`,
+                                            query: {
+                                                properties: [
+                                                    'email',
+                                                    'firstname',
+                                                    'lastname',
+                                                    'jobtitle',
+                                                    'lifecyclestage',
+                                                    'hs_lead_status'
+                                                ]
+                                            }
+                                        });
+                                        return contactResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Get associated company details if any exist
+                            let companies = [];
+                            if (deal.associations?.companies?.results?.length > 0) {
+                                companies = await Promise.all(
+                                    deal.associations.companies.results.map(async (company) => {
+                                        const companyResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/companies/${company.id}`,
+                                            query: {
+                                                properties: [
+                                                    'name',
+                                                    'domain',
+                                                    'industry',
+                                                    'numberofemployees',
+                                                    'annualrevenue',
+                                                    'type'
+                                                ]
+                                            }
+                                        });
+                                        return companyResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Get associated line items if any exist
+                            let lineItems = [];
+                            if (deal.associations?.line_items?.results?.length > 0) {
+                                lineItems = await Promise.all(
+                                    deal.associations.line_items.results.map(async (lineItem) => {
+                                        const lineItemResponse = await this.client.apiRequest({
+                                            method: 'GET',
+                                            path: `/crm/v3/objects/line_items/${lineItem.id}`,
+                                            query: {
+                                                properties: [
+                                                    'name',
+                                                    'quantity',
+                                                    'price',
+                                                    'amount',
+                                                    'description',
+                                                    'hs_sku'
+                                                ]
+                                            }
+                                        });
+                                        return lineItemResponse.json();
+                                    })
+                                );
+                            }
+
+                            // Calculate deal metrics
+                            const metrics = {
+                                totalValue: Number(deal.properties?.amount) || 0,
+                                lineItemCount: lineItems.length,
+                                contactCount: contacts.length,
+                                companyCount: companies.length,
+                                salesCycleDays: deal.properties?.closedate && deal.properties?.createdate ? 
+                                    Math.round((new Date(deal.properties.closedate) - new Date(deal.properties.createdate)) / (1000 * 60 * 60 * 24)) : 
+                                    null
+                            };
+
+                            return {
+                                ...deal,
+                                enriched: {
+                                    contacts,
+                                    companies,
+                                    lineItems,
+                                    metrics
+                                }
+                            };
+                        } catch (error) {
+                            logger.error(`Error fetching details for deal ${id}:`, error);
+                            return null;
+                        }
+                    })
+                );
+                
+                // Filter out any null results from failed fetches
+                return deals.filter(deal => deal !== null);
+            } catch (error) {
+                logger.error('Error getting deals from HubSpot list:', {
+                    listId,
+                    error: error.message,
+                    stack: error.stack
+                });
+                throw error;
+            }
+        });
     }
 
     calculateContactGroupMetrics(contacts) {
