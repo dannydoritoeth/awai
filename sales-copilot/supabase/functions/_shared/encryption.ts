@@ -1,75 +1,76 @@
-import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { crypto } from 'https://deno.land/std/crypto/mod.ts';
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;
+const SALT_LENGTH = 16;
+const TAG_LENGTH = 16;
+const ENCODING = 'base64';
 
 /**
- * Encrypts sensitive data using AES-256-GCM
+ * Encrypts data using AES-256-GCM
  * @param data - The data to encrypt
- * @param key - The encryption key (must be 32 bytes for AES-256)
- * @returns Base64 encoded encrypted data with IV and auth tag
+ * @param key - The encryption key
+ * @returns The encrypted data as a base64 string
  */
 export async function encrypt(data: string, key: string): Promise<string> {
-  // Convert key to correct format
-  const encoder = new TextEncoder();
-  const keyBuffer = encoder.encode(key);
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyBuffer,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt']
-  );
+  try {
+    // Generate a random salt and IV
+    const salt = randomBytes(SALT_LENGTH);
+    const iv = randomBytes(IV_LENGTH);
 
-  // Generate random IV
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  
-  // Encrypt the data
-  const dataBuffer = encoder.encode(data);
-  const encryptedBuffer = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    dataBuffer
-  );
+    // Create cipher
+    const cipher = createCipheriv(ALGORITHM, Buffer.from(key), iv);
 
-  // Combine IV and encrypted data
-  const combined = new Uint8Array(iv.length + new Uint8Array(encryptedBuffer).length);
-  combined.set(iv);
-  combined.set(new Uint8Array(encryptedBuffer), iv.length);
+    // Encrypt the data
+    let encrypted = cipher.update(data, 'utf8', ENCODING);
+    encrypted += cipher.final(ENCODING);
 
-  // Return as base64
-  return encodeBase64(combined);
+    // Get the auth tag
+    const tag = cipher.getAuthTag();
+
+    // Combine the salt, IV, encrypted data, and auth tag
+    const result = Buffer.concat([
+      salt,
+      iv,
+      Buffer.from(encrypted, ENCODING),
+      tag
+    ]).toString(ENCODING);
+
+    return result;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown encryption error';
+    throw new Error(`Encryption failed: ${message}`);
+  }
 }
 
 /**
  * Decrypts data that was encrypted using the encrypt function
- * @param encryptedData - Base64 encoded encrypted data with IV
- * @param key - The encryption key (must be 32 bytes for AES-256)
- * @returns Decrypted data as string
+ * @param encryptedData - The encrypted data as a base64 string
+ * @param key - The encryption key
+ * @returns The decrypted data
  */
 export async function decrypt(encryptedData: string, key: string): Promise<string> {
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  
-  // Convert key to correct format
-  const keyBuffer = encoder.encode(key);
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyBuffer,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt']
-  );
+  try {
+    // Convert the combined data back to a buffer
+    const buffer = Buffer.from(encryptedData, ENCODING);
 
-  // Decode base64 and split IV and data
-  const combined = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
-  const iv = combined.slice(0, 12);
-  const encryptedBuffer = combined.slice(12);
+    // Extract the pieces
+    const salt = buffer.slice(0, SALT_LENGTH);
+    const iv = buffer.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+    const tag = buffer.slice(-TAG_LENGTH);
+    const encrypted = buffer.slice(SALT_LENGTH + IV_LENGTH, -TAG_LENGTH).toString(ENCODING);
 
-  // Decrypt
-  const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    encryptedBuffer
-  );
+    // Create decipher
+    const decipher = createDecipheriv(ALGORITHM, Buffer.from(key), iv);
+    decipher.setAuthTag(tag);
 
-  return decoder.decode(decryptedBuffer);
+    // Decrypt the data
+    let decrypted = decipher.update(encrypted, ENCODING, 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown decryption error';
+    throw new Error(`Decryption failed: ${message}`);
+  }
 } 

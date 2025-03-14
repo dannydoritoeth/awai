@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { HubspotClient } from "../../../shared/src/services/hubspotClient.ts";
-import { ScoringService } from "../../../shared/src/services/scoringService.ts";
-import { Logger } from "../../../shared/src/utils/logger.ts";
-import { HubSpotWebhookEvent } from "../../../shared/src/types/hubspot.ts";
+import { HubspotClient } from "../_shared/hubspotClient.ts";
+import { ScoringService } from "../_shared/scoringService.ts";
+import { Logger } from "../_shared/logger.ts";
+import { HubSpotWebhookEvent } from "../_shared/hubspotClient.ts";
 
 const logger = new Logger("score-record");
 

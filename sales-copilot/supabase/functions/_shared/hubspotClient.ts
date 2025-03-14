@@ -3,6 +3,17 @@ export interface HubspotRecord {
   properties: Record<string, any>;
 }
 
+export interface HubSpotWebhookEvent {
+  subscriptionType: string;
+  portalId: number;
+  objectId: number;
+  propertyName?: string;
+  propertyValue?: string;
+  changeSource?: string;
+  eventId?: string;
+  appId?: number;
+}
+
 interface PropertyGroup {
   name: string;
   label: string;
