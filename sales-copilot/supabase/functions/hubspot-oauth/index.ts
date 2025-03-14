@@ -36,107 +36,182 @@ interface HubSpotErrorResponse {
 }
 
 async function createHubSpotProperties(accessToken: string) {
-  const propertyGroup = {
-    name: "sales_copilot",
-    label: "Sales Copilot",
-    displayOrder: -1
-  };
-
-  const properties = [
-    // Contact Properties
-    {
-      name: "ideal_client_score",
-      label: "Ideal Client Score",
-      groupName: "sales_copilot",
-      type: "number",
-      fieldType: "number",
-      description: "Score indicating how well this contact matches ideal client criteria",
-      displayOrder: 1,
-      hasUniqueValue: false,
-      formField: true
-    },
-    {
-      name: "ideal_client_summary",
-      label: "Ideal Client Summary",
-      groupName: "sales_copilot",
-      type: "textarea",
-      fieldType: "textarea",
-      description: "Summary of ideal client match analysis",
-      displayOrder: 2,
-      hasUniqueValue: false,
-      formField: true
-    },
-    {
-      name: "ideal_client_last_scored",
-      label: "Last Scored Date",
-      groupName: "sales_copilot",
-      type: "datetime",
-      fieldType: "datetime",
-      description: "When this contact was last evaluated",
-      displayOrder: 3,
-      hasUniqueValue: false,
-      formField: true
-    }
-  ];
-
   try {
-    // Create property groups and properties for each object type
+    // Create contact properties
+    const contactProperties = [
+      {
+        name: "ideal_client_score",
+        label: "Ideal Client Score",
+        type: "number",
+        fieldType: "number",
+        groupName: "sales_copilot",
+        description: "Score indicating how well this contact matches ideal client criteria",
+        displayOrder: 1,
+        formField: true
+      },
+      {
+        name: "ideal_client_summary",
+        label: "Ideal Client Summary",
+        type: "string",
+        fieldType: "textarea",
+        groupName: "sales_copilot",
+        description: "Summary of ideal client match analysis",
+        displayOrder: 2,
+        formField: true
+      },
+      {
+        name: "ideal_client_last_scored",
+        label: "Last Scored Date",
+        type: "datetime",
+        fieldType: "date",
+        groupName: "sales_copilot",
+        description: "When this contact was last evaluated",
+        displayOrder: 3,
+        formField: true
+      }
+    ];
+
+    // Create company properties
+    const companyProperties = [
+      {
+        name: "company_fit_score",
+        label: "Company Fit Score",
+        type: "number",
+        fieldType: "number",
+        groupName: "sales_copilot",
+        description: "Score indicating how well this company matches ideal criteria",
+        displayOrder: 1,
+        formField: true
+      },
+      {
+        name: "company_fit_summary",
+        label: "Company Fit Summary",
+        type: "string",
+        fieldType: "textarea",
+        groupName: "sales_copilot",
+        description: "Summary of company fit analysis",
+        displayOrder: 2,
+        formField: true
+      },
+      {
+        name: "company_fit_last_scored",
+        label: "Last Scored Date",
+        type: "datetime",
+        fieldType: "date",
+        groupName: "sales_copilot",
+        description: "When this company was last evaluated",
+        displayOrder: 3,
+        formField: true
+      }
+    ];
+
+    // Create deal properties
+    const dealProperties = [
+      {
+        name: "deal_quality_score",
+        label: "Deal Quality Score",
+        type: "number",
+        fieldType: "number",
+        groupName: "sales_copilot",
+        description: "Score indicating the quality of this deal",
+        displayOrder: 1,
+        formField: true
+      },
+      {
+        name: "deal_quality_summary",
+        label: "Deal Quality Summary",
+        type: "string",
+        fieldType: "textarea",
+        groupName: "sales_copilot",
+        description: "Summary of deal quality analysis",
+        displayOrder: 2,
+        formField: true
+      },
+      {
+        name: "deal_quality_last_scored",
+        label: "Last Scored Date",
+        type: "datetime",
+        fieldType: "date",
+        groupName: "sales_copilot",
+        description: "When this deal was last evaluated",
+        displayOrder: 3,
+        formField: true
+      }
+    ];
+
     const objectTypes = [
-      { name: 'contacts', propertyPrefix: 'ideal_client' },
-      { name: 'companies', propertyPrefix: 'company_fit' },
-      { name: 'deals', propertyPrefix: 'deal_quality' }
+      { name: 'contacts', properties: contactProperties },
+      { name: 'companies', properties: companyProperties },
+      { name: 'deals', properties: dealProperties }
     ];
 
     for (const objectType of objectTypes) {
-      console.log(`Creating property group for ${objectType.name}...`);
-      
-      // Create property group
-      const groupResponse = await fetch(`https://api.hubapi.com/properties/v2/${objectType.name}/groups`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(propertyGroup)
-      });
+      console.log(`\nProcessing ${objectType.name}...`);
 
-      if (!groupResponse.ok && groupResponse.status !== 409) { // 409 means group already exists
-        const errorData = await groupResponse.json();
-        console.error(`Failed to create property group for ${objectType.name}:`, errorData);
-        throw new Error(`Failed to create property group for ${objectType.name}: ${groupResponse.statusText}`);
-      }
-
-      // Create properties
-      const objectProperties = properties.map(prop => ({
-        ...prop,
-        name: prop.name.replace('ideal_client', objectType.propertyPrefix)
-      }));
-
-      for (const property of objectProperties) {
-        console.log(`Creating property ${property.name} for ${objectType.name}...`);
-        
-        const propertyResponse = await fetch(`https://api.hubapi.com/properties/v2/${objectType.name}/properties`, {
+      try {
+        // Create property group
+        console.log(`Creating property group for ${objectType.name}...`);
+        const groupResponse = await fetch(`https://api.hubapi.com/crm/v3/properties/${objectType.name}/groups`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(property)
+          body: JSON.stringify({
+            name: "sales_copilot",
+            label: "Sales Copilot",
+            displayOrder: 1
+          })
         });
 
-        if (!propertyResponse.ok && propertyResponse.status !== 409) { // 409 means property already exists
-          const errorData = await propertyResponse.json();
-          console.error(`Failed to create property ${property.name} for ${objectType.name}:`, errorData);
-          throw new Error(`Failed to create property ${property.name} for ${objectType.name}: ${propertyResponse.statusText}`);
+        const groupResult = await groupResponse.text();
+        console.log(`Group creation response for ${objectType.name}:`, groupResult);
+
+        if (!groupResponse.ok && groupResponse.status !== 409) {
+          throw new Error(`Failed to create group for ${objectType.name}: ${groupResult}`);
         }
+
+        // Create properties
+        for (const property of objectType.properties) {
+          try {
+            console.log(`Creating property ${property.name}...`);
+            
+            const response = await fetch(`https://api.hubapi.com/crm/v3/properties/${objectType.name}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(property)
+            });
+
+            const result = await response.text();
+            console.log(`Response for ${property.name}:`, result);
+
+            if (!response.ok && response.status !== 409) {
+              throw new Error(`Failed to create ${property.name}: ${result}`);
+            }
+
+            // Wait between requests
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Error creating property ${property.name}:`, error);
+            throw error;
+          }
+        }
+
+        console.log(`Successfully created all properties for ${objectType.name}`);
+      } catch (error) {
+        console.error(`Error processing ${objectType.name}:`, error);
+        // Continue with next object type instead of stopping completely
+        continue;
       }
     }
 
-    console.log('Successfully created all properties');
     return true;
   } catch (error) {
-    console.error('Error creating HubSpot properties:', error);
-    throw error; // Re-throw to handle in the main function
+    console.error('Error in createHubSpotProperties:', error);
+    throw error;
   }
 }
 
