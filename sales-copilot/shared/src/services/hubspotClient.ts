@@ -7,18 +7,33 @@ import {
   IdealClientData
 } from '../types';
 import { logger } from '../utils/logger';
+import { Logger } from '../utils/logger';
+
+export interface HubspotRecord {
+  id: string;
+  properties: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+  archived?: boolean;
+}
 
 /**
  * HubspotClient implementation that works in both Node.js and Deno environments
  */
 export class HubspotClient implements HubspotClientInterface {
   private client: any;
+  private baseUrl = 'https://api.hubapi.com';
+  private logger: Logger;
   
-  constructor(accessToken: string) {
+  constructor(
+    accessToken: string,
+    logger?: Logger
+  ) {
+    this.logger = logger || new Logger();
     // Create a simple fetch-based client that works in both environments
     this.client = {
       apiRequest: async (options: any) => {
-        const url = `https://api.hubapi.com${options.path}${options.query ? '?' + new URLSearchParams(options.query).toString() : ''}`;
+        const url = `${this.baseUrl}${options.path}${options.query ? '?' + new URLSearchParams(options.query).toString() : ''}`;
         const response = await fetch(url, {
           method: options.method || 'GET',
           headers: {
@@ -548,5 +563,82 @@ export class HubspotClient implements HubspotClientInterface {
       logger.error(`Error getting ideal and less-ideal ${type}:`, error);
       throw error;
     }
+  }
+
+  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`HubSpot API error: ${JSON.stringify(error)}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      this.logger.error(`HubSpot API request failed: ${url}`, error);
+      throw error;
+    }
+  }
+
+  async getContact(id: string): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/contacts/${id}`);
+  }
+
+  async getCompany(id: string): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/companies/${id}`);
+  }
+
+  async getDeal(id: string): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/deals/${id}`);
+  }
+
+  async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/contacts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+  }
+
+  async updateCompany(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/companies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+  }
+
+  async updateDeal(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
+    return this.makeRequest(`/crm/v3/objects/deals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+  }
+
+  async createWebhookSubscription(
+    portalId: string,
+    appId: string,
+    subscriptionDetails: {
+      eventType: string;
+      propertyName?: string;
+      webhookUrl: string;
+    }
+  ): Promise<any> {
+    return this.makeRequest('/webhooks/v3/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...subscriptionDetails,
+        active: true
+      })
+    });
   }
 } 
