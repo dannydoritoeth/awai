@@ -35,18 +35,140 @@ interface HubSpotErrorResponse {
   error_description?: string;
 }
 
+async function createHubSpotProperties(accessToken: string) {
+  const propertyGroup = {
+    name: "sales_copilot",
+    label: "Sales Copilot",
+    displayOrder: -1
+  };
+
+  const properties = [
+    // Contact Properties
+    {
+      name: "ideal_client_score",
+      label: "Ideal Client Score",
+      groupName: "sales_copilot",
+      type: "number",
+      fieldType: "number",
+      description: "Score indicating how well this contact matches ideal client criteria",
+      displayOrder: 1,
+      hasUniqueValue: false,
+      formField: true
+    },
+    {
+      name: "ideal_client_summary",
+      label: "Ideal Client Summary",
+      groupName: "sales_copilot",
+      type: "textarea",
+      fieldType: "textarea",
+      description: "Summary of ideal client match analysis",
+      displayOrder: 2,
+      hasUniqueValue: false,
+      formField: true
+    },
+    {
+      name: "ideal_client_last_scored",
+      label: "Last Scored Date",
+      groupName: "sales_copilot",
+      type: "datetime",
+      fieldType: "datetime",
+      description: "When this contact was last evaluated",
+      displayOrder: 3,
+      hasUniqueValue: false,
+      formField: true
+    }
+  ];
+
+  try {
+    // Create property groups and properties for each object type
+    const objectTypes = [
+      { name: 'contacts', propertyPrefix: 'ideal_client' },
+      { name: 'companies', propertyPrefix: 'company_fit' },
+      { name: 'deals', propertyPrefix: 'deal_quality' }
+    ];
+
+    for (const objectType of objectTypes) {
+      console.log(`Creating property group for ${objectType.name}...`);
+      
+      // Create property group
+      const groupResponse = await fetch(`https://api.hubapi.com/properties/v2/${objectType.name}/groups`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(propertyGroup)
+      });
+
+      if (!groupResponse.ok && groupResponse.status !== 409) { // 409 means group already exists
+        const errorData = await groupResponse.json();
+        console.error(`Failed to create property group for ${objectType.name}:`, errorData);
+        throw new Error(`Failed to create property group for ${objectType.name}: ${groupResponse.statusText}`);
+      }
+
+      // Create properties
+      const objectProperties = properties.map(prop => ({
+        ...prop,
+        name: prop.name.replace('ideal_client', objectType.propertyPrefix)
+      }));
+
+      for (const property of objectProperties) {
+        console.log(`Creating property ${property.name} for ${objectType.name}...`);
+        
+        const propertyResponse = await fetch(`https://api.hubapi.com/properties/v2/${objectType.name}/properties`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(property)
+        });
+
+        if (!propertyResponse.ok && propertyResponse.status !== 409) { // 409 means property already exists
+          const errorData = await propertyResponse.json();
+          console.error(`Failed to create property ${property.name} for ${objectType.name}:`, errorData);
+          throw new Error(`Failed to create property ${property.name} for ${objectType.name}: ${propertyResponse.statusText}`);
+        }
+      }
+    }
+
+    console.log('Successfully created all properties');
+    return true;
+  } catch (error) {
+    console.error('Error creating HubSpot properties:', error);
+    throw error; // Re-throw to handle in the main function
+  }
+}
+
 serve(async (req) => {
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    console.log('Received request:', req.method);
+    console.log('URL:', req.url);
+    console.log('Headers:', JSON.stringify(Object.fromEntries(req.headers.entries())));
+
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
+    
+    console.log('Authorization code:', code);
+
+    if (!code) {
+      console.error('No authorization code provided');
+      return new Response(
+        JSON.stringify({ 
+          error: 'No authorization code provided',
+          success: false 
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        }
+      );
+    }
+
     const error = url.searchParams.get('error');
     const state = url.searchParams.get('state');
     
@@ -63,20 +185,6 @@ serve(async (req) => {
       console.error('HubSpot OAuth error:', error);
       return new Response(
         JSON.stringify({ error: 'OAuth error', details: error }),
-        { 
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
-
-    // Check for authorization code
-    if (!code) {
-      return new Response(
-        JSON.stringify({ error: 'Missing code parameter' }),
         { 
           status: 400,
           headers: {
@@ -183,24 +291,25 @@ serve(async (req) => {
       );
     }
 
-    // Return success with stored data
+    // After successfully getting and storing tokens
+    try {
+      await createHubSpotProperties(tokenData.access_token);
+      console.log('Successfully created HubSpot properties');
+    } catch (error) {
+      console.error('Failed to create HubSpot properties:', error);
+      // Continue with the success response even if property creation fails
+      // This allows the app to still function and retry property creation later if needed
+    }
+
     return new Response(
       JSON.stringify({ 
+        message: "Successfully authenticated and created custom properties",
         success: true,
-        message: 'HubSpot account connected successfully',
-        account: {
-          portal_id: hubspotAccount.portal_id,
-          status: hubspotAccount.status,
-          created_at: hubspotAccount.created_at,
-          metadata: hubspotAccount.metadata
-        }
-      }, null, 2),
+        portal_id: accountInfo.portalId.toString()
+      }),
       {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
       }
     );
 
