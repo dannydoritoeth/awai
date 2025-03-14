@@ -17,6 +17,27 @@ export interface HubspotRecord {
   archived?: boolean;
 }
 
+interface SearchRequest {
+  filterGroups: Array<{
+    filters: Array<{
+      propertyName: string;
+      operator: string;
+      value: string;
+    }>;
+  }>;
+  limit: number;
+  after?: string;
+}
+
+interface SearchResponse<T> {
+  results: T[];
+  paging?: {
+    next?: {
+      after: string;
+    };
+  };
+}
+
 /**
  * HubspotClient implementation that works in both Node.js and Deno environments
  */
@@ -639,6 +660,27 @@ export class HubspotClient implements HubspotClientInterface {
         ...subscriptionDetails,
         active: true
       })
+    });
+  }
+
+  async searchContacts(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/contacts/search', {
+      method: 'POST',
+      body: JSON.stringify(searchRequest)
+    });
+  }
+
+  async searchCompanies(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/companies/search', {
+      method: 'POST',
+      body: JSON.stringify(searchRequest)
+    });
+  }
+
+  async searchDeals(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/deals/search', {
+      method: 'POST',
+      body: JSON.stringify(searchRequest)
     });
   }
 } 
