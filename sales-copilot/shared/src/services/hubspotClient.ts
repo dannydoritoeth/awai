@@ -4,7 +4,12 @@ import {
   HubspotContact, 
   HubspotCompany, 
   HubspotDeal,
-  IdealClientData
+  IdealClientData,
+  HubspotRecord,
+  PropertyGroup,
+  Property,
+  SearchRequest,
+  SearchResponse
 } from '../types';
 import { logger } from '../utils/logger';
 import { Logger } from '../utils/logger';
@@ -45,12 +50,14 @@ export class HubspotClient implements HubspotClientInterface {
   private client: any;
   private baseUrl = 'https://api.hubapi.com';
   private logger: Logger;
+  private accessToken: string;
   
   constructor(
     accessToken: string,
     logger?: Logger
   ) {
-    this.logger = logger || new Logger();
+    this.accessToken = accessToken;
+    this.logger = logger || new Logger('hubspot-client');
     // Create a simple fetch-based client that works in both environments
     this.client = {
       apiRequest: async (options: any) => {
@@ -664,23 +671,37 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async searchContacts(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/contacts/search', {
+    return this.makeRequest('/crm/v3/objects/contacts/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
     });
   }
 
   async searchCompanies(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/companies/search', {
+    return this.makeRequest('/crm/v3/objects/companies/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
     });
   }
 
   async searchDeals(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/deals/search', {
+    return this.makeRequest('/crm/v3/objects/deals/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
+    });
+  }
+
+  async createPropertyGroup(group: PropertyGroup): Promise<PropertyGroup> {
+    return this.makeRequest('/properties/v2/groups', {
+      method: 'POST',
+      body: JSON.stringify(group)
+    });
+  }
+
+  async createProperty(objectType: string, property: Property): Promise<Property> {
+    return this.makeRequest(`/properties/v2/${objectType}/properties`, {
+      method: 'POST',
+      body: JSON.stringify(property)
     });
   }
 } 

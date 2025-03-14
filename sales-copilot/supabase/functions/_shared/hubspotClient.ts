@@ -18,6 +18,28 @@ interface Property {
   fieldType: string;
 }
 
+interface SearchResponse<T> {
+  total: number;
+  results: T[];
+  paging?: {
+    next?: {
+      after: string;
+    };
+  };
+}
+
+interface SearchRequest {
+  filterGroups: {
+    filters: {
+      propertyName: string;
+      operator: string;
+      value: string;
+    }[];
+  }[];
+  limit: number;
+  after?: string;
+}
+
 export class HubspotClient {
   private accessToken: string;
   private baseUrl = 'https://api.hubspot.com/crm/v3';
@@ -75,6 +97,27 @@ export class HubspotClient {
     return this.makeRequest(`/objects/deals/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties }),
+    });
+  }
+
+  async searchContacts(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/contacts/search', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    });
+  }
+
+  async searchCompanies(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/companies/search', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    });
+  }
+
+  async searchDeals(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
+    return this.makeRequest('/objects/deals/search', {
+      method: 'POST',
+      body: JSON.stringify(request)
     });
   }
 

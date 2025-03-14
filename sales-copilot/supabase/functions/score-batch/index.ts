@@ -1,8 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { HubspotClient } from "./src/services/hubspotClient.ts";
-import { ScoringService } from "./src/services/scoringService.ts";
-import { Logger } from "./src/utils/logger.ts";
+import { HubspotClient } from "../_shared/hubspotClient.ts";
+import { ScoringService } from "../_shared/scoringService.ts";
+import { Logger } from "../_shared/logger.ts";
+
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 const BATCH_SIZE = 100; // Process 100 records at a time
 const logger = new Logger("score-batch");
@@ -33,7 +39,7 @@ serve(async (req) => {
       // Process contacts
       let contactsProcessed = 0;
       let hasMore = true;
-      let after = undefined;
+      let after: string | null = null;
 
       while (hasMore) {
         const response = await hubspotClient.searchContacts({
@@ -45,7 +51,7 @@ serve(async (req) => {
             }]
           }],
           limit: BATCH_SIZE,
-          after
+          after: after || undefined
         });
 
         for (const contact of response.results) {
@@ -54,13 +60,13 @@ serve(async (req) => {
         }
 
         hasMore = response.paging?.next?.after != null;
-        after = response.paging?.next?.after;
+        after = response.paging?.next?.after || null;
       }
 
       // Process companies
       let companiesProcessed = 0;
       hasMore = true;
-      after = undefined;
+      after = null;
 
       while (hasMore) {
         const response = await hubspotClient.searchCompanies({
@@ -72,7 +78,7 @@ serve(async (req) => {
             }]
           }],
           limit: BATCH_SIZE,
-          after
+          after: after || undefined
         });
 
         for (const company of response.results) {
@@ -81,13 +87,13 @@ serve(async (req) => {
         }
 
         hasMore = response.paging?.next?.after != null;
-        after = response.paging?.next?.after;
+        after = response.paging?.next?.after || null;
       }
 
       // Process deals
       let dealsProcessed = 0;
       hasMore = true;
-      after = undefined;
+      after = null;
 
       while (hasMore) {
         const response = await hubspotClient.searchDeals({
@@ -99,7 +105,7 @@ serve(async (req) => {
             }]
           }],
           limit: BATCH_SIZE,
-          after
+          after: after || undefined
         });
 
         for (const deal of response.results) {
@@ -108,7 +114,7 @@ serve(async (req) => {
         }
 
         hasMore = response.paging?.next?.after != null;
-        after = response.paging?.next?.after;
+        after = response.paging?.next?.after || null;
       }
 
       // Update last run time
@@ -132,14 +138,14 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { "Content-Type": "application/json" }
     });
 
   } catch (error) {
     logger.error('Batch scoring error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }); 

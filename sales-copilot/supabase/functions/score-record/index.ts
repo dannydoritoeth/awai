@@ -1,20 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { HubspotClient } from "./src/services/hubspotClient.ts";
-import { ScoringService } from "./src/services/scoringService.ts";
-import { Logger } from "./src/utils/logger.ts";
+import { HubspotClient } from "../../../shared/src/services/hubspotClient.ts";
+import { ScoringService } from "../../../shared/src/services/scoringService.ts";
+import { Logger } from "../../../shared/src/utils/logger.ts";
+import { HubSpotWebhookEvent } from "../../../shared/src/types/hubspot.ts";
 
 const logger = new Logger("score-record");
-
-interface HubSpotWebhookEvent {
-  subscriptionType: string;
-  portalId: number;
-  objectId: number;
-  propertyName?: string;
-  propertyValue?: string;
-  changeSource?: string;
-  eventId?: string;
-  appId?: number;
-}
 
 serve(async (req) => {
   try {

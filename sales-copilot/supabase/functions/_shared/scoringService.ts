@@ -1,4 +1,5 @@
-import { HubspotClient } from './hubspotClient';
+import { HubspotClient } from './hubspotClient.ts';
+import { Logger } from './logger.ts';
 
 export interface ScoringResult {
   score: number;
@@ -8,13 +9,15 @@ export interface ScoringResult {
 
 export class ScoringService {
   private hubspotClient: HubspotClient;
+  private logger: Logger;
 
   constructor(accessToken: string) {
     this.hubspotClient = new HubspotClient(accessToken);
+    this.logger = new Logger('ScoringService');
   }
 
   async scoreContact(contactId: string): Promise<ScoringResult> {
-    console.log(`Scoring contact ${contactId}`);
+    this.logger.info(`Scoring contact ${contactId}`);
     
     try {
       const contact = await this.hubspotClient.getContact(contactId);
@@ -32,13 +35,13 @@ export class ScoringService {
 
       return { score, summary, lastScored };
     } catch (error) {
-      console.error('Error scoring contact:', error);
+      this.logger.error('Error scoring contact:', error);
       throw error;
     }
   }
 
   async scoreCompany(companyId: string): Promise<ScoringResult> {
-    console.log(`Scoring company ${companyId}`);
+    this.logger.info(`Scoring company ${companyId}`);
     
     try {
       const company = await this.hubspotClient.getCompany(companyId);
@@ -56,13 +59,13 @@ export class ScoringService {
 
       return { score, summary, lastScored };
     } catch (error) {
-      console.error('Error scoring company:', error);
+      this.logger.error('Error scoring company:', error);
       throw error;
     }
   }
 
   async scoreDeal(dealId: string): Promise<ScoringResult> {
-    console.log(`Scoring deal ${dealId}`);
+    this.logger.info(`Scoring deal ${dealId}`);
     
     try {
       const deal = await this.hubspotClient.getDeal(dealId);
@@ -80,7 +83,7 @@ export class ScoringService {
 
       return { score, summary, lastScored };
     } catch (error) {
-      console.error('Error scoring deal:', error);
+      this.logger.error('Error scoring deal:', error);
       throw error;
     }
   }
