@@ -13,18 +13,11 @@ ALTER TABLE hubspot_accounts
 ADD COLUMN last_scoring_run TIMESTAMP WITH TIME ZONE,
 ADD COLUMN last_scoring_counts JSONB DEFAULT '{"contacts": 0, "companies": 0, "deals": 0}'::jsonb;
 
--- Create a function to schedule the batch scoring
-CREATE OR REPLACE FUNCTION schedule_batch_scoring()
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = net, pg_temp
-AS $$
-BEGIN
-  -- Schedule the function to run every hour
-  PERFORM cron.schedule(
+
+select
+  cron.schedule(
     'batch-scoring',
-    '0 * * * *',
+    '0 0 * * *', -- every minute
     $$
     select
       net.http_post(
@@ -39,8 +32,4 @@ BEGIN
       ) as request_id;
     $$
   );
-END;
-$$;
 
--- Execute the scheduling function
-SELECT schedule_batch_scoring(); 
