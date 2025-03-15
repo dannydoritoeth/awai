@@ -3,6 +3,26 @@
 ## Overview
 This system provides AI-powered scoring for HubSpot contacts, companies, and deals based on your organization's ideal client profile. It uses machine learning to analyze patterns in your classified records and score new records accordingly.
 
+## Project Structure
+
+```
+/
+├── docs/                 # Documentation
+├── node_modules/         # Node.js dependencies
+├── shared/              # Shared utilities and types
+├── sql/                 # Database schemas and migrations
+├── supabase/            # Supabase Edge Functions
+│   └── functions/       # Serverless functions
+│       ├── _shared/     # Shared utilities and services
+│       ├── hubspot-oauth/           # HubSpot OAuth and setup
+│       ├── hubspot-process-training/ # Process training data
+│       ├── hubspot-score-record/    # Real-time scoring
+│       └── hubspot-score-batch/     # Batch scoring
+├── worker/              # Background processing jobs
+├── .env.example         # Example environment configuration
+└── .gitignore          # Git ignore rules
+```
+
 ## How It Works
 
 ### 1. Installation & Setup
@@ -42,10 +62,10 @@ Periodically processes updated records:
 ## Technical Components
 
 ### Edge Functions
-- `hubspot-oauth`: Handles installation and setup
-- `process-ideal-clients`: Processes training data
-- `score-record`: Handles real-time scoring
-- `score-batch`: Processes records in bulk
+- `hubspot-oauth`: Handles HubSpot installation and setup
+- `hubspot-process-training`: Processes training data for HubSpot records
+- `hubspot-score-record`: Handles real-time scoring of HubSpot records
+- `hubspot-score-batch`: Processes batch scoring of HubSpot records
 
 ### Shared Components
 - `ScoringService`: Core scoring logic
@@ -85,21 +105,6 @@ PINECONE_INDEX_NAME=your_index_name
 A platform that integrates with various CRM systems to provide AI-powered insights.
 
 Primary Objective: lead/opportunity/deal scoring, generative ai, client summary/best next action
-
-## Project Structure
-
-```
-/
-├── docs/                 # Documentation
-├── node_modules/         # Node.js dependencies
-├── shared/              # Shared utilities and types
-├── sql/                 # Database schemas and migrations
-├── supabase/            # Supabase Edge Functions
-│   └── functions/       # Serverless functions
-├── worker/              # Background processing jobs
-├── .env.example         # Example environment configuration
-└── .gitignore          # Git ignore rules
-```
 
 ## Development Setup
 
