@@ -335,8 +335,8 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Store the tokens
-    const { error: insertError } = await supabase
-      .from('hubspot_tokens')
+    const { error } = await supabase
+      .from('hubspot_accounts')
       .upsert({
         portal_id: accountInfo.hub_id.toString(),
         access_token: encrypt(tokenData.access_token, ENCRYPTION_KEY),
@@ -344,8 +344,8 @@ serve(async (req) => {
         expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
       });
 
-    if (insertError) {
-      console.error('Failed to store tokens:', insertError);
+    if (error) {
+      console.error('Failed to store tokens:', error);
       return new Response(
         JSON.stringify({ error: 'Failed to store access token' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
