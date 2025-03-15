@@ -114,6 +114,58 @@ const trainingProperties = {
       fieldType: 'textarea',
       groupName: 'ai_scoring'
     }
+  ],
+  deals: [
+    {
+      name: 'training_classification',
+      label: 'Training Classification',
+      type: 'enumeration',
+      fieldType: 'select',
+      options: [
+        { label: 'Ideal', value: 'ideal' },
+        { label: 'Less Ideal', value: 'less_ideal' }
+      ],
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'training_score',
+      label: 'Training Score',
+      type: 'number',
+      fieldType: 'number',
+      description: 'Score this record from 0-100 to indicate how ideal this deal is',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'training_attributes',
+      label: 'Training Attributes',
+      type: 'enumeration',
+      fieldType: 'checkbox',
+      options: [
+        // Positive attributes
+        { label: 'High Value', value: 'high_value' },
+        { label: 'Quick Close', value: 'quick_close' },
+        { label: 'Clear Requirements', value: 'clear_requirements' },
+        { label: 'Strong Champion', value: 'strong_champion' },
+        { label: 'Budget Approved', value: 'budget_approved' },
+        { label: 'Strategic Fit', value: 'strategic_fit' },
+        { label: 'Competitive Advantage', value: 'competitive_advantage' },
+        // Negative attributes
+        { label: 'Low Value', value: 'low_value' },
+        { label: 'Long Sales Cycle', value: 'long_sales_cycle' },
+        { label: 'Unclear Requirements', value: 'unclear_requirements' },
+        { label: 'No Champion', value: 'no_champion' },
+        { label: 'Budget Issues', value: 'budget_issues' },
+        { label: 'High Competition', value: 'high_competition' }
+      ],
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'training_notes',
+      label: 'Training Notes',
+      type: 'string',
+      fieldType: 'textarea',
+      groupName: 'ai_scoring'
+    }
   ]
 };
 
@@ -169,6 +221,32 @@ const scoringProperties = {
       description: 'When this company was last analyzed by AI',
       groupName: 'ai_scoring'
     }
+  ],
+  deals: [
+    {
+      name: 'deal_quality_score',
+      label: 'Deal Quality Score',
+      type: 'number',
+      fieldType: 'number',
+      description: 'AI-generated score indicating the overall quality and likelihood of closing this deal',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'deal_quality_summary',
+      label: 'Deal Quality Summary',
+      type: 'string',
+      fieldType: 'textarea',
+      description: 'AI-generated analysis of deal quality factors and recommendations',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'deal_quality_last_scored',
+      label: 'Last Scored',
+      type: 'datetime',
+      fieldType: 'date',
+      description: 'When this deal was last analyzed by AI',
+      groupName: 'ai_scoring'
+    }
   ]
 };
 
@@ -176,6 +254,7 @@ async function createHubSpotProperties(accessToken: string) {
   const hubspotClient = new HubspotClient(accessToken);
   let contactGroupCreated = false;
   let companyGroupCreated = false;
+  let dealGroupCreated = false;
 
   // Create property groups first
   try {
@@ -202,6 +281,19 @@ async function createHubSpotProperties(accessToken: string) {
     companyGroupCreated = true;
   } catch (error) {
     console.error('Error creating company property group:', error);
+  }
+
+  try {
+    await hubspotClient.createPropertyGroup({
+      name: 'ai_scoring',
+      label: 'AI Scoring',
+      displayOrder: 1,
+      target: 'deal'
+    });
+    console.log('Created deal property group: ai_scoring');
+    dealGroupCreated = true;
+  } catch (error) {
+    console.error('Error creating deal property group:', error);
   }
 
   // Add a small delay to ensure HubSpot has processed the groups
@@ -255,6 +347,30 @@ async function createHubSpotProperties(accessToken: string) {
     console.log('Skipping company properties as group creation failed');
   }
 
+  // Only create deal properties if the group was created
+  if (dealGroupCreated) {
+    // Create training properties
+    for (const property of trainingProperties.deals) {
+      try {
+        await hubspotClient.createDealProperty(property);
+        console.log(`Created deal training property: ${property.name}`);
+      } catch (error) {
+        console.error(`Error creating deal training property ${property.name}:`, error);
+      }
+    }
+    // Create scoring properties
+    for (const property of scoringProperties.deals) {
+      try {
+        await hubspotClient.createDealProperty(property);
+        console.log(`Created deal scoring property: ${property.name}`);
+      } catch (error) {
+        console.error(`Error creating deal scoring property ${property.name}:`, error);
+      }
+    }
+  } else {
+    console.log('Skipping deal properties as group creation failed');
+  }
+
   // Create CRM cards for contacts and companies
   try {
     await hubspotClient.createCrmCard(
@@ -302,6 +418,30 @@ async function createHubSpotProperties(accessToken: string) {
     console.log('Created company CRM card');
   } catch (error) {
     console.error('Error creating company CRM card:', error);
+  }
+
+  try {
+    await hubspotClient.createCrmCard(
+      Deno.env.get('HUBSPOT_APP_ID')!,
+      {
+        title: 'AI Scoring',
+        objectType: 'deals',
+        properties: [
+          // Training properties
+          'training_classification',
+          'training_score',
+          'training_attributes',
+          'training_notes',
+          // Scoring properties
+          'deal_quality_score',
+          'deal_quality_summary',
+          'deal_quality_last_scored'
+        ]
+      }
+    );
+    console.log('Created deal CRM card');
+  } catch (error) {
+    console.error('Error creating deal CRM card:', error);
   }
 }
 
