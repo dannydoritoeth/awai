@@ -184,15 +184,20 @@ export class HubspotClient {
       propertyName?: string;
     }
   ) {
-    const url = `/webhooks/v3/${appId}/settings`;
+    const url = `/webhooks/v3/${appId}/subscriptions`;
     
     return this.makeRequest(url, {
       method: 'POST',
       body: JSON.stringify({
-        targetUrl: subscriptionDetails.webhookUrl,
-        eventType: subscriptionDetails.eventType,
-        propertyName: subscriptionDetails.propertyName || undefined,
-        active: true
+        subscriptionDetails: {
+          propertyName: subscriptionDetails.propertyName,
+          eventType: subscriptionDetails.eventType
+        },
+        throttling: {
+          maxConcurrentRequests: 10
+        },
+        webhookUrl: subscriptionDetails.webhookUrl,
+        enabled: true
       })
     });
   }
