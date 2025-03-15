@@ -117,6 +117,61 @@ const trainingProperties = {
   ]
 };
 
+const scoringProperties = {
+  contacts: [
+    {
+      name: 'ideal_client_score',
+      label: 'Ideal Client Score',
+      type: 'number',
+      fieldType: 'number',
+      description: 'AI-generated score indicating how well this contact matches your ideal client profile',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'ideal_client_summary',
+      label: 'Ideal Client Summary',
+      type: 'string',
+      fieldType: 'textarea',
+      description: 'AI-generated analysis of why this contact matches or differs from your ideal client profile',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'ideal_client_last_scored',
+      label: 'Last Scored',
+      type: 'datetime',
+      fieldType: 'date',
+      description: 'When this contact was last analyzed by AI',
+      groupName: 'ai_scoring'
+    }
+  ],
+  companies: [
+    {
+      name: 'company_fit_score',
+      label: 'Company Fit Score',
+      type: 'number',
+      fieldType: 'number',
+      description: 'AI-generated score indicating how well this company matches your ideal customer profile',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'company_fit_summary',
+      label: 'Company Fit Summary',
+      type: 'string',
+      fieldType: 'textarea',
+      description: 'AI-generated analysis of why this company matches or differs from your ideal customer profile',
+      groupName: 'ai_scoring'
+    },
+    {
+      name: 'company_fit_last_scored',
+      label: 'Last Scored',
+      type: 'datetime',
+      fieldType: 'date',
+      description: 'When this company was last analyzed by AI',
+      groupName: 'ai_scoring'
+    }
+  ]
+};
+
 async function createHubSpotProperties(accessToken: string) {
   const hubspotClient = new HubspotClient(accessToken);
   let contactGroupCreated = false;
@@ -154,12 +209,22 @@ async function createHubSpotProperties(accessToken: string) {
 
   // Only create contact properties if the group was created
   if (contactGroupCreated) {
+    // Create training properties
     for (const property of trainingProperties.contacts) {
       try {
         await hubspotClient.createContactProperty(property);
-        console.log(`Created contact property: ${property.name}`);
+        console.log(`Created contact training property: ${property.name}`);
       } catch (error) {
-        console.error(`Error creating contact property ${property.name}:`, error);
+        console.error(`Error creating contact training property ${property.name}:`, error);
+      }
+    }
+    // Create scoring properties
+    for (const property of scoringProperties.contacts) {
+      try {
+        await hubspotClient.createContactProperty(property);
+        console.log(`Created contact scoring property: ${property.name}`);
+      } catch (error) {
+        console.error(`Error creating contact scoring property ${property.name}:`, error);
       }
     }
   } else {
@@ -168,16 +233,75 @@ async function createHubSpotProperties(accessToken: string) {
 
   // Only create company properties if the group was created
   if (companyGroupCreated) {
+    // Create training properties
     for (const property of trainingProperties.companies) {
       try {
         await hubspotClient.createCompanyProperty(property);
-        console.log(`Created company property: ${property.name}`);
+        console.log(`Created company training property: ${property.name}`);
       } catch (error) {
-        console.error(`Error creating company property ${property.name}:`, error);
+        console.error(`Error creating company training property ${property.name}:`, error);
+      }
+    }
+    // Create scoring properties
+    for (const property of scoringProperties.companies) {
+      try {
+        await hubspotClient.createCompanyProperty(property);
+        console.log(`Created company scoring property: ${property.name}`);
+      } catch (error) {
+        console.error(`Error creating company scoring property ${property.name}:`, error);
       }
     }
   } else {
     console.log('Skipping company properties as group creation failed');
+  }
+
+  // Create CRM cards for contacts and companies
+  try {
+    await hubspotClient.createCrmCard(
+      Deno.env.get('HUBSPOT_APP_ID')!,
+      {
+        title: 'AI Scoring',
+        objectType: 'contacts',
+        properties: [
+          // Training properties
+          'training_classification',
+          'training_score',
+          'training_attributes',
+          'training_notes',
+          // Scoring properties
+          'ideal_client_score',
+          'ideal_client_summary',
+          'ideal_client_last_scored'
+        ]
+      }
+    );
+    console.log('Created contact CRM card');
+  } catch (error) {
+    console.error('Error creating contact CRM card:', error);
+  }
+
+  try {
+    await hubspotClient.createCrmCard(
+      Deno.env.get('HUBSPOT_APP_ID')!,
+      {
+        title: 'AI Scoring',
+        objectType: 'companies',
+        properties: [
+          // Training properties
+          'training_classification',
+          'training_score',
+          'training_attributes',
+          'training_notes',
+          // Scoring properties
+          'company_fit_score',
+          'company_fit_summary',
+          'company_fit_last_scored'
+        ]
+      }
+    );
+    console.log('Created company CRM card');
+  } catch (error) {
+    console.error('Error creating company CRM card:', error);
   }
 }
 

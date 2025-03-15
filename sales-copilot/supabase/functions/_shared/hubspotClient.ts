@@ -267,6 +267,48 @@ export class HubspotClient {
     }, false);
   }
 
+  async createCrmCard(
+    appId: string,
+    cardDefinition: {
+      title: string;
+      properties: string[];
+      objectType: 'contacts' | 'companies';
+    }
+  ) {
+    const url = `/crm/v3/extensions/cards/${appId}`;
+    console.log('Creating CRM card:', { url, cardDefinition });
+    
+    try {
+      const result = await this.makeRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: cardDefinition.title,
+          fetch: {
+            targetUrl: null,
+            objectTypes: [{ name: cardDefinition.objectType }]
+          },
+          display: {
+            properties: cardDefinition.properties.map(prop => ({
+              name: prop,
+              label: null,
+              dataType: 'STRING',
+              options: []
+            }))
+          },
+          actions: []
+        }),
+      }, false);
+      console.log('CRM card created:', result);
+      return result;
+    } catch (error) {
+      console.error('Failed to create CRM card:', {
+        error,
+        objectType: cardDefinition.objectType
+      });
+      throw error;
+    }
+  }
+
   async createWebhookSubscription(
     appId: string,
     subscriptionDetails: {
