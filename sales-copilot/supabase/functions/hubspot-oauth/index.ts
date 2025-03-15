@@ -7,7 +7,6 @@ import { HubspotClient } from '../_shared/hubspotClient.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY')!;
-const HUBSPOT_APP_ID = Deno.env.get('HUBSPOT_APP_ID')!;
 
 const trainingProperties = {
   contacts: [
@@ -120,6 +119,8 @@ const trainingProperties = {
 
 async function createHubSpotProperties(accessToken: string) {
   const hubspotClient = new HubspotClient(accessToken);
+  let contactGroupCreated = false;
+  let companyGroupCreated = false;
 
   // Create property groups first
   try {
@@ -130,6 +131,7 @@ async function createHubSpotProperties(accessToken: string) {
       target: 'contact'
     });
     console.log('Created contact property group: ai_scoring');
+    contactGroupCreated = true;
   } catch (error) {
     console.error('Error creating contact property group:', error);
   }
@@ -142,61 +144,40 @@ async function createHubSpotProperties(accessToken: string) {
       target: 'company'
     });
     console.log('Created company property group: ai_scoring');
+    companyGroupCreated = true;
   } catch (error) {
     console.error('Error creating company property group:', error);
   }
 
-  // Create properties for contacts
-  for (const property of trainingProperties.contacts) {
-    try {
-      await hubspotClient.createContactProperty(property);
-      console.log(`Created contact property: ${property.name}`);
-    } catch (error) {
-      console.error(`Error creating contact property ${property.name}:`, error);
-    }
-  }
+  // Add a small delay to ensure HubSpot has processed the groups
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Create properties for companies
-  for (const property of trainingProperties.companies) {
-    try {
-      await hubspotClient.createCompanyProperty(property);
-      console.log(`Created company property: ${property.name}`);
-    } catch (error) {
-      console.error(`Error creating company property ${property.name}:`, error);
-    }
-  }
-}
-
-async function setupWebhookSubscriptions(accessToken: string, portalId: string) {
-  const hubspotClient = new HubspotClient(accessToken);
-  const webhookUrl = `https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/score-record`;
-  
-  const subscriptions = [
-    { eventType: 'contact.propertyChange', propertyName: undefined },
-    { eventType: 'company.propertyChange', propertyName: undefined },
-    { eventType: 'deal.propertyChange', propertyName: undefined }
-  ];
-
-  try {
-    console.log('Setting up webhook subscriptions...');
-    for (const subscription of subscriptions) {
+  // Only create contact properties if the group was created
+  if (contactGroupCreated) {
+    for (const property of trainingProperties.contacts) {
       try {
-        await hubspotClient.createWebhookSubscription(
-          HUBSPOT_APP_ID,
-          {
-            ...subscription,
-            webhookUrl
-          }
-        );
-        console.log(`Created webhook subscription for ${subscription.eventType}`);
+        await hubspotClient.createContactProperty(property);
+        console.log(`Created contact property: ${property.name}`);
       } catch (error) {
-        console.error(`Failed to create webhook for ${subscription.eventType}:`, error);
+        console.error(`Error creating contact property ${property.name}:`, error);
       }
     }
-    console.log('Successfully set up webhook subscriptions');
-  } catch (error) {
-    console.error('Error setting up webhook subscriptions:', error);
-    throw error;
+  } else {
+    console.log('Skipping contact properties as group creation failed');
+  }
+
+  // Only create company properties if the group was created
+  if (companyGroupCreated) {
+    for (const property of trainingProperties.companies) {
+      try {
+        await hubspotClient.createCompanyProperty(property);
+        console.log(`Created company property: ${property.name}`);
+      } catch (error) {
+        console.error(`Error creating company property ${property.name}:`, error);
+      }
+    }
+  } else {
+    console.log('Skipping company properties as group creation failed');
   }
 }
 
@@ -293,10 +274,6 @@ serve(async (req) => {
       await createHubSpotProperties(tokenData.access_token);
       console.log('Successfully created HubSpot properties');
       
-      await setupWebhookSubscriptions(
-        tokenData.access_token,
-        accountInfo.hub_id.toString()
-      );
     } catch (error) {
       console.error('Setup failed:', error);
       // Continue with success response even if setup fails

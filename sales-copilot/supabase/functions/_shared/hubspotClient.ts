@@ -21,12 +21,21 @@ interface PropertyGroup {
   target: 'contact' | 'company' | 'deal';
 }
 
+interface PropertyOption {
+  label: string;
+  value: string;
+  description?: string;
+  hidden?: boolean;
+}
+
 interface Property {
   name: string;
   label: string;
   type: string;
   groupName: string;
   fieldType: string;
+  description?: string;
+  options?: PropertyOption[];
 }
 
 interface SearchResponse<T> {
@@ -66,18 +75,26 @@ export class HubspotClient {
 
   private async makeRequest(path: string, options: RequestInit = {}, useCrmBase = true) {
     const url = `${useCrmBase ? this.crmBaseUrl : this.baseUrl}${path}`;
+    const headers = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(`HubSpot API error: ${error.message}`);
+      console.error('HubSpot API error:', {
+        url,
+        status: response.status,
+        error,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      throw new Error(`HubSpot API error: ${error.message || error.status || 'Unknown error'}`);
     }
 
     return response.json();
@@ -145,29 +162,102 @@ export class HubspotClient {
   }
 
   async createPropertyGroup(group: PropertyGroup) {
-    const objectType = group.target + 's'; // contacts, companies, deals
-    return this.makeRequest(`/properties/v2/${objectType}/groups`, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: group.name,
-        label: group.label,
-        displayOrder: group.displayOrder,
-      }),
-    }, false);
+    const objectTypePlural = {
+      'contact': 'contacts',
+      'company': 'companies',
+      'deal': 'deals'
+    }[group.target];
+
+    const url = `/properties/v1/${objectTypePlural}/groups`;
+    console.log('Creating property group:', { url, group });
+    
+    try {
+      const result = await this.makeRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: group.name,
+          displayName: group.label,
+          displayOrder: group.displayOrder
+        }),
+      }, false);
+      console.log('Property group created:', result);
+      return result;
+    } catch (error) {
+      console.error('Failed to create property group:', {
+        error,
+        objectType: objectTypePlural,
+        groupName: group.name
+      });
+      throw error;
+    }
   }
 
   async createContactProperty(property: Property) {
-    return this.makeRequest('/properties/v2/contacts/properties', {
-      method: 'POST',
-      body: JSON.stringify(property),
-    }, false);
+    const url = '/properties/v1/contacts/properties';
+    console.log('Creating contact property:', { url, property });
+    
+    try {
+      const result = await this.makeRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: property.name,
+          label: property.label,
+          description: property.description,
+          groupName: property.groupName,
+          type: property.type,
+          fieldType: property.fieldType,
+          options: property.options?.map(opt => ({
+            label: opt.label,
+            value: opt.value,
+            description: opt.description,
+            hidden: opt.hidden
+          })) || []
+        }),
+      }, false);
+      console.log('Contact property created:', result);
+      return result;
+    } catch (error) {
+      console.error('Failed to create contact property:', {
+        error,
+        propertyName: property.name,
+        groupName: property.groupName
+      });
+      throw error;
+    }
   }
 
   async createCompanyProperty(property: Property) {
-    return this.makeRequest('/properties/v2/companies/properties', {
-      method: 'POST',
-      body: JSON.stringify(property),
-    }, false);
+    const url = '/properties/v1/companies/properties';
+    console.log('Creating company property:', { url, property });
+    
+    try {
+      const result = await this.makeRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: property.name,
+          label: property.label,
+          description: property.description,
+          groupName: property.groupName,
+          type: property.type,
+          fieldType: property.fieldType,
+          options: property.options?.map(opt => ({
+            label: opt.label,
+            value: opt.value,
+            description: opt.description,
+            hidden: opt.hidden
+          })) || []
+        }),
+      }, false);
+      console.log('Company property created:', result);
+      return result;
+    } catch (error) {
+      console.error('Failed to create company property:', {
+        error,
+        propertyName: property.name,
+        groupName: property.groupName
+      });
+      throw error;
+    }
   }
 
   async createDealProperty(property: Property) {
@@ -190,15 +280,10 @@ export class HubspotClient {
     return this.makeRequest(url, {
       method: 'POST',
       body: JSON.stringify({
-        subscriptionDetails: {
-          propertyName: subscriptionDetails.propertyName,
-          eventType: subscriptionDetails.eventType
-        },
-        throttling: {
-          maxConcurrentRequests: 10
-        },
+        eventType: subscriptionDetails.eventType,
+        propertyName: subscriptionDetails.propertyName,
         webhookUrl: subscriptionDetails.webhookUrl,
-        enabled: true
+        active: true
       })
     }, false);
   }
