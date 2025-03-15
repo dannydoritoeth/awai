@@ -145,7 +145,30 @@ supabase start
    - `hubspot-score-batch` - Batch scoring
    - `_shared` - Shared utilities and services
 
-2. Deploy the functions:
+2. Set up Edge Function secrets in your Supabase project:
+   ```bash
+   # Required secrets for edge functions
+   supabase secrets set SUPABASE_URL=your_project_url
+   supabase secrets set SUPABASE_ANON_KEY=your_anon_key
+   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   supabase secrets set SUPABASE_DB_URL=your_db_url
+   supabase secrets set HUBSPOT_CLIENT_ID=your_hubspot_client_id
+   supabase secrets set HUBSPOT_CLIENT_SECRET=your_hubspot_client_secret
+   supabase secrets set HUBSPOT_REDIRECT_URI=your_redirect_uri
+   supabase secrets set APP_URL=your_app_url
+   supabase secrets set ENCRYPTION_KEY=your_32_byte_encryption_key
+   supabase secrets set HUBSPOT_APP_ID=your_hubspot_app_id
+   ```
+
+   > **Important Notes:**
+   > - You can set these secrets in the Supabase Dashboard under:
+   >   Project Settings > Edge Functions > Environment variables
+   > - The `ENCRYPTION_KEY` must be a 32-byte key. Generate it using: `openssl rand -base64 32`
+   > - The `HUBSPOT_APP_ID` is found in your HubSpot Developer Account under App Settings
+   > - The `SUPABASE_*` values can be found in your Supabase project settings
+   > - Make sure your `HUBSPOT_REDIRECT_URI` matches exactly what's configured in your HubSpot app
+
+3. Deploy the functions:
 ```bash
 supabase functions deploy hubspot-oauth
 supabase functions deploy hubspot-process-training
