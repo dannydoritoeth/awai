@@ -1,7 +1,62 @@
-# HubSpot Lead Scoring System
+# HubSpot Lead Scoring Guide
+
+This guide explains how the AI-powered scoring system works with your HubSpot data.
 
 ## Overview
-The AI-based lead scoring system integrates with HubSpot to automatically score leads based on their profile, behavior, and engagement data. The system generates dynamic lead scores that help the sales team prioritize high-potential leads and improve conversion rates.
+
+The system uses machine learning to:
+1. Learn from your classified records
+2. Find similar records when scoring
+3. Apply consistent scoring criteria
+4. Provide explanations for scores
+
+## Training Data
+
+### Classification
+- Mark records as "Ideal" or "Less Ideal"
+- Assign a score from 0-100
+- Select relevant attributes
+- Add explanatory notes
+
+### Processing
+- System creates embeddings for classified records
+- Stores them in vector database
+- Uses them as context for scoring
+
+## Scoring Process
+
+### Real-time Scoring
+When a new record is created:
+1. System generates embeddings
+2. Finds similar records from training data
+3. Uses AI to analyze similarities
+4. Updates record with results
+
+### Batch Scoring
+Periodically processes updated records:
+1. Identifies modified records
+2. Applies same scoring process
+3. Updates in bulk
+
+## Best Practices
+
+1. **Training Data Quality**
+   - Provide diverse examples
+   - Include both positive and negative cases
+   - Keep classifications consistent
+   - Add detailed notes
+
+2. **Monitoring**
+   - Review scoring results
+   - Update training data as needed
+   - Add more examples if scores seem incorrect
+
+3. **Maintenance**
+   - Regularly review training data
+   - Update classifications as needed
+   - Add new attributes when relevant
+
+# HubSpot Lead Scoring System
 
 ## Features
 

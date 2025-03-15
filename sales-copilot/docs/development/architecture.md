@@ -1,3 +1,66 @@
+# System Architecture
+
+Sales Copilot is built using Supabase Edge Functions to provide serverless, scalable processing of HubSpot data.
+
+## Components
+
+### Edge Functions
+
+1. **hubspot-oauth**
+   - Handles HubSpot installation
+   - Creates required properties
+   - Manages OAuth flow
+   - Stores access tokens
+
+2. **hubspot-process-training**
+   - Processes classified records
+   - Creates embeddings
+   - Stores training data
+   - Manages vector database
+
+3. **hubspot-score-record**
+   - Real-time scoring
+   - Finds similar records
+   - Generates AI analysis
+   - Updates HubSpot
+
+4. **hubspot-score-batch**
+   - Periodic batch processing
+   - Handles modified records
+   - Uses same scoring logic
+   - Bulk updates
+
+### Shared Components
+
+Located in `_shared` directory:
+- `hubspotClient.ts` - HubSpot API interactions
+- `scoringService.ts` - Core scoring logic
+- `types.ts` - Shared type definitions
+
+## Data Flow
+
+1. **Installation**
+   ```
+   HubSpot App → OAuth Flow → Edge Function → Database
+   ```
+
+2. **Training**
+   ```
+   Classified Records → Process Training → Vector Database
+   ```
+
+3. **Scoring**
+   ```
+   New/Updated Record → Find Similar → AI Analysis → Update HubSpot
+   ```
+
+## Technologies
+
+- Supabase Edge Functions (Deno)
+- OpenAI Embeddings
+- Pinecone Vector Database
+- HubSpot APIs
+
 # Process Flow Documentation
 
 ## Client Onboarding Process
