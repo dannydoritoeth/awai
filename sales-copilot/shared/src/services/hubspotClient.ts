@@ -14,35 +14,6 @@ import {
 import { logger } from '../utils/logger';
 import { Logger } from '../utils/logger';
 
-export interface HubspotRecord {
-  id: string;
-  properties: Record<string, any>;
-  createdAt?: string;
-  updatedAt?: string;
-  archived?: boolean;
-}
-
-interface SearchRequest {
-  filterGroups: Array<{
-    filters: Array<{
-      propertyName: string;
-      operator: string;
-      value: string;
-    }>;
-  }>;
-  limit: number;
-  after?: string;
-}
-
-interface SearchResponse<T> {
-  results: T[];
-  paging?: {
-    next?: {
-      after: string;
-    };
-  };
-}
-
 /**
  * HubspotClient implementation that works in both Node.js and Deno environments
  */
@@ -92,7 +63,7 @@ export class HubspotClient implements HubspotClientInterface {
       });
 
       const data = await response.json();
-      logger.info('HubSpot lists response:', {
+      this.logger.info('HubSpot lists response:', {
         requestedName: listName,
         availableLists: data.lists ? data.lists.map((l: any) => l.name) : []
       });
@@ -112,7 +83,7 @@ export class HubspotClient implements HubspotClientInterface {
         size: matchingList.additionalProperties?.hs_list_size || 0
       };
     } catch (error) {
-      logger.error('Error finding HubSpot list:', {
+      this.logger.error('Error finding HubSpot list:', {
         requestedName: listName,
         error: (error as Error).message
       });
@@ -122,7 +93,6 @@ export class HubspotClient implements HubspotClientInterface {
   
   async getContactsFromList(listId: string): Promise<HubspotContact[]> {
     try {
-      // Get list memberships
       const response = await this.client.apiRequest({
         method: 'GET',
         path: `/crm/v3/lists/${listId}/memberships`,
@@ -132,7 +102,7 @@ export class HubspotClient implements HubspotClientInterface {
       });
 
       const data = await response.json();
-      logger.info('HubSpot list contacts response:', {
+      this.logger.info('HubSpot list contacts response:', {
         listId,
         contactCount: data.results ? data.results.length : 0
       });
@@ -141,12 +111,10 @@ export class HubspotClient implements HubspotClientInterface {
         return [];
       }
 
-      // Get full contact details with associations for each member
       const contactIds = data.results.map((result: any) => result.recordId);
       const contacts = await Promise.all(
         contactIds.map(async (id: string) => {
           try {
-            // Get contact with associations
             const contactResponse = await this.client.apiRequest({
               method: 'GET',
               path: `/crm/v3/objects/contacts/${id}`,
@@ -170,7 +138,6 @@ export class HubspotClient implements HubspotClientInterface {
             
             const contact = await contactResponse.json();
             
-            // Get associated company details if any exist
             let companies: any[] = [];
             if (contact.associations?.companies?.results?.length > 0) {
               companies = await Promise.all(
@@ -195,7 +162,6 @@ export class HubspotClient implements HubspotClientInterface {
               );
             }
 
-            // Get associated deal details if any exist
             let deals: any[] = [];
             if (contact.associations?.deals?.results?.length > 0) {
               deals = await Promise.all(
@@ -227,16 +193,15 @@ export class HubspotClient implements HubspotClientInterface {
               }
             };
           } catch (error) {
-            logger.error(`Error fetching details for contact ${id}:`, error);
+            this.logger.error(`Error fetching details for contact ${id}:`, error);
             return null;
           }
         })
       );
       
-      // Filter out any null results from failed fetches
       return contacts.filter(contact => contact !== null) as HubspotContact[];
     } catch (error) {
-      logger.error('Error getting contacts from HubSpot list:', {
+      this.logger.error('Error getting contacts from HubSpot list:', {
         listId,
         error: (error as Error).message
       });
@@ -246,7 +211,6 @@ export class HubspotClient implements HubspotClientInterface {
   
   async getCompaniesFromList(listId: string): Promise<HubspotCompany[]> {
     try {
-      // Get list memberships
       const response = await this.client.apiRequest({
         method: 'GET',
         path: `/crm/v3/lists/${listId}/memberships`,
@@ -256,7 +220,7 @@ export class HubspotClient implements HubspotClientInterface {
       });
 
       const data = await response.json();
-      logger.info('HubSpot list companies response:', {
+      this.logger.info('HubSpot list companies response:', {
         listId,
         companyCount: data.results ? data.results.length : 0
       });
@@ -265,12 +229,10 @@ export class HubspotClient implements HubspotClientInterface {
         return [];
       }
 
-      // Get full company details with associations for each member
       const companyIds = data.results.map((result: any) => result.recordId);
       const companies = await Promise.all(
         companyIds.map(async (id: string) => {
           try {
-            // Get company with associations
             const companyResponse = await this.client.apiRequest({
               method: 'GET',
               path: `/crm/v3/objects/companies/${id}`,
@@ -279,17 +241,12 @@ export class HubspotClient implements HubspotClientInterface {
                   'name',
                   'domain',
                   'industry',
-                  'type',
-                  'city',
-                  'state',
-                  'country',
-                  'phone',
-                  'lifecyclestage',
                   'numberofemployees',
                   'annualrevenue',
+                  'type',
                   'description',
                   'createdate',
-                  'hs_lastmodifieddate'
+                  'lastmodifieddate'
                 ],
                 associations: ['contacts', 'deals']
               }
@@ -297,7 +254,6 @@ export class HubspotClient implements HubspotClientInterface {
             
             const company = await companyResponse.json();
             
-            // Get associated contact details if any exist
             let contacts: any[] = [];
             if (company.associations?.contacts?.results?.length > 0) {
               contacts = await Promise.all(
@@ -310,11 +266,8 @@ export class HubspotClient implements HubspotClientInterface {
                         'email',
                         'firstname',
                         'lastname',
-                        'jobtitle',
-                        'lifecyclestage',
-                        'hs_lead_status',
-                        'createdate',
-                        'lastmodifieddate'
+                        'phone',
+                        'jobtitle'
                       ]
                     }
                   });
@@ -323,7 +276,6 @@ export class HubspotClient implements HubspotClientInterface {
               );
             }
 
-            // Get associated deal details if any exist
             let deals: any[] = [];
             if (company.associations?.deals?.results?.length > 0) {
               deals = await Promise.all(
@@ -338,9 +290,7 @@ export class HubspotClient implements HubspotClientInterface {
                         'amount',
                         'closedate',
                         'pipeline',
-                        'dealtype',
-                        'createdate',
-                        'hs_lastmodifieddate'
+                        'dealtype'
                       ]
                     }
                   });
@@ -349,37 +299,30 @@ export class HubspotClient implements HubspotClientInterface {
               );
             }
 
-            // Calculate company metrics
-            const metrics = {
-              totalRevenue: deals.reduce((sum: number, deal: any) => 
-                sum + (Number(deal.properties?.amount) || 0), 0),
-              totalDeals: deals.length,
-              wonDeals: deals.filter((deal: any) => 
-                deal.properties?.dealstage === 'closedwon').length,
-              activeContacts: contacts.filter((contact: any) => 
-                contact.properties?.hs_lead_status === 'active').length,
-              totalContacts: contacts.length
-            };
-
             return {
               ...company,
               enriched: {
                 contacts,
                 deals,
-                metrics
+                metrics: {
+                  totalRevenue: deals.reduce((sum, deal) => sum + (parseFloat(deal.properties.amount) || 0), 0),
+                  totalDeals: deals.length,
+                  wonDeals: deals.filter(deal => deal.properties.dealstage === 'closedwon').length,
+                  activeContacts: contacts.filter(contact => contact.properties.hs_lead_status === 'active').length,
+                  totalContacts: contacts.length
+                }
               }
             };
           } catch (error) {
-            logger.error(`Error fetching details for company ${id}:`, error);
+            this.logger.error(`Error fetching details for company ${id}:`, error);
             return null;
           }
         })
       );
       
-      // Filter out any null results from failed fetches
       return companies.filter(company => company !== null) as HubspotCompany[];
     } catch (error) {
-      logger.error('Error getting companies from HubSpot list:', {
+      this.logger.error('Error getting companies from HubSpot list:', {
         listId,
         error: (error as Error).message
       });
@@ -389,7 +332,6 @@ export class HubspotClient implements HubspotClientInterface {
   
   async getDealsFromList(listId: string): Promise<HubspotDeal[]> {
     try {
-      // Get list memberships
       const response = await this.client.apiRequest({
         method: 'GET',
         path: `/crm/v3/lists/${listId}/memberships`,
@@ -399,7 +341,7 @@ export class HubspotClient implements HubspotClientInterface {
       });
 
       const data = await response.json();
-      logger.info('HubSpot list deals response:', {
+      this.logger.info('HubSpot list deals response:', {
         listId,
         dealCount: data.results ? data.results.length : 0
       });
@@ -408,12 +350,10 @@ export class HubspotClient implements HubspotClientInterface {
         return [];
       }
 
-      // Get full deal details with associations for each member
       const dealIds = data.results.map((result: any) => result.recordId);
       const deals = await Promise.all(
         dealIds.map(async (id: string) => {
           try {
-            // Get deal with associations
             const dealResponse = await this.client.apiRequest({
               method: 'GET',
               path: `/crm/v3/objects/deals/${id}`,
@@ -426,9 +366,7 @@ export class HubspotClient implements HubspotClientInterface {
                   'pipeline',
                   'dealtype',
                   'createdate',
-                  'hs_lastmodifieddate',
-                  'description',
-                  'hs_priority'
+                  'lastmodifieddate'
                 ],
                 associations: ['contacts', 'companies', 'line_items']
               }
@@ -436,7 +374,6 @@ export class HubspotClient implements HubspotClientInterface {
             
             const deal = await dealResponse.json();
             
-            // Get associated contact details if any exist
             let contacts: any[] = [];
             if (deal.associations?.contacts?.results?.length > 0) {
               contacts = await Promise.all(
@@ -449,9 +386,8 @@ export class HubspotClient implements HubspotClientInterface {
                         'email',
                         'firstname',
                         'lastname',
-                        'jobtitle',
-                        'lifecyclestage',
-                        'hs_lead_status'
+                        'phone',
+                        'jobtitle'
                       ]
                     }
                   });
@@ -460,7 +396,6 @@ export class HubspotClient implements HubspotClientInterface {
               );
             }
 
-            // Get associated company details if any exist
             let companies: any[] = [];
             if (deal.associations?.companies?.results?.length > 0) {
               companies = await Promise.all(
@@ -474,8 +409,7 @@ export class HubspotClient implements HubspotClientInterface {
                         'domain',
                         'industry',
                         'numberofemployees',
-                        'annualrevenue',
-                        'type'
+                        'annualrevenue'
                       ]
                     }
                   });
@@ -484,40 +418,32 @@ export class HubspotClient implements HubspotClientInterface {
               );
             }
 
-            // Get associated line items if any exist
             let lineItems: any[] = [];
             if (deal.associations?.line_items?.results?.length > 0) {
               lineItems = await Promise.all(
-                deal.associations.line_items.results.map(async (lineItem: any) => {
-                  const lineItemResponse = await this.client.apiRequest({
+                deal.associations.line_items.results.map(async (item: any) => {
+                  const itemResponse = await this.client.apiRequest({
                     method: 'GET',
-                    path: `/crm/v3/objects/line_items/${lineItem.id}`,
+                    path: `/crm/v3/objects/line_items/${item.id}`,
                     query: {
                       properties: [
                         'name',
                         'quantity',
                         'price',
-                        'amount',
-                        'description',
-                        'hs_sku'
+                        'amount'
                       ]
                     }
                   });
-                  return lineItemResponse.json();
+                  return itemResponse.json();
                 })
               );
             }
 
-            // Calculate deal metrics
-            const metrics = {
-              totalValue: Number(deal.properties?.amount) || 0,
-              lineItemCount: lineItems.length,
-              contactCount: contacts.length,
-              companyCount: companies.length,
-              salesCycleDays: deal.properties?.closedate && deal.properties?.createdate ? 
-                Math.round((new Date(deal.properties.closedate).getTime() - new Date(deal.properties.createdate).getTime()) / (1000 * 60 * 60 * 24)) : 
-                null
-            };
+            const createDate = new Date(deal.properties.createdate);
+            const closeDate = new Date(deal.properties.closedate);
+            const salesCycleDays = !isNaN(closeDate.getTime()) && !isNaN(createDate.getTime())
+              ? Math.ceil((closeDate.getTime() - createDate.getTime()) / (1000 * 60 * 60 * 24))
+              : null;
 
             return {
               ...deal,
@@ -525,20 +451,25 @@ export class HubspotClient implements HubspotClientInterface {
                 contacts,
                 companies,
                 lineItems,
-                metrics
+                metrics: {
+                  totalValue: parseFloat(deal.properties.amount) || 0,
+                  lineItemCount: lineItems.length,
+                  contactCount: contacts.length,
+                  companyCount: companies.length,
+                  salesCycleDays
+                }
               }
             };
           } catch (error) {
-            logger.error(`Error fetching details for deal ${id}:`, error);
+            this.logger.error(`Error fetching details for deal ${id}:`, error);
             return null;
           }
         })
       );
       
-      // Filter out any null results from failed fetches
       return deals.filter(deal => deal !== null) as HubspotDeal[];
     } catch (error) {
-      logger.error('Error getting deals from HubSpot list:', {
+      this.logger.error('Error getting deals from HubSpot list:', {
         listId,
         error: (error as Error).message
       });
@@ -548,110 +479,99 @@ export class HubspotClient implements HubspotClientInterface {
   
   async getIdealAndLessIdealData(type = 'contacts'): Promise<IdealClientData> {
     try {
-      // Validate type
-      const validTypes = ['contacts', 'companies', 'deals'];
-      if (!validTypes.includes(type)) {
-        throw new Error(`Invalid type: ${type}. Must be one of: ${validTypes.join(', ')}`);
-      }
-
-      const listSuffix = type.charAt(0).toUpperCase() + type.slice(1);
+      const idealListName = `Ideal ${type}`;
+      const lessIdealListName = `Less Ideal ${type}`;
       
-      // Find both lists
       const [idealList, lessIdealList] = await Promise.all([
-        this.findListByName(`Ideal-${listSuffix}`),
-        this.findListByName(`Less-Ideal-${listSuffix}`)
+        this.findListByName(idealListName),
+        this.findListByName(lessIdealListName)
       ]);
-
-      // Get records from both lists based on type
-      let idealRecords, lessIdealRecords;
+      
+      let ideal: any[] = [];
+      let lessIdeal: any[] = [];
       
       if (type === 'contacts') {
-        [idealRecords, lessIdealRecords] = await Promise.all([
+        [ideal, lessIdeal] = await Promise.all([
           this.getContactsFromList(idealList.id),
           this.getContactsFromList(lessIdealList.id)
         ]);
       } else if (type === 'companies') {
-        [idealRecords, lessIdealRecords] = await Promise.all([
+        [ideal, lessIdeal] = await Promise.all([
           this.getCompaniesFromList(idealList.id),
           this.getCompaniesFromList(lessIdealList.id)
         ]);
       } else if (type === 'deals') {
-        [idealRecords, lessIdealRecords] = await Promise.all([
+        [ideal, lessIdeal] = await Promise.all([
           this.getDealsFromList(idealList.id),
           this.getDealsFromList(lessIdealList.id)
         ]);
       }
-
+      
       return {
-        ideal: idealRecords || [],
-        lessIdeal: lessIdealRecords || [],
-        type: type
+        ideal,
+        lessIdeal,
+        type
       };
     } catch (error) {
-      logger.error(`Error getting ideal and less-ideal ${type}:`, error);
+      this.logger.error('Error getting ideal and less ideal data:', {
+        type,
+        error: (error as Error).message
+      });
       throw error;
     }
   }
-
+  
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const headers = {
-      'Authorization': `Bearer ${this.accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    };
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`HubSpot API error: ${JSON.stringify(error)}`);
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
       }
-
-      return await response.json();
-    } catch (error) {
-      this.logger.error(`HubSpot API request failed: ${url}`, error);
-      throw error;
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HubSpot API error: ${response.status} ${response.statusText}`);
     }
+    
+    return response.json();
   }
-
+  
   async getContact(id: string): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/contacts/${id}`);
   }
-
+  
   async getCompany(id: string): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/companies/${id}`);
   }
-
+  
   async getDeal(id: string): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/deals/${id}`);
   }
-
+  
   async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/contacts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties })
     });
   }
-
+  
   async updateCompany(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/companies/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties })
     });
   }
-
+  
   async updateDeal(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
     return this.makeRequest(`/crm/v3/objects/deals/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties })
     });
   }
-
+  
   async createWebhookSubscription(
     portalId: string,
     appId: string,
@@ -661,43 +581,43 @@ export class HubspotClient implements HubspotClientInterface {
       webhookUrl: string;
     }
   ): Promise<any> {
-    return this.makeRequest('/webhooks/v3/subscriptions', {
+    return this.makeRequest(`/webhooks/v3/${portalId}/subscriptions`, {
       method: 'POST',
       body: JSON.stringify({
         ...subscriptionDetails,
-        active: true
+        appId
       })
     });
   }
-
+  
   async searchContacts(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
     return this.makeRequest('/crm/v3/objects/contacts/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
     });
   }
-
+  
   async searchCompanies(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
     return this.makeRequest('/crm/v3/objects/companies/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
     });
   }
-
+  
   async searchDeals(searchRequest: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
     return this.makeRequest('/crm/v3/objects/deals/search', {
       method: 'POST',
       body: JSON.stringify(searchRequest)
     });
   }
-
+  
   async createPropertyGroup(group: PropertyGroup): Promise<PropertyGroup> {
     return this.makeRequest('/properties/v2/groups', {
       method: 'POST',
       body: JSON.stringify(group)
     });
   }
-
+  
   async createProperty(objectType: string, property: Property): Promise<Property> {
     return this.makeRequest(`/properties/v2/${objectType}/properties`, {
       method: 'POST',

@@ -128,4 +128,53 @@ export interface IdealClientServiceInterface {
   validateType(type: string): string;
   storeIdealClientData(data: any, type: string, label: string): Promise<StoreResult>;
   processHubSpotLists(hubspotClient: HubspotClientInterface, type: string): Promise<ProcessResult>;
+}
+
+export interface HubspotRecord {
+  id: string;
+  properties: Record<string, any>;
+}
+
+export interface PropertyGroup {
+  name: string;
+  properties: Property[];
+}
+
+export interface Property {
+  name: string;
+  label: string;
+  type: string;
+  description?: string;
+  groupName?: string;
+  options?: Array<{
+    label: string;
+    value: string;
+  }>;
+}
+
+export interface SearchRequest {
+  filterGroups: Array<{
+    filters: Array<{
+      propertyName: string;
+      operator: string;
+      value: string | number | boolean;
+    }>;
+  }>;
+  sorts?: Array<{
+    propertyName: string;
+    direction: 'ASC' | 'DESC';
+  }>;
+  properties?: string[];
+  limit?: number;
+  after?: string;
+}
+
+export interface SearchResponse<T> {
+  total: number;
+  results: T[];
+  paging?: {
+    next?: {
+      after: string;
+    };
+  };
 } 

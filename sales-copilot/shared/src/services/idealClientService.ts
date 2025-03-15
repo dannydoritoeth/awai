@@ -6,7 +6,7 @@ import {
   HubspotClientInterface,
   Logger
 } from '../types';
-import { logger } from '../utils/logger';
+import { logger as defaultLogger } from '../utils/logger';
 
 /**
  * IdealClientService implementation that works in both Node.js and Deno environments
@@ -14,8 +14,11 @@ import { logger } from '../utils/logger';
 export class IdealClientService implements IdealClientServiceInterface {
   private vectorStore: any | null = null;
   private namespace: string = '';
+  private logger: Logger;
   
-  constructor(private logger: Logger = logger) {}
+  constructor(logger?: Logger) {
+    this.logger = logger || defaultLogger;
+  }
 
   /**
    * Set the vector store to use for storing processed data
