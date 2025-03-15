@@ -69,7 +69,12 @@ serve(async (req) => {
     };
 
     // Initialize services
-    const scoringService = new ScoringService(accessToken, aiConfig, logger);
+    const scoringService = new ScoringService(
+      accessToken, 
+      aiConfig, 
+      payload.portalId.toString(), 
+      logger
+    );
 
     // Handle different subscription types
     switch (payload.subscriptionType) {

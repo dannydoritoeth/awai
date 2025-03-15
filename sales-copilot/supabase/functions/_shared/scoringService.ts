@@ -18,22 +18,113 @@ export class ScoringService {
   private hubspotClient: HubspotClient;
   private logger: Logger;
   private aiConfig: AIConfig;
+  private portalId: string;
 
   constructor(
     accessToken: string,
     aiConfig: AIConfig,
+    portalId: string,
     logger?: Logger
   ) {
     this.hubspotClient = new HubspotClient(accessToken);
     this.logger = logger || new Logger('ScoringService');
     this.aiConfig = aiConfig;
+    this.portalId = portalId;
   }
 
-  private async getAIResponse(prompt: string, data: any): Promise<{ score: number; summary: string }> {
+  private async getEmbeddings(record: any): Promise<number[]> {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input: JSON.stringify(record),
+        model: 'text-embedding-3-large'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI embeddings error: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result.data[0].embedding;
+  }
+
+  private async getSimilarRecords(record: any, type: 'contact' | 'company' | 'deal'): Promise<any[]> {
+    try {
+      // Get embeddings for the current record
+      const embedding = await this.getEmbeddings(record);
+      
+      // Query Pinecone using portal ID as namespace
+      const response = await fetch(`https://${Deno.env.get('PINECONE_INDEX_NAME')}-${Deno.env.get('PINECONE_ENVIRONMENT')}.svc.pinecone.io/query`, {
+        method: 'POST',
+        headers: {
+          'Api-Key': Deno.env.get('PINECONE_API_KEY')!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vector: embedding,
+          namespace: `${this.portalId}-${type}`,
+          topK: 5,
+          includeMetadata: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Pinecone query failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return result.matches.map(match => match.metadata);
+    } catch (error) {
+      this.logger.error(`Error getting similar ${type}s:`, error);
+      return []; // Return empty array if similarity search fails
+    }
+  }
+
+  private async storeEmbedding(record: any, type: 'contact' | 'company' | 'deal'): Promise<void> {
+    try {
+      const embedding = await this.getEmbeddings(record);
+      
+      const response = await fetch(`https://${Deno.env.get('PINECONE_INDEX_NAME')}-${Deno.env.get('PINECONE_ENVIRONMENT')}.svc.pinecone.io/vectors/upsert`, {
+        method: 'POST',
+        headers: {
+          'Api-Key': Deno.env.get('PINECONE_API_KEY')!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vectors: [{
+            id: record.id,
+            values: embedding,
+            metadata: record
+          }],
+          namespace: `${this.portalId}-${type}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Pinecone upsert failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      this.logger.error('Error storing embedding:', error);
+      // Don't throw the error as this is not critical for scoring
+    }
+  }
+
+  private async getAIResponse(prompt: string, data: any, similarRecords: any[] = []): Promise<{ score: number; summary: string }> {
     const { provider, model, temperature, maxTokens, scoringPrompt } = this.aiConfig;
     
-    // Construct the full prompt
-    const fullPrompt = `${scoringPrompt}\n\nData to analyze:\n${JSON.stringify(data, null, 2)}`;
+    // Construct the full prompt with similar records context
+    const fullPrompt = `${scoringPrompt}
+
+${similarRecords.length > 0 ? `Similar records for context:
+${JSON.stringify(similarRecords, null, 2)}
+
+` : ''}Record to analyze:
+${JSON.stringify(data, null, 2)}`;
 
     try {
       let response;
@@ -52,8 +143,6 @@ export class ScoringService {
           throw new Error(`Unsupported AI provider: ${provider}`);
       }
 
-      // Parse the response
-      // Expected format: { score: number, summary: string }
       return response;
     } catch (error) {
       this.logger.error('Error getting AI response:', error);
@@ -138,8 +227,12 @@ export class ScoringService {
     
     try {
       const contact = await this.hubspotClient.getContact(contactId);
-      const result = await this.getAIResponse('Score this contact', contact);
+      const similarContacts = await this.getSimilarRecords(contact, 'contact');
+      const result = await this.getAIResponse('Score this contact', contact, similarContacts);
       const lastScored = new Date().toISOString();
+
+      // Store the embedding for future similarity searches
+      await this.storeEmbedding(contact, 'contact');
 
       await this.hubspotClient.updateContact(contactId, {
         ideal_client_score: result.score.toString(),
@@ -159,8 +252,12 @@ export class ScoringService {
     
     try {
       const company = await this.hubspotClient.getCompany(companyId);
-      const result = await this.getAIResponse('Score this company', company);
+      const similarCompanies = await this.getSimilarRecords(company, 'company');
+      const result = await this.getAIResponse('Score this company', company, similarCompanies);
       const lastScored = new Date().toISOString();
+
+      // Store the embedding for future similarity searches
+      await this.storeEmbedding(company, 'company');
 
       await this.hubspotClient.updateCompany(companyId, {
         company_fit_score: result.score.toString(),
@@ -180,8 +277,12 @@ export class ScoringService {
     
     try {
       const deal = await this.hubspotClient.getDeal(dealId);
-      const result = await this.getAIResponse('Score this deal', deal);
+      const similarDeals = await this.getSimilarRecords(deal, 'deal');
+      const result = await this.getAIResponse('Score this deal', deal, similarDeals);
       const lastScored = new Date().toISOString();
+
+      // Store the embedding for future similarity searches
+      await this.storeEmbedding(deal, 'deal');
 
       await this.hubspotClient.updateDeal(dealId, {
         deal_quality_score: result.score.toString(),

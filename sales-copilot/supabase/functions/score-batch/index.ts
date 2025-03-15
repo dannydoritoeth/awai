@@ -43,7 +43,12 @@ serve(async (req) => {
       };
 
       const hubspotClient = new HubspotClient(account.access_token);
-      const scoringService = new ScoringService(account.access_token, aiConfig, logger);
+      const scoringService = new ScoringService(
+        account.access_token, 
+        aiConfig, 
+        account.portal_id, 
+        logger
+      );
 
       // Get last processed timestamp for this portal
       const since = account.last_scoring_run || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
