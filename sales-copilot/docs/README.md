@@ -10,6 +10,7 @@ This directory contains all documentation for the Sales Copilot application.
   - `training.md` - Training data setup and management
   - `scoring.md` - Lead scoring process and configuration
 - `development/` - Development documentation
+  - `installation.md` - Developer setup and installation
   - `architecture.md` - System architecture and components
   - `deployment.md` - Deployment process and environments
   - `edge-functions.md` - Edge functions documentation
@@ -18,4 +19,5 @@ This directory contains all documentation for the Sales Copilot application.
 
 - [Getting Started](getting-started.md)
 - [HubSpot Installation](hubspot/installation.md)
+- [Developer Setup](development/installation.md)
 - [System Architecture](development/architecture.md) 
