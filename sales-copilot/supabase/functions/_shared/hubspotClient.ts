@@ -177,18 +177,23 @@ export class HubspotClient {
   }
 
   async createWebhookSubscription(
-    portalId: string,
     appId: string,
-    subscription: { eventType: string; webhookUrl: string }
+    subscriptionDetails: {
+      eventType: string;
+      webhookUrl: string;
+      propertyName?: string;
+    }
   ) {
-    return this.makeRequest(`/webhooks/app/subscriptions`, {
+    const url = `/webhooks/v3/${appId}/settings`;
+    
+    return this.makeRequest(url, {
       method: 'POST',
       body: JSON.stringify({
-        ...subscription,
-        active: true,
-        appId,
-        portalId,
-      }),
+        targetUrl: subscriptionDetails.webhookUrl,
+        eventType: subscriptionDetails.eventType,
+        propertyName: subscriptionDetails.propertyName || undefined,
+        active: true
+      })
     });
   }
 } 

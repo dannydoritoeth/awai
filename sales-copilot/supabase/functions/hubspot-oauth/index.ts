@@ -258,29 +258,31 @@ async function createHubSpotProperties(accessToken: string) {
 
 async function setupWebhookSubscriptions(accessToken: string, portalId: string) {
   const hubspotClient = new HubspotClient(accessToken);
-  const webhookUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/score-record';
+  const webhookUrl = `https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/score-record`;
   
   const subscriptions = [
-    { eventType: 'contact.creation' },
-    { eventType: 'contact.propertyChange' },
-    { eventType: 'company.creation' },
-    { eventType: 'company.propertyChange' },
-    { eventType: 'deal.creation' },
-    { eventType: 'deal.propertyChange' }
+    { eventType: 'contact.propertyChange', propertyName: undefined },
+    { eventType: 'company.propertyChange', propertyName: undefined },
+    { eventType: 'deal.propertyChange', propertyName: undefined }
   ];
 
   try {
+    console.log('Setting up webhook subscriptions...');
     for (const subscription of subscriptions) {
-      await hubspotClient.createWebhookSubscription(
-        portalId,
-        HUBSPOT_APP_ID,
-        {
-          ...subscription,
-          webhookUrl
-        }
-      );
-      console.log(`Created webhook subscription for ${subscription.eventType}`);
+      try {
+        await hubspotClient.createWebhookSubscription(
+          HUBSPOT_APP_ID,
+          {
+            ...subscription,
+            webhookUrl
+          }
+        );
+        console.log(`Created webhook subscription for ${subscription.eventType}`);
+      } catch (error) {
+        console.error(`Failed to create webhook for ${subscription.eventType}:`, error);
+      }
     }
+    console.log('Successfully set up webhook subscriptions');
   } catch (error) {
     console.error('Error setting up webhook subscriptions:', error);
     throw error;
@@ -384,32 +386,28 @@ serve(async (req) => {
         tokenData.access_token,
         accountInfo.hub_id.toString()
       );
-      console.log('Successfully set up webhook subscriptions');
 
-      // After getting the access token, create the properties
+      // Create training properties
       const hubspotClient = new HubspotClient(tokenData.access_token);
-
-      // Create property group if it doesn't exist
-      await hubspotClient.createPropertyGroup('contacts', {
-        name: 'ai_scoring',
-        label: 'AI Scoring',
-        displayOrder: 1
-      });
-
-      await hubspotClient.createPropertyGroup('companies', {
-        name: 'ai_scoring',
-        label: 'AI Scoring',
-        displayOrder: 1
-      });
 
       // Create properties for contacts
       for (const property of trainingProperties.contacts) {
-        await hubspotClient.createProperty('contacts', property);
+        try {
+          await hubspotClient.createContactProperty(property);
+          console.log(`Created contact property: ${property.name}`);
+        } catch (error) {
+          console.error(`Error creating contact property ${property.name}:`, error);
+        }
       }
 
       // Create properties for companies
       for (const property of trainingProperties.companies) {
-        await hubspotClient.createProperty('companies', property);
+        try {
+          await hubspotClient.createCompanyProperty(property);
+          console.log(`Created company property: ${property.name}`);
+        } catch (error) {
+          console.error(`Error creating company property ${property.name}:`, error);
+        }
       }
     } catch (error) {
       console.error('Setup failed:', error);
