@@ -58,8 +58,18 @@ psql -h 127.0.0.1 -p 54322 -U postgres -d postgres
 
 5. Apply database migrations:
 ```bash
-supabase migration up
+# For local development database
+supabase db reset    # This resets and runs all migrations locally
+
+# For production database (be careful!)
+supabase db push     # This pushes migrations to production
 ```
+
+> ⚠️ **Important**: 
+> - `db reset` is safe for local development but will reset your local database
+> - `db push` affects your production database, use with caution
+> - Always test migrations locally first before applying to production
+> - Make sure you're linked to the correct project before running migrations
 
 ### Troubleshooting Database Connection
 
@@ -128,10 +138,12 @@ supabase start
 
 ## 4. Edge Functions Setup
 
-1. Create function directories:
-```bash
-mkdir -p supabase/functions/{hubspot-oauth,hubspot-process-training,hubspot-score-record,hubspot-score-batch,_shared}
-```
+1. Review existing functions in `supabase/functions/`:
+   - `hubspot-oauth` - OAuth and installation
+   - `hubspot-process-training` - Training data processing
+   - `hubspot-score-record` - Real-time scoring
+   - `hubspot-score-batch` - Batch scoring
+   - `_shared` - Shared utilities and services
 
 2. Deploy the functions:
 ```bash
