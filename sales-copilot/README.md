@@ -1,14 +1,105 @@
+# AI Scoring System for HubSpot
+
+## Overview
+This system provides AI-powered scoring for HubSpot contacts, companies, and deals based on your organization's ideal client profile. It uses machine learning to analyze patterns in your classified records and score new records accordingly.
+
+## How It Works
+
+### 1. Installation & Setup
+- Install the app through HubSpot marketplace
+- The app automatically creates required properties in your HubSpot portal:
+  - `training_classification` (Ideal/Less Ideal)
+  - `training_attributes` (Relevant characteristics)
+  - `training_score` (0-100 rating)
+  - `training_notes` (Additional context)
+
+### 2. Training Data
+1. Classify your existing records:
+   - Mark records as "Ideal" or "Less Ideal"
+   - Assign a score (0-100)
+   - Select relevant attributes
+   - Add explanatory notes
+2. Run the "Process Ideal Clients" function to:
+   - Create embeddings for classified records
+   - Store them in vector database (Pinecone)
+
+### 3. Scoring Process
+The system scores records in two ways:
+
+#### Real-time Scoring
+When a new record is created:
+1. System generates embeddings for the new record
+2. Retrieves similar records from training data
+3. Uses AI to analyze similarities and differences
+4. Updates record with results
+
+#### Batch Scoring
+Periodically processes updated records:
+1. Identifies recently modified records
+2. Applies the same scoring process
+3. Updates records in bulk
+
+## Technical Components
+
+### Edge Functions
+- `hubspot-oauth`: Handles installation and setup
+- `process-ideal-clients`: Processes training data
+- `score-record`: Handles real-time scoring
+- `score-batch`: Processes records in bulk
+
+### Shared Components
+- `ScoringService`: Core scoring logic
+- `HubspotClient`: HubSpot API interactions
+
+## Environment Setup
+Required environment variables (see `.env.example`):
+```env
+# HubSpot Configuration
+HUBSPOT_CLIENT_ID=your_client_id
+HUBSPOT_CLIENT_SECRET=your_client_secret
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_key
+
+# Pinecone Configuration
+PINECONE_API_KEY=your_pinecone_key
+PINECONE_ENVIRONMENT=your_environment
+PINECONE_INDEX_NAME=your_index_name
+```
+
+## Best Practices
+1. Provide diverse training data
+2. Include both ideal and less ideal examples
+3. Add detailed notes for context
+4. Regularly update training data
+5. Monitor scoring results
+
+## Limitations
+- Requires sufficient training data
+- Scoring quality depends on training data quality
+- API rate limits apply
+- Vector database size limits apply
+
 # Sales Copilot
 
 A platform that integrates with various CRM systems to provide AI-powered insights.
 
-Primary Objective: lead/opportunity/deal scoring, generative ai, client summary/best next action, 
-
+Primary Objective: lead/opportunity/deal scoring, generative ai, client summary/best next action
 
 ## Project Structure
 
-- `/api` - REST API server for managing integrations and user interactions
-- `/worker` - Background worker for processing CRM data and creating embeddings
+```
+/
+├── docs/                 # Documentation
+├── node_modules/         # Node.js dependencies
+├── shared/              # Shared utilities and types
+├── sql/                 # Database schemas and migrations
+├── supabase/            # Supabase Edge Functions
+│   └── functions/       # Serverless functions
+├── worker/              # Background processing jobs
+├── .env.example         # Example environment configuration
+└── .gitignore          # Git ignore rules
+```
 
 ## Development Setup
 
