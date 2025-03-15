@@ -39,15 +39,19 @@ interface SearchResponse<T> {
   };
 }
 
+interface SearchFilter {
+  propertyName: string;
+  operator: string;
+  value?: string;
+  values?: string[];
+}
+
 interface SearchRequest {
-  filterGroups: {
-    filters: {
-      propertyName: string;
-      operator: string;
-      value: string;
-    }[];
-  }[];
-  limit: number;
+  filterGroups: Array<{
+    filters: SearchFilter[];
+  }>;
+  properties?: string[];
+  limit?: number;
   after?: string;
 }
 
@@ -127,6 +131,13 @@ export class HubspotClient {
 
   async searchDeals(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
     return this.makeRequest('/objects/deals/search', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    });
+  }
+
+  async searchRecords(type: 'contact' | 'company' | 'deal', request: SearchRequest) {
+    return this.makeRequest(`/crm/v3/objects/${type}s/search`, {
       method: 'POST',
       body: JSON.stringify(request)
     });
