@@ -120,115 +120,34 @@ const trainingProperties = {
 
 async function createHubSpotProperties(accessToken: string) {
   const hubspotClient = new HubspotClient(accessToken);
-  
-  // Create property groups
-  const groups = [
-    {
-      name: 'sales_copilot_contact',
-      label: 'Sales Copilot',
+
+  // Create property groups first
+  try {
+    await hubspotClient.createPropertyGroup({
+      name: 'ai_scoring',
+      label: 'AI Scoring',
       displayOrder: 1,
       target: 'contact'
-    },
-    {
-      name: 'sales_copilot_company',
-      label: 'Sales Copilot',
-      displayOrder: 1,
-      target: 'company'
-    },
-    {
-      name: 'sales_copilot_deal',
-      label: 'Sales Copilot',
-      displayOrder: 1,
-      target: 'deal'
-    }
-  ];
-
-  // Create properties for each object type
-  const contactProperties = [
-    {
-      name: 'ideal_client_score',
-      label: 'Ideal Client Score',
-      type: 'number',
-      groupName: 'sales_copilot_contact',
-      fieldType: 'number'
-    },
-    {
-      name: 'ideal_client_summary',
-      label: 'Ideal Client Summary',
-      type: 'string',
-      groupName: 'sales_copilot_contact',
-      fieldType: 'textarea'
-    },
-    {
-      name: 'ideal_client_last_scored',
-      label: 'Last Scored Date',
-      type: 'datetime',
-      groupName: 'sales_copilot_contact',
-      fieldType: 'date'
-    }
-  ];
-
-  const companyProperties = [
-    {
-      name: 'company_fit_score',
-      label: 'Company Fit Score',
-      type: 'number',
-      groupName: 'sales_copilot_company',
-      fieldType: 'number'
-    },
-    {
-      name: 'company_fit_summary',
-      label: 'Company Fit Summary',
-      type: 'string',
-      groupName: 'sales_copilot_company',
-      fieldType: 'textarea'
-    },
-    {
-      name: 'company_fit_last_scored',
-      label: 'Last Scored Date',
-      type: 'datetime',
-      groupName: 'sales_copilot_company',
-      fieldType: 'date'
-    }
-  ];
-
-  const dealProperties = [
-    {
-      name: 'deal_quality_score',
-      label: 'Deal Quality Score',
-      type: 'number',
-      groupName: 'sales_copilot_deal',
-      fieldType: 'number'
-    },
-    {
-      name: 'deal_quality_summary',
-      label: 'Deal Quality Summary',
-      type: 'string',
-      groupName: 'sales_copilot_deal',
-      fieldType: 'textarea'
-    },
-    {
-      name: 'deal_quality_last_scored',
-      label: 'Last Scored Date',
-      type: 'datetime',
-      groupName: 'sales_copilot_deal',
-      fieldType: 'date'
-    }
-  ];
-
-  // Create property groups and properties
-  for (const group of groups) {
-    try {
-      await hubspotClient.createPropertyGroup(group);
-      console.log(`Created property group: ${group.name}`);
-    } catch (error) {
-      console.error(`Error creating property group ${group.name}:`, error);
-      // Continue even if group creation fails (might already exist)
-    }
+    });
+    console.log('Created contact property group: ai_scoring');
+  } catch (error) {
+    console.error('Error creating contact property group:', error);
   }
 
-  // Create properties for each object type
-  for (const property of contactProperties) {
+  try {
+    await hubspotClient.createPropertyGroup({
+      name: 'ai_scoring',
+      label: 'AI Scoring',
+      displayOrder: 1,
+      target: 'company'
+    });
+    console.log('Created company property group: ai_scoring');
+  } catch (error) {
+    console.error('Error creating company property group:', error);
+  }
+
+  // Create properties for contacts
+  for (const property of trainingProperties.contacts) {
     try {
       await hubspotClient.createContactProperty(property);
       console.log(`Created contact property: ${property.name}`);
@@ -237,21 +156,13 @@ async function createHubSpotProperties(accessToken: string) {
     }
   }
 
-  for (const property of companyProperties) {
+  // Create properties for companies
+  for (const property of trainingProperties.companies) {
     try {
       await hubspotClient.createCompanyProperty(property);
       console.log(`Created company property: ${property.name}`);
     } catch (error) {
       console.error(`Error creating company property ${property.name}:`, error);
-    }
-  }
-
-  for (const property of dealProperties) {
-    try {
-      await hubspotClient.createDealProperty(property);
-      console.log(`Created deal property: ${property.name}`);
-    } catch (error) {
-      console.error(`Error creating deal property ${property.name}:`, error);
     }
   }
 }
@@ -386,29 +297,6 @@ serve(async (req) => {
         tokenData.access_token,
         accountInfo.hub_id.toString()
       );
-
-      // Create training properties
-      const hubspotClient = new HubspotClient(tokenData.access_token);
-
-      // Create properties for contacts
-      for (const property of trainingProperties.contacts) {
-        try {
-          await hubspotClient.createContactProperty(property);
-          console.log(`Created contact property: ${property.name}`);
-        } catch (error) {
-          console.error(`Error creating contact property ${property.name}:`, error);
-        }
-      }
-
-      // Create properties for companies
-      for (const property of trainingProperties.companies) {
-        try {
-          await hubspotClient.createCompanyProperty(property);
-          console.log(`Created company property: ${property.name}`);
-        } catch (error) {
-          console.error(`Error creating company property ${property.name}:`, error);
-        }
-      }
     } catch (error) {
       console.error('Setup failed:', error);
       // Continue with success response even if setup fails

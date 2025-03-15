@@ -57,14 +57,15 @@ interface SearchRequest {
 
 export class HubspotClient {
   private accessToken: string;
-  private baseUrl = 'https://api.hubspot.com/crm/v3';
+  private baseUrl = 'https://api.hubspot.com';
+  private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
   }
 
-  private async makeRequest(path: string, options: RequestInit = {}) {
-    const url = `${this.baseUrl}${path}`;
+  private async makeRequest(path: string, options: RequestInit = {}, useCrmBase = true) {
+    const url = `${useCrmBase ? this.crmBaseUrl : this.baseUrl}${path}`;
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -145,35 +146,35 @@ export class HubspotClient {
 
   async createPropertyGroup(group: PropertyGroup) {
     const objectType = group.target + 's'; // contacts, companies, deals
-    return this.makeRequest(`/properties/${objectType}/groups`, {
+    return this.makeRequest(`/properties/v2/${objectType}/groups`, {
       method: 'POST',
       body: JSON.stringify({
         name: group.name,
         label: group.label,
         displayOrder: group.displayOrder,
       }),
-    });
+    }, false);
   }
 
   async createContactProperty(property: Property) {
-    return this.makeRequest('/properties/contacts', {
+    return this.makeRequest('/properties/v2/contacts/properties', {
       method: 'POST',
       body: JSON.stringify(property),
-    });
+    }, false);
   }
 
   async createCompanyProperty(property: Property) {
-    return this.makeRequest('/properties/companies', {
+    return this.makeRequest('/properties/v2/companies/properties', {
       method: 'POST',
       body: JSON.stringify(property),
-    });
+    }, false);
   }
 
   async createDealProperty(property: Property) {
-    return this.makeRequest('/properties/deals', {
+    return this.makeRequest('/properties/v2/deals/properties', {
       method: 'POST',
       body: JSON.stringify(property),
-    });
+    }, false);
   }
 
   async createWebhookSubscription(
@@ -199,6 +200,6 @@ export class HubspotClient {
         webhookUrl: subscriptionDetails.webhookUrl,
         enabled: true
       })
-    });
+    }, false);
   }
 } 
