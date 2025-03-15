@@ -327,6 +327,13 @@ serve(async (req) => {
       );
     }
 
+    console.log('Token data received:', {
+      hasAccessToken: !!tokenData.access_token,
+      hasRefreshToken: !!tokenData.refresh_token,
+      expiresIn: tokenData.expires_in,
+      tokenType: tokenData.token_type
+    });
+
     // Get HubSpot account info
     const accountResponse = await fetch('https://api.hubapi.com/oauth/v1/access-tokens/' + tokenData.access_token);
     const accountInfo = await accountResponse.json();
@@ -339,13 +346,29 @@ serve(async (req) => {
       .from('hubspot_accounts')
       .upsert({
         portal_id: accountInfo.hub_id.toString(),
-        access_token: encrypt(tokenData.access_token, ENCRYPTION_KEY),
-        refresh_token: encrypt(tokenData.refresh_token, ENCRYPTION_KEY),
+        access_token: await encrypt(tokenData.access_token, ENCRYPTION_KEY),
+        refresh_token: await encrypt(tokenData.refresh_token, ENCRYPTION_KEY),
         expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        token_type: tokenData.token_type || 'bearer',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: JSON.stringify({
+          user_id: accountInfo.user_id,
+          hub_domain: accountInfo.hub_domain,
+          scopes: tokenData.scope?.split(' ') || []
+        })
       });
 
     if (error) {
       console.error('Failed to store tokens:', error);
+      console.error('Token storage payload:', {
+        portalId: accountInfo.hub_id.toString(),
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token,
+        expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        tokenType: tokenData.token_type || 'bearer'
+      });
       return new Response(
         JSON.stringify({ error: 'Failed to store access token' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
