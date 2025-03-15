@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { HubspotClient } from "../_shared/hubspotClient.ts";
 import { ScoringService } from "../_shared/scoringService.ts";
 import { Logger } from "../_shared/logger.ts";
+import { AIConfig } from "../_shared/types.ts";
 
 declare const Deno: {
   env: {
@@ -23,15 +24,26 @@ serve(async (req) => {
 
     // Get all active HubSpot accounts
     const { data: accounts, error } = await supabase
-      .from('hubspot_tokens')
-      .select('*');
+      .from('hubspot_accounts')
+      .select('*')
+      .eq('status', 'active');
 
     if (error) throw error;
 
     for (const account of accounts) {
       logger.info(`Processing portal ${account.portal_id}`);
+
+      // Create AI configuration from account settings
+      const aiConfig: AIConfig = {
+        provider: account.ai_provider,
+        model: account.ai_model,
+        temperature: account.ai_temperature,
+        maxTokens: account.ai_max_tokens,
+        scoringPrompt: account.scoring_prompt
+      };
+
       const hubspotClient = new HubspotClient(account.access_token);
-      const scoringService = new ScoringService(account.access_token);
+      const scoringService = new ScoringService(account.access_token, aiConfig, logger);
 
       // Get last processed timestamp for this portal
       const since = account.last_scoring_run || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -119,7 +131,7 @@ serve(async (req) => {
 
       // Update last run time
       await supabase
-        .from('hubspot_tokens')
+        .from('hubspot_accounts')
         .update({ 
           last_scoring_run: new Date().toISOString(),
           last_scoring_counts: {

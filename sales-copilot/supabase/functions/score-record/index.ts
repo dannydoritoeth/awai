@@ -1,8 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { HubspotClient } from "../_shared/hubspotClient.ts";
 import { ScoringService } from "../_shared/scoringService.ts";
 import { Logger } from "../_shared/logger.ts";
-import { HubSpotWebhookEvent } from "../_shared/hubspotClient.ts";
+import { HubSpotWebhookEvent, AIConfig } from "../_shared/types.ts";
+
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 const logger = new Logger("score-record");
 
@@ -35,9 +42,34 @@ serve(async (req) => {
     }
     const accessToken = authHeader.substring(7);
 
+    // Get the account configuration from Supabase
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const { data: accounts, error } = await supabase
+      .from('hubspot_accounts')
+      .select('*')
+      .eq('portal_id', payload.portalId.toString())
+      .eq('status', 'active')
+      .single();
+
+    if (error || !accounts) {
+      throw new Error(`No active account found for portal ${payload.portalId}`);
+    }
+
+    // Create AI configuration from account settings
+    const aiConfig: AIConfig = {
+      provider: accounts.ai_provider,
+      model: accounts.ai_model,
+      temperature: accounts.ai_temperature,
+      maxTokens: accounts.ai_max_tokens,
+      scoringPrompt: accounts.scoring_prompt
+    };
+
     // Initialize services
-    const hubspotClient = new HubspotClient(accessToken);
-    const scoringService = new ScoringService(accessToken);
+    const scoringService = new ScoringService(accessToken, aiConfig, logger);
 
     // Handle different subscription types
     switch (payload.subscriptionType) {
