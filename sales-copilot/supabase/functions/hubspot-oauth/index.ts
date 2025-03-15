@@ -7,6 +7,7 @@ import { HubspotClient } from '../_shared/hubspotClient.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY')!;
+const HUBSPOT_APP_ID = Deno.env.get('HUBSPOT_APP_ID')!;
 
 const trainingProperties = {
   contacts: [
@@ -257,7 +258,7 @@ async function createHubSpotProperties(accessToken: string) {
 
 async function setupWebhookSubscriptions(accessToken: string, portalId: string) {
   const hubspotClient = new HubspotClient(accessToken);
-  const webhookUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-webhook';
+  const webhookUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/score-record';
   
   const subscriptions = [
     { eventType: 'contact.creation' },
@@ -272,7 +273,7 @@ async function setupWebhookSubscriptions(accessToken: string, portalId: string) 
     for (const subscription of subscriptions) {
       await hubspotClient.createWebhookSubscription(
         portalId,
-        '1a625962-e7a0-40e8-a54c-863a24acd1f0', // Your app ID
+        HUBSPOT_APP_ID,
         {
           ...subscription,
           webhookUrl
