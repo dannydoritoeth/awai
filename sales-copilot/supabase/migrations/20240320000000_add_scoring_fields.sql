@@ -13,23 +13,21 @@ ALTER TABLE hubspot_accounts
 ADD COLUMN last_scoring_run TIMESTAMP WITH TIME ZONE,
 ADD COLUMN last_scoring_counts JSONB DEFAULT '{"contacts": 0, "companies": 0, "deals": 0}'::jsonb;
 
-
-select
-  cron.schedule(
+-- Schedule batch scoring to run daily at midnight UTC
+SELECT cron.schedule(
     'batch-scoring',
-    '0 0 * * *', -- every minute
+    '0 0 * * *',  -- At 00:00 (midnight) every day
     $$
-    select
-      net.http_post(
-          url:='https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/score-batch',
-          headers:=jsonb_build_object(
+    SELECT net.http_post(
+        url:=current_setting('app.edge_function_url') || '/score-batch',
+        headers:=jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0YWxoamFveGxjcW14cHB1aGh6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTYzOTM0NCwiZXhwIjoyMDU3MjE1MzQ0fQ.-LHwqxbkHHxjk3C9DYyTzWs3gi30EB09xEHV94ko8sw'
-          ),
-          body:=jsonb_build_object(
+            'Authorization', 'Bearer ' || current_setting('app.edge_function_key')
+        ),
+        body:=jsonb_build_object(
             'timestamp', now()
-          )
-      ) as request_id;
+        )
+    ) AS request_id;
     $$
-  );
+);
 

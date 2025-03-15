@@ -33,17 +33,6 @@ CREATE TRIGGER update_hubspot_accounts_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Create junction table for user-portal relationships
-CREATE TABLE user_hubspot_portals (
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    portal_id TEXT REFERENCES hubspot_accounts(portal_id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, portal_id)
-);
-
 -- Grant necessary permissions to authenticated users and service role
 GRANT ALL ON TABLE hubspot_accounts TO authenticated;
-GRANT ALL ON TABLE hubspot_accounts TO service_role;
-GRANT ALL ON TABLE user_hubspot_portals TO authenticated;
-GRANT ALL ON TABLE user_hubspot_portals TO service_role; 
+GRANT ALL ON TABLE hubspot_accounts TO service_role; 
