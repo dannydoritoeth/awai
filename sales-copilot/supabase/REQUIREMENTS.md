@@ -44,6 +44,8 @@ The Supabase project provides the backend infrastructure for the Sales Copilot a
   - Secure token storage
   - Error handling and logging
   - Rate limiting compliance
+- **Deployment**: Must be deployed with `--no-verify-jwt` flag since it needs to be publicly accessible for OAuth callbacks
+- **Endpoint**: `/hubspot-oauth`
 
 ### 2. HubSpot Score Record Function
 - **Purpose**: Process individual HubSpot records for scoring
@@ -52,6 +54,7 @@ The Supabase project provides the backend infrastructure for the Sales Copilot a
   - Scoring calculation
   - Result storage
   - Error handling
+- **Endpoint**: `/hubspot-score-record`
 
 ### 3. HubSpot Score Batch Function
 - **Purpose**: Process multiple HubSpot records in batch

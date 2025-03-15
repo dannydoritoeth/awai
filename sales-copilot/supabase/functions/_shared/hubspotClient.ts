@@ -272,10 +272,10 @@ export class HubspotClient {
     cardDefinition: {
       title: string;
       properties: string[];
-      objectType: 'contacts' | 'companies';
+      objectType: 'contacts' | 'companies' | 'deals';
     }
   ) {
-    const url = `/crm/v3/extensions/cards/${appId}`;
+    const url = `/crm/v3/extensions/cards-dev/${appId}`;
     console.log('Creating CRM card:', { url, cardDefinition });
     
     try {
@@ -283,15 +283,11 @@ export class HubspotClient {
         method: 'POST',
         body: JSON.stringify({
           title: cardDefinition.title,
-          fetch: {
-            targetUrl: null,
-            objectTypes: [{ name: cardDefinition.objectType }]
-          },
           display: {
             properties: cardDefinition.properties.map(prop => ({
               name: prop,
-              label: null,
-              dataType: 'STRING',
+              label: prop.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+              dataType: prop.includes('score') ? 'NUMBER' : 'STRING',
               options: []
             }))
           },
