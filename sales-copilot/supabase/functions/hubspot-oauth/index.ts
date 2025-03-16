@@ -370,42 +370,6 @@ async function createHubSpotProperties(accessToken: string) {
   } else {
     console.log('Skipping deal properties as group creation failed');
   }
-
-  // Log APP ID before creating CRM cards
-  console.log('Creating CRM cards with APP ID:', Deno.env.get('HUBSPOT_APP_ID'));
-
-  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const FUNCTION_URL = Deno.env.get('FUNCTION_URL')!;
-
-  // Create CRM cards for contacts, companies, and deals
-  try {
-    const cardConfig = {
-      title: "Test Card",
-      fetch: {
-        targetUrl: `${FUNCTION_URL}/hubspot-webcard-fetch`,
-        objectTypes: [{ name: "contacts" }]
-      },
-      display: {
-        properties: [
-          {
-            name: "test_score",
-            label: "Test Score",
-            dataType: "NUMBER"
-          }
-        ]
-      }
-    };
-
-    // Use the public apps endpoint
-    await hubspotClient.createCrmCard(
-      Deno.env.get('HUBSPOT_APP_ID')!,
-      cardConfig,
-      true // flag to use public apps endpoint
-    );
-    console.log('Created CRM card');
-  } catch (error) {
-    console.error('Error creating CRM card:', error);
-  }
 }
 
 serve(async (req) => {
