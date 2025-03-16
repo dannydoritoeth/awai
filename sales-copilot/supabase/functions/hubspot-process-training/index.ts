@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
 import OpenAI from 'https://esm.sh/openai@4.20.1';
+import { Document } from "npm:langchain/document";
+import { OpenAIEmbeddings } from "npm:langchain/embeddings/openai";
+import { PineconeStore } from "npm:langchain/vectorstores/pinecone";
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
@@ -110,7 +113,7 @@ serve(async (req) => {
     }
 
     // Decrypt tokens
-    const decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+    let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
     const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
     
     logger.info('Found HubSpot account:', { 
@@ -221,6 +224,15 @@ serve(async (req) => {
       errors: [] as any[]
     };
 
+    // Initialize OpenAI embeddings
+    const embeddings = new OpenAIEmbeddings({
+      openAIApiKey: Deno.env.get('OPENAI_API_KEY')!,
+      modelName: 'text-embedding-3-large'
+    });
+
+    // Prepare documents for batch processing
+    const documents: Document[] = [];
+
     for (const record of searchResults.results) {
       try {
         logger.info(`Processing record ${record.id} (${results.processed + 1}/${searchResults.results.length})`);
@@ -252,28 +264,20 @@ serve(async (req) => {
           }
         };
 
-        // Get embeddings using OpenAI directly
-        logger.info(`Generating embeddings for record ${record.id}`);
-        const embeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-3-large',
-          input: JSON.stringify(trainingData)
-        });
-
-        const embedding = embeddingResponse.data[0].embedding;
-
-        // Store in Pinecone
-        logger.info(`Storing embeddings for record ${record.id} in Pinecone`);
-        await pineconeIndex.upsert({
-          vectors: [{
+        // Create LangChain document
+        const doc = new Document({
+          pageContent: JSON.stringify(trainingData),
+          metadata: {
             id: record.id,
-            values: embedding,
-            metadata: trainingData
-          }],
-          namespace: type // Use record type as namespace
+            source: 'hubspot',
+            type,
+            ...trainingData.metadata
+          }
         });
 
+        documents.push(doc);
         results.successful++;
-        logger.info(`Successfully processed record ${record.id}`);
+        logger.info(`Successfully prepared document for record ${record.id}`);
       } catch (error) {
         results.failed++;
         const errorDetails = {
@@ -284,6 +288,28 @@ serve(async (req) => {
         };
         results.errors.push(errorDetails);
         logger.error(`Error processing record ${record.id}:`, errorDetails);
+      }
+    }
+
+    if (documents.length > 0) {
+      try {
+        logger.info(`Adding ${documents.length} documents to Pinecone`);
+        
+        // Create Pinecone store with namespace
+        await PineconeStore.fromDocuments(
+          documents,
+          embeddings,
+          {
+            pineconeIndex: pineconeIndex,
+            namespace: type,
+            textKey: 'pageContent'
+          }
+        );
+
+        logger.info('Successfully added documents to Pinecone');
+      } catch (error) {
+        logger.error('Error adding documents to Pinecone:', error);
+        throw error;
       }
     }
 
