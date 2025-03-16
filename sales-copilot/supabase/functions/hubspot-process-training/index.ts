@@ -300,6 +300,22 @@ serve(async (req) => {
       try {
         logger.info(`Adding ${documents.length} documents to Pinecone`);
         
+        // Log document details
+        documents.forEach((doc, index) => {
+          logger.info(`Document ${index + 1}/${documents.length}:`, {
+            metadata: doc.metadata,
+            contentLength: doc.pageContent.length,
+            contentPreview: doc.pageContent.substring(0, 100) + '...'
+          });
+        });
+
+        logger.info('Pinecone configuration:', {
+          indexName,
+          namespace: `${namespace}-${type}`,
+          documentsCount: documents.length,
+          embeddingModel: embeddings.modelName
+        });
+        
         // Create Pinecone store with namespace
         await PineconeStore.fromDocuments(
           documents,
