@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
-import { OpenAIEmbeddings } from 'https://esm.sh/@langchain/openai@0.0.10';
+import OpenAI from 'https://esm.sh/openai@4.20.1';
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 
@@ -50,6 +50,11 @@ serve(async (req) => {
     });
 
     const pineconeIndex = pinecone.Index(Deno.env.get('PINECONE_INDEX_NAME')!);
+
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: Deno.env.get('OPENAI_API_KEY')!
+    });
 
     // Search for classified records
     const searchResults = await hubspotClient.searchRecords(type, {
@@ -120,13 +125,13 @@ serve(async (req) => {
           }
         };
 
-        // Get embeddings
-        const embeddings = new OpenAIEmbeddings({
-          openAIApiKey: Deno.env.get('OPENAI_API_KEY')!,
-          modelName: 'text-embedding-3-large'
+        // Get embeddings using OpenAI directly
+        const embeddingResponse = await openai.embeddings.create({
+          model: 'text-embedding-3-large',
+          input: JSON.stringify(trainingData)
         });
 
-        const embedding = await embeddings.embedQuery(JSON.stringify(trainingData));
+        const embedding = embeddingResponse.data[0].embedding;
 
         // Store in Pinecone
         await pineconeIndex.upsert({
