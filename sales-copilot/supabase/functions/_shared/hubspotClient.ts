@@ -281,8 +281,7 @@ export class HubspotClient {
     try {
       // Use developer API key as query parameter
       const apiKey = Deno.env.get('HUBSPOT_DEVELOPER_API_KEY');
-      const projectRef = Deno.env.get('SUPABASE_PROJECT_REF');
-      const functionUrl = `https://${projectRef}.supabase.co/functions/v1/hubspot-score-record`;
+      const functionUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record';
 
       const result = await fetch(`${this.baseUrl}${url}?hapikey=${apiKey}`, {
         method: 'POST',
