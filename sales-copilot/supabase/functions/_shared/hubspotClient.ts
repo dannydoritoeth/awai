@@ -64,6 +64,26 @@ interface SearchRequest {
   after?: string;
 }
 
+interface CrmCardProperty {
+  name: string;
+  label: string;
+  dataType: string;
+  options?: any[];
+}
+
+interface CrmCardDefinition {
+  title: string;
+  fetch?: {
+    targetUrl: string;
+    objectTypes: string[];
+    headers?: Record<string, string>;
+  };
+  display: {
+    properties: CrmCardProperty[];
+  };
+  actions?: Record<string, any>;
+}
+
 export class HubspotClient {
   private accessToken: string;
   private baseUrl = 'https://api.hubspot.com';
@@ -267,62 +287,21 @@ export class HubspotClient {
     }, false);
   }
 
-  async createCrmCard(
-    appId: string,
-    cardDefinition: {
-      title: string;
-      properties: string[];
-      objectType: 'contacts' | 'companies' | 'deals';
-    }
-  ) {
-    const url = `/crm/v3/extensions/cards-dev/${appId}`;
+  async createCrmCard(appId: string, cardDefinition: CrmCardDefinition, isPublicApp = false) {
+    const url = isPublicApp 
+      ? `/crm/v3/extensions/cards/public-apps/${appId}`
+      : `/crm/v3/extensions/cards/${appId}`;
+    
     console.log('Creating CRM card:', { url, cardDefinition });
     
     try {
-      // Use developer API key as query parameter
-      const apiKey = Deno.env.get('HUBSPOT_DEVELOPER_API_KEY');
-      const functionUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-webcard-fetch';
-
-      const result = await fetch(`${this.baseUrl}${url}?hapikey=${apiKey}`, {
+      const result = await fetch(`${this.baseUrl}${url}`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          title: cardDefinition.title,
-          fetch: {
-            targetUrl: functionUrl,
-            objectTypes: [
-              {
-                name: cardDefinition.objectType,
-                propertyWhitelist: cardDefinition.properties
-              }
-            ]
-          },
-          display: {
-            properties: [
-              {
-                name: 'ideal_client_score',
-                label: 'Ideal Client Score',
-                dataType: 'NUMERIC',
-                options: []
-              },
-              {
-                name: 'engagement_score',
-                label: 'Engagement Score',
-                dataType: 'NUMERIC',
-                options: []
-              },
-              {
-                name: 'conversion_probability',
-                label: 'Conversion Probability',
-                dataType: 'NUMERIC',
-                options: []
-              }
-            ]
-          },
-          actions: {}
-        }),
+        body: JSON.stringify(cardDefinition)
       });
 
       if (!result.ok) {
@@ -340,10 +319,7 @@ export class HubspotClient {
       console.log('CRM card created:', data);
       return data;
     } catch (error) {
-      console.error('Failed to create CRM card:', {
-        error,
-        objectType: cardDefinition.objectType
-      });
+      console.error('Failed to create CRM card:', error);
       throw error;
     }
   }
@@ -367,5 +343,17 @@ export class HubspotClient {
         active: true
       })
     }, false);
+  }
+
+  async getContactWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
+    return this.makeRequest(`/objects/contacts/${id}?properties=${properties.join(',')}`);
+  }
+
+  async getCompanyWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
+    return this.makeRequest(`/objects/companies/${id}?properties=${properties.join(',')}`);
+  }
+
+  async getDealWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
+    return this.makeRequest(`/objects/deals/${id}?properties=${properties.join(',')}`);
   }
 } 

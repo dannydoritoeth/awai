@@ -374,77 +374,37 @@ async function createHubSpotProperties(accessToken: string) {
   // Log APP ID before creating CRM cards
   console.log('Creating CRM cards with APP ID:', Deno.env.get('HUBSPOT_APP_ID'));
 
-  // Create CRM cards for contacts and companies
-  try {
-    await hubspotClient.createCrmCard(
-      Deno.env.get('HUBSPOT_APP_ID')!,
-      {
-        title: 'AI Scoring',
-        objectType: 'contacts',
-        properties: [
-          // Training properties
-          'training_classification',
-          'training_score',
-          'training_attributes',
-          'training_notes',
-          // Scoring properties
-          'ideal_client_score',
-          'ideal_client_summary',
-          'ideal_client_last_scored'
-        ]
-      }
-    );
-    console.log('Created contact CRM card');
-  } catch (error) {
-    console.error('Error creating contact CRM card:', error);
-  }
+  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const FUNCTION_URL = Deno.env.get('FUNCTION_URL')!;
 
+  // Create CRM cards for contacts, companies, and deals
   try {
-    await hubspotClient.createCrmCard(
-      Deno.env.get('HUBSPOT_APP_ID')!,
-      {
-        title: 'AI Scoring',
-        objectType: 'companies',
+    const cardConfig = {
+      title: "Test Card",
+      fetch: {
+        targetUrl: `${FUNCTION_URL}/hubspot-webcard-fetch`,
+        objectTypes: [{ name: "contacts" }]
+      },
+      display: {
         properties: [
-          // Training properties
-          'training_classification',
-          'training_score',
-          'training_attributes',
-          'training_notes',
-          // Scoring properties
-          'company_fit_score',
-          'company_fit_summary',
-          'company_fit_last_scored'
+          {
+            name: "test_score",
+            label: "Test Score",
+            dataType: "NUMBER"
+          }
         ]
       }
-    );
-    console.log('Created company CRM card');
-  } catch (error) {
-    console.error('Error creating company CRM card:', error);
-  }
+    };
 
-  try {
+    // Use the public apps endpoint
     await hubspotClient.createCrmCard(
       Deno.env.get('HUBSPOT_APP_ID')!,
-      {
-        title: 'AI Scoring',
-        objectType: 'deals',
-        properties: [
-          // Training properties
-          'training_classification',
-          'training_score',
-          'training_attributes',
-          'training_notes',
-          // Scoring properties
-          'deal_quality_score',
-          'deal_quality_summary',
-          'deal_quality_last_scored'
-        ]
-      }
+      cardConfig,
+      true // flag to use public apps endpoint
     );
-    console.log('Created deal CRM card');
+    console.log('Created CRM card');
   } catch (error) {
-    console.error('Error creating deal CRM card:', error);
+    console.error('Error creating CRM card:', error);
   }
 }
 
