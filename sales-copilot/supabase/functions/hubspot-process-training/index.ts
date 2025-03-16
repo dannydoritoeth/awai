@@ -87,7 +87,8 @@ serve(async (req) => {
     // Initialize Pinecone
     logger.info(`Initializing Pinecone with index ${portalId}`);
     const pinecone = new Pinecone({
-      apiKey: Deno.env.get('PINECONE_API_KEY')!
+      apiKey: Deno.env.get('PINECONE_API_KEY')!,
+      environment: Deno.env.get('PINECONE_ENVIRONMENT')!
     });
 
     const pineconeIndex = pinecone.Index(portalId);
