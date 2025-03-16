@@ -175,7 +175,7 @@ export class HubspotClient {
   }
 
   async searchRecords(type: 'contact' | 'company' | 'deal', request: SearchRequest) {
-    return this.makeRequest(`/crm/v3/objects/${type}s/search`, {
+    return this.makeRequest(`/objects/${type}s/search`, {
       method: 'POST',
       body: JSON.stringify(request)
     });

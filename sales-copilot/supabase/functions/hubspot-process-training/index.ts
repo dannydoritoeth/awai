@@ -4,6 +4,7 @@ import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
 import OpenAI from 'https://esm.sh/openai@4.20.1';
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
+import { decrypt } from '../_shared/encryption.ts';
 
 const logger = new Logger('process-ideal-clients');
 
@@ -66,10 +67,14 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // Convert portalId to number if it's a string
+    const numericPortalId = typeof portalId === 'string' ? parseInt(portalId, 10) : portalId;
+    logger.info(`Looking up account for portal ID: ${numericPortalId}`);
+
     const { data: account, error: accountError } = await supabase
       .from('hubspot_accounts')
       .select('*')
-      .eq('portal_id', portalId)
+      .eq('portal_id', numericPortalId)
       .single();
 
     if (accountError) {
@@ -78,11 +83,25 @@ serve(async (req) => {
     }
 
     if (!account) {
-      throw new Error(`No account found for portal ${portalId}`);
+      throw new Error(`No account found for portal ${numericPortalId}`);
+    }
+
+    // Decrypt the access token
+    const decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+    
+    logger.info('Found HubSpot account:', { 
+      portalId: account.portal_id,
+      hasAccessToken: !!decryptedToken,
+      tokenLength: decryptedToken?.length || 0,
+      tokenStart: decryptedToken?.substring(0, 5) || 'none'
+    });
+
+    if (!decryptedToken) {
+      throw new Error('HubSpot access token is missing or invalid. Please reconnect your HubSpot account.');
     }
 
     logger.info('Initializing clients');
-    const hubspotClient = new HubspotClient(account.access_token);
+    const hubspotClient = new HubspotClient(decryptedToken);
 
     // Initialize Pinecone
     logger.info(`Initializing Pinecone with index ${portalId}`);
@@ -100,7 +119,8 @@ serve(async (req) => {
 
     // Search for classified records
     logger.info('Searching for classified records in HubSpot');
-    const searchResults = await hubspotClient.searchRecords(type, {
+    const recordType = type === 'contacts' ? 'contact' : 'company';
+    const searchResults = await hubspotClient.searchRecords(recordType, {
       filterGroups: [{
         filters: [{
           propertyName: 'training_classification',
