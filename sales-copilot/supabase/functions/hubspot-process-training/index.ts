@@ -4,9 +4,32 @@ import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
 import OpenAI from 'https://esm.sh/openai@4.20.1';
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
-import { decrypt } from '../_shared/encryption.ts';
+import { decrypt, encrypt } from '../_shared/encryption.ts';
 
 const logger = new Logger('process-ideal-clients');
+
+async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: Deno.env.get('HUBSPOT_CLIENT_ID')!,
+      client_secret: Deno.env.get('HUBSPOT_CLIENT_SECRET')!,
+      refresh_token: refreshToken,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    logger.error('Failed to refresh token:', error);
+    throw new Error('Failed to refresh HubSpot token');
+  }
+
+  return response.json();
+}
 
 serve(async (req) => {
   try {
@@ -86,18 +109,54 @@ serve(async (req) => {
       throw new Error(`No account found for portal ${numericPortalId}`);
     }
 
-    // Decrypt the access token
+    // Decrypt tokens
     const decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+    const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
     
     logger.info('Found HubSpot account:', { 
       portalId: account.portal_id,
       hasAccessToken: !!decryptedToken,
+      hasRefreshToken: !!decryptedRefreshToken,
       tokenLength: decryptedToken?.length || 0,
-      tokenStart: decryptedToken?.substring(0, 5) || 'none'
+      tokenStart: decryptedToken?.substring(0, 5) || 'none',
+      expiresAt: account.expires_at
     });
 
-    if (!decryptedToken) {
-      throw new Error('HubSpot access token is missing or invalid. Please reconnect your HubSpot account.');
+    if (!decryptedToken || !decryptedRefreshToken) {
+      throw new Error('HubSpot tokens are missing or invalid. Please reconnect your HubSpot account.');
+    }
+
+    // Check if token is expired or will expire soon (within 5 minutes)
+    const expiresAt = new Date(account.expires_at);
+    const now = new Date();
+    const fiveMinutes = 5 * 60 * 1000;
+    
+    if (expiresAt.getTime() - now.getTime() < fiveMinutes) {
+      logger.info('Access token expired or expiring soon, refreshing...');
+      const newTokens = await refreshHubSpotToken(decryptedRefreshToken);
+      
+      // Encrypt new tokens
+      const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+      const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+      
+      // Update tokens in database
+      const { error: updateError } = await supabase
+        .from('hubspot_accounts')
+        .update({
+          access_token: newEncryptedToken,
+          refresh_token: newEncryptedRefreshToken,
+          expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('portal_id', numericPortalId);
+        
+      if (updateError) {
+        logger.error('Failed to update tokens:', updateError);
+        throw new Error('Failed to update HubSpot tokens');
+      }
+      
+      logger.info('Successfully refreshed and updated tokens');
+      decryptedToken = newTokens.access_token;
     }
 
     logger.info('Initializing clients');
