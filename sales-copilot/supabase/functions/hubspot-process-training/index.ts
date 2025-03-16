@@ -2,9 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
 import OpenAI from 'https://esm.sh/openai@4.20.1';
-import { Document } from "npm:langchain/document";
-import { OpenAIEmbeddings } from "npm:langchain/embeddings/openai";
-import { PineconeStore } from "npm:langchain/vectorstores/pinecone";
+import { Document } from "https://esm.sh/langchain@0.0.197/document";
+import { OpenAIEmbeddings } from "https://esm.sh/langchain@0.0.197/embeddings/openai";
+import { PineconeStore } from "https://esm.sh/langchain@0.0.197/vectorstores/pinecone";
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
@@ -166,13 +166,18 @@ serve(async (req) => {
     const hubspotClient = new HubspotClient(decryptedToken);
 
     // Initialize Pinecone
-    logger.info(`Initializing Pinecone with index ${portalId}`);
+    logger.info('Initializing Pinecone');
     const pinecone = new Pinecone({
       apiKey: Deno.env.get('PINECONE_API_KEY')!,
       environment: Deno.env.get('PINECONE_ENVIRONMENT')!
     });
 
-    const pineconeIndex = pinecone.Index(portalId);
+    // Use a single index with portal ID as namespace
+    const indexName = 'sales-copilot';
+    const namespace = `portal-${portalId}`;
+    logger.info(`Using index "${indexName}" with namespace "${namespace}"`);
+
+    const pineconeIndex = pinecone.Index(indexName);
 
     // Initialize OpenAI client
     const openai = new OpenAI({
@@ -301,7 +306,7 @@ serve(async (req) => {
           embeddings,
           {
             pineconeIndex: pineconeIndex,
-            namespace: type,
+            namespace: `${namespace}-${type}`, // Combine portal namespace with record type
             textKey: 'pageContent'
           }
         );
