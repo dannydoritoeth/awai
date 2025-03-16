@@ -31,7 +31,7 @@ async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token
   return response.json();
 }
 
-async function processRecords(records: any[], type: string, portalId: string) {
+async function processRecords(records: any[], type: string, portalId: string, shouldClearNamespace: boolean = false) {
   const logger = new Logger('processRecords');
   logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
 
@@ -40,6 +40,13 @@ async function processRecords(records: any[], type: string, portalId: string) {
   });
 
   const pineconeIndex = pinecone.index('sales-copilot');
+  const namespace = `hubspot-${portalId}`;
+
+  // Delete all existing vectors in the namespace if this is the first record type
+  if (shouldClearNamespace) {
+    logger.info(`Deleting existing vectors in namespace: ${namespace}`);
+    await pineconeIndex.deleteAll({ namespace });
+  }
 
   const openai = new OpenAI({
     apiKey: Deno.env.get('OPENAI_API_KEY') || ''
@@ -53,6 +60,7 @@ async function processRecords(records: any[], type: string, portalId: string) {
     const notes = record.properties.training_notes;
 
     const content = [
+      `Type: ${type}`,
       `Classification: ${classification}`,
       `Score: ${score}`,
       `Attributes: ${attributes.join(', ')}`,
@@ -105,7 +113,7 @@ async function processRecords(records: any[], type: string, portalId: string) {
   logger.info('Pinecone config:', {
     apiKey: Deno.env.get('PINECONE_API_KEY')?.slice(0, 5) + '...',
     indexName: 'sales-copilot',
-    namespace: `${portalId}-${type}`
+    namespace
   });
 
   // Upsert to Pinecone - update format for v5.1.1
@@ -175,8 +183,8 @@ serve(async (req) => {
       throw new Error(`Failed to parse request body: ${error.message}`);
     }
 
-    const { portalId, type = 'contacts' } = body;
-    logger.info(`Processing portal ${portalId} for type ${type}`);
+    const { portalId } = body;
+    logger.info(`Processing portal ${portalId} for all record types`);
     
     if (!portalId) {
       throw new Error('Portal ID is required');
@@ -261,23 +269,24 @@ serve(async (req) => {
     logger.info('Initializing clients');
     const hubspotClient = new HubspotClient(decryptedToken);
 
-    // Search for classified records
-    logger.info('Searching for classified records in HubSpot');
-    const recordType = type === 'contacts' ? 'contact' : 'company';
-    const searchResults = await hubspotClient.searchRecords(recordType, {
-      filterGroups: [{
-        filters: [{
-          propertyName: 'training_classification',
-          operator: 'IN',
-          values: ['ideal', 'less_ideal']
-        }]
-      }],
-      properties: [
+    // Process each record type
+    const recordTypes = ['contacts', 'companies', 'deals'];
+    const results = {
+      contacts: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+      companies: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+      deals: { processed: 0, successful: 0, failed: 0, errors: [] as any[] }
+    };
+
+    for (const type of recordTypes) {
+      logger.info(`Processing ${type}`);
+      const recordType = type === 'deals' ? 'deal' : type.slice(0, -1); // Remove 's' for contacts/companies
+
+      // Get properties based on record type
+      const properties = [
         'training_classification',
         'training_attributes',
         'training_score',
         'training_notes',
-        // Add other relevant properties based on record type
         ...(type === 'contacts' ? [
           'firstname',
           'lastname',
@@ -285,43 +294,55 @@ serve(async (req) => {
           'company',
           'industry',
           'jobtitle'
-        ] : [
+        ] : type === 'companies' ? [
           'name',
           'industry',
           'type',
           'description',
           'numberofemployees'
+        ] : [ // deals
+          'dealname',
+          'amount',
+          'dealstage',
+          'pipeline',
+          'closedate'
         ])
-      ],
-      limit: 100
-    });
+      ];
 
-    logger.info(`Found ${searchResults.results.length} classified ${type}`);
+      // Search for classified records
+      logger.info(`Searching for classified ${type} in HubSpot`);
+      const searchResults = await hubspotClient.searchRecords(recordType, {
+        filterGroups: [{
+          filters: [{
+            propertyName: 'training_classification',
+            operator: 'IN',
+            values: ['ideal', 'less_ideal']
+          }]
+        }],
+        properties,
+        limit: 100
+      });
 
-    // Process each record
-    const results = {
-      processed: 0,
-      successful: 0,
-      failed: 0,
-      errors: [] as any[]
-    };
+      logger.info(`Found ${searchResults.results.length} classified ${type}`);
 
-    if (searchResults.results.length > 0) {
-      try {
-        logger.info('Processing records');
-        const processedCount = await processRecords(searchResults.results, type, portalId);
-        results.processed = processedCount;
-        results.successful = processedCount;
-        logger.info('Successfully processed records');
-      } catch (error) {
-        results.failed = searchResults.results.length;
-        const errorDetails = {
-          recordCount: searchResults.results.length,
-          error: error.message,
-          stack: error.stack,
-        };
-        results.errors.push(errorDetails);
-        logger.error('Error processing records:', errorDetails);
+      if (searchResults.results.length > 0) {
+        try {
+          logger.info(`Processing ${type} records`);
+          // Pass shouldClearNamespace as true only for the first type
+          const processedCount = await processRecords(searchResults.results, type, portalId, type === recordTypes[0]);
+          results[type].processed = processedCount;
+          results[type].successful = processedCount;
+          logger.info(`Successfully processed ${type} records`);
+        } catch (error) {
+          results[type].failed = searchResults.results.length;
+          const errorDetails = {
+            recordCount: searchResults.results.length,
+            error: error.message,
+            stack: error.stack,
+          };
+          results[type].errors.push(errorDetails);
+          logger.error(`Error processing ${type} records:`, errorDetails);
+        }
       }
     }
 
@@ -335,7 +356,7 @@ serve(async (req) => {
       stack: error.stack,
       cause: error.cause
     };
-    logger.error('Error processing ideal clients:', errorDetails);
+    logger.error('Error processing training data:', errorDetails);
     return new Response(
       JSON.stringify({ error: error.message, details: errorDetails }),
       { status: 500, headers: { "Content-Type": "application/json" } }
