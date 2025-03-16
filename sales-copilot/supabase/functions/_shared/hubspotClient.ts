@@ -279,23 +279,53 @@ export class HubspotClient {
     console.log('Creating CRM card:', { url, cardDefinition });
     
     try {
-      const result = await this.makeRequest(url, {
+      // Use developer API key as query parameter
+      const apiKey = Deno.env.get('HUBSPOT_DEVELOPER_API_KEY');
+      const projectRef = Deno.env.get('SUPABASE_PROJECT_REF');
+      const functionUrl = `https://${projectRef}.supabase.co/functions/v1/hubspot-score-record`;
+
+      const result = await fetch(`${this.baseUrl}${url}?hapikey=${apiKey}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           title: cardDefinition.title,
+          fetch: {
+            targetUrl: functionUrl,
+            objectTypes: [
+              {
+                name: cardDefinition.objectType,
+                propertyWhitelist: cardDefinition.properties
+              }
+            ]
+          },
           display: {
             properties: cardDefinition.properties.map(prop => ({
               name: prop,
               label: prop.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-              dataType: prop.includes('score') ? 'NUMBER' : 'STRING',
+              dataType: prop.includes('score') ? 'NUMERIC' : 'STRING',
               options: []
             }))
           },
-          actions: []
+          actions: {}
         }),
-      }, false);
-      console.log('CRM card created:', result);
-      return result;
+      });
+
+      if (!result.ok) {
+        const error = await result.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('HubSpot API error:', {
+          url,
+          status: result.status,
+          error,
+          headers: Object.fromEntries(result.headers.entries())
+        });
+        throw new Error(`HubSpot API error: ${error.message || error.status || 'Unknown error'}`);
+      }
+
+      const data = await result.json();
+      console.log('CRM card created:', data);
+      return data;
     } catch (error) {
       console.error('Failed to create CRM card:', {
         error,

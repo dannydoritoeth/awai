@@ -371,6 +371,9 @@ async function createHubSpotProperties(accessToken: string) {
     console.log('Skipping deal properties as group creation failed');
   }
 
+  // Log APP ID before creating CRM cards
+  console.log('Creating CRM cards with APP ID:', Deno.env.get('HUBSPOT_APP_ID'));
+
   // Create CRM cards for contacts and companies
   try {
     await hubspotClient.createCrmCard(
