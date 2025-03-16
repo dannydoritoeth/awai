@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@1.1.0';
-import OpenAI from 'https://esm.sh/openai@4.20.1';
-import { Document } from "https://esm.sh/langchain@0.0.197/document";
-import { OpenAIEmbeddings } from "https://esm.sh/langchain@0.0.197/embeddings/openai";
-import { PineconeStore } from "https://esm.sh/langchain@0.0.197/vectorstores/pinecone";
+import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
+import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
@@ -32,6 +29,105 @@ async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token
   }
 
   return response.json();
+}
+
+async function processRecords(records: any[], type: string, portalId: string) {
+  const logger = new Logger('processRecords');
+  logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
+
+  const pinecone = new Pinecone({
+    apiKey: Deno.env.get('PINECONE_API_KEY') || '',
+  });
+
+  const pineconeIndex = pinecone.index('sales-copilot');
+
+  const openai = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY') || ''
+  });
+
+  // Create documents with content and metadata
+  const documents = records.map(record => {
+    const attributes = record.properties.training_attributes?.split(';') || [];
+    const score = parseFloat(record.properties.training_score) || null;
+    const classification = record.properties.training_classification;
+    const notes = record.properties.training_notes;
+
+    const content = [
+      `Classification: ${classification}`,
+      `Score: ${score}`,
+      `Attributes: ${attributes.join(', ')}`,
+      `Notes: ${notes}`,
+      ...Object.entries(record.properties)
+        .filter(([key]) => !key.startsWith('training_'))
+        .map(([key, value]) => `${key}: ${value}`)
+    ].join('\n');
+
+    const metadata = {
+      id: record.id,
+      source: type,
+      portalId: portalId,
+      classification,
+      score,
+      attributes,
+      isTrainingData: true
+    };
+
+    logger.info(`Created document for record ${record.id}:`, {
+      metadata,
+      contentPreview: content.slice(0, 100) + '...'
+    });
+
+    return {
+      content,
+      metadata
+    };
+  });
+
+  logger.info(`Created ${documents.length} documents`);
+
+  // Get embeddings for all documents using OpenAI directly
+  const embeddingResponse = await openai.embeddings.create({
+    model: 'text-embedding-3-large',
+    input: documents.map(doc => doc.content)
+  });
+
+  // Prepare vectors for Pinecone
+  const vectors = documents.map((doc, i) => ({
+    id: doc.metadata.id.toString(),
+    values: embeddingResponse.data[i].embedding,
+    metadata: {
+      ...doc.metadata,
+      text: doc.content
+    }
+  }));
+
+  logger.info(`Upserting ${vectors.length} vectors to Pinecone`);
+  logger.info('Pinecone config:', {
+    apiKey: Deno.env.get('PINECONE_API_KEY')?.slice(0, 5) + '...',
+    indexName: 'sales-copilot',
+    namespace: `${portalId}-${type}`
+  });
+
+  // Upsert to Pinecone - update format for v5.1.1
+  await pineconeIndex.upsert([{
+    id: vectors[0].id,
+    values: vectors[0].values,
+    metadata: vectors[0].metadata
+  }]);
+
+  // Upsert remaining vectors in batches of 100
+  for (let i = 1; i < vectors.length; i += 100) {
+    const batch = vectors.slice(i, i + 100).map(vector => ({
+      id: vector.id,
+      values: vector.values,
+      metadata: vector.metadata
+    }));
+    await pineconeIndex.upsert(batch);
+    logger.info(`Upserted batch of ${batch.length} vectors`);
+  }
+
+  logger.info(`Successfully added ${vectors.length} documents to Pinecone`);
+  return vectors.length;
 }
 
 serve(async (req) => {
@@ -165,25 +261,6 @@ serve(async (req) => {
     logger.info('Initializing clients');
     const hubspotClient = new HubspotClient(decryptedToken);
 
-    // Initialize Pinecone
-    logger.info('Initializing Pinecone');
-    const pinecone = new Pinecone({
-      apiKey: Deno.env.get('PINECONE_API_KEY')!,
-      environment: Deno.env.get('PINECONE_ENVIRONMENT')!
-    });
-
-    // Use a single index with portal ID as namespace
-    const indexName = 'sales-copilot';
-    const namespace = `portal-${portalId}`;
-    logger.info(`Using index "${indexName}" with namespace "${namespace}"`);
-
-    const pineconeIndex = pinecone.Index(indexName);
-
-    // Initialize OpenAI client
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY')!
-    });
-
     // Search for classified records
     logger.info('Searching for classified records in HubSpot');
     const recordType = type === 'contacts' ? 'contact' : 'company';
@@ -229,108 +306,22 @@ serve(async (req) => {
       errors: [] as any[]
     };
 
-    // Initialize OpenAI embeddings
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: Deno.env.get('OPENAI_API_KEY')!,
-      modelName: 'text-embedding-3-large'
-    });
-
-    // Prepare documents for batch processing
-    const documents: Document[] = [];
-
-    for (const record of searchResults.results) {
+    if (searchResults.results.length > 0) {
       try {
-        logger.info(`Processing record ${record.id} (${results.processed + 1}/${searchResults.results.length})`);
-        results.processed++;
-
-        // Get selected attributes
-        const attributes = record.properties.training_attributes?.split(';') || [];
-        const score = parseFloat(record.properties.training_score) || null;
-
-        if (!score) {
-          logger.warn(`No training score found for record ${record.id}`);
-        }
-
-        // Create training data object
-        const trainingData = {
-          id: record.id,
-          type,
-          properties: record.properties,
-          classification: record.properties.training_classification,
-          score,
-          attributes,
-          notes: record.properties.training_notes,
-          metadata: {
-            isTrainingData: true,
-            classification: record.properties.training_classification,
-            score,
-            attributes,
-            recordType: type
-          }
-        };
-
-        // Create LangChain document
-        const doc = new Document({
-          pageContent: JSON.stringify(trainingData),
-          metadata: {
-            id: record.id,
-            source: 'hubspot',
-            type,
-            ...trainingData.metadata
-          }
-        });
-
-        documents.push(doc);
-        results.successful++;
-        logger.info(`Successfully prepared document for record ${record.id}`);
+        logger.info('Processing records');
+        const processedCount = await processRecords(searchResults.results, type, portalId);
+        results.processed = processedCount;
+        results.successful = processedCount;
+        logger.info('Successfully processed records');
       } catch (error) {
-        results.failed++;
+        results.failed = searchResults.results.length;
         const errorDetails = {
-          recordId: record.id,
+          recordCount: searchResults.results.length,
           error: error.message,
           stack: error.stack,
-          properties: record.properties
         };
         results.errors.push(errorDetails);
-        logger.error(`Error processing record ${record.id}:`, errorDetails);
-      }
-    }
-
-    if (documents.length > 0) {
-      try {
-        logger.info(`Adding ${documents.length} documents to Pinecone`);
-        
-        // Log document details
-        documents.forEach((doc, index) => {
-          logger.info(`Document ${index + 1}/${documents.length}:`, {
-            metadata: doc.metadata,
-            contentLength: doc.pageContent.length,
-            contentPreview: doc.pageContent.substring(0, 100) + '...'
-          });
-        });
-
-        logger.info('Pinecone configuration:', {
-          indexName,
-          namespace: `${namespace}-${type}`,
-          documentsCount: documents.length,
-          embeddingModel: embeddings.modelName
-        });
-        
-        // Create Pinecone store with namespace
-        await PineconeStore.fromDocuments(
-          documents,
-          embeddings,
-          {
-            pineconeIndex: pineconeIndex,
-            namespace: `${namespace}-${type}`, // Combine portal namespace with record type
-            textKey: 'pageContent'
-          }
-        );
-
-        logger.info('Successfully added documents to Pinecone');
-      } catch (error) {
-        logger.error('Error adding documents to Pinecone:', error);
-        throw error;
+        logger.error('Error processing records:', errorDetails);
       }
     }
 
