@@ -281,7 +281,7 @@ export class HubspotClient {
     try {
       // Use developer API key as query parameter
       const apiKey = Deno.env.get('HUBSPOT_DEVELOPER_API_KEY');
-      const functionUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record';
+      const functionUrl = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-webcard-fetch';
 
       const result = await fetch(`${this.baseUrl}${url}?hapikey=${apiKey}`, {
         method: 'POST',
@@ -300,12 +300,26 @@ export class HubspotClient {
             ]
           },
           display: {
-            properties: cardDefinition.properties.map(prop => ({
-              name: prop,
-              label: prop.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-              dataType: prop.includes('score') ? 'NUMERIC' : 'STRING',
-              options: []
-            }))
+            properties: [
+              {
+                name: 'ideal_client_score',
+                label: 'Ideal Client Score',
+                dataType: 'NUMERIC',
+                options: []
+              },
+              {
+                name: 'engagement_score',
+                label: 'Engagement Score',
+                dataType: 'NUMERIC',
+                options: []
+              },
+              {
+                name: 'conversion_probability',
+                label: 'Conversion Probability',
+                dataType: 'NUMERIC',
+                options: []
+              }
+            ]
           },
           actions: {}
         }),
