@@ -356,4 +356,60 @@ export class HubspotClient {
   async getDealWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
     return this.makeRequest(`/objects/deals/${id}?properties=${properties.join(',')}`);
   }
+
+  async createScoringProperties() {
+    const propertyGroup = {
+      name: 'ideal_client_fit',
+      label: 'Ideal Client Fit',
+      displayOrder: 1
+    };
+
+    // Create property group for each object type
+    await this.createPropertyGroup({ ...propertyGroup, target: 'contact' });
+    await this.createPropertyGroup({ ...propertyGroup, target: 'company' });
+    await this.createPropertyGroup({ ...propertyGroup, target: 'deal' });
+
+    // Define the properties
+    const properties = [
+      {
+        name: 'ideal_client_score',
+        label: 'Ideal Client Score',
+        type: 'number',
+        fieldType: 'number',
+        groupName: 'ideal_client_fit',
+        description: 'AI-generated score indicating how well this record matches the ideal client profile'
+      },
+      {
+        name: 'ideal_client_summary',
+        label: 'Ideal Client Summary',
+        type: 'string',
+        fieldType: 'textarea',
+        groupName: 'ideal_client_fit',
+        description: 'AI-generated summary explaining the ideal client fit score'
+      },
+      {
+        name: 'ideal_client_last_scored',
+        label: 'Last Scored At',
+        type: 'datetime',
+        fieldType: 'date',
+        groupName: 'ideal_client_fit',
+        description: 'When this record was last scored by the AI'
+      }
+    ];
+
+    // Create properties for contacts
+    for (const property of properties) {
+      await this.createContactProperty(property);
+    }
+
+    // Create properties for companies
+    for (const property of properties) {
+      await this.createCompanyProperty(property);
+    }
+
+    // Create properties for deals
+    for (const property of properties) {
+      await this.createDealProperty(property);
+    }
+  }
 } 

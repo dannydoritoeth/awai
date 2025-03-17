@@ -117,8 +117,26 @@ export class ScoringService {
   private async getAIResponse(prompt: string, data: any, similarRecords: any[] = []): Promise<{ score: number; summary: string }> {
     const { provider, model, temperature, maxTokens, scoringPrompt } = this.aiConfig;
     
+    const defaultPrompt = `You are an expert at analyzing business records and determining how well they match an ideal client profile. 
+Your task is to analyze the given record and provide:
+1. A score from 0-100 indicating how well this record matches an ideal client profile
+2. A brief summary explaining the score and key factors considered
+
+Please format your response as a JSON object with two fields:
+- score: number between 0-100
+- summary: string explaining the score
+
+Consider factors such as:
+- Industry and company size
+- Job title and seniority
+- Deal size and stage
+- Past interactions and engagement
+- Similar successful records provided for context
+
+Base your analysis on the record data and any similar records provided for context.`;
+
     // Construct the full prompt with similar records context
-    const fullPrompt = `${scoringPrompt}
+    const fullPrompt = `${scoringPrompt || defaultPrompt}
 
 ${similarRecords.length > 0 ? `Similar records for context:
 ${JSON.stringify(similarRecords, null, 2)}
@@ -234,10 +252,11 @@ ${JSON.stringify(data, null, 2)}`;
       // Store the embedding for future similarity searches
       await this.storeEmbedding(contact, 'contact');
 
+      // Update the contact in HubSpot
       await this.hubspotClient.updateContact(contactId, {
         ideal_client_score: result.score.toString(),
         ideal_client_summary: result.summary,
-        ideal_client_last_scored: lastScored,
+        ideal_client_last_scored: lastScored
       });
 
       return { ...result, lastScored };
@@ -259,10 +278,11 @@ ${JSON.stringify(data, null, 2)}`;
       // Store the embedding for future similarity searches
       await this.storeEmbedding(company, 'company');
 
+      // Update the company in HubSpot
       await this.hubspotClient.updateCompany(companyId, {
-        company_fit_score: result.score.toString(),
-        company_fit_summary: result.summary,
-        company_fit_last_scored: lastScored,
+        ideal_client_score: result.score.toString(),
+        ideal_client_summary: result.summary,
+        ideal_client_last_scored: lastScored
       });
 
       return { ...result, lastScored };
@@ -284,10 +304,11 @@ ${JSON.stringify(data, null, 2)}`;
       // Store the embedding for future similarity searches
       await this.storeEmbedding(deal, 'deal');
 
+      // Update the deal in HubSpot
       await this.hubspotClient.updateDeal(dealId, {
-        deal_quality_score: result.score.toString(),
-        deal_quality_summary: result.summary,
-        deal_quality_last_scored: lastScored,
+        ideal_client_score: result.score.toString(),
+        ideal_client_summary: result.summary,
+        ideal_client_last_scored: lastScored
       });
 
       return { ...result, lastScored };

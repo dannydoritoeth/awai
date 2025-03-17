@@ -198,23 +198,23 @@ const scoringProperties = {
   ],
   companies: [
     {
-      name: 'company_fit_score',
-      label: 'Company Fit Score',
+      name: 'ideal_client_score',
+      label: 'Ideal Client Score',
       type: 'number',
       fieldType: 'number',
-      description: 'AI-generated score indicating how well this company matches your ideal customer profile',
+      description: 'AI-generated score indicating how well this company matches your ideal client profile',
       groupName: 'ai_scoring'
     },
     {
-      name: 'company_fit_summary',
-      label: 'Company Fit Summary',
+      name: 'ideal_client_summary',
+      label: 'Ideal Client Summary',
       type: 'string',
       fieldType: 'textarea',
-      description: 'AI-generated analysis of why this company matches or differs from your ideal customer profile',
+      description: 'AI-generated analysis of why this company matches or differs from your ideal client profile',
       groupName: 'ai_scoring'
     },
     {
-      name: 'company_fit_last_scored',
+      name: 'ideal_client_last_scored',
       label: 'Last Scored',
       type: 'datetime',
       fieldType: 'date',
@@ -224,23 +224,23 @@ const scoringProperties = {
   ],
   deals: [
     {
-      name: 'deal_quality_score',
-      label: 'Deal Quality Score',
+      name: 'ideal_client_score',
+      label: 'Ideal Client Score',
       type: 'number',
       fieldType: 'number',
-      description: 'AI-generated score indicating the overall quality and likelihood of closing this deal',
+      description: 'AI-generated score indicating how well this deal matches your ideal client profile',
       groupName: 'ai_scoring'
     },
     {
-      name: 'deal_quality_summary',
-      label: 'Deal Quality Summary',
+      name: 'ideal_client_summary',
+      label: 'Ideal Client Summary',
       type: 'string',
       fieldType: 'textarea',
-      description: 'AI-generated analysis of deal quality factors and recommendations',
+      description: 'AI-generated analysis of why this deal matches or differs from your ideal client profile',
       groupName: 'ai_scoring'
     },
     {
-      name: 'deal_quality_last_scored',
+      name: 'ideal_client_last_scored',
       label: 'Last Scored',
       type: 'datetime',
       fieldType: 'date',
@@ -371,123 +371,3 @@ async function createHubSpotProperties(accessToken: string) {
     console.log('Skipping deal properties as group creation failed');
   }
 }
-
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  try {
-    const url = new URL(req.url);
-    const code = url.searchParams.get('code');
-    
-    if (!code) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization code required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Exchange the code for tokens
-    const tokenResponse = await fetch('https://api.hubapi.com/oauth/v1/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: Deno.env.get('HUBSPOT_CLIENT_ID')!,
-        client_secret: Deno.env.get('HUBSPOT_CLIENT_SECRET')!,
-        redirect_uri: Deno.env.get('HUBSPOT_REDIRECT_URI')!,
-        code,
-      }),
-    });
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-      console.error('Token exchange failed:', tokenData);
-      return new Response(
-        JSON.stringify({ error: 'Failed to exchange authorization code' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Token data received:', {
-      hasAccessToken: !!tokenData.access_token,
-      hasRefreshToken: !!tokenData.refresh_token,
-      expiresIn: tokenData.expires_in,
-      tokenType: tokenData.token_type
-    });
-
-    // Get HubSpot account info
-    const accountResponse = await fetch('https://api.hubapi.com/oauth/v1/access-tokens/' + tokenData.access_token);
-    const accountInfo = await accountResponse.json();
-
-    // Initialize Supabase client
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Store the tokens
-    const { error } = await supabase
-      .from('hubspot_accounts')
-      .upsert({
-        portal_id: accountInfo.hub_id.toString(),
-        access_token: await encrypt(tokenData.access_token, ENCRYPTION_KEY),
-        refresh_token: await encrypt(tokenData.refresh_token, ENCRYPTION_KEY),
-        expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-        token_type: tokenData.token_type || 'bearer',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        metadata: JSON.stringify({
-          user_id: accountInfo.user_id,
-          hub_domain: accountInfo.hub_domain,
-          scopes: tokenData.scope?.split(' ') || []
-        })
-      });
-
-    if (error) {
-      console.error('Failed to store tokens:', error);
-      console.error('Token storage payload:', {
-        portalId: accountInfo.hub_id.toString(),
-        hasAccessToken: !!tokenData.access_token,
-        hasRefreshToken: !!tokenData.refresh_token,
-        expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-        tokenType: tokenData.token_type || 'bearer'
-      });
-      return new Response(
-        JSON.stringify({ error: 'Failed to store access token' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    try {
-      await createHubSpotProperties(tokenData.access_token);
-      console.log('Successfully created HubSpot properties');
-      
-    } catch (error) {
-      console.error('Setup failed:', error);
-      // Continue with success response even if setup fails
-      // This allows retry mechanisms to handle it
-    }
-
-    return new Response(
-      JSON.stringify({ 
-        message: "Successfully authenticated and configured app",
-        success: true,
-        portal_id: accountInfo.hub_id.toString()
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      }
-    );
-
-  } catch (error) {
-    console.error('OAuth error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-}); 

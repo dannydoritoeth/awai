@@ -40,9 +40,9 @@ export class ScoringService {
       const summary = "Company scored based on industry fit and size.";
       
       await this.hubspotClient.updateCompany(companyId, {
-        company_fit_score: score,
-        company_fit_summary: summary,
-        company_fit_last_scored: new Date().toISOString()
+        ideal_client_score: score,
+        ideal_client_summary: summary,
+        ideal_client_last_scored: new Date().toISOString()
       });
 
       this.logger.info(`Scored company ${companyId}`, { score, summary });
@@ -61,9 +61,9 @@ export class ScoringService {
       const summary = "Deal scored based on value and probability.";
       
       await this.hubspotClient.updateDeal(dealId, {
-        deal_quality_score: score,
-        deal_quality_summary: summary,
-        deal_quality_last_scored: new Date().toISOString()
+        ideal_client_score: score,
+        ideal_client_summary: summary,
+        ideal_client_last_scored: new Date().toISOString()
       });
 
       this.logger.info(`Scored deal ${dealId}`, { score, summary });
