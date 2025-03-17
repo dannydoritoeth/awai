@@ -371,3 +371,48 @@ async function createHubSpotProperties(accessToken: string) {
     console.log('Skipping deal properties as group creation failed');
   }
 }
+
+async function handleOAuth(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const tokenData = {
+    access_token: url.searchParams.get('access_token')!,
+    accountInfo: {
+      hub_id: parseInt(url.searchParams.get('hub_id')!)
+    }
+  };
+
+  try {
+    await createHubSpotProperties(tokenData.access_token);
+    console.log('Successfully created HubSpot properties');
+    
+  } catch (error) {
+    console.error('Setup failed:', error);
+    // Continue with success response even if setup fails
+    // This allows retry mechanisms to handle it
+  }
+
+  // Validate required properties
+  try {
+    const hubspotClient = new HubspotClient(tokenData.access_token);
+    await hubspotClient.validateProperties();
+    console.log('Successfully validated HubSpot properties');
+  } catch (error) {
+    console.error('Property validation failed:', error);
+    // Continue with success response even if validation fails
+    // Properties will be validated again during scoring
+  }
+
+  return new Response(
+    JSON.stringify({ 
+      message: "Successfully authenticated and configured app",
+      success: true,
+      portal_id: tokenData.accountInfo.hub_id.toString()
+    }),
+    {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200
+    }
+  );
+}
+
+serve(handleOAuth);

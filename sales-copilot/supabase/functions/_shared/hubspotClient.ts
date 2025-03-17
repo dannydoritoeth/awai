@@ -86,38 +86,50 @@ interface CrmCardDefinition {
 
 export class HubspotClient {
   private accessToken: string;
-  private baseUrl = 'https://api.hubspot.com';
+  private baseUrl = 'https://api.hubapi.com';
   private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
+  private rateLimitDelay = 100; // ms between requests
+  private maxRetries = 3;
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
   }
 
-  private async makeRequest(path: string, options: RequestInit = {}, useCrmBase = true) {
-    const url = `${useCrmBase ? this.crmBaseUrl : this.baseUrl}${path}`;
-    const headers = {
-      'Authorization': `Bearer ${this.accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    const response = await fetch(url, {
-      ...options,
-      headers
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-      console.error('HubSpot API error:', {
-        url,
-        status: response.status,
-        error,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-      throw new Error(`HubSpot API error: ${error.message || error.status || 'Unknown error'}`);
+  private async rateLimitedRequest<T>(fn: () => Promise<T>, retryCount = 0): Promise<T> {
+    try {
+      const result = await fn();
+      // Add delay between requests
+      await new Promise(resolve => setTimeout(resolve, this.rateLimitDelay));
+      return result;
+    } catch (error) {
+      if (error.status === 429 && retryCount < this.maxRetries) { // Too Many Requests
+        // Wait for the time specified in the response headers or default to 10 seconds
+        const retryAfter = (error.headers?.get('Retry-After') || 10) * 1000;
+        await new Promise(resolve => setTimeout(resolve, retryAfter));
+        return this.rateLimitedRequest(fn, retryCount + 1);
+      }
+      throw error;
     }
+  }
 
-    return response.json();
+  private async makeRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+    return this.rateLimitedRequest(async () => {
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`HubSpot API error: ${response.status} ${response.statusText} ${JSON.stringify(error)}`);
+      }
+
+      return response.json();
+    });
   }
 
   async getContact(id: string): Promise<HubspotRecord> {
@@ -411,5 +423,100 @@ export class HubspotClient {
     for (const property of properties) {
       await this.createDealProperty(property);
     }
+  }
+
+  async validateProperties(): Promise<void> {
+    const propertyGroup = {
+      name: 'ideal_client_fit',
+      label: 'Ideal Client Fit',
+      displayOrder: 1
+    };
+
+    const properties = [
+      {
+        name: 'ideal_client_score',
+        label: 'Ideal Client Score',
+        type: 'number',
+        fieldType: 'number',
+        groupName: 'ideal_client_fit',
+        description: 'AI-generated score indicating how well this record matches the ideal client profile'
+      },
+      {
+        name: 'ideal_client_summary',
+        label: 'Ideal Client Summary',
+        type: 'string',
+        fieldType: 'textarea',
+        groupName: 'ideal_client_fit',
+        description: 'AI-generated summary explaining the ideal client fit score'
+      },
+      {
+        name: 'ideal_client_last_scored',
+        label: 'Last Scored At',
+        type: 'datetime',
+        fieldType: 'date',
+        groupName: 'ideal_client_fit',
+        description: 'When this record was last scored by the AI'
+      }
+    ];
+
+    // Validate property groups
+    for (const target of ['contact', 'company', 'deal'] as const) {
+      try {
+        await this.makeRequest(`/properties/v2/${target}s/groups`, {
+          method: 'POST',
+          body: JSON.stringify({ ...propertyGroup, target })
+        });
+      } catch (error) {
+        if (!error.message.includes('already exists')) throw error;
+      }
+    }
+
+    // Validate properties for each object type
+    for (const target of ['contact', 'company', 'deal'] as const) {
+      for (const property of properties) {
+        try {
+          await this.makeRequest(`/properties/v2/${target}s/properties`, {
+            method: 'POST',
+            body: JSON.stringify(property)
+          });
+        } catch (error) {
+          if (!error.message.includes('already exists')) throw error;
+        }
+      }
+    }
+  }
+
+  // Update existing methods to use rate-limited requests
+  async getContact(contactId: string): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/contacts/${contactId}`);
+  }
+
+  async updateContact(contactId: string, properties: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/contacts/${contactId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+  }
+
+  async getCompany(companyId: string): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/companies/${companyId}`);
+  }
+
+  async updateCompany(companyId: string, properties: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/companies/${companyId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+  }
+
+  async getDeal(dealId: string): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/deals/${dealId}`);
+  }
+
+  async updateDeal(dealId: string, properties: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/crm/v3/objects/deals/${dealId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
   }
 } 
