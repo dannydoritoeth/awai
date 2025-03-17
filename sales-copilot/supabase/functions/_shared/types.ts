@@ -18,4 +18,17 @@ export interface HubspotAccount {
   ai_max_tokens: number;
   scoring_prompt: string;
   scoring_prompt_updated_at: string;
+}
+
+export interface HubSpotWebhookEvent {
+  eventId: number;
+  subscriptionId: number;
+  portalId: number;
+  appId: number;
+  occurredAt: number;
+  subscriptionType: 'contact.creation' | 'company.creation' | 'deal.creation';
+  attemptNumber: number;
+  objectId: number;
+  changeSource: string;
+  changeFlag: string;
 } 
