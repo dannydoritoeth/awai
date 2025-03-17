@@ -5,6 +5,7 @@ import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { HubspotClient } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
+import { DocumentPackager } from '../_shared/documentPackager.ts';
 
 const logger = new Logger('process-ideal-clients');
 
@@ -52,48 +53,16 @@ async function processRecords(records: any[], type: string, portalId: string, sh
     apiKey: Deno.env.get('OPENAI_API_KEY') || ''
   });
 
-  // Create documents with content and metadata
-  const documents = records.map(record => {
-    const attributes = record.properties.training_attributes?.split(';') || [];
-    const score = parseFloat(record.properties.training_score) || null;
-    const classification = record.properties.training_classification;
-    const notes = record.properties.training_notes;
+  const documentPackager = new DocumentPackager();
 
-    const content = [
-      `Type: ${type}`,
-      `Classification: ${classification}`,
-      `Score: ${score}`,
-      `Attributes: ${attributes.join(', ')}`,
-      `Notes: ${notes}`,
-      ...Object.entries(record.properties)
-        .filter(([key]) => !key.startsWith('training_'))
-        .map(([key, value]) => `${key}: ${value}`)
-    ].join('\n');
-
-    const metadata = {
-      id: record.id,
-      source: type,
-      portalId: portalId,
-      classification,
-      score,
-      attributes,
-      isTrainingData: true
-    };
-
-    logger.info(`Created document for record ${record.id}:`, {
-      metadata,
-      contentPreview: content.slice(0, 100) + '...'
-    });
-
-    return {
-      content,
-      metadata
-    };
-  });
+  // Process each record through the document packager
+  const documents = await Promise.all(
+    records.map(record => documentPackager.packageDocument(record, type, portalId))
+  );
 
   logger.info(`Created ${documents.length} documents`);
 
-  // Get embeddings for all documents using OpenAI directly
+  // Get embeddings for all documents using OpenAI
   const embeddingResponse = await openai.embeddings.create({
     model: 'text-embedding-3-large',
     input: documents.map(doc => doc.content)
@@ -105,7 +74,8 @@ async function processRecords(records: any[], type: string, portalId: string, sh
     values: embeddingResponse.data[i].embedding,
     metadata: {
       ...doc.metadata,
-      text: doc.content
+      text: doc.content,
+      structuredContent: doc.structuredContent
     }
   }));
 
