@@ -34,22 +34,5 @@
         "active": true
       }
     ]
-  },
-  "webhooks": [
-    {
-      "subscriptionType": "contact.creation",
-      "propertyName": "*",
-      "active": true
-    },
-    {
-      "subscriptionType": "company.creation",
-      "propertyName": "*",
-      "active": true
-    },
-    {
-      "subscriptionType": "deal.creation",
-      "propertyName": "*",
-      "active": true
-    }
-  ]
+  }
 }

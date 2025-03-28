@@ -1,15 +1,10 @@
 {
-  "name": "Sales Copilot",
-  "uid": "sales-copilot",
-  "description": "AI-powered tool that helps identify and score ideal clients in your HubSpot CRM",
-  "allowedUrls": [
-    "https://api.openai.com",
-    "https://api.anthropic.com",
-    "https://generativelanguage.googleapis.com",
-    "https://*.pinecone.io"
-  ],
+  "name": "ScoreAI",
+  "uid": "scoreai",
+  "description": "An example to demonstrate how to build a public app with developer projects.",
+  "allowedUrls": ["https://api.example.com"],
   "auth": {
-    "redirectUrls": ["http://localhost:3000/oauth-callback"],
+    "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
     "requiredScopes": [
       "crm.objects.contacts.read",
       "crm.objects.contacts.write",
@@ -17,28 +12,24 @@
       "crm.objects.companies.write",
       "crm.objects.deals.read",
       "crm.objects.deals.write",
-      "properties.read",
-      "properties.write"
+      "crm.schemas.deals.write",
+      "crm.schemas.contacts.write",
+      "crm.schemas.companies.write"
     ],
     "optionalScopes": [],
     "conditionallyRequiredScopes": []
   },
   "support": {
-    "supportEmail": "support@salescopilot.ai",
-    "documentationUrl": "https://docs.salescopilot.ai",
-    "supportUrl": "https://support.salescopilot.ai",
+    "supportEmail": "support@example.com",
+    "documentationUrl": "https://example.com/docs",
+    "supportUrl": "https://example.com/support",
     "supportPhone": "+18005555555"
   },
   "extensions": {
     "crm": {
       "cards": [
         {
-          "file": "./extensions/ideal-client-score.json"
-        }
-      ],
-      "customObjects": [
-        {
-          "file": "./extensions/ideal-client-profile.json"
+          "file": "./extensions/example-card.json"
         }
       ]
     }
