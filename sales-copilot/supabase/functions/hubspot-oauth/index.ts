@@ -7,6 +7,9 @@ import { HubspotClient } from '../_shared/hubspotClient.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY')!;
+const HUBSPOT_CLIENT_ID = Deno.env.get('HUBSPOT_CLIENT_ID')!;
+const HUBSPOT_CLIENT_SECRET = Deno.env.get('HUBSPOT_CLIENT_SECRET')!;
+const HUBSPOT_REDIRECT_URI = Deno.env.get('HUBSPOT_REDIRECT_URI')!;
 
 const trainingProperties = {
   contacts: [
@@ -372,47 +375,128 @@ async function createHubSpotProperties(accessToken: string) {
   }
 }
 
+async function exchangeCodeForToken(code: string): Promise<{ access_token: string; hub_id: number }> {
+  const tokenEndpoint = 'https://api.hubapi.com/oauth/v1/token';
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: HUBSPOT_CLIENT_ID,
+    client_secret: HUBSPOT_CLIENT_SECRET,
+    redirect_uri: HUBSPOT_REDIRECT_URI,
+    code: code
+  });
+
+  console.log('Exchanging code for token...');
+  
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: params.toString()
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Token exchange failed:', error);
+    throw new Error(`Failed to exchange code for token: ${error}`);
+  }
+
+  const data = await response.json();
+  console.log('Token response data:', JSON.stringify(data, null, 2));
+
+  if (!data.access_token) {
+    console.error('No access token in response');
+    throw new Error('No access token in response');
+  }
+
+  // Fetch token metadata to get hub ID
+  console.log('Fetching token metadata...');
+  const metadataResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${data.access_token}`, {
+    method: 'GET'
+  });
+
+  if (!metadataResponse.ok) {
+    const error = await metadataResponse.text();
+    console.error('Token metadata fetch failed:', error);
+    throw new Error(`Failed to fetch token metadata: ${error}`);
+  }
+
+  const metadata = await metadataResponse.json();
+  console.log('Token metadata:', JSON.stringify(metadata, null, 2));
+
+  const hubId = metadata.hub_id;
+  if (!hubId) {
+    console.error('No hub_id in token metadata');
+    throw new Error('Failed to get hub ID from token metadata');
+  }
+
+  return {
+    access_token: data.access_token,
+    hub_id: Number(hubId)
+  };
+}
+
 async function handleOAuth(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const tokenData = {
-    access_token: url.searchParams.get('access_token')!,
-    accountInfo: {
-      hub_id: parseInt(url.searchParams.get('hub_id')!)
-    }
-  };
-
-  try {
-    await createHubSpotProperties(tokenData.access_token);
-    console.log('Successfully created HubSpot properties');
-    
-  } catch (error) {
-    console.error('Setup failed:', error);
-    // Continue with success response even if setup fails
-    // This allows retry mechanisms to handle it
+  const code = url.searchParams.get('code');
+  
+  if (!code) {
+    return new Response('ERROR: Missing authorization code', {
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+      status: 400
+    });
   }
 
-  // Validate required properties
   try {
-    const hubspotClient = new HubspotClient(tokenData.access_token);
-    await hubspotClient.validateProperties();
-    console.log('Successfully validated HubSpot properties');
-  } catch (error) {
-    console.error('Property validation failed:', error);
-    // Continue with success response even if validation fails
-    // Properties will be validated again during scoring
-  }
+    // Exchange the code for an access token
+    const { access_token, hub_id } = await exchangeCodeForToken(code);
+    console.log('Successfully exchanged code for token');
 
-  return new Response(
-    JSON.stringify({ 
-      message: "Successfully authenticated and configured app",
-      success: true,
-      portal_id: tokenData.accountInfo.hub_id.toString()
-    }),
-    {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
+    try {
+      await createHubSpotProperties(access_token);
+      console.log('Successfully created HubSpot properties');
+    } catch (error) {
+      console.error('Setup failed:', error);
+      // Continue with success response even if setup fails
+      // This allows retry mechanisms to handle it
     }
-  );
+
+    // Validate required properties
+    try {
+      const hubspotClient = new HubspotClient(access_token);
+      await hubspotClient.validateProperties();
+      console.log('Successfully validated HubSpot properties');
+    } catch (error) {
+      console.error('Property validation failed:', error);
+      // Continue with success response even if validation fails
+      // Properties will be validated again during scoring
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        message: "Successfully authenticated and configured app",
+        success: true,
+        portal_id: hub_id.toString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
+    );
+  } catch (error) {
+    console.error('OAuth process failed:', error);
+    return new Response(
+      JSON.stringify({
+        message: error instanceof Error ? error.message : 'Failed to complete OAuth process',
+        success: false,
+        portal_id: null
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      }
+    );
+  }
 }
 
 serve(handleOAuth);
