@@ -375,7 +375,7 @@ async function createHubSpotProperties(accessToken: string) {
   }
 }
 
-async function exchangeCodeForToken(code: string): Promise<{ access_token: string; hub_id: number }> {
+async function exchangeCodeForToken(code: string): Promise<{ access_token: string; refresh_token: string; hub_id: number }> {
   const tokenEndpoint = 'https://api.hubapi.com/oauth/v1/token';
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -409,6 +409,11 @@ async function exchangeCodeForToken(code: string): Promise<{ access_token: strin
     throw new Error('No access token in response');
   }
 
+  if (!data.refresh_token) {
+    console.error('No refresh token in response');
+    throw new Error('No refresh token in response');
+  }
+
   // Fetch token metadata to get hub ID
   console.log('Fetching token metadata...');
   const metadataResponse = await fetch(`https://api.hubapi.com/oauth/v1/access-tokens/${data.access_token}`, {
@@ -432,6 +437,7 @@ async function exchangeCodeForToken(code: string): Promise<{ access_token: strin
 
   return {
     access_token: data.access_token,
+    refresh_token: data.refresh_token,
     hub_id: Number(hubId)
   };
 }
@@ -448,9 +454,48 @@ async function handleOAuth(request: Request): Promise<Response> {
   }
 
   try {
-    // Exchange the code for an access token
-    const { access_token, hub_id } = await exchangeCodeForToken(code);
-    console.log('Successfully exchanged code for token');
+    // Exchange the code for tokens
+    const { access_token, refresh_token, hub_id } = await exchangeCodeForToken(code);
+    console.log('Successfully exchanged code for tokens');
+
+    // Initialize Supabase client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Encrypt the tokens before storing
+    const encryptedAccessToken = await encrypt(access_token, ENCRYPTION_KEY);
+    const encryptedRefreshToken = await encrypt(refresh_token, ENCRYPTION_KEY);
+
+    const now = new Date().toISOString();
+
+    // Store the HubSpot account information
+    const { data: accountData, error: accountError } = await supabase
+      .from('hubspot_accounts')
+      .upsert({
+        portal_id: hub_id.toString(),
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
+        expires_at: new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString(),
+        created_at: now,
+        updated_at: now,
+        status: 'active',
+        token_type: 'bearer',
+        metadata: {},
+        ai_provider: 'openai',
+        ai_model: 'gpt-4-turbo-preview',
+        ai_temperature: 0.7,
+        ai_max_tokens: 4000,
+        last_scoring_counts: { contacts: 0, companies: 0, deals: 0 }
+      }, {
+        onConflict: 'portal_id'
+      })
+      .select();
+
+    if (accountError) {
+      console.error('Failed to store HubSpot account:', accountError);
+      throw new Error('Failed to store HubSpot account information');
+    }
+
+    console.log('Successfully stored HubSpot account information');
 
     try {
       await createHubSpotProperties(access_token);
