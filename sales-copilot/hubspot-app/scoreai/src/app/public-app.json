@@ -1,0 +1,49 @@
+{
+  "name": "Sales Copilot",
+  "uid": "sales-copilot",
+  "description": "AI-powered tool that helps identify and score ideal clients in your HubSpot CRM",
+  "allowedUrls": [
+    "https://api.openai.com",
+    "https://api.anthropic.com",
+    "https://generativelanguage.googleapis.com",
+    "https://*.pinecone.io"
+  ],
+  "auth": {
+    "redirectUrls": ["http://localhost:3000/oauth-callback"],
+    "requiredScopes": [
+      "crm.objects.contacts.read",
+      "crm.objects.contacts.write",
+      "crm.objects.companies.read",
+      "crm.objects.companies.write",
+      "crm.objects.deals.read",
+      "crm.objects.deals.write",
+      "properties.read",
+      "properties.write"
+    ],
+    "optionalScopes": [],
+    "conditionallyRequiredScopes": []
+  },
+  "support": {
+    "supportEmail": "support@salescopilot.ai",
+    "documentationUrl": "https://docs.salescopilot.ai",
+    "supportUrl": "https://support.salescopilot.ai",
+    "supportPhone": "+18005555555"
+  },
+  "extensions": {
+    "crm": {
+      "cards": [
+        {
+          "file": "./extensions/ideal-client-score.json"
+        }
+      ],
+      "customObjects": [
+        {
+          "file": "./extensions/ideal-client-profile.json"
+        }
+      ]
+    }
+  },
+  "webhooks": {
+    "file": "./webhooks/webhooks.json"
+  }
+}

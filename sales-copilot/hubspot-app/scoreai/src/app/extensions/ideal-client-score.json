@@ -1,0 +1,46 @@
+{
+  "name": "Ideal Client Score",
+  "description": "AI-powered score indicating how well this record matches your ideal client profile",
+  "icon": "score",
+  "target": ["contact", "company", "deal"],
+  "schema": {
+    "properties": {
+      "score": {
+        "type": "number",
+        "title": "Ideal Client Score",
+        "description": "Score from 0-100 indicating ideal client fit",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "summary": {
+        "type": "string",
+        "title": "AI Analysis",
+        "description": "AI-generated explanation of the score",
+        "format": "textarea"
+      },
+      "lastScored": {
+        "type": "string",
+        "title": "Last Scored",
+        "description": "When this record was last analyzed",
+        "format": "datetime"
+      }
+    }
+  },
+  "actions": [
+    {
+      "name": "refreshScore",
+      "label": "Refresh Score",
+      "type": "button",
+      "action": {
+        "type": "serverless",
+        "serverlessFunction": "refresh-score"
+      }
+    }
+  ],
+  "display": {
+    "type": "card",
+    "layout": "vertical",
+    "showTitle": true,
+    "showDescription": true
+  }
+} 

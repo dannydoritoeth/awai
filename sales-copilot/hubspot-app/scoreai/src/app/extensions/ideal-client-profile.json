@@ -1,0 +1,100 @@
+{
+  "name": "Ideal Client Profile",
+  "description": "Define your ideal client profile for AI-powered scoring",
+  "properties": [
+    {
+      "name": "industry",
+      "label": "Target Industries",
+      "type": "enumeration",
+      "fieldType": "select",
+      "groupName": "ideal_client_profile",
+      "description": "Industries that match your ideal client profile",
+      "options": [
+        { "label": "Technology", "value": "technology" },
+        { "label": "Healthcare", "value": "healthcare" },
+        { "label": "Finance", "value": "finance" },
+        { "label": "Manufacturing", "value": "manufacturing" },
+        { "label": "Retail", "value": "retail" }
+      ]
+    },
+    {
+      "name": "company_size",
+      "label": "Company Size",
+      "type": "enumeration",
+      "fieldType": "select",
+      "groupName": "ideal_client_profile",
+      "description": "Preferred company size range",
+      "options": [
+        { "label": "1-10", "value": "1-10" },
+        { "label": "11-50", "value": "11-50" },
+        { "label": "51-200", "value": "51-200" },
+        { "label": "201-500", "value": "201-500" },
+        { "label": "501-1000", "value": "501-1000" },
+        { "label": "1000+", "value": "1000+" }
+      ]
+    },
+    {
+      "name": "deal_size",
+      "label": "Preferred Deal Size",
+      "type": "number",
+      "fieldType": "number",
+      "groupName": "ideal_client_profile",
+      "description": "Minimum deal size in USD"
+    },
+    {
+      "name": "deal_stage",
+      "label": "Preferred Deal Stages",
+      "type": "enumeration",
+      "fieldType": "select",
+      "groupName": "ideal_client_profile",
+      "description": "Deal stages that match your ideal client profile",
+      "options": [
+        { "label": "Appointments Scheduled", "value": "appointments_scheduled" },
+        { "label": "Qualified to Buy", "value": "qualified_to_buy" },
+        { "label": "Presentations Scheduled", "value": "presentations_scheduled" },
+        { "label": "Decision Maker Bought-In", "value": "decision_maker_bought_in" },
+        { "label": "Contract Sent", "value": "contract_sent" },
+        { "label": "Closed Won", "value": "closed_won" }
+      ]
+    },
+    {
+      "name": "location",
+      "label": "Target Locations",
+      "type": "string",
+      "fieldType": "text",
+      "groupName": "ideal_client_profile",
+      "description": "Comma-separated list of target locations"
+    },
+    {
+      "name": "custom_criteria",
+      "label": "Custom Criteria",
+      "type": "string",
+      "fieldType": "textarea",
+      "groupName": "ideal_client_profile",
+      "description": "Additional criteria for ideal client matching"
+    }
+  ],
+  "associations": [
+    {
+      "name": "contacts",
+      "target": "contact",
+      "type": "HAS_MANY"
+    },
+    {
+      "name": "companies",
+      "target": "company",
+      "type": "HAS_MANY"
+    },
+    {
+      "name": "deals",
+      "target": "deal",
+      "type": "HAS_MANY"
+    }
+  ],
+  "display": {
+    "type": "form",
+    "layout": "vertical",
+    "showTitle": true,
+    "showDescription": true
+  }
+} 
