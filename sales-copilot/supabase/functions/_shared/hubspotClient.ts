@@ -462,9 +462,13 @@ export class HubspotClient {
     // Validate property groups
     for (const target of ['contact', 'company', 'deal'] as const) {
       try {
-        await this.makeRequest(`/properties/v2/${target}s/groups`, {
+        await this.makeRequest(`/properties/v1/${target}s/groups`, {
           method: 'POST',
-          body: JSON.stringify({ ...propertyGroup, target })
+          body: JSON.stringify({
+            name: propertyGroup.name,
+            displayName: propertyGroup.label,
+            displayOrder: propertyGroup.displayOrder
+          })
         });
       } catch (error) {
         if (!error.message.includes('already exists')) throw error;
@@ -475,7 +479,7 @@ export class HubspotClient {
     for (const target of ['contact', 'company', 'deal'] as const) {
       for (const property of properties) {
         try {
-          await this.makeRequest(`/properties/v2/${target}s/properties`, {
+          await this.makeRequest(`/properties/v1/${target}s/properties`, {
             method: 'POST',
             body: JSON.stringify(property)
           });
