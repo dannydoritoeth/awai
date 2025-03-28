@@ -518,26 +518,18 @@ async function handleOAuth(request: Request): Promise<Response> {
     }
 
     return new Response(
-      JSON.stringify({ 
-        message: "Successfully authenticated and configured app",
-        success: true,
-        portal_id: hub_id.toString()
-      }),
+      `Great! Your HubSpot account (Portal ID: ${hub_id}) has been successfully connected and configured.`,
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
         status: 200
       }
     );
   } catch (error) {
     console.error('OAuth process failed:', error);
     return new Response(
-      JSON.stringify({
-        message: error instanceof Error ? error.message : 'Failed to complete OAuth process',
-        success: false,
-        portal_id: null
-      }),
+      `Sorry, something went wrong: ${error instanceof Error ? error.message : 'Failed to complete OAuth process'}`,
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
         status: 400
       }
     );
