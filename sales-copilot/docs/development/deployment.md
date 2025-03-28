@@ -15,7 +15,7 @@ supabase db push
 ## 2. Deploy Edge Functions
 ```bash
 # Deploy all functions
-supabase functions deploy hubspot-oauth
+supabase functions deploy hubspot-oauth --no-verify-jwt
 supabase functions deploy hubspot-process-training
 supabase functions deploy hubspot-score-record
 supabase functions deploy hubspot-score-batch
