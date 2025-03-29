@@ -66,11 +66,14 @@ export class DocumentPackager {
   private getTitle(record: any, recordType: string): string {
     switch (recordType) {
       case 'contact':
-        return `${record.properties.firstname || ''} ${record.properties.lastname || ''}`.trim();
+        // Don't include actual names, just use role-based identifier
+        return `Contact ${record.id}`;
       case 'company':
-        return record.properties.name || '';
+        // Use industry + size category instead of actual name
+        return `${record.properties.industry || 'Unknown Industry'} Company`;
       case 'deal':
-        return record.properties.dealname || '';
+        // Use deal type/category instead of actual name
+        return `${record.properties.dealtype || 'Standard'} Deal`;
       default:
         return '';
     }
@@ -79,11 +82,14 @@ export class DocumentPackager {
   private getDescription(record: any, recordType: string): string {
     switch (recordType) {
       case 'contact':
-        return `${record.properties.jobtitle || ''} at ${record.properties.company || ''}`.trim();
+        // Only include non-PII information
+        return `${record.properties.jobtitle || 'Professional'} in ${record.properties.industry || 'Unknown Industry'}`;
       case 'company':
-        return record.properties.description || '';
+        // Use general description without specific details
+        return `${record.properties.industry || 'Business'} organization`;
       case 'deal':
-        return `${record.properties.amount || '0'} - ${record.properties.dealstage || ''}`;
+        // Use stage without amount
+        return `${record.properties.dealstage || 'In Progress'}`;
       default:
         return '';
     }
@@ -124,8 +130,6 @@ export class DocumentPackager {
     switch (recordType) {
       case 'contact':
         content.properties = {
-          email: { value: record.properties.email, label: 'Email', category: 'contact' },
-          company: { value: record.properties.company, label: 'Company', category: 'company' },
           industry: { value: record.properties.industry, label: 'Industry', category: 'business' },
           jobtitle: { value: record.properties.jobtitle, label: 'Job Title', category: 'professional' }
         };
@@ -134,31 +138,32 @@ export class DocumentPackager {
         content.properties = {
           industry: { value: record.properties.industry, label: 'Industry', category: 'business' },
           type: { value: record.properties.type, label: 'Type', category: 'business' },
-          size: { value: record.properties.numberofemployees, label: 'Employee Count', category: 'business' }
+          size_category: { 
+            value: this.getSizeCategory(record.properties.numberofemployees), 
+            label: 'Size Category', 
+            category: 'business' 
+          }
         };
         break;
       case 'deal':
         content.properties = {
-          amount: { value: record.properties.amount, label: 'Amount', category: 'financial' },
           stage: { value: record.properties.dealstage, label: 'Stage', category: 'pipeline' },
           pipeline: { value: record.properties.pipeline, label: 'Pipeline', category: 'pipeline' },
-          closedate: { value: record.properties.closedate, label: 'Close Date', category: 'timeline' }
+          type: { value: record.properties.dealtype, label: 'Type', category: 'pipeline' }
         };
         break;
     }
 
-    // Add any custom properties that don't start with 'training_'
-    Object.entries(record.properties)
-      .filter(([key, value]) => !key.startsWith('training_') && !content.properties[key])
-      .forEach(([key, value]) => {
-        content.properties[key] = {
-          value,
-          label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-          category: 'custom'
-        };
-      });
-
     return content;
+  }
+
+  private getSizeCategory(employeeCount: string | number | null): string {
+    const count = Number(employeeCount);
+    if (isNaN(count)) return 'Unknown';
+    if (count < 10) return 'Micro';
+    if (count < 50) return 'Small';
+    if (count < 250) return 'Medium';
+    return 'Large';
   }
 
   private contentToString(content: StructuredContent): string {
@@ -222,12 +227,9 @@ export class DocumentPackager {
     if (!companyId) return null;
     try {
       const company = await this.hubspotClient.getRecord('company', companyId, [
-        'name',
         'industry',
         'type',
-        'description',
         'numberofemployees',
-        'training_classification',
         'training_score'
       ]);
       return company;
