@@ -118,16 +118,26 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
+    // If the endpoint starts with http(s), use it as is, otherwise prepend baseUrl
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+    
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
       'Content-Type': 'application/json',
       ...options.headers
     };
 
-    return fetch(endpoint, {
+    const response = await fetch(url, {
       ...options,
       headers
     });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(error.message || `Request failed: ${response.statusText}`);
+    }
+
+    return response;
   }
 
   async getContact(id: string): Promise<HubspotRecord> {
@@ -469,10 +479,16 @@ export class HubspotClient implements HubspotClientInterface {
       }
     ];
 
+    const objectTypePlural = {
+      'contact': 'contacts',
+      'company': 'companies',
+      'deal': 'deals'
+    };
+
     // Validate property groups
     for (const target of ['contact', 'company', 'deal'] as const) {
       try {
-        await this.makeRequest(`/properties/v1/${target}s/groups`, {
+        await this.makeRequest(`/properties/v2/${objectTypePlural[target]}/groups`, {
           method: 'POST',
           body: JSON.stringify({
             name: propertyGroup.name,
@@ -481,7 +497,10 @@ export class HubspotClient implements HubspotClientInterface {
           })
         });
       } catch (error) {
-        if (!error.message.includes('already exists')) throw error;
+        if (!error.message?.includes('already exists')) {
+          this.logger.error(`Failed to create property group for ${target}:`, error);
+          throw error;
+        }
       }
     }
 
@@ -489,12 +508,15 @@ export class HubspotClient implements HubspotClientInterface {
     for (const target of ['contact', 'company', 'deal'] as const) {
       for (const property of properties) {
         try {
-          await this.makeRequest(`/properties/v1/${target}s/properties`, {
+          await this.makeRequest(`/properties/v2/${objectTypePlural[target]}/properties`, {
             method: 'POST',
             body: JSON.stringify(property)
           });
         } catch (error) {
-          if (!error.message.includes('already exists')) throw error;
+          if (!error.message?.includes('already exists')) {
+            this.logger.error(`Failed to create property for ${target}:`, error);
+            throw error;
+          }
         }
       }
     }
