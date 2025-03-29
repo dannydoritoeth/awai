@@ -10,6 +10,8 @@ const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY')!;
 const HUBSPOT_CLIENT_ID = Deno.env.get('HUBSPOT_CLIENT_ID')!;
 const HUBSPOT_CLIENT_SECRET = Deno.env.get('HUBSPOT_CLIENT_SECRET')!;
 const HUBSPOT_REDIRECT_URI = Deno.env.get('HUBSPOT_REDIRECT_URI')!;
+const APP_INSTALL_SUCCESS_URI = Deno.env.get('APP_INSTALL_SUCCESS_URI')!;
+const APP_INSTALL_FAILED_URI = Deno.env.get('APP_INSTALL_FAILED_URI')!;
 
 const trainingProperties = {
   contacts: [
@@ -414,10 +416,9 @@ async function handleOAuth(request: Request): Promise<Response> {
   const code = url.searchParams.get('code');
   
   if (!code) {
-    return new Response('ERROR: Missing authorization code', {
-      headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
-      status: 400
-    });
+    const failureUri = new URL(APP_INSTALL_FAILED_URI);
+    failureUri.searchParams.set('error', 'Missing authorization code');
+    return Response.redirect(failureUri.toString(), 302);
   }
 
   try {
@@ -459,18 +460,20 @@ async function handleOAuth(request: Request): Promise<Response> {
 
     if (accountError) {
       console.error('Failed to store HubSpot account:', accountError);
-      throw new Error('Failed to store HubSpot account information');
+      const failureUri = new URL(APP_INSTALL_FAILED_URI);
+      failureUri.searchParams.set('error', 'Failed to store HubSpot account information');
+      return Response.redirect(failureUri.toString(), 302);
     }
 
     console.log('Successfully stored HubSpot account information');
 
+    let setupError = null;
     try {
       await createHubSpotProperties(access_token);
       console.log('Successfully created HubSpot properties');
     } catch (error) {
       console.error('Setup failed:', error);
-      // Continue with success response even if setup fails
-      // This allows retry mechanisms to handle it
+      setupError = error instanceof Error ? error.message : 'Property setup failed';
     }
 
     // Validate required properties
@@ -480,26 +483,24 @@ async function handleOAuth(request: Request): Promise<Response> {
       console.log('Successfully validated HubSpot properties');
     } catch (error) {
       console.error('Property validation failed:', error);
-      // Continue with success response even if validation fails
-      // Properties will be validated again during scoring
+      if (!setupError) {
+        setupError = error instanceof Error ? error.message : 'Property validation failed';
+      }
     }
 
-    return new Response(
-      `Great! Your HubSpot account (Portal ID: ${hub_id}) has been successfully connected and configured.`,
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
-        status: 200
-      }
-    );
+    // Redirect to success URI with portal ID and any setup warnings
+    const successUri = new URL(APP_INSTALL_SUCCESS_URI);
+    successUri.searchParams.set('portal_id', hub_id.toString());
+    if (setupError) {
+      successUri.searchParams.set('warning', setupError);
+    }
+    return Response.redirect(successUri.toString(), 302);
+
   } catch (error) {
     console.error('OAuth process failed:', error);
-    return new Response(
-      `Sorry, something went wrong: ${error instanceof Error ? error.message : 'Failed to complete OAuth process'}`,
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
-        status: 400
-      }
-    );
+    const failureUri = new URL(APP_INSTALL_FAILED_URI);
+    failureUri.searchParams.set('error', error instanceof Error ? error.message : 'Failed to complete OAuth process');
+    return Response.redirect(failureUri.toString(), 302);
   }
 }
 
