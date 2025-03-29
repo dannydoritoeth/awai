@@ -1,7 +1,7 @@
 {
   "name": "ScoreAI",
   "uid": "scoreai",
-  "description": "AI-Powered Lead Scoring for HubSpot\n\nAutomatically score and prioritize your leads using AI trained on your real customer data—not generic rules. This app helps sales and marketing teams focus on the highest-value opportunities by analyzing your Contacts, Companies, and Deals against what makes a great customer for you.\n\nWhether you're on Starter, Professional, or Enterprise, you can easily define what an ideal or non-ideal customer looks like, and let the system do the rest—delivering a dynamic lead score and an AI-generated summary for every record.\n\n🔑 Key Features:\n - Works across all HubSpot tiers\n - Score Contacts, Companies, and Deals\n - Trained on your actual ideal & non-ideal customers\n - Includes AI-generated explanations for transparency\n - No need for complex workflows or static rules\n - Seamlessly updates scores as your data evolves\n\nTake the guesswork out of lead scoring—get better alignment between sales and marketing, faster follow-ups, and more closed deals.",
+  "description": "AI-Powered Lead Scoring for HubSpot\n\nAutomatically score and prioritize your leads using AI trained on your real customer data—not generic rules. This app helps sales and marketing teams focus on the highest-value opportunities by analyzing your Contacts, Companies, and Deals against what makes a great customer for you.\n\n🔑 Key Features:\n - Works across all HubSpot tiers\n - Score Contacts, Companies, and Deals\n - Trained on your actual ideal & non-ideal customers\n - Includes AI-generated explanations\n - No complex workflows needed\n - Seamlessly updates as your data evolves\n\nTake the guesswork out of lead scoring—get better alignment between sales and marketing, faster follow-ups, and more closed deals.",
   "allowedUrls": ["https://api.example.com"],
   "auth": {
     "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
@@ -35,6 +35,70 @@
     }
   },
   "webhooks": {
-    "file": "./webhooks/training.json"
+    "subscriptions": [
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_score",
+        "objectType": "CONTACT",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_attributes",
+        "objectType": "CONTACT",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_notes",
+        "objectType": "CONTACT",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_score",
+        "objectType": "COMPANY",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_attributes",
+        "objectType": "COMPANY",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_notes",
+        "objectType": "COMPANY",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_score",
+        "objectType": "DEAL",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_attributes",
+        "objectType": "DEAL",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      },
+      {
+        "eventType": "property.propertyChange",
+        "propertyName": "training_notes",
+        "objectType": "DEAL",
+        "webhookUrl": "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-process-training",
+        "active": true
+      }
+    ]
   }
 }
