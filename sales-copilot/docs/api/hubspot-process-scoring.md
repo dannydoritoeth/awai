@@ -6,8 +6,15 @@ This edge function handles the periodic AI lead scoring process for HubSpot acco
 
 The function:
 1. Checks if accounts have enough training data (≥10 high scores and ≥10 low scores)
-2. Processes unscored records in batches of 100
+2. Processes unscored records in batches of 100, prioritizing most recent records first
 3. Calls the batch scoring function for each batch
+
+## Processing Order
+
+Records are processed in the following order:
+- Most recent records first (sorted by `createdate` in descending order)
+- This ensures that new records are scored before older ones
+- Helps maintain up-to-date scoring for active records
 
 ## Endpoints
 

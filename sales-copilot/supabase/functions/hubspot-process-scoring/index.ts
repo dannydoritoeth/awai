@@ -116,7 +116,11 @@ async function processAccount(
                 operator: 'HAS_NO_VALUE'
               }]
             }],
-            properties: ['id', 'ai_score'],
+            properties: ['id', 'ai_score', 'createdate'],
+            sorts: [{
+              propertyName: 'createdate',
+              direction: 'DESCENDING'
+            }],
             limit: batchSize
           });
 
