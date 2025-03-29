@@ -35,6 +35,6 @@
     }
   },
   "webhooks": {
-    "file": "./webhooks/webhooks.json"
+    "file": "./webhooks/training.json"
   }
 }

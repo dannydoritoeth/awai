@@ -362,19 +362,80 @@ export class HubspotClient implements HubspotClientInterface {
       eventType: string;
       webhookUrl: string;
       propertyName?: string;
+      objectType?: string;
     }
   ) {
     const url = `/webhooks/v3/${appId}/subscriptions`;
     
+    const subscription = {
+      eventType: subscriptionDetails.eventType,
+      propertyName: subscriptionDetails.propertyName,
+      objectType: subscriptionDetails.objectType,
+      webhookUrl: subscriptionDetails.webhookUrl,
+      active: true
+    };
+
+    this.logger.info('Creating webhook subscription:', subscription);
+    
     return this.makeRequest(url, {
       method: 'POST',
-      body: JSON.stringify({
-        eventType: subscriptionDetails.eventType,
-        propertyName: subscriptionDetails.propertyName,
-        webhookUrl: subscriptionDetails.webhookUrl,
-        active: true
-      })
-    }, false);
+      body: JSON.stringify(subscription)
+    });
+  }
+
+  /**
+   * Set up training field webhooks for a specific object type
+   */
+  async setupTrainingWebhooks(
+    appId: string,
+    objectType: 'contacts' | 'companies' | 'deals',
+    webhookUrl: string
+  ) {
+    const trainingProperties = [
+      'training_score',
+      'training_attributes',
+      'training_notes'
+    ];
+
+    const subscriptions = [];
+
+    for (const propertyName of trainingProperties) {
+      try {
+        const subscription = await this.createWebhookSubscription(appId, {
+          eventType: 'property.propertyChange',
+          propertyName,
+          objectType,
+          webhookUrl
+        });
+        subscriptions.push(subscription);
+        this.logger.info(`Created webhook for ${objectType}.${propertyName}`);
+      } catch (error) {
+        this.logger.error(`Failed to create webhook for ${objectType}.${propertyName}:`, error);
+        throw error;
+      }
+    }
+
+    return subscriptions;
+  }
+
+  /**
+   * Set up all training webhooks for contacts, companies, and deals
+   */
+  async setupAllTrainingWebhooks(appId: string, webhookUrl: string) {
+    const objectTypes = ['contacts', 'companies', 'deals'] as const;
+    const results = {};
+
+    for (const objectType of objectTypes) {
+      try {
+        results[objectType] = await this.setupTrainingWebhooks(appId, objectType, webhookUrl);
+        this.logger.info(`Successfully set up webhooks for ${objectType}`);
+      } catch (error) {
+        this.logger.error(`Failed to set up webhooks for ${objectType}:`, error);
+        throw error;
+      }
+    }
+
+    return results;
   }
 
   async getContactWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
