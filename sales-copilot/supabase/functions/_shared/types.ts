@@ -31,4 +31,25 @@ export interface HubSpotWebhookEvent {
   objectId: number;
   changeSource: string;
   changeFlag: string;
+}
+
+export interface PropertyHistoryEntry {
+  timestamp: string;
+  propertyName: string;
+  previousValue: string;
+  value: string;
+  source: string;
+}
+
+export interface EngagementHistoryEntry {
+  type: string;
+  timestamp: string;
+  details: string;
+}
+
+export interface HubspotClientInterface {
+  getPropertyHistory(recordId: string, recordType: string, properties: string[]): Promise<PropertyHistoryEntry[]>;
+  getEngagementHistory(recordId: string, recordType: string): Promise<EngagementHistoryEntry[]>;
+  getRecord(objectType: string, recordId: string, properties: string[]): Promise<any>;
+  searchRecords(objectType: string, query: any): Promise<any>;
 } 

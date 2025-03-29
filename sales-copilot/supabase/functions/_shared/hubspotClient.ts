@@ -1,3 +1,6 @@
+import { Logger } from './logger.ts';
+import { HubspotClientInterface, PropertyHistoryEntry, EngagementHistoryEntry } from './types.ts';
+
 export interface HubspotRecord {
   id: string;
   properties: Record<string, any>;
@@ -84,8 +87,9 @@ interface CrmCardDefinition {
   actions?: Record<string, any>;
 }
 
-export class HubspotClient {
+export class HubspotClient implements HubspotClientInterface {
   private accessToken: string;
+  private logger: Logger;
   private baseUrl = 'https://api.hubapi.com';
   private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
   private rateLimitDelay = 100; // ms between requests
@@ -93,6 +97,7 @@ export class HubspotClient {
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
+    this.logger = new Logger('HubspotClient');
   }
 
   private async rateLimitedRequest<T>(fn: () => Promise<T>, retryCount = 0): Promise<T> {
@@ -112,23 +117,16 @@ export class HubspotClient {
     }
   }
 
-  private async makeRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-    return this.rateLimitedRequest(async () => {
-      const response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
+    const headers = {
+      'Authorization': `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(`HubSpot API error: ${response.status} ${response.statusText} ${JSON.stringify(error)}`);
-      }
-
-      return response.json();
+    return fetch(endpoint, {
+      ...options,
+      headers
     });
   }
 
@@ -186,11 +184,23 @@ export class HubspotClient {
     });
   }
 
-  async searchRecords(type: 'contact' | 'company' | 'deal', request: SearchRequest) {
-    return this.makeRequest(`/objects/${type}s/search`, {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+  async searchRecords(objectType: string, query: any): Promise<any> {
+    try {
+      const endpoint = `https://api.hubapi.com/crm/v3/objects/${objectType}/search`;
+      const response = await this.makeRequest(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(query)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to search records: ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      this.logger.error('Error searching records:', error);
+      throw error;
+    }
   }
 
   async createPropertyGroup(group: PropertyGroup) {
@@ -522,5 +532,141 @@ export class HubspotClient {
       method: 'PATCH',
       body: JSON.stringify({ properties })
     });
+  }
+
+  /**
+   * Get the history of property changes for a record
+   */
+  async getPropertyHistory(recordId: string, recordType: string, properties: string[]): Promise<PropertyHistoryEntry[]> {
+    try {
+      const endpoint = `https://api.hubapi.com/crm/v3/objects/${recordType}/${recordId}/history`;
+      const params = new URLSearchParams({ properties: properties.join(',') });
+      const response = await this.makeRequest(`${endpoint}?${params}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get property history: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.results.map((change: any) => ({
+        timestamp: change.timestamp,
+        propertyName: change.propertyName,
+        previousValue: change.previousValue,
+        value: change.value,
+        source: change.sourceType || 'system'
+      }));
+    } catch (error) {
+      this.logger.error('Error getting property history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get the engagement history for a record
+   */
+  async getEngagementHistory(recordId: string, recordType: string): Promise<EngagementHistoryEntry[]> {
+    try {
+      const endpoint = `https://api.hubapi.com/crm/v3/objects/${recordType}/${recordId}/associations/engagement`;
+      const response = await this.makeRequest(endpoint);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get engagements: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const engagementIds = data.results.map((result: any) => result.id);
+
+      const engagements = await Promise.all(
+        engagementIds.map(async (id: string) => {
+          const engagementResponse = await this.makeRequest(
+            `https://api.hubapi.com/engagements/v1/engagements/${id}`
+          );
+
+          if (!engagementResponse.ok) {
+            return null;
+          }
+
+          const engagementData = await engagementResponse.json();
+          return {
+            type: this.mapEngagementType(engagementData.engagement.type),
+            timestamp: engagementData.engagement.createdAt,
+            details: this.formatEngagementDetails(engagementData)
+          };
+        })
+      );
+
+      return engagements.filter((e): e is NonNullable<typeof e> => e !== null);
+    } catch (error) {
+      this.logger.error('Error getting engagement history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Map HubSpot engagement types to our standardized types
+   */
+  private mapEngagementType(type: string): string {
+    const typeMap: Record<string, string> = {
+      'NOTE': 'note',
+      'EMAIL': 'email',
+      'TASK': 'task',
+      'CALL': 'call',
+      'MEETING': 'meeting',
+      'FORM_SUBMISSION': 'form_submission',
+      'PAGE_VIEW': 'page_view',
+      'DOCUMENT_DOWNLOAD': 'downloaded_content',
+      'WEBINAR_REGISTRATION': 'attended_webinar',
+      'DEMO_REQUEST': 'requested_demo',
+      'PRICING_PAGE_VIEW': 'visited_pricing'
+    };
+
+    return typeMap[type] || type.toLowerCase();
+  }
+
+  /**
+   * Format engagement details into a readable string
+   */
+  private formatEngagementDetails(engagement: any): string {
+    const type = engagement.engagement.type;
+    const metadata = engagement.metadata;
+
+    switch (type) {
+      case 'EMAIL':
+        return `Email: ${metadata.subject || 'No subject'}`;
+      case 'CALL':
+        return `Call: ${metadata.status || 'Unknown status'} - ${metadata.disposition || 'No disposition'}`;
+      case 'MEETING':
+        return `Meeting: ${metadata.title || 'No title'}`;
+      case 'FORM_SUBMISSION':
+        return `Form submitted: ${metadata.formName || 'Unknown form'}`;
+      case 'PAGE_VIEW':
+        return `Viewed page: ${metadata.path || 'Unknown page'}`;
+      case 'DOCUMENT_DOWNLOAD':
+        return `Downloaded: ${metadata.documentName || 'Unknown document'}`;
+      case 'NOTE':
+        return metadata.body || 'No content';
+      default:
+        return `${type}: ${JSON.stringify(metadata)}`;
+    }
+  }
+
+  /**
+   * Get a single record by ID
+   */
+  async getRecord(objectType: string, recordId: string, properties: string[]): Promise<any> {
+    try {
+      const endpoint = `https://api.hubapi.com/crm/v3/objects/${objectType}/${recordId}`;
+      const params = new URLSearchParams({ properties: properties.join(',') });
+      const response = await this.makeRequest(`${endpoint}?${params}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get record: ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      this.logger.error('Error getting record:', error);
+      throw error;
+    }
   }
 } 

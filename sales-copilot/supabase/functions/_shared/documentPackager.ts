@@ -36,6 +36,35 @@ interface StructuredContent {
       category: string;
     };
   };
+  timeline?: {
+    events: {
+      timestamp: string;
+      type: string;
+      description: string;
+      oldValue?: string;
+      newValue?: string;
+      source?: string;
+    }[];
+    summary?: {
+      firstInteraction?: string;
+      lastInteraction?: string;
+      totalInteractions: number;
+      significantChanges: string[];
+    };
+  };
+  engagement?: {
+    history: {
+      type: string;
+      timestamp: string;
+      details: string;
+    }[];
+    metrics: {
+      totalEngagements: number;
+      lastEngagement?: string;
+      engagementTypes: string[];
+      highValueActions: string[];
+    };
+  };
   relationships?: {
     [key: string]: {
       type: string;
@@ -152,6 +181,18 @@ export class DocumentPackager {
           type: { value: record.properties.dealtype, label: 'Type', category: 'pipeline' }
         };
         break;
+    }
+
+    // Add timeline tracking
+    const timeline = await this.buildTimeline(record, recordType);
+    if (timeline) {
+      content.timeline = timeline;
+    }
+
+    // Add engagement history
+    const engagement = await this.buildEngagementHistory(record, recordType);
+    if (engagement) {
+      content.engagement = engagement;
     }
 
     return content;
@@ -414,6 +455,102 @@ export class DocumentPackager {
         }
         break;
       }
+    }
+  }
+
+  private async buildTimeline(record: any, recordType: string): Promise<StructuredContent['timeline']> {
+    const events: StructuredContent['timeline']['events'] = [];
+    
+    try {
+      // Get property history from HubSpot
+      const propertyHistory = await this.hubspotClient.getPropertyHistory(record.id, recordType, [
+        'dealstage',
+        'pipeline',
+        'lifecyclestage',
+        'hs_lead_status',
+        'jobtitle',
+        'industry'
+      ]);
+
+      // Convert property changes to timeline events
+      events.push(...propertyHistory.map(change => ({
+        timestamp: change.timestamp,
+        type: 'property_change',
+        description: `${change.propertyName} changed`,
+        oldValue: change.previousValue,
+        newValue: change.value,
+        source: change.source
+      })));
+
+      // Get engagement history
+      const engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+      
+      // Add significant engagements to timeline
+      events.push(...engagements.map(engagement => ({
+        timestamp: engagement.timestamp,
+        type: 'engagement',
+        description: engagement.type,
+        details: engagement.details
+      })));
+
+      // Sort all events by timestamp
+      events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      // Create timeline summary
+      const summary = {
+        firstInteraction: events[0]?.timestamp,
+        lastInteraction: events[events.length - 1]?.timestamp,
+        totalInteractions: events.length,
+        significantChanges: events
+          .filter(e => e.type === 'property_change' && 
+            ['dealstage', 'lifecyclestage', 'hs_lead_status'].includes(e.propertyName))
+          .map(e => `${e.propertyName}: ${e.oldValue} → ${e.newValue}`)
+      };
+
+      return { events, summary };
+    } catch (error) {
+      this.logger.warn(`Failed to build timeline for ${recordType} ${record.id}:`, error);
+      return { events: [], summary: { totalInteractions: 0, significantChanges: [] } };
+    }
+  }
+
+  private async buildEngagementHistory(record: any, recordType: string): Promise<StructuredContent['engagement']> {
+    try {
+      const engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+      
+      const history = engagements.map(e => ({
+        type: e.type,
+        timestamp: e.timestamp,
+        details: e.details
+      }));
+
+      // Calculate engagement metrics
+      const metrics = {
+        totalEngagements: history.length,
+        lastEngagement: history[history.length - 1]?.timestamp,
+        engagementTypes: [...new Set(history.map(h => h.type))],
+        highValueActions: history
+          .filter(h => [
+            'downloaded_content',
+            'attended_webinar',
+            'requested_demo',
+            'visited_pricing',
+            'multiple_page_views'
+          ].includes(h.type))
+          .map(h => h.type)
+      };
+
+      return { history, metrics };
+    } catch (error) {
+      this.logger.warn(`Failed to build engagement history for ${recordType} ${record.id}:`, error);
+      return { 
+        history: [], 
+        metrics: { 
+          totalEngagements: 0, 
+          engagementTypes: [], 
+          highValueActions: [] 
+        } 
+      };
     }
   }
 
