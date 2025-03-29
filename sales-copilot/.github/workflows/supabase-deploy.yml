@@ -1,0 +1,54 @@
+name: Deploy Supabase Resources
+
+on:
+  push:
+    branches: [scoreai-dev, scoreai-test, scoreai-live]
+  pull_request:
+    branches: [scoreai-dev, scoreai-test, scoreai-live]
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Deploy SQL
+        run: |
+          if [ ${{ github.ref }} = 'refs/heads/scoreai-dev' ]; then
+            supabase db push --db-url ${{ secrets.SUPABASE_DEV_DB_URL }}
+          elif [ ${{ github.ref }} = 'refs/heads/scoreai-test' ]; then
+            supabase db push --db-url ${{ secrets.SUPABASE_TEST_DB_URL }}
+          else
+            supabase db push --db-url ${{ secrets.SUPABASE_PROD_DB_URL }}
+          fi
+
+      - name: Deploy Edge Functions
+        run: |
+          if [ ${{ github.ref }} = 'refs/heads/scoreai-dev' ]; then
+            supabase functions deploy hubspot-oauth --no-verify-jwt
+            supabase functions deploy hubspot-process-training --no-verify-jwt
+            supabase functions deploy hubspot-process-scoring --no-verify-jwt
+            supabase functions deploy hubspot-batch-score --no-verify-jwt
+          elif [ ${{ github.ref }} = 'refs/heads/scoreai-test' ]; then
+            supabase functions deploy hubspot-oauth --no-verify-jwt
+            supabase functions deploy hubspot-process-training --no-verify-jwt
+            supabase functions deploy hubspot-process-scoring --no-verify-jwt
+            supabase functions deploy hubspot-batch-score --no-verify-jwt
+          else
+            supabase functions deploy hubspot-oauth --no-verify-jwt
+            supabase functions deploy hubspot-process-training --no-verify-jwt
+            supabase functions deploy hubspot-process-scoring --no-verify-jwt
+            supabase functions deploy hubspot-batch-score --no-verify-jwt
+          fi 

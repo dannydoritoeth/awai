@@ -1,0 +1,57 @@
+name: Deploy HubSpot App
+
+on:
+  push:
+    branches: [scoreai-dev, scoreai-test, scoreai-live]
+    paths:
+      - 'hubspot-app/**'
+  pull_request:
+    branches: [scoreai-dev, scoreai-test, scoreai-live]
+    paths:
+      - 'hubspot-app/**'
+
+env:
+  HUBSPOT_DEV_APP_ID: ${{ secrets.HUBSPOT_DEV_APP_ID }}
+  HUBSPOT_TEST_APP_ID: ${{ secrets.HUBSPOT_TEST_APP_ID }}
+  HUBSPOT_PROD_APP_ID: ${{ secrets.HUBSPOT_PROD_APP_ID }}
+  HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install HubSpot CLI
+        run: npm install -g @hubspot/cli
+
+      - name: Configure HubSpot CLI
+        run: |
+          if [ ${{ github.ref }} = 'refs/heads/scoreai-dev' ]; then
+            hubspot config set appId ${{ secrets.HUBSPOT_DEV_APP_ID }}
+          elif [ ${{ github.ref }} = 'refs/heads/scoreai-test' ]; then
+            hubspot config set appId ${{ secrets.HUBSPOT_TEST_APP_ID }}
+          else
+            hubspot config set appId ${{ secrets.HUBSPOT_PROD_APP_ID }}
+          fi
+          hubspot auth set accessToken ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
+
+      - name: Deploy HubSpot App
+        run: |
+          cd hubspot-app/scoreai
+          hubspot app deploy
+
+      - name: Verify Deployment
+        run: |
+          if [ ${{ github.ref }} = 'refs/heads/scoreai-dev' ]; then
+            hubspot app status --appId ${{ secrets.HUBSPOT_DEV_APP_ID }}
+          elif [ ${{ github.ref }} = 'refs/heads/scoreai-test' ]; then
+            hubspot app status --appId ${{ secrets.HUBSPOT_TEST_APP_ID }}
+          else
+            hubspot app status --appId ${{ secrets.HUBSPOT_PROD_APP_ID }}
+          fi 

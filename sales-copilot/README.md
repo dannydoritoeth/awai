@@ -70,3 +70,80 @@ Periodically processes updated records:
 ### Shared Components
 - `ScoringService`: Core scoring logic
 - `HubspotClient`: HubSpot API interactions
+
+## Deployment
+
+The application is automatically deployed to different environments based on Git branches:
+
+### Environments
+
+- **Development** (`scoreai-dev` branch)
+  - Deploys to development environment
+  - Used for feature development and testing
+  - URL: `https://dev-[project-ref].supabase.co`
+
+- **Testing** (`scoreai-test` branch)
+  - Deploys to staging environment
+  - Used for QA and acceptance testing
+  - URL: `https://test-[project-ref].supabase.co`
+
+- **Production** (`scoreai-live` branch)
+  - Deploys to production environment
+  - Used for live customer data
+  - URL: `https://[project-ref].supabase.co`
+
+### Deployment Process
+
+The deployment process is automated using GitHub Actions:
+
+1. **Supabase Resources** (`.github/workflows/supabase-deploy.yml`)
+   - Deploys SQL migrations
+   - Deploys Edge Functions
+   - Runs on push/PR to scoreai-dev/scoreai-test/scoreai-live branches
+
+2. **HubSpot App** (`.github/workflows/hubspot-deploy.yml`)
+   - Deploys HubSpot app configuration
+   - Only runs when changes are made to `hubspot-app/` directory
+   - Runs on push/PR to scoreai-dev/scoreai-test/scoreai-live branches
+
+### Required Secrets
+
+The following secrets need to be configured in GitHub:
+
+#### Supabase
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_PROJECT_ID`
+- `SUPABASE_DEV_DB_URL`
+- `SUPABASE_TEST_DB_URL`
+- `SUPABASE_PROD_DB_URL`
+
+#### HubSpot
+- `HUBSPOT_DEV_APP_ID`
+- `HUBSPOT_TEST_APP_ID`
+- `HUBSPOT_PROD_APP_ID`
+- `HUBSPOT_ACCESS_TOKEN`
+
+### Manual Deployment
+
+To manually deploy:
+
+1. **Supabase**
+   ```bash
+   # Deploy SQL
+   supabase db push --db-url [ENV_DB_URL]
+
+   # Deploy Functions
+   supabase functions deploy [function-name] --no-verify-jwt
+   ```
+
+2. **HubSpot**
+   ```bash
+   cd hubspot-app/scoreai
+   hubspot config set appId [APP_ID]
+   hubspot auth set accessToken [ACCESS_TOKEN]
+   hubspot app deploy
+   ```
+
+## Development
+
+[Rest of your existing README content...]
