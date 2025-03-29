@@ -5,7 +5,6 @@ interface DocumentMetadata {
   id: string;
   source: string;
   portalId: string;
-  classification?: string;
   score?: number;
   attributes?: string[];
   isTrainingData: boolean;
@@ -93,7 +92,19 @@ export class DocumentPackager {
   private async buildStructuredContent(record: any, recordType: string): Promise<StructuredContent> {
     const attributes = record.properties.training_attributes?.split(';') || [];
     const score = parseFloat(record.properties.training_score) || undefined;
-    const classification = record.properties.training_classification;
+    
+    // Determine classification based on score thresholds
+    let classification: string;
+    if (score === undefined) {
+      classification = 'Unknown';
+    } else if (score > 80) {
+      classification = 'Ideal';
+    } else if (score < 50) {
+      classification = 'Less Ideal';
+    } else {
+      classification = 'Neutral';
+    }
+
     const notes = record.properties.training_notes;
 
     const content: StructuredContent = {
@@ -423,7 +434,6 @@ export class DocumentPackager {
       source: 'hubspot',
       portalId,
       recordType,
-      classification: record.properties.training_classification,
       score: parseFloat(record.properties.training_score) || undefined,
       attributes: record.properties.training_attributes?.split(';') || [],
       isTrainingData: true,

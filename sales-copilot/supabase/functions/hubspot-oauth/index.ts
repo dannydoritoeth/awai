@@ -14,17 +14,6 @@ const HUBSPOT_REDIRECT_URI = Deno.env.get('HUBSPOT_REDIRECT_URI')!;
 const trainingProperties = {
   contacts: [
     {
-      name: 'training_classification',
-      label: 'Training Classification',
-      type: 'enumeration',
-      fieldType: 'select',
-      options: [
-        { label: 'Ideal', value: 'ideal' },
-        { label: 'Less Ideal', value: 'less_ideal' }
-      ],
-      groupName: 'ai_scoring'
-    },
-    {
       name: 'training_score',
       label: 'Training Score',
       type: 'number',
@@ -67,17 +56,6 @@ const trainingProperties = {
   ],
   companies: [
     {
-      name: 'training_classification',
-      label: 'Training Classification',
-      type: 'enumeration',
-      fieldType: 'select',
-      options: [
-        { label: 'Ideal', value: 'ideal' },
-        { label: 'Less Ideal', value: 'less_ideal' }
-      ],
-      groupName: 'ai_scoring'
-    },
-    {
       name: 'training_score',
       label: 'Training Score',
       type: 'number',
@@ -119,17 +97,6 @@ const trainingProperties = {
     }
   ],
   deals: [
-    {
-      name: 'training_classification',
-      label: 'Training Classification',
-      type: 'enumeration',
-      fieldType: 'select',
-      options: [
-        { label: 'Ideal', value: 'ideal' },
-        { label: 'Less Ideal', value: 'less_ideal' }
-      ],
-      groupName: 'ai_scoring'
-    },
     {
       name: 'training_score',
       label: 'Training Score',

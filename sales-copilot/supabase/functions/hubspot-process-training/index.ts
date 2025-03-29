@@ -253,7 +253,6 @@ serve(async (req) => {
 
       // Get properties based on record type
       const properties = [
-        'training_classification',
         'training_attributes',
         'training_score',
         'training_notes',
@@ -279,14 +278,13 @@ serve(async (req) => {
         ])
       ];
 
-      // Search for classified records
-      logger.info(`Searching for classified ${type} in HubSpot`);
+      // Search for records with training data
+      logger.info(`Searching for ${type} with training data in HubSpot`);
       const searchResults = await hubspotClient.searchRecords(recordType, {
         filterGroups: [{
           filters: [{
-            propertyName: 'training_classification',
-            operator: 'IN',
-            values: ['ideal', 'less_ideal']
+            propertyName: 'training_score',
+            operator: 'EXISTS'
           }]
         }],
         properties,
