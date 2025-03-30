@@ -1,6 +1,6 @@
 -- Enable required extensions if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA net;
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Grant necessary permissions
 GRANT USAGE ON SCHEMA net TO postgres;
