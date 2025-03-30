@@ -366,7 +366,7 @@ export class HubspotClient implements HubspotClientInterface {
     for (const [objectType, properties] of Object.entries(requiredProperties)) {
       for (const property of properties) {
         try {
-          await this.makeRequest(`/properties/v1/${objectType}/properties/${property}`);
+          await this.makeRequest(`/crm/v3/properties/${objectType}/${property}`);
         } catch (error) {
           this.logger.error(`Property ${property} not found for ${objectType}`);
           throw new Error(`Required property ${property} not found for ${objectType}`);
