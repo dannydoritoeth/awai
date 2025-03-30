@@ -40,7 +40,7 @@ async function processRecords(records: any[], type: string, portalId: string, sh
     apiKey: Deno.env.get('PINECONE_API_KEY') || '',
   });
 
-  const pineconeIndex = pinecone.index('sales-copilot');
+  const pineconeIndex = pinecone.index(Deno.env.get('PINECONE_INDEX') || 'sales-copilot');
   const namespace = `hubspot-${portalId}`;
 
   // Delete all existing vectors in the namespace if this is the first record type
@@ -82,7 +82,7 @@ async function processRecords(records: any[], type: string, portalId: string, sh
   logger.info(`Upserting ${vectors.length} vectors to Pinecone`);
   logger.info('Pinecone config:', {
     apiKey: Deno.env.get('PINECONE_API_KEY')?.slice(0, 5) + '...',
-    indexName: 'sales-copilot',
+    indexName: Deno.env.get('PINECONE_INDEX') || 'sales-copilot',
     namespace
   });
 
