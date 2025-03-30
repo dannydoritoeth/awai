@@ -198,10 +198,20 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async createPropertyGroup(group: PropertyGroup) {
-    const endpoint = `/properties/v1/${group.target}/groups`;
+    const objectTypePlural = {
+      'contact': 'contacts',
+      'company': 'companies',
+      'deal': 'deals'
+    }[group.target];
+
+    const endpoint = `/properties/v1/${objectTypePlural}/groups`;
     return this.makeRequest(endpoint, {
       method: 'POST',
-      body: JSON.stringify(group)
+      body: JSON.stringify({
+        name: group.name,
+        displayName: group.label,
+        displayOrder: group.displayOrder
+      })
     });
   }
 
