@@ -467,13 +467,13 @@ async function handleOAuth(request: Request): Promise<Response> {
 
     console.log('Successfully stored HubSpot account information');
 
-    let setupError = null;
+    let setupWarning = null;
     try {
       await createHubSpotProperties(access_token);
       console.log('Successfully created HubSpot properties');
     } catch (error) {
-      console.error('Setup failed:', error);
-      setupError = error instanceof Error ? error.message : 'Property setup failed';
+      console.warn('Property setup warning:', error);
+      setupWarning = error instanceof Error ? error.message : 'Property setup warning';
     }
 
     // Validate required properties
@@ -482,22 +482,23 @@ async function handleOAuth(request: Request): Promise<Response> {
       await hubspotClient.validateProperties();
       console.log('Successfully validated HubSpot properties');
     } catch (error) {
-      console.error('Property validation failed:', error);
-      if (!setupError) {
-        setupError = error instanceof Error ? error.message : 'Property validation failed';
+      console.warn('Property validation warning:', error);
+      if (!setupWarning) {
+        setupWarning = error instanceof Error ? error.message : 'Property validation warning';
       }
     }
 
     // Redirect to success URI with portal ID and any setup warnings
     const successUri = new URL(APP_INSTALL_SUCCESS_URI);
     successUri.searchParams.set('portal_id', hub_id.toString());
-    if (setupError) {
-      successUri.searchParams.set('warning', setupError);
+    if (setupWarning) {
+      successUri.searchParams.set('warning', setupWarning);
     }
     return Response.redirect(successUri.toString(), 302);
 
   } catch (error) {
-    console.error('OAuth process failed:', error);
+    // Only redirect to failure URI for critical errors
+    console.error('Critical OAuth process error:', error);
     const failureUri = new URL(APP_INSTALL_FAILED_URI);
     failureUri.searchParams.set('error', error instanceof Error ? error.message : 'Failed to complete OAuth process');
     return Response.redirect(failureUri.toString(), 302);
