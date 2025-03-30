@@ -32,7 +32,7 @@ async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token
   return response.json();
 }
 
-async function processRecords(records: any[], type: string, portalId: string, shouldClearNamespace: boolean = false) {
+async function processRecords(records: any[], type: string, portalId: string, hubspotClient: HubspotClient, shouldClearNamespace: boolean = false) {
   const logger = new Logger('processRecords');
   logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
 
@@ -45,19 +45,30 @@ async function processRecords(records: any[], type: string, portalId: string, sh
 
   // Delete all existing vectors in the namespace if this is the first record type
   if (shouldClearNamespace) {
-    logger.info(`Deleting existing vectors in namespace: ${namespace}`);
-    await pineconeIndex.deleteAll({ namespace });
+    try {
+      logger.info(`Attempting to delete existing vectors in namespace: ${namespace}`);
+      await pineconeIndex.deleteAll({ namespace });
+      logger.info(`Successfully deleted vectors in namespace: ${namespace}`);
+    } catch (error) {
+      // If the namespace doesn't exist (404), we can ignore the error
+      if (error.message.includes('404')) {
+        logger.info(`Namespace ${namespace} does not exist, skipping deletion`);
+      } else {
+        // For other errors, log them but continue processing
+        logger.warn(`Error deleting vectors in namespace ${namespace}:`, error);
+      }
+    }
   }
 
   const openai = new OpenAI({
     apiKey: Deno.env.get('OPENAI_API_KEY') || ''
   });
 
-  const documentPackager = new DocumentPackager();
+  const documentPackager = new DocumentPackager(hubspotClient);
 
   // Process each record through the document packager
   const documents = await Promise.all(
-    records.map(record => documentPackager.packageDocument(record, type, portalId))
+    records.map(record => documentPackager.packageDocument(record, type as 'contact' | 'company' | 'deal', portalId))
   );
 
   logger.info(`Created ${documents.length} documents`);
@@ -128,206 +139,164 @@ serve(async (req) => {
       throw new Error(`Method ${req.method} not allowed. Only POST requests are accepted.`);
     }
 
-    // Validate Content-Type
-    const contentType = req.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error("Content-Type must be application/json");
-    }
-
-    // Get and validate request body
-    let body;
-    try {
-      const text = await req.text();
-      logger.info('Received request body:', text);
-      
-      if (!text) {
-        throw new Error("Request body is empty");
-      }
-      
-      body = JSON.parse(text);
-      
-      if (!body || typeof body !== 'object') {
-        throw new Error("Invalid JSON body");
-      }
-    } catch (error) {
-      throw new Error(`Failed to parse request body: ${error.message}`);
-    }
-
-    const { portalId } = body;
-    logger.info(`Processing portal ${portalId} for all record types`);
-    
-    if (!portalId) {
-      throw new Error('Portal ID is required');
-    }
-
-    // Get the access token from Supabase
-    logger.info('Fetching account from Supabase');
+    // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Convert portalId to number if it's a string
-    const numericPortalId = typeof portalId === 'string' ? parseInt(portalId, 10) : portalId;
-    logger.info(`Looking up account for portal ID: ${numericPortalId}`);
-
-    const { data: account, error: accountError } = await supabase
+    // Fetch all HubSpot accounts
+    const { data: accounts, error: accountsError } = await supabase
       .from('hubspot_accounts')
-      .select('*')
-      .eq('portal_id', numericPortalId)
-      .single();
+      .select('*');
 
-    if (accountError) {
-      logger.error('Error fetching account from Supabase:', accountError);
-      throw new Error(`Failed to fetch account: ${accountError.message}`);
+    if (accountsError) {
+      logger.error('Error fetching accounts from Supabase:', accountsError);
+      throw new Error(`Failed to fetch accounts: ${accountsError.message}`);
     }
 
-    if (!account) {
-      throw new Error(`No account found for portal ${numericPortalId}`);
+    if (!accounts || accounts.length === 0) {
+      throw new Error('No HubSpot accounts found');
     }
 
-    // Decrypt tokens
-    let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-    
-    logger.info('Found HubSpot account:', { 
-      portalId: account.portal_id,
-      hasAccessToken: !!decryptedToken,
-      hasRefreshToken: !!decryptedRefreshToken,
-      tokenLength: decryptedToken?.length || 0,
-      tokenStart: decryptedToken?.substring(0, 5) || 'none',
-      expiresAt: account.expires_at
-    });
+    logger.info(`Found ${accounts.length} HubSpot accounts to process`);
 
-    if (!decryptedToken || !decryptedRefreshToken) {
-      throw new Error('HubSpot tokens are missing or invalid. Please reconnect your HubSpot account.');
-    }
+    // Process each account
+    const allResults = {
+      total: accounts.length,
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      portals: [] as any[]
+    };
 
-    // Check if token is expired or will expire soon (within 5 minutes)
-    const expiresAt = new Date(account.expires_at);
-    const now = new Date();
-    const fiveMinutes = 5 * 60 * 1000;
-    
-    if (expiresAt.getTime() - now.getTime() < fiveMinutes) {
-      logger.info('Access token expired or expiring soon, refreshing...');
-      const newTokens = await refreshHubSpotToken(decryptedRefreshToken);
-      
-      // Encrypt new tokens
-      const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-      const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-      
-      // Update tokens in database
-      const { error: updateError } = await supabase
-        .from('hubspot_accounts')
-        .update({
-          access_token: newEncryptedToken,
-          refresh_token: newEncryptedRefreshToken,
-          expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('portal_id', numericPortalId);
+    for (const account of accounts) {
+      const portalId = account.portal_id;
+      logger.info(`Processing portal ${portalId}`);
+
+      try {
+        // Decrypt tokens
+        let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+        const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
         
-      if (updateError) {
-        logger.error('Failed to update tokens:', updateError);
-        throw new Error('Failed to update HubSpot tokens');
-      }
-      
-      logger.info('Successfully refreshed and updated tokens');
-      decryptedToken = newTokens.access_token;
-    }
-
-    logger.info('Initializing clients');
-    const hubspotClient = new HubspotClient(decryptedToken);
-
-    // Process each record type
-    const recordTypes = ['contacts', 'companies', 'deals'];
-    const results = {
-      contacts: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
-      companies: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
-      deals: { processed: 0, successful: 0, failed: 0, errors: [] as any[] }
-    };
-
-    for (const type of recordTypes) {
-      logger.info(`Processing ${type}`);
-      const recordType = type === 'deals' ? 'deal' : type.slice(0, -1); // Remove 's' for contacts/companies
-
-      // Get properties based on record type
-      const properties = [
-        'training_attributes',
-        'training_score',
-        'training_notes',
-        ...(type === 'contacts' ? [
-          'firstname',
-          'lastname',
-          'email',
-          'company',
-          'industry',
-          'jobtitle'
-        ] : type === 'companies' ? [
-          'name',
-          'industry',
-          'type',
-          'description',
-          'numberofemployees'
-        ] : [ // deals
-          'dealname',
-          'amount',
-          'dealstage',
-          'pipeline',
-          'closedate'
-        ])
-      ];
-
-      // Search for records with training data
-      logger.info(`Searching for ${type} with training data in HubSpot`);
-      const searchResults = await hubspotClient.searchRecords(recordType, {
-        filterGroups: [{
-          filters: [{
-            propertyName: 'training_score',
-            operator: 'EXISTS'
-          }]
-        }],
-        properties,
-        limit: 100
-      });
-
-      logger.info(`Found ${searchResults.results.length} classified ${type}`);
-
-      if (searchResults.results.length > 0) {
-        try {
-          logger.info(`Processing ${type} records`);
-          // Pass shouldClearNamespace as true only for the first type
-          const processedCount = await processRecords(searchResults.results, type, portalId, type === recordTypes[0]);
-          results[type].processed = processedCount;
-          results[type].successful = processedCount;
-          logger.info(`Successfully processed ${type} records`);
-        } catch (error) {
-          results[type].failed = searchResults.results.length;
-          const errorDetails = {
-            recordCount: searchResults.results.length,
-            error: error.message,
-            stack: error.stack,
-          };
-          results[type].errors.push(errorDetails);
-          logger.error(`Error processing ${type} records:`, errorDetails);
+        if (!decryptedToken || !decryptedRefreshToken) {
+          throw new Error('HubSpot tokens are missing or invalid');
         }
+
+        // Initialize HubSpot client with current token
+        const hubspotClient = new HubspotClient(decryptedToken);
+
+        // Check if token is expired or will expire soon (within 5 minutes)
+        const expiresAt = new Date(account.expires_at);
+        const now = new Date();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        // Try to make a test request to validate the token
+        try {
+          await hubspotClient.searchRecords('contacts', { limit: 1 });
+        } catch (error) {
+          if (error.message.includes('expired')) {
+            logger.info(`Token validation failed for portal ${portalId}, refreshing...`);
+            const newTokens = await refreshHubSpotToken(decryptedRefreshToken);
+            
+            // Encrypt new tokens
+            const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+            const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+            
+            // Update tokens in database
+            const { error: updateError } = await supabase
+              .from('hubspot_accounts')
+              .update({
+                access_token: newEncryptedToken,
+                refresh_token: newEncryptedRefreshToken,
+                expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('portal_id', portalId);
+              
+            if (updateError) {
+              throw new Error('Failed to update HubSpot tokens');
+            }
+            
+            // Update the client with the new token
+            decryptedToken = newTokens.access_token;
+            hubspotClient.updateToken(newTokens.access_token);
+            logger.info('Successfully refreshed and updated tokens');
+          } else {
+            throw error;
+          }
+        }
+
+        // Process each record type
+        const recordTypes = ['contacts', 'companies', 'deals'];
+        const portalResults = {
+          portalId,
+          contacts: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          companies: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          deals: { processed: 0, successful: 0, failed: 0, errors: [] as any[] }
+        };
+
+        for (const type of recordTypes) {
+          try {
+            logger.info(`Processing ${type} for portal ${portalId}`);
+            const searchResponse = await hubspotClient.searchRecords(type, {
+              limit: 100
+            });
+
+            if (searchResponse.total > 0) {
+              portalResults[type].processed = searchResponse.total;
+              await processRecords(searchResponse.results, type, portalId.toString(), hubspotClient, type === 'contacts');
+              portalResults[type].successful = searchResponse.total;
+            }
+          } catch (error) {
+            portalResults[type].failed = 1;
+            const errorDetails = {
+              message: error.message,
+              stack: error.stack,
+              cause: error.cause,
+              type: error.name
+            };
+            portalResults[type].errors.push(errorDetails);
+            logger.error(`Error processing ${type} for portal ${portalId}:`, errorDetails);
+          }
+        }
+
+        allResults.portals.push(portalResults);
+        allResults.successful++;
+      } catch (error) {
+        allResults.failed++;
+        logger.error(`Failed to process portal ${portalId}:`, error);
+        allResults.portals.push({
+          portalId,
+          error: error.message
+        });
       }
+
+      allResults.processed++;
     }
 
-    logger.info('Process training completed', results);
-    return new Response(JSON.stringify(results), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    const errorDetails = {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    };
-    logger.error('Error processing training data:', errorDetails);
     return new Response(
-      JSON.stringify({ error: error.message, details: errorDetails }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: true,
+        message: `Processed ${allResults.processed} portals`,
+        results: allResults
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }
+    );
+  } catch (error) {
+    logger.error('Error in process training function:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 500,
+      }
     );
   }
 }); 

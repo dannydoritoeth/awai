@@ -89,6 +89,10 @@ export class HubspotClient implements HubspotClientInterface {
     this.logger = new Logger('HubspotClient');
   }
 
+  updateToken(newAccessToken: string) {
+    this.accessToken = newAccessToken;
+  }
+
   private async rateLimitedRequest<T>(fn: () => Promise<T>, retryCount = 0): Promise<T> {
     try {
       const result = await fn();
@@ -183,16 +187,26 @@ export class HubspotClient implements HubspotClientInterface {
     });
   }
 
-  async searchRecords(objectType: string, query: any): Promise<any> {
+  async searchRecords(objectType: string, query: any): Promise<SearchResponse<HubspotRecord>> {
     try {
-      const endpoint = `https://api.hubapi.com/crm/v3/objects/${objectType}/search`;
+      const endpoint = `/crm/v3/objects/${objectType}/search`;
       const response = await this.makeRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(query)
       });
-      return response.json();
+      const data = await response.json();
+      return {
+        total: data.total,
+        results: data.results,
+        paging: data.paging
+      };
     } catch (error) {
-      this.logger.error(`Error searching ${objectType}:`, error);
+      this.logger.error(`Error searching ${objectType}:`, {
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+        query
+      });
       throw error;
     }
   }

@@ -11,11 +11,7 @@ interface DocumentMetadata {
   recordType: 'contact' | 'company' | 'deal';
   createdAt?: string;
   updatedAt?: string;
-  relatedIds: {
-    companies: string[];
-    contacts: string[];
-    deals: string[];
-  };
+  relatedIds: string;
   [key: string]: any; // Allow for custom metadata fields
 }
 
@@ -74,6 +70,12 @@ interface StructuredContent {
     }[];
   };
   customFields?: Record<string, any>;
+}
+
+interface Document {
+  content: string;
+  metadata: DocumentMetadata;
+  structuredContent: StructuredContent;
 }
 
 export class DocumentPackager {
@@ -183,17 +185,16 @@ export class DocumentPackager {
         break;
     }
 
-    // Add timeline tracking
-    const timeline = await this.buildTimeline(record, recordType);
-    if (timeline) {
-      content.timeline = timeline;
-    }
+    // Skip timeline and engagement history for training/scoring
+    // const timeline = await this.buildTimeline(record, recordType);
+    // if (timeline) {
+    //   content.timeline = timeline;
+    // }
 
-    // Add engagement history
-    const engagement = await this.buildEngagementHistory(record, recordType);
-    if (engagement) {
-      content.engagement = engagement;
-    }
+    // const engagement = await this.buildEngagementHistory(record, recordType);
+    // if (engagement) {
+    //   content.engagement = engagement;
+    // }
 
     return content;
   }
@@ -554,38 +555,44 @@ export class DocumentPackager {
     }
   }
 
-  async packageDocument(record: any, recordType: 'contact' | 'company' | 'deal', portalId: string): Promise<{
-    content: string;
-    metadata: DocumentMetadata;
-    structuredContent: StructuredContent;
-  }> {
-    this.logger.info(`Packaging ${recordType} record ${record.id}`);
+  public async packageDocument(record: any, recordType: 'contact' | 'company' | 'deal', portalId: string): Promise<Document> {
+    const logger = new Logger('packageDocument');
+    logger.info(`Packaging ${recordType} document for record ${record.id}`);
 
+    // Build structured content
     const structuredContent = await this.buildStructuredContent(record, recordType);
-    
-    // Enrich the content with relationships
-    await this.enrichWithRelationships(structuredContent, record, recordType);
-    
-    const content = this.contentToString(structuredContent);
 
+    // Build relationships
+    const relationships = await this.enrichWithRelationships(structuredContent, record, recordType);
+
+    // Convert relationships to string format for Pinecone compatibility
+    const relatedIdsString = JSON.stringify({
+      companies: relationships?.companies?.map(c => c.id) || [],
+      contacts: relationships?.contacts?.map(c => c.id) || [],
+      deals: relationships?.deals?.map(d => d.id) || []
+    });
+
+    // Build metadata
     const metadata: DocumentMetadata = {
-      id: record.id,
+      id: record.id.toString(),
       source: 'hubspot',
       portalId,
-      recordType,
       score: parseFloat(record.properties.training_score) || undefined,
       attributes: record.properties.training_attributes?.split(';') || [],
       isTrainingData: true,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-      // Add relationship IDs to metadata for filtering
-      relatedIds: {
-        companies: structuredContent.relationships?.company?.map(c => c.id) || [],
-        contacts: structuredContent.relationships?.contacts?.map(c => c.id) || [],
-        deals: structuredContent.relationships?.deals?.map(d => d.id) || []
-      }
+      recordType,
+      createdAt: record.properties.createdate,
+      updatedAt: record.properties.hs_lastmodifieddate,
+      relatedIds: relatedIdsString
     };
 
-    return { content, metadata, structuredContent };
+    // Build content string
+    const content = this.contentToString(structuredContent);
+
+    return {
+      content,
+      metadata,
+      structuredContent
+    };
   }
 } 
