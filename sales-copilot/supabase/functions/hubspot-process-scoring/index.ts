@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { HubspotClient } from '../_shared/hubspotClient.ts'
-import { decryptData } from '../_shared/encryption.ts'
+import { decrypt } from '../_shared/encryption.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,78 +80,78 @@ async function processAccount(
 ): Promise<void> {
   try {
     // Decrypt access token
-    const accessToken = decryptData(account.access_token, encryptionKey);
-    const hubspotClient = new HubspotClient(account.portal_id, accessToken);
+    const accessToken = await decrypt(account.access_token, encryptionKey);
+    // const hubspotClient = new HubspotClient(account.portal_id, accessToken);
 
-    // Check each object type
-    const objectTypes = ['contact', 'company', 'deal'] as const;
+    // // Check each object type
+    // const objectTypes = ['contact', 'company', 'deal'] as const;
     
-    for (const objectType of objectTypes) {
-      console.log(`Processing ${objectType}s for account ${account.portal_id}`);
+    // for (const objectType of objectTypes) {
+    //   console.log(`Processing ${objectType}s for account ${account.portal_id}`);
       
-      // Get scoring stats
-      const stats = await getScoringStats(hubspotClient, objectType);
+    //   // Get scoring stats
+    //   const stats = await getScoringStats(hubspotClient, objectType);
       
-      // Check if we can do scoring
-      const canDoScoring = stats.highScoreCount >= 10 && stats.lowScoreCount >= 10;
+    //   // Check if we can do scoring
+    //   const canDoScoring = stats.highScoreCount >= 10 && stats.lowScoreCount >= 10;
       
-      if (!canDoScoring) {
-        console.log(`Cannot do scoring for ${objectType}s: high=${stats.highScoreCount}, low=${stats.lowScoreCount}`);
-        continue;
-      }
+    //   if (!canDoScoring) {
+    //     console.log(`Cannot do scoring for ${objectType}s: high=${stats.highScoreCount}, low=${stats.lowScoreCount}`);
+    //     continue;
+    //   }
 
-      // If we have unscored records, process them in batches
-      if (stats.unscoredCount > 0) {
-        console.log(`Found ${stats.unscoredCount} unscored ${objectType}s`);
+    //   // If we have unscored records, process them in batches
+    //   if (stats.unscoredCount > 0) {
+    //     console.log(`Found ${stats.unscoredCount} unscored ${objectType}s`);
         
-        // Get unscored records in batches of 100
-        const batchSize = 100;
-        let processedCount = 0;
+    //     // Get unscored records in batches of 100
+    //     const batchSize = 100;
+    //     let processedCount = 0;
         
-        while (processedCount < stats.unscoredCount) {
-          const unscoredRecords = await hubspotClient.searchRecords(objectType, {
-            filterGroups: [{
-              filters: [{
-                propertyName: 'ai_score',
-                operator: 'HAS_NO_VALUE'
-              }]
-            }],
-            properties: ['id', 'ai_score', 'createdate'],
-            sorts: [{
-              propertyName: 'createdate',
-              direction: 'DESCENDING'
-            }],
-            limit: batchSize
-          });
+    //     while (processedCount < stats.unscoredCount) {
+    //       const unscoredRecords = await hubspotClient.searchRecords(objectType, {
+    //         filterGroups: [{
+    //           filters: [{
+    //             propertyName: 'ai_score',
+    //             operator: 'HAS_NO_VALUE'
+    //           }]
+    //         }],
+    //         properties: ['id', 'ai_score', 'createdate'],
+    //         sorts: [{
+    //           propertyName: 'createdate',
+    //           direction: 'DESCENDING'
+    //         }],
+    //         limit: batchSize
+    //       });
 
-          if (unscoredRecords.results.length === 0) break;
+    //       if (unscoredRecords.results.length === 0) break;
 
-          // Call batch scoring function
-          const response = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/hubspot-batch-score`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                portal_id: account.portal_id,
-                object_type: objectType,
-                record_ids: unscoredRecords.results.map(r => r.id)
-              })
-            }
-          );
+    //       // Call batch scoring function
+    //       const response = await fetch(
+    //         `${Deno.env.get('SUPABASE_URL')}/functions/v1/hubspot-batch-score`,
+    //         {
+    //           method: 'POST',
+    //           headers: {
+    //             'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+    //             'Content-Type': 'application/json'
+    //           },
+    //           body: JSON.stringify({
+    //             portal_id: account.portal_id,
+    //             object_type: objectType,
+    //             record_ids: unscoredRecords.results.map(r => r.id)
+    //           })
+    //         }
+    //       );
 
-          if (!response.ok) {
-            throw new Error(`Batch scoring failed: ${await response.text()}`);
-          }
+    //       if (!response.ok) {
+    //         throw new Error(`Batch scoring failed: ${await response.text()}`);
+    //       }
 
-          processedCount += unscoredRecords.results.length;
-          console.log(`Processed ${processedCount}/${stats.unscoredCount} ${objectType}s`);
-        }
-      }
-    }
+    //       processedCount += unscoredRecords.results.length;
+    //       console.log(`Processed ${processedCount}/${stats.unscoredCount} ${objectType}s`);
+    //     }
+    //   }
+    // }
   } catch (error) {
     console.error(`Error processing account ${account.portal_id}:`, error);
     throw error;
