@@ -84,9 +84,7 @@ async function processRecords(records: any[], type: string, portalId: string, hu
     id: doc.metadata.id.toString(),
     values: embeddingResponse.data[i].embedding,
     metadata: {
-      ...doc.metadata,
-      text: doc.content,
-      structuredContent: doc.structuredContent
+      ...doc.metadata
     }
   }));
 

@@ -3,16 +3,9 @@ import { HubspotClient } from './hubspotClient.ts';
 
 interface DocumentMetadata {
   id: string;
-  source: string;
   portalId: string;
-  score?: number;
-  attributes?: string[];
-  isTrainingData: boolean;
   recordType: 'contact' | 'company' | 'deal';
-  createdAt?: string;
-  updatedAt?: string;
-  relatedIds: string;
-  [key: string]: any; // Allow for custom metadata fields
+  updatedAt: string;
 }
 
 interface StructuredContent {
@@ -559,40 +552,26 @@ export class DocumentPackager {
     const logger = new Logger('packageDocument');
     logger.info(`Packaging ${recordType} document for record ${record.id}`);
 
-    // Build structured content
+    // Build structured content for embedding generation only
     const structuredContent = await this.buildStructuredContent(record, recordType);
 
-    // Build relationships
-    const relationships = await this.enrichWithRelationships(structuredContent, record, recordType);
+    // Build content string for embedding
+    const content = this.contentToString(structuredContent);
 
-    // Convert relationships to string format for Pinecone compatibility
-    const relatedIdsString = JSON.stringify({
-      companies: relationships?.companies?.map(c => c.id) || [],
-      contacts: relationships?.contacts?.map(c => c.id) || [],
-      deals: relationships?.deals?.map(d => d.id) || []
-    });
-
-    // Build metadata
+    // Minimal metadata for Pinecone - only simple types
     const metadata: DocumentMetadata = {
       id: record.id.toString(),
-      source: 'hubspot',
-      portalId,
-      score: parseFloat(record.properties.training_score) || undefined,
-      attributes: record.properties.training_attributes?.split(';') || [],
-      isTrainingData: true,
+      portalId: portalId.toString(),
       recordType,
-      createdAt: record.properties.createdate,
-      updatedAt: record.properties.hs_lastmodifieddate,
-      relatedIds: relatedIdsString
+      updatedAt: record.properties.hs_lastmodifieddate || new Date().toISOString()
     };
 
-    // Build content string
-    const content = this.contentToString(structuredContent);
+    logger.info(`Prepared metadata for Pinecone: ${JSON.stringify(metadata)}`);
 
     return {
       content,
       metadata,
-      structuredContent
+      structuredContent // Only used for content generation, not stored in Pinecone
     };
   }
 } 
