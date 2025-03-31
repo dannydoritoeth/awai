@@ -1,7 +1,7 @@
 {
-  "name": "ScoreAI",
-  "uid": "scoreai",
-  "description": "AaI-powered lead scoring for HubSpot. Train it on your best and worst customers to prioritize leads with scores and AI-generated summaries. Works across all tiers—no complex rules or workflows. Just smarter, faster lead qualification.",
+  "name": "ScoreAI DEV",
+  "uid": "scoreai-dev",
+  "description": "AI-powered lead scoring for HubSpot. Train it on your best and worst customers to prioritize leads with scores and AI-generated summaries. Works across all tiers—no complex rules or workflows. Just smarter, faster lead qualification.",
   "allowedUrls": ["https://api.example.com"],
   "auth": {
     "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],

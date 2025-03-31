@@ -1,6 +1,8 @@
 import { HubspotClient } from './hubspotClient.ts';
 import { Logger } from './logger.ts';
 import { AIConfig, HubspotAccount } from './types.ts';
+import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
+import OpenAI from 'https://esm.sh/openai@4.86.1';
 
 declare const Deno: {
   env: {
@@ -19,6 +21,9 @@ export class ScoringService {
   private logger: Logger;
   private aiConfig: AIConfig;
   private portalId: string;
+  private openai: OpenAI;
+  private pinecone: Pinecone;
+  private pineconeIndex: any;
 
   constructor(
     accessToken: string,
@@ -30,6 +35,13 @@ export class ScoringService {
     this.logger = logger || new Logger('ScoringService');
     this.aiConfig = aiConfig;
     this.portalId = portalId;
+    this.openai = new OpenAI({
+      apiKey: Deno.env.get('OPENAI_API_KEY') || ''
+    });
+    this.pinecone = new Pinecone({
+      apiKey: Deno.env.get('PINECONE_API_KEY') || ''
+    });
+    this.pineconeIndex = this.pinecone.index(Deno.env.get('PINECONE_INDEX') || 'sales-copilot');
   }
 
   private async getEmbeddings(record: any): Promise<number[]> {
@@ -59,26 +71,14 @@ export class ScoringService {
       const embedding = await this.getEmbeddings(record);
       
       // Query Pinecone using portal ID as namespace
-      const response = await fetch(`https://${Deno.env.get('PINECONE_INDEX_NAME')}-${Deno.env.get('PINECONE_ENVIRONMENT')}.svc.pinecone.io/query`, {
-        method: 'POST',
-        headers: {
-          'Api-Key': Deno.env.get('PINECONE_API_KEY')!,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vector: embedding,
-          namespace: `${this.portalId}-${type}`,
-          topK: 5,
-          includeMetadata: true
-        })
+      const queryResponse = await this.pineconeIndex.query({
+        vector: embedding,
+        namespace: `${this.portalId}-${type}`,
+        topK: 5,
+        includeMetadata: true
       });
 
-      if (!response.ok) {
-        throw new Error(`Pinecone query failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      return result.matches.map(match => match.metadata);
+      return queryResponse.matches.map(match => match.metadata);
     } catch (error) {
       this.logger.error(`Error getting similar ${type}s:`, error);
       return []; // Return empty array if similarity search fails
@@ -89,25 +89,11 @@ export class ScoringService {
     try {
       const embedding = await this.getEmbeddings(record);
       
-      const response = await fetch(`https://${Deno.env.get('PINECONE_INDEX_NAME')}-${Deno.env.get('PINECONE_ENVIRONMENT')}.svc.pinecone.io/vectors/upsert`, {
-        method: 'POST',
-        headers: {
-          'Api-Key': Deno.env.get('PINECONE_API_KEY')!,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vectors: [{
-            id: record.id,
-            values: embedding,
-            metadata: record
-          }],
-          namespace: `${this.portalId}-${type}`
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Pinecone upsert failed: ${response.statusText}`);
-      }
+      await this.pineconeIndex.upsert([{
+        id: record.id,
+        values: embedding,
+        metadata: record
+      }]);
     } catch (error) {
       this.logger.error('Error storing embedding:', error);
       // Don't throw the error as this is not critical for scoring
