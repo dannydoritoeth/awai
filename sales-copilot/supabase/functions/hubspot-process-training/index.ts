@@ -36,6 +36,108 @@ async function processRecords(records: any[], type: string, portalId: string, hu
   const logger = new Logger('processRecords');
   logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
 
+  // Query HubSpot for ideal and less ideal counts
+  const idealQuery = await hubspotClient.searchRecords(type, {
+    filterGroups: [{
+      filters: [{
+        propertyName: 'training_score',
+        operator: 'GTE',
+        value: '80'
+      }]
+    }],
+    limit: 1,
+    after: 0
+  });
+
+  const lessIdealQuery = await hubspotClient.searchRecords(type, {
+    filterGroups: [{
+      filters: [{
+        propertyName: 'training_score',
+        operator: 'LT',
+        value: '50'
+      }]
+    }],
+    limit: 1,
+    after: 0
+  });
+
+  const currentIdealCount = idealQuery.total;
+  const currentLessIdealCount = lessIdealQuery.total;
+
+  // Update counts in database based on record type
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
+  const updateData = {
+    last_training_date: new Date().toISOString()
+  };
+
+  // Add the appropriate counts based on record type
+  if (type === 'contacts') {
+    Object.assign(updateData, {
+      current_ideal_contacts: currentIdealCount,
+      current_less_ideal_contacts: currentLessIdealCount
+    });
+  } else if (type === 'companies') {
+    Object.assign(updateData, {
+      current_ideal_companies: currentIdealCount,
+      current_less_ideal_companies: currentLessIdealCount
+    });
+  } else if (type === 'deals') {
+    Object.assign(updateData, {
+      current_ideal_deals: currentIdealCount,
+      current_less_ideal_deals: currentLessIdealCount
+    });
+  }
+
+  const { error: updateError } = await supabase
+    .from('hubspot_accounts')
+    .update(updateData)
+    .eq('portal_id', portalId);
+
+  if (updateError) {
+    logger.error('Failed to update training metrics:', updateError);
+    throw new Error('Failed to update training metrics');
+  }
+
+  // Check if we have enough records to process
+  const { data: account } = await supabase
+    .from('hubspot_accounts')
+    .select(`
+      minimum_ideal_contacts, minimum_less_ideal_contacts,
+      minimum_ideal_companies, minimum_less_ideal_companies,
+      minimum_ideal_deals, minimum_less_ideal_deals
+    `)
+    .eq('portal_id', portalId)
+    .single();
+
+  if (!account) {
+    throw new Error('Account not found');
+  }
+
+  // Check minimums based on record type
+  let minimumIdealCount = 0;
+  let minimumLessIdealCount = 0;
+
+  if (type === 'contacts') {
+    minimumIdealCount = account.minimum_ideal_contacts;
+    minimumLessIdealCount = account.minimum_less_ideal_contacts;
+  } else if (type === 'companies') {
+    minimumIdealCount = account.minimum_ideal_companies;
+    minimumLessIdealCount = account.minimum_less_ideal_companies;
+  } else if (type === 'deals') {
+    minimumIdealCount = account.minimum_ideal_deals;
+    minimumLessIdealCount = account.minimum_less_ideal_deals;
+  }
+
+  if (currentIdealCount < minimumIdealCount || currentLessIdealCount < minimumLessIdealCount) {
+    logger.info(`Skipping processing for ${type} in portal ${portalId} - insufficient records. Current: ${currentIdealCount} ideal, ${currentLessIdealCount} less ideal. Required: ${minimumIdealCount} ideal, ${minimumLessIdealCount} less ideal`);
+    return 0;
+  }
+
+  // Initialize Pinecone client
   const pinecone = new Pinecone({
     apiKey: Deno.env.get('PINECONE_API_KEY') || '',
   });
@@ -79,42 +181,46 @@ async function processRecords(records: any[], type: string, portalId: string, hu
     input: documents.map(doc => doc.content)
   });
 
-  // Prepare vectors for Pinecone
-  const vectors = documents.map((doc, i) => ({
+  logger.info('Embedding response structure:', {
+    hasData: !!embeddingResponse.data,
+    firstEmbeddingLength: embeddingResponse.data[0]?.embedding?.length,
+    isEmbeddingArray: Array.isArray(embeddingResponse.data[0]?.embedding)
+  });
+
+  // Create vectors for all documents
+  const vectors = documents.map((doc, index) => ({
     id: doc.metadata.id.toString(),
-    values: embeddingResponse.data[i].embedding,
+    values: Array.from(embeddingResponse.data[index].embedding),
     metadata: {
-      ...doc.metadata
+      id: doc.metadata.id.toString(),
+      recordType: doc.metadata.recordType,
+      updatedAt: doc.metadata.updatedAt
     }
   }));
 
-  logger.info(`Upserting ${vectors.length} vectors to Pinecone`);
-  logger.info('Pinecone config:', {
-    apiKey: Deno.env.get('PINECONE_API_KEY')?.slice(0, 5) + '...',
-    indexName: Deno.env.get('PINECONE_INDEX') || 'sales-copilot',
+  logger.info('Vector structure:', {
+    totalVectors: vectors.length,
+    firstVector: {
+      hasId: !!vectors[0]?.id,
+      valuesLength: vectors[0]?.values?.length,
+      isValuesArray: Array.isArray(vectors[0]?.values),
+      metadata: vectors[0]?.metadata
+    },
     namespace
   });
 
-  // Upsert to Pinecone - update format for v5.1.1
-  await pineconeIndex.upsert([{
-    id: vectors[0].id,
-    values: vectors[0].values,
-    metadata: vectors[0].metadata
-  }]);
-
-  // Upsert remaining vectors in batches of 100
-  for (let i = 1; i < vectors.length; i += 100) {
-    const batch = vectors.slice(i, i + 100).map(vector => ({
-      id: vector.id,
-      values: vector.values,
-      metadata: vector.metadata
-    }));
-    await pineconeIndex.upsert(batch);
-    logger.info(`Upserted batch of ${batch.length} vectors`);
+  try {
+    logger.info(`Attempting to upsert ${vectors.length} vectors into namespace: ${namespace}`);
+    await pineconeIndex.namespace(namespace).upsert(vectors);
+    logger.info(`Successfully upserted ${vectors.length} vectors into namespace: ${namespace}`);
+  } catch (error) {
+    logger.error('Error upserting vectors:', error);
+    logger.error('Error upserting vectors - first vector:', JSON.stringify(vectors[0]));
+    logger.error('Attempted namespace:', namespace);
+    throw error;
   }
 
-  logger.info(`Successfully added ${vectors.length} documents to Pinecone`);
-  return vectors.length;
+  return vectors.length; // Return the number of vectors processed
 }
 
 serve(async (req) => {
