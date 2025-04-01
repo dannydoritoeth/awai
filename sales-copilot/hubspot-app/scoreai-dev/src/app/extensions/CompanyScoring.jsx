@@ -15,6 +15,10 @@ import {
 // Constants
 const REQUIRED_TRAINING_COUNT = 10;
 
+// Supabase function URLs
+const SUPABASE_SCORE_RECORD_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record';
+const SUPABASE_GET_TRAINING_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-get-training-counts';
+
 // Main Extension Component
 const Extension = ({ context, actions }) => {
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,9 @@ const Extension = ({ context, actions }) => {
   const [canScore, setCanScore] = useState(false);
   const [trainingCounts, setTrainingCounts] = useState({ high: 0, low: 0 });
   const [scoring, setScoring] = useState(false);
+  const [trainingError, setTrainingError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState({});
+
 
   useEffect(() => {
     checkCanScore();
@@ -35,48 +42,40 @@ const Extension = ({ context, actions }) => {
       setLoading(true);
       setError(null);
 
-      // Get high score count (>= 80)
-      const highScoreResponse = await hubspot.crm.records.searchCompanies({
-        filterGroups: [{
-          filters: [{
-            propertyName: 'training_score',
-            operator: 'GTE',
-            value: '80'
-          }]
-        }],
-        limit: REQUIRED_TRAINING_COUNT,
-        properties: ['training_score']
+      // Get training counts from Supabase Edge function
+      const response = await hubspot.fetch(SUPABASE_GET_TRAINING_URL, {
+        method: 'POST',
+        // headers: {
+        //   'Content-Type': 'application/json',
+        //   'Authorization': `Bearer ${accessToken}`
+        // },
+        body: JSON.stringify({
+          portalId: context.portal.id
+        })
       });
 
-      // Get low score count (<= 50)
-      const lowScoreResponse = await hubspot.crm.records.searchCompanies({
-        filterGroups: [{
-          filters: [{
-            propertyName: 'training_score',
-            operator: 'LTE',
-            value: '50'
-          }]
-        }],
-        limit: REQUIRED_TRAINING_COUNT,
-        properties: ['training_score']
-      });
+      const data = await response.json();
+      setDebugInfo(prev => ({ ...prev, trainingData: data }));
 
-      const highCount = highScoreResponse.total;
-      const lowCount = lowScoreResponse.total;
-      
-      setTrainingCounts({ high: highCount, low: lowCount });
-      setCanScore(highCount >= REQUIRED_TRAINING_COUNT && lowCount >= REQUIRED_TRAINING_COUNT);
+      if (data.success) {
+        const { ideal_companies, less_ideal_companies } = data.result;
+        setTrainingCounts({ 
+          high: ideal_companies || 0, 
+          low: less_ideal_companies || 0 
+        });
+        setCanScore(ideal_companies >= REQUIRED_TRAINING_COUNT && less_ideal_companies >= REQUIRED_TRAINING_COUNT);
 
-      // Get current record's score
-      const currentRecord = await hubspot.crm.records.get('companies', context.object.objectId);
-      
-      if (currentRecord.properties.ai_score) {
-        setScore(currentRecord.properties.ai_score);
-        setSummary(currentRecord.properties.ai_summary || '');
+        // Get current score if available
+        if (data.result.current_score) {
+          setScore(data.result.current_score);
+          setSummary(data.result.current_summary || '');
+        }
+      } else {
+        throw new Error(data.error || 'Failed to get training counts');
       }
     } catch (error) {
       console.error('Error in checkCanScore:', error);
-      setError('Failed to check scoring status');
+      setError('Failed to check scoring status', error);
     } finally {
       setLoading(false);
     }
@@ -85,28 +84,47 @@ const Extension = ({ context, actions }) => {
   const handleScore = async () => {
     try {
       setScoring(true);
-      setError(null);
+      setTrainingError(null);
 
-      const response = await hubspot.api.scoreCompany({
-        recordId: context.object.objectId,
-        recordType: 'company',
-        portalId: context.portal.id
+
+      const response = await hubspot.fetch(SUPABASE_SCORE_RECORD_URL, {
+        method: 'POST',
+        // headers: {
+        //   'Content-Type': 'application/json',
+        //   'Authorization': `Bearer ${accessToken}`
+        // },
+        body: JSON.stringify({
+          recordId: context.crm.objectId,
+          recordType: 'company',
+          portalId: context.portal.id
+        })
       });
-      
+
       const data = await response.json();
+      setDebugInfo(prev => ({ ...prev, scoreResponse: data }));
 
       if (data.success) {
-        setScore(data.result.score);
-        setSummary(data.result.summary);
+        if (data.result.canScore) {
+          setScore(data.result.score);
+          setSummary(data.result.summary);
+          await checkCanScore(); // Refresh training counts and current score
+        } else {
+          setTrainingError({
+            current: data.result.current,
+            required: data.result.required
+          });
+        }
       } else {
-        throw new Error(data.error || 'Scoring failed');
+        setTrainingError({
+          message: data.error || 'Unable to score at this time. Please try again.'
+        });
       }
     } catch (error) {
-      console.error('Error scoring company:', error);
-      setError('Failed to score company');
+      setTrainingError({
+        message: 'Unable to score at this time. Please try again.'
+      });
     } finally {
       setScoring(false);
-      checkCanScore();
     }
   };
 
@@ -153,29 +171,77 @@ const Extension = ({ context, actions }) => {
         <Divider />
 
         <Box>
-          {!canScore && (
+          {trainingError && (
             <Alert title="More training data needed" variant="warning">
-              <Text>
-                You will need at least {REQUIRED_TRAINING_COUNT} training records with scores above 80 and {REQUIRED_TRAINING_COUNT} training records with scores below 50.
-              </Text>
-              <Text>
-                You currently have <Link href={getHighScoreUrl()}>{trainingCounts.high} high scores</Link> and <Link href={getLowScoreUrl()}>{trainingCounts.low} low scores</Link>.
-              </Text>
-              <Divider />
-              <Text>
-                Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
-              </Text>
+              {trainingError.message ? (
+                <Text>{trainingError.message}</Text>
+              ) : (
+                <>
+                  <Text>
+                    You will need at least {trainingError.required.companies} training records with scores above 80 and {trainingError.required.companies} training records with scores below 50.
+                  </Text>
+                  <Text>
+                    You currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link> and <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>.
+                  </Text>
+                  <Divider />
+                  <Text>
+                    Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
+                  </Text>
+                </>
+              )}
             </Alert>
           )}
 
           <Button
             variant="primary"
-            disabled={!canScore || scoring}
             onClick={handleScore}
             loading={scoring}
           >
             {scoring ? 'Scoring...' : 'Score Company'}
           </Button>
+        </Box>
+
+        <Divider />
+        
+        <Box>
+          <Heading>Debug Information</Heading>
+          
+          <Text format={{ fontWeight: "bold" }}>Training Counts Response:</Text>
+          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(debugInfo?.trainingData?.result || {}, null, 2)}
+          </Text>
+
+          <Divider />
+          
+          <Text format={{ fontWeight: "bold" }}>Companies:</Text>
+          <Text format={{ fontFamily: "monospace" }}>
+            Ideal: {debugInfo?.trainingData?.result?.companies?.current?.ideal || 0}
+            Less Ideal: {debugInfo?.trainingData?.result?.companies?.current?.less_ideal || 0}
+          </Text>
+
+          <Text format={{ fontWeight: "bold" }}>Contacts:</Text>
+          <Text format={{ fontFamily: "monospace" }}>
+            Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.ideal || 0}
+            Less Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.less_ideal || 0}
+          </Text>
+
+          <Text format={{ fontWeight: "bold" }}>Deals:</Text>
+          <Text format={{ fontFamily: "monospace" }}>
+            Ideal: {debugInfo?.trainingData?.result?.deals?.current?.ideal || 0}
+            Less Ideal: {debugInfo?.trainingData?.result?.deals?.current?.less_ideal || 0}
+          </Text>
+
+          <Divider />
+
+          <Text format={{ fontWeight: "bold" }}>Context:</Text>
+          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify({ portalId: context.portal.id, objectId: context.crm.objectId }, null, 2)}
+          </Text>
+
+          <Text format={{ fontWeight: "bold" }}>Score Response:</Text>
+          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(debugInfo?.scoreResponse || {}, null, 2)}
+          </Text>
         </Box>
       </Flex>
     </Box>
