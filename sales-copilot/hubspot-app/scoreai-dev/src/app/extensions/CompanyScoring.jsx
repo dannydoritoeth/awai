@@ -66,14 +66,20 @@ const Extension = ({ context, actions }) => {
 
       if (data.success) {
         const { companies } = data.result;
-        const hasEnoughTraining = companies.current.ideal >= REQUIRED_TRAINING_COUNT && 
-                                 companies.current.less_ideal >= REQUIRED_TRAINING_COUNT;
+        const hasEnoughTraining = companies.current.ideal >= companies.required.ideal && 
+                                 companies.current.less_ideal >= companies.required.less_ideal;
         
         setTrainingCounts({ 
           high: companies.current.ideal || 0, 
           low: companies.current.less_ideal || 0 
         });
         setCanScore(hasEnoughTraining);
+
+        // Set debug info
+        setDebugInfo({
+          trainingData: data,
+          scoreResponse: debugInfo.scoreResponse
+        });
 
         // Set training error if not enough records
         if (!hasEnoughTraining) {
@@ -83,7 +89,8 @@ const Extension = ({ context, actions }) => {
               less_ideal_companies: companies.current.less_ideal
             },
             required: {
-              companies: REQUIRED_TRAINING_COUNT
+              ideal_companies: companies.required.ideal,
+              less_ideal_companies: companies.required.less_ideal
             }
           });
         } else {
@@ -209,14 +216,14 @@ const Extension = ({ context, actions }) => {
                   <Box margin={{ left: "md" }}>
                     <Box margin={{ bottom: "xs" }}>
                       <Text>
-                        • At least {trainingError.required.companies} records with scores above 80
+                        • At least {trainingError.required.ideal_companies} records with scores above 80
                         {' '}
                         (you currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link>)
                       </Text>
                     </Box>
                     <Box margin={{ bottom: "sm" }}>
                       <Text>
-                        • At least {trainingError.required.companies} records with scores below 50
+                        • At least {trainingError.required.less_ideal_companies} records with scores below 50
                         {' '}
                         (you currently have <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>)
                       </Text>
@@ -237,7 +244,7 @@ const Extension = ({ context, actions }) => {
             loading={scoring}
             disabled={!canScore}
           >
-            {scoring ? 'Scoring...' : 'Score Company'}
+            {scoring ? 'Scoring...' : score ? 'Rescore Company' : 'Score Company'}
           </Button>
         </Box>
 
@@ -256,19 +263,28 @@ const Extension = ({ context, actions }) => {
           <Text format={{ fontWeight: "bold" }}>Companies:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.companies?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.companies?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.companies?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.companies?.required?.less_ideal || 0}
           </Text>
 
           <Text format={{ fontWeight: "bold" }}>Contacts:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.less_ideal || 0}
           </Text>
 
           <Text format={{ fontWeight: "bold" }}>Deals:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.deals?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.deals?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.deals?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.deals?.required?.less_ideal || 0}
           </Text>
 
           <Divider />

@@ -8,12 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Minimum required training counts for each type
-const MIN_TRAINING_COUNTS = {
-  companies: 10,
-  contacts: 10,
-  deals: 10
-}
+
 
 async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
   const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
@@ -83,6 +78,12 @@ serve(async (req) => {
         current_less_ideal_contacts,
         current_ideal_deals,
         current_less_ideal_deals,
+        minimum_ideal_companies,
+        minimum_less_ideal_companies,
+        minimum_ideal_contacts,
+        minimum_less_ideal_contacts,
+        minimum_ideal_deals,
+        minimum_less_ideal_deals,
         access_token,
         refresh_token,
         expires_at
@@ -192,8 +193,8 @@ serve(async (req) => {
               less_ideal: accountData?.current_less_ideal_companies || 0
             },
             required: {
-              ideal: MIN_TRAINING_COUNTS.companies,
-              less_ideal: MIN_TRAINING_COUNTS.companies
+              ideal: accountData?.minimum_ideal_companies || 0,
+              less_ideal: accountData?.minimum_less_ideal_companies || 0
             }
           },
           contacts: {
@@ -202,8 +203,8 @@ serve(async (req) => {
               less_ideal: accountData?.current_less_ideal_contacts || 0
             },
             required: {
-              ideal: MIN_TRAINING_COUNTS.contacts,
-              less_ideal: MIN_TRAINING_COUNTS.contacts
+              ideal: accountData?.minimum_ideal_contacts || 0,
+              less_ideal: accountData?.minimum_less_ideal_contacts || 0
             }
           },
           deals: {
@@ -212,8 +213,8 @@ serve(async (req) => {
               less_ideal: accountData?.current_less_ideal_deals || 0
             },
             required: {
-              ideal: MIN_TRAINING_COUNTS.deals,
-              less_ideal: MIN_TRAINING_COUNTS.deals
+              ideal: accountData?.minimum_ideal_deals || 0,
+              less_ideal: accountData?.minimum_less_ideal_deals || 0
             }
           },
           currentRecord
