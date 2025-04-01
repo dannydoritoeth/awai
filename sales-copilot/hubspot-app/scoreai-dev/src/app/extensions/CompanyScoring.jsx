@@ -55,7 +55,14 @@ const Extension = ({ context, actions }) => {
       );
 
       const data = await response.json();
-      setDebugInfo(prev => ({ ...prev, trainingData: data }));
+      console.log('Raw response data:', data);
+      console.log('Current record from response:', data.result.currentRecord);
+      setDebugInfo(prev => {
+        console.log('Previous debug info:', prev);
+        const newDebugInfo = { ...prev, trainingData: data };
+        console.log('New debug info:', newDebugInfo);
+        return newDebugInfo;
+      });
 
       if (data.success) {
         const { ideal_companies, less_ideal_companies } = data.result;
@@ -66,9 +73,9 @@ const Extension = ({ context, actions }) => {
         setCanScore(ideal_companies >= REQUIRED_TRAINING_COUNT && less_ideal_companies >= REQUIRED_TRAINING_COUNT);
 
         // Get current score if available
-        if (data.result.current_score) {
-          setScore(data.result.current_score);
-          setSummary(data.result.current_summary || '');
+        if (data.result.currentRecord?.ideal_client_score) {
+          setScore(data.result.currentRecord.ideal_client_score);
+          setSummary(data.result.currentRecord.ideal_client_summary || '');
         }
       } else {
         throw new Error(data.error || 'Failed to get training counts');
