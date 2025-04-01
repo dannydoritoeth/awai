@@ -16,7 +16,7 @@ import {
 const REQUIRED_TRAINING_COUNT = 10;
 
 // Main Extension Component
-const Extension = () => {
+const Extension = ({ context, actions }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [score, setScore] = useState(null);
@@ -24,7 +24,6 @@ const Extension = () => {
   const [canScore, setCanScore] = useState(false);
   const [trainingCounts, setTrainingCounts] = useState({ high: 0, low: 0 });
   const [scoring, setScoring] = useState(false);
-  const [context, setContext] = useState(null);
 
   useEffect(() => {
     checkCanScore();
@@ -32,12 +31,9 @@ const Extension = () => {
 
   const checkCanScore = async () => {
     try {
+      console.log('Starting checkCanScore with context:', context);
       setLoading(true);
       setError(null);
-
-      // Get context first and store it
-      const ctx = await hubspot.getContext();
-      setContext(ctx);
 
       // Get high score count (>= 80)
       const highScoreResponse = await hubspot.crm.records.searchCompanies({
@@ -72,14 +68,14 @@ const Extension = () => {
       setCanScore(highCount >= REQUIRED_TRAINING_COUNT && lowCount >= REQUIRED_TRAINING_COUNT);
 
       // Get current record's score
-      const currentRecord = await hubspot.crm.records.get('companies', ctx.object.objectId);
+      const currentRecord = await hubspot.crm.records.get('companies', context.object.objectId);
       
       if (currentRecord.properties.ai_score) {
         setScore(currentRecord.properties.ai_score);
         setSummary(currentRecord.properties.ai_summary || '');
       }
     } catch (error) {
-      console.error('Error checking scoring status:', error);
+      console.error('Error in checkCanScore:', error);
       setError('Failed to check scoring status');
     } finally {
       setLoading(false);
@@ -187,4 +183,9 @@ const Extension = () => {
 };
 
 // Initialize the extension
-hubspot.extend(() => <Extension />); 
+hubspot.extend(({ context, actions }) => (
+  <Extension
+    context={context}
+    actions={actions}
+  />
+)); 
