@@ -65,12 +65,30 @@ const Extension = ({ context, actions }) => {
       });
 
       if (data.success) {
-        const { ideal_companies, less_ideal_companies } = data.result;
+        const { companies } = data.result;
+        const hasEnoughTraining = companies.current.ideal >= REQUIRED_TRAINING_COUNT && 
+                                 companies.current.less_ideal >= REQUIRED_TRAINING_COUNT;
+        
         setTrainingCounts({ 
-          high: ideal_companies || 0, 
-          low: less_ideal_companies || 0 
+          high: companies.current.ideal || 0, 
+          low: companies.current.less_ideal || 0 
         });
-        setCanScore(ideal_companies >= REQUIRED_TRAINING_COUNT && less_ideal_companies >= REQUIRED_TRAINING_COUNT);
+        setCanScore(hasEnoughTraining);
+
+        // Set training error if not enough records
+        if (!hasEnoughTraining) {
+          setTrainingError({
+            current: {
+              ideal_companies: companies.current.ideal,
+              less_ideal_companies: companies.current.less_ideal
+            },
+            required: {
+              companies: REQUIRED_TRAINING_COUNT
+            }
+          });
+        } else {
+          setTrainingError(null);
+        }
 
         // Get current score if available
         if (data.result.currentRecord?.ideal_client_score) {
@@ -179,22 +197,36 @@ const Extension = ({ context, actions }) => {
 
         <Box>
           {trainingError && (
-            <Alert title="More training data needed" variant="warning">
+            <Alert variant="warning">
               {trainingError.message ? (
                 <Text>{trainingError.message}</Text>
               ) : (
-                <>
-                  <Text>
-                    You will need at least {trainingError.required.companies} training records with scores above 80 and {trainingError.required.companies} training records with scores below 50.
-                  </Text>
-                  <Text>
-                    You currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link> and <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>.
-                  </Text>
-                  <Divider />
+                <Box>
+                  <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed</Text>
+                  <Box margin={{ bottom: "sm" }}>
+                    <Text>You will need:</Text>
+                  </Box>
+                  <Box margin={{ left: "md" }}>
+                    <Box margin={{ bottom: "xs" }}>
+                      <Text>
+                        • At least {trainingError.required.companies} records with scores above 80
+                        {' '}
+                        (you currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link>)
+                      </Text>
+                    </Box>
+                    <Box margin={{ bottom: "sm" }}>
+                      <Text>
+                        • At least {trainingError.required.companies} records with scores below 50
+                        {' '}
+                        (you currently have <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>)
+                      </Text>
+                    </Box>
+                  </Box>
+                  <Divider margin={{ top: "md", bottom: "md" }} />
                   <Text>
                     Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
                   </Text>
-                </>
+                </Box>
               )}
             </Alert>
           )}
@@ -203,6 +235,7 @@ const Extension = ({ context, actions }) => {
             variant="primary"
             onClick={handleScore}
             loading={scoring}
+            disabled={!canScore}
           >
             {scoring ? 'Scoring...' : 'Score Company'}
           </Button>
