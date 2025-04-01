@@ -43,16 +43,16 @@ const Extension = ({ context, actions }) => {
       setError(null);
 
       // Get training counts from Supabase Edge function
-      const response = await hubspot.fetch(SUPABASE_GET_TRAINING_URL, {
-        method: 'POST',
+      const response = await hubspot.fetch(
+        `${SUPABASE_GET_TRAINING_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}`, 
+        {
+          method: 'POST'
+        },
         // headers: {
         //   'Content-Type': 'application/json',
         //   'Authorization': `Bearer ${accessToken}`
         // },
-        body: JSON.stringify({
-          portalId: context.portal.id
-        })
-      });
+      );
 
       const data = await response.json();
       setDebugInfo(prev => ({ ...prev, trainingData: data }));
