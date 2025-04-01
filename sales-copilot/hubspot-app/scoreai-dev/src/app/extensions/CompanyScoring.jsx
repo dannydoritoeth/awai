@@ -167,7 +167,7 @@ const Extension = ({ context, actions }) => {
 
   const getLowScoreUrl = () => {
     if (!context?.portal?.id) return '#';
-    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2280%22%7D%5D`;
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2250%22%7D%5D`;
   };
 
   if (loading) {
@@ -209,7 +209,7 @@ const Extension = ({ context, actions }) => {
                 <Text>{trainingError.message}</Text>
               ) : (
                 <Box>
-                  <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed</Text>
+                  <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed to score this company</Text>
                   <Box margin={{ bottom: "sm" }}>
                     <Text>You will need:</Text>
                   </Box>
