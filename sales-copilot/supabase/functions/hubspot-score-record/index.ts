@@ -3,19 +3,39 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { ScoringService } from "../_shared/scoringService.ts";
 import { Logger } from "../_shared/logger.ts";
 import { AIConfig } from "../_shared/types.ts";
-import { decrypt } from "../_shared/encryption.ts";
+import { decrypt, encrypt } from "../_shared/encryption.ts";
 import { HubspotClient } from "../_shared/hubspotClient.ts";
 
 const logger = new Logger("score-record");
 
-serve(async (req) => {
-  try {
-    const { recordId, recordType, portalId } = await req.json();
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-    if (!recordId || !recordType || !portalId) {
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  try {
+    // Parse URL parameters
+    const url = new URL(req.url);
+    const portalId = url.searchParams.get('portalId');
+    const recordType = url.searchParams.get('recordType');
+    const recordId = url.searchParams.get('recordId');
+
+    // Validate required parameters
+    if (!portalId || !recordType || !recordId) {
       return new Response(
-        JSON.stringify({ error: 'recordId, recordType, and portalId are required' }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error: 'Missing required parameters: portalId, recordType, and recordId must be provided in URL'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        }
       );
     }
 
@@ -84,8 +104,11 @@ serve(async (req) => {
           break;
         default:
           return new Response(
-            JSON.stringify({ error: 'Invalid record type. Must be contact, company, or deal' }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
+            JSON.stringify({ success: false, error: 'Invalid record type. Must be contact, company, or deal' }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" } 
+            }
           );
       }
     } catch (scoringError) {
@@ -99,7 +122,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, result }),
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -108,12 +131,21 @@ serve(async (req) => {
       message: error.message,
       stack: error.stack
     });
+    
+    // Ensure we have a proper error message
+    const errorMessage = error.message || 'Internal server error';
+    const errorDetails = error.stack || 'No stack trace available';
+    
     return new Response(
       JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message 
+        success: false,
+        error: errorMessage,
+        details: errorDetails
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
     );
   }
 }); 

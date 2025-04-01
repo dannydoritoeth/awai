@@ -118,21 +118,22 @@ const Extension = ({ context, actions }) => {
       setScoring(true);
       setTrainingError(null);
 
+      const response = await hubspot.fetch(
+        `${SUPABASE_SCORE_RECORD_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}`,
+        {
+          method: 'POST'
+        }
+      );
 
-      const response = await hubspot.fetch(SUPABASE_SCORE_RECORD_URL, {
-        method: 'POST',
-        // headers: {
-        //   'Content-Type': 'application/json',
-        //   'Authorization': `Bearer ${accessToken}`
-        // },
-        body: JSON.stringify({
-          recordId: context.crm.objectId,
-          recordType: 'company',
-          portalId: context.portal.id
-        })
-      });
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Invalid response from server. Please try again.');
+      }
 
-      const data = await response.json();
+      console.log('Score response:', data);
       setDebugInfo(prev => ({ ...prev, scoreResponse: data }));
 
       if (data.success) {
@@ -148,12 +149,14 @@ const Extension = ({ context, actions }) => {
         }
       } else {
         setTrainingError({
-          message: data.error || 'Unable to score at this time. Please try again.'
+          message: data.error || 'Unable to score at this time. Please try again.',
+          details: data.details
         });
       }
     } catch (error) {
+      console.error('Scoring error:', error);
       setTrainingError({
-        message: 'Unable to score at this time. Please try again.'
+        message: error.message || 'Unable to score at this time. Please try again.'
       });
     } finally {
       setScoring(false);
