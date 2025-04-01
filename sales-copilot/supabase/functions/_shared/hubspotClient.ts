@@ -134,36 +134,42 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async getContact(id: string): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/contacts/${id}`);
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/contacts/${id}`);
+    return response.json();
   }
 
   async getCompany(id: string): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/companies/${id}`);
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/companies/${id}`);
+    return response.json();
   }
 
   async getDeal(id: string): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/deals/${id}`);
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/deals/${id}`);
+    return response.json();
   }
 
   async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/contacts/${id}`, {
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/contacts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties }),
     });
+    return response.json();
   }
 
   async updateCompany(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/companies/${id}`, {
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/companies/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties }),
     });
+    return response.json();
   }
 
   async updateDeal(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/deals/${id}`, {
+    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/deals/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties }),
     });
+    return response.json();
   }
 
   async searchContacts(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {

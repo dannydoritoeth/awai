@@ -1,255 +1,245 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { HubspotClient } from '../_shared/hubspotClient.ts'
-import { decryptData } from '../_shared/encryption.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
+import OpenAI from 'https://esm.sh/openai@4.86.1';
+import { HubspotClient } from '../_shared/hubspotClient.ts';
+import { Logger } from '../_shared/logger.ts';
+import { decrypt, encrypt } from '../_shared/encryption.ts';
+import { DocumentPackager } from '../_shared/documentPackager.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const logger = new Logger('process-ideal-clients');
 
-interface HubspotAccount {
-  portal_id: string
-  access_token: string
-  refresh_token: string
-  expires_at: number
-  created_at: string
-  updated_at: string
-}
-
-interface ScoringStats {
-  highScoreCount: number
-  lowScoreCount: number
-  unscoredCount: number
-}
-
-async function getScoringStats(
-  hubspotClient: HubspotClient,
-  objectType: 'contact' | 'company' | 'deal'
-): Promise<ScoringStats> {
-  // Query for high scores (>= 80)
-  const highScoreResponse = await hubspotClient.searchRecords(objectType, {
-    filterGroups: [{
-      filters: [{
-        propertyName: 'training_score',
-        operator: 'GTE',
-        value: '80'
-      }]
-    }],
-    properties: ['training_score'],
-    limit: 10
+async function refreshHubSpotToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: Deno.env.get('HUBSPOT_CLIENT_ID')!,
+      client_secret: Deno.env.get('HUBSPOT_CLIENT_SECRET')!,
+      refresh_token: refreshToken,
+    }).toString(),
   });
 
-  // Query for low scores (<= 50)
-  const lowScoreResponse = await hubspotClient.searchRecords(objectType, {
-    filterGroups: [{
-      filters: [{
-        propertyName: 'training_score',
-        operator: 'LTE',
-        value: '50'
-      }]
-    }],
-    properties: ['training_score'],
-    limit: 10
-  });
-
-  // Query for unscored records
-  const unscoredResponse = await hubspotClient.searchRecords(objectType, {
-    filterGroups: [{
-      filters: [{
-        propertyName: 'ai_score',
-        operator: 'HAS_NO_VALUE'
-      }]
-    }],
-    properties: ['ai_score'],
-    limit: 1
-  });
-
-  return {
-    highScoreCount: highScoreResponse.total,
-    lowScoreCount: lowScoreResponse.total,
-    unscoredCount: unscoredResponse.total
-  };
-}
-
-async function processAccount(
-  supabase: any,
-  account: HubspotAccount,
-  encryptionKey: string,
-  isManualTrigger: boolean = false
-): Promise<void> {
-  try {
-    // Decrypt access token
-    const accessToken = decryptData(account.access_token, encryptionKey);
-    const hubspotClient = new HubspotClient(account.portal_id, accessToken);
-
-    // Check each object type
-    const objectTypes = ['contact', 'company', 'deal'] as const;
-    
-    for (const objectType of objectTypes) {
-      console.log(`Processing ${objectType}s for account ${account.portal_id}`);
-      
-      // Get scoring stats
-      const stats = await getScoringStats(hubspotClient, objectType);
-      
-      // Check if we can do scoring
-      const canDoScoring = stats.highScoreCount >= 10 && stats.lowScoreCount >= 10;
-      
-      if (!canDoScoring) {
-        console.log(`Cannot do scoring for ${objectType}s: high=${stats.highScoreCount}, low=${stats.lowScoreCount}`);
-        continue;
-      }
-
-      // If we have unscored records, process them in batches
-      if (stats.unscoredCount > 0) {
-        console.log(`Found ${stats.unscoredCount} unscored ${objectType}s`);
-        
-        // Get unscored records in batches of 100
-        const batchSize = 100;
-        let processedCount = 0;
-        
-        while (processedCount < stats.unscoredCount) {
-          const unscoredRecords = await hubspotClient.searchRecords(objectType, {
-            filterGroups: [{
-              filters: [{
-                propertyName: 'ai_score',
-                operator: 'HAS_NO_VALUE'
-              }]
-            }],
-            properties: ['id', 'ai_score', 'createdate'],
-            sorts: [{
-              propertyName: 'createdate',
-              direction: 'DESCENDING'
-            }],
-            limit: batchSize
-          });
-
-          if (unscoredRecords.results.length === 0) break;
-
-          // Call batch scoring function
-          const response = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/hubspot-batch-score`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                portal_id: account.portal_id,
-                object_type: objectType,
-                record_ids: unscoredRecords.results.map(r => r.id)
-              })
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`Batch scoring failed: ${await response.text()}`);
-          }
-
-          processedCount += unscoredRecords.results.length;
-          console.log(`Processed ${processedCount}/${stats.unscoredCount} ${objectType}s`);
-        }
-      }
-    }
-  } catch (error) {
-    console.error(`Error processing account ${account.portal_id}:`, error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.text();
+    logger.error('Failed to refresh token:', error);
+    throw new Error('Failed to refresh HubSpot token');
   }
+
+  return response.json();
+}
+
+async function processRecords(records: any[], type: string, portalId: string, hubspotClient: HubspotClient, shouldClearNamespace: boolean = false) {
+  const logger = new Logger('processRecords');
+  logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
+
+  // Call batch scoring function
+  const response = await fetch(
+    `${Deno.env.get('SUPABASE_URL')}/functions/v1/hubspot-score-batch`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        portal_id: portalId,
+        object_type: type === 'contacts' ? 'contact' : type === 'companies' ? 'company' : 'deal',
+        record_ids: records.map(r => r.id)
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error(`Batch scoring failed: ${errorText}`);
+    throw new Error(`Batch scoring failed: ${errorText}`);
+  }
+
+  return records.length; // Return the number of records processed
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
   try {
-    // Get environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const encryptionKey = Deno.env.get('ENCRYPTION_KEY')
+    logger.info('Starting process training function');
+    
+    // Handle CORS preflight
+    if (req.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      });
+    }
 
-    if (!supabaseUrl || !supabaseServiceKey || !encryptionKey) {
-      throw new Error('Missing required environment variables')
+    // Validate request method
+    if (req.method !== "POST") {
+      throw new Error(`Method ${req.method} not allowed. Only POST requests are accepted.`);
     }
 
     // Initialize Supabase client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
 
-    // Check if this is a manual trigger
-    const url = new URL(req.url)
-    const isManualTrigger = url.searchParams.get('manual') === 'true'
-    const portalId = url.searchParams.get('portal_id')
-
-    // For manual triggers, require authentication
-    if (isManualTrigger) {
-      const authHeader = req.headers.get('Authorization')
-      if (!authHeader) {
-        throw new Error('Authorization header required for manual triggers')
-      }
-
-      // Verify the request is from an authenticated user
-      const { data: { user }, error: authError } = await supabase.auth.getUser(
-        authHeader.replace('Bearer ', '')
-      )
-
-      if (authError || !user) {
-        throw new Error('Invalid authentication')
-      }
-    }
-
-    // Get HubSpot accounts
-    let query = supabase.from('hubspot_accounts').select('*')
-    
-    // If portal_id is specified, only process that account
-    if (portalId) {
-      query = query.eq('portal_id', portalId)
-    }
-
-    const { data: accounts, error: accountsError } = await query
+    // Fetch all HubSpot accounts
+    const { data: accounts, error: accountsError } = await supabase
+      .from('hubspot_accounts')
+      .select('*');
 
     if (accountsError) {
-      throw accountsError
+      logger.error('Error fetching accounts from Supabase:', accountsError);
+      throw new Error(`Failed to fetch accounts: ${accountsError.message}`);
     }
 
     if (!accounts || accounts.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          message: 'No accounts found to process',
-          manual: isManualTrigger,
-          portal_id: portalId
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      throw new Error('No HubSpot accounts found');
     }
+
+    logger.info(`Found ${accounts.length} HubSpot accounts to process`);
 
     // Process each account
+    const allResults = {
+      total: accounts.length,
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      portals: [] as any[]
+    };
+
     for (const account of accounts) {
-      await processAccount(supabase, account, encryptionKey, isManualTrigger)
+      const portalId = account.portal_id;
+      logger.info(`Processing portal ${portalId}`);
+
+      try {
+        // Decrypt tokens
+        let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+        const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+        
+        if (!decryptedToken || !decryptedRefreshToken) {
+          throw new Error('HubSpot tokens are missing or invalid');
+        }
+
+        // Initialize HubSpot client with current token
+        const hubspotClient = new HubspotClient(decryptedToken);
+
+        // Check if token is expired or will expire soon (within 5 minutes)
+        const expiresAt = new Date(account.expires_at);
+        const now = new Date();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        // Try to make a test request to validate the token
+        try {
+          await hubspotClient.searchRecords('contacts', { limit: 1 });
+        } catch (error) {
+          if (error.message.includes('expired')) {
+            logger.info(`Token validation failed for portal ${portalId}, refreshing...`);
+            const newTokens = await refreshHubSpotToken(decryptedRefreshToken);
+            
+            // Encrypt new tokens
+            const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+            const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+            
+            // Update tokens in database
+            const { error: updateError } = await supabase
+              .from('hubspot_accounts')
+              .update({
+                access_token: newEncryptedToken,
+                refresh_token: newEncryptedRefreshToken,
+                expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('portal_id', portalId);
+              
+            if (updateError) {
+              throw new Error('Failed to update HubSpot tokens');
+            }
+            
+            // Update the client with the new token
+            decryptedToken = newTokens.access_token;
+            hubspotClient.updateToken(newTokens.access_token);
+            logger.info('Successfully refreshed and updated tokens');
+          } else {
+            throw error;
+          }
+        }
+
+        // Process each record type
+        const recordTypes = ['contacts', 'companies', 'deals'];
+        const portalResults = {
+          portalId,
+          contacts: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          companies: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          deals: { processed: 0, successful: 0, failed: 0, errors: [] as any[] }
+        };
+
+        for (const type of recordTypes) {
+          try {
+            logger.info(`Processing ${type} for portal ${portalId}`);
+            const searchResponse = await hubspotClient.searchRecords(type, {
+              limit: 100
+            });
+
+            if (searchResponse.total > 0) {
+              portalResults[type].processed = searchResponse.total;
+              await processRecords(searchResponse.results, type, portalId.toString(), hubspotClient, type === 'contacts');
+              portalResults[type].successful = searchResponse.total;
+            }
+          } catch (error) {
+            portalResults[type].failed = 1;
+            const errorDetails = {
+              message: error.message,
+              stack: error.stack,
+              cause: error.cause,
+              type: error.name
+            };
+            portalResults[type].errors.push(errorDetails);
+            logger.error(`Error processing ${type} for portal ${portalId}:`, errorDetails);
+          }
+        }
+
+        allResults.portals.push(portalResults);
+        allResults.successful++;
+      } catch (error) {
+        allResults.failed++;
+        logger.error(`Failed to process portal ${portalId}:`, error);
+        allResults.portals.push({
+          portalId,
+          error: error.message
+        });
+      }
+
+      allResults.processed++;
     }
 
     return new Response(
-      JSON.stringify({ 
-        message: 'Scoring process completed successfully',
-        manual: isManualTrigger,
-        portal_id: portalId,
-        accounts_processed: accounts.length
+      JSON.stringify({
+        success: true,
+        message: `Processed ${allResults.processed} portals`,
+        results: allResults
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  } catch (error) {
-    console.error('Scoring process error:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        manual: isManualTrigger,
-        portal_id: portalId
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
       }
-    )
+    );
+  } catch (error) {
+    logger.error('Error in process training function:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
   }
-}) 
+}); 

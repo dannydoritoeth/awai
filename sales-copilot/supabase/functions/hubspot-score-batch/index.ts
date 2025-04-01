@@ -44,15 +44,15 @@ serve(async (req) => {
 
       const hubspotClient = new HubspotClient(account.access_token);
       
-      // Validate properties before processing
-      try {
-        await hubspotClient.validateProperties();
-        logger.info(`Validated properties for portal ${account.portal_id}`);
-      } catch (error) {
-        logger.error(`Failed to validate properties for portal ${account.portal_id}:`, error);
-        // Skip this account if property validation fails
-        continue;
-      }
+      // // Validate properties before processing
+      // try {
+      //   await hubspotClient.validateProperties();
+      //   logger.info(`Validated properties for portal ${account.portal_id}`);
+      // } catch (error) {
+      //   logger.error(`Failed to validate properties for portal ${account.portal_id}:`, error);
+      //   // Skip this account if property validation fails
+      //   continue;
+      // }
 
       const scoringService = new ScoringService(
         account.access_token, 

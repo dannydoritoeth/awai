@@ -26,21 +26,25 @@ export class ScoringService {
   private pineconeIndex: any;
 
   constructor(
-    accessToken: string,
+    clientOrToken: HubspotClient | string,
     aiConfig: AIConfig,
     portalId: string,
     logger?: Logger
   ) {
-    this.hubspotClient = new HubspotClient(accessToken);
-    this.logger = logger || new Logger('ScoringService');
+    this.hubspotClient = clientOrToken instanceof HubspotClient ? clientOrToken : new HubspotClient(clientOrToken);
     this.aiConfig = aiConfig;
     this.portalId = portalId;
+    this.logger = logger || new Logger('ScoringService');
+
+    // Initialize AI services
     this.openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY') || ''
     });
+
     this.pinecone = new Pinecone({
-      apiKey: Deno.env.get('PINECONE_API_KEY') || ''
+      apiKey: Deno.env.get('PINECONE_API_KEY') || '',
     });
+
     this.pineconeIndex = this.pinecone.index(Deno.env.get('PINECONE_INDEX') || 'sales-copilot');
   }
 
