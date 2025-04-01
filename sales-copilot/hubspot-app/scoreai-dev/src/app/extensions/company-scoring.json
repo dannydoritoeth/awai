@@ -1,0 +1,31 @@
+{
+  "name": "AI Score",
+  "description": "Display and manage AI scoring for companies",
+  "uid": "company_ai_score",
+  "scopes": ["crm.objects.companies.read", "crm.objects.companies.write"],
+  "public": false,
+  "actions": {
+    "scoreCompany": {
+      "url": "${baseUrl}/hubspot-score-record",
+      "method": "POST",
+      "targetFunction": "hubspot-score-record"
+    }
+  },
+  "cards": [{
+    "name": "AI Score",
+    "location": "crm.record.tab",
+    "source": {
+      "url": "${baseUrl}/extensions/company-scoring.html"
+    }
+  }],
+  "type": "crm-card",
+  "data": {
+    "title": "AI Score",
+    "uid": "company-ai-score",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "CompanyScoring.jsx"
+    },
+    "objectTypes": [{ "name": "companies" }]
+  }
+} 
