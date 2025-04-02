@@ -12,6 +12,7 @@ import {
   hubspot,
   Link,
   Divider,
+  Toggle,
 } from "@hubspot/ui-extensions";
 
 // Supabase function URLs
@@ -41,6 +42,7 @@ const Extension = ({ context, actions }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [trainingData, setTrainingData] = useState({
     training_score: '',
     training_attributes: [],
@@ -307,10 +309,14 @@ const Extension = ({ context, actions }) => {
         </Box>
 
         <Box>
-          <Text format={{ fontWeight: "bold" }}>Debug Information</Text>
-          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(debugInfo, null, 2)}
-          </Text>
+          {showDebug && (
+            <>
+              <Text format={{ fontWeight: "bold" }}>Debug Information</Text>
+              <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo, null, 2)}
+              </Text>
+            </>
+          )}
         </Box>
       </Flex>
     </Box>
