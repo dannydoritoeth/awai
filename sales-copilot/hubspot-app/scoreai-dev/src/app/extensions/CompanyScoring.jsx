@@ -137,16 +137,12 @@ const Extension = ({ context, actions }) => {
       setDebugInfo(prev => ({ ...prev, scoreResponse: data }));
 
       if (data.success) {
-        if (data.result.canScore) {
+        if (data.result.score) {
           setScore(data.result.score);
           setSummary(data.result.summary);
-          await checkCanScore(); // Refresh training counts and current score
-        } else {
-          setTrainingError({
-            current: data.result.current,
-            required: data.result.required
-          });
         }
+        // Always refresh data after successful scoring
+        await checkCanScore();
       } else {
         setTrainingError({
           message: data.error || 'Unable to score at this time. Please try again.',
