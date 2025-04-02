@@ -53,6 +53,31 @@ const Extension = ({ context, actions }) => {
     return Number.isInteger(num) && num >= 0 && num <= 100;
   };
 
+  const fetchWithRetry = async (url, options) => {
+    try {
+      const response = await hubspot.fetch(url, options);
+      const data = await response.json();
+      
+      // If successful, return the data
+      if (data.success !== false) {
+        return data;
+      }
+
+      // Check if it's a token expiration error
+      if (data.error?.includes('OAuth token') && data.error?.includes('expired')) {
+        // Token expired, get a fresh token and retry the request
+        await hubspot.refreshToken();
+        const retryResponse = await hubspot.fetch(url, options);
+        return retryResponse.json();
+      }
+
+      // Some other error occurred
+      throw new Error(data.error || 'Request failed');
+    } catch (error) {
+      throw error;
+    }
+  };
+
   useEffect(() => {
     fetchTrainingData();
   }, []);
@@ -62,20 +87,12 @@ const Extension = ({ context, actions }) => {
       setLoading(true);
       setError(null);
 
-      const response = await hubspot.fetch(
+      const data = await fetchWithRetry(
         `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=get`,
         {
           method: 'POST'
         }
       );
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        throw new Error('Invalid response from server. Please try again.');
-      }
 
       console.log('Training data response:', data);
       setDebugInfo(prev => ({ ...prev, fetchResponse: data }));
@@ -102,59 +119,20 @@ const Extension = ({ context, actions }) => {
       setSaving(true);
       setError(null);
 
-      // Debug info for validation
-      const validationInfo = {
-        beforeValidation: {
-          value: trainingData.training_score,
-          type: typeof trainingData.training_score
-        }
-      };
-
       // Validate and prepare data for saving
       const score = Number(trainingData.training_score);
-      validationInfo.parsedScore = score;
-
       if (isNaN(score) || score < 0 || score > 100) {
         throw new Error('Score must be a number between 0 and 100');
       }
 
-      const dataToSave = {
-        training_score: score,  // Send as number, not string
-        training_attributes: trainingData.training_attributes,
-        training_notes: trainingData.training_notes
-      };
-
-      setDebugInfo(prev => ({ 
-        ...prev, 
-        validation: validationInfo,
-        dataToSave
-      }));
-
-      const response = await hubspot.fetch(
+      const data = await fetchWithRetry(
         `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=update&training_score=${score}&training_attributes=${encodeURIComponent(trainingData.training_attributes.join(','))}&training_notes=${encodeURIComponent(trainingData.training_notes || '')}`,
         {
           method: 'POST'
         }
       );
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        setDebugInfo(prev => ({ 
-          ...prev, 
-          parseError: {
-            message: parseError.message,
-            stack: parseError.stack
-          }
-        }));
-        throw new Error('Invalid response from server. Please try again.');
-      }
-
-      setDebugInfo(prev => ({ 
-        ...prev, 
-        saveResponse: data 
-      }));
+      setDebugInfo(prev => ({ ...prev, saveResponse: data }));
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to save training data');

@@ -76,13 +76,19 @@ interface CrmCardDefinition {
   actions?: Record<string, any>;
 }
 
+interface CustomError extends Error {
+  status?: number;
+  headers?: Headers;
+}
+
 export class HubspotClient implements HubspotClientInterface {
   private accessToken: string;
   private logger: Logger;
   private baseUrl = 'https://api.hubapi.com';
   private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
-  private rateLimitDelay = 100; // ms between requests
-  private maxRetries = 3;
+  private rateLimitDelay = 250; // Increased from 100ms to 250ms between requests
+  private maxRetries = 5; // Increased from 3 to 5 retries
+  private baseRetryDelay = 1000; // Base delay for exponential backoff (1 second)
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -100,52 +106,80 @@ export class HubspotClient implements HubspotClientInterface {
       await new Promise(resolve => setTimeout(resolve, this.rateLimitDelay));
       return result;
     } catch (error) {
-      if (error.status === 429 && retryCount < this.maxRetries) { // Too Many Requests
-        // Wait for the time specified in the response headers or default to 10 seconds
-        const retryAfter = (error.headers?.get('Retry-After') || 10) * 1000;
-        await new Promise(resolve => setTimeout(resolve, retryAfter));
+      const customError = error as CustomError;
+      // Check for rate limit errors
+      if (customError.status === 429 && retryCount < this.maxRetries) {
+        // Calculate exponential backoff delay
+        const retryAfter = customError.headers?.get('Retry-After');
+        const backoffDelay = retryAfter 
+          ? parseInt(retryAfter, 10) * 1000 
+          : Math.min(this.baseRetryDelay * Math.pow(2, retryCount), 30000); // Max 30 seconds
+
+        this.logger.info(`Rate limited. Retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
+        
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
         return this.rateLimitedRequest(fn, retryCount + 1);
+      }
+      
+      // If we've exhausted retries or it's not a rate limit error
+      if (customError.status === 429) {
+        this.logger.error('Rate limit exceeded and max retries reached');
+        throw new Error('HubSpot rate limit exceeded. Please try again later.');
       }
       throw error;
     }
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
-    // If the endpoint starts with http(s), use it as is, otherwise prepend baseUrl
-    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
-    
-    const headers = {
-      'Authorization': `Bearer ${this.accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    };
+    return this.rateLimitedRequest(async () => {
+      // If the endpoint starts with http(s), use it as is, otherwise prepend baseUrl
+      const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+      
+      const headers = {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      };
 
-    const response = await fetch(url, {
-      ...options,
-      headers
+      const response = await fetch(url, {
+        ...options,
+        headers
+      });
+
+      if (!response.ok) {
+        const customError: CustomError = new Error();
+        customError.status = response.status;
+        customError.headers = response.headers;
+        
+        try {
+          const errorData = await response.json();
+          customError.message = errorData.message || `Request failed: ${response.statusText}`;
+        } catch {
+          customError.message = `Request failed: ${response.statusText}`;
+        }
+        
+        throw customError;
+      }
+
+      return response;
     });
+  }
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(error.message || `Request failed: ${response.statusText}`);
-    }
-
-    return response;
+  private async makeJsonRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await this.makeRequest(endpoint, options);
+    return response.json();
   }
 
   async getContact(id: string): Promise<HubspotRecord> {
-    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/contacts/${id}`);
-    return response.json();
+    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/contacts/${id}`);
   }
 
   async getCompany(id: string): Promise<HubspotRecord> {
-    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/companies/${id}`);
-    return response.json();
+    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/companies/${id}`);
   }
 
   async getDeal(id: string): Promise<HubspotRecord> {
-    const response = await this.makeRequest(`${this.crmBaseUrl}/objects/deals/${id}`);
-    return response.json();
+    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/deals/${id}`);
   }
 
   async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
@@ -173,21 +207,21 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async searchContacts(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/contacts/search', {
+    return this.makeJsonRequest('/objects/contacts/search', {
       method: 'POST',
       body: JSON.stringify(request)
     });
   }
 
   async searchCompanies(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/companies/search', {
+    return this.makeJsonRequest('/objects/companies/search', {
       method: 'POST',
       body: JSON.stringify(request)
     });
   }
 
   async searchDeals(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeRequest('/objects/deals/search', {
+    return this.makeJsonRequest('/objects/deals/search', {
       method: 'POST',
       body: JSON.stringify(request)
     });
