@@ -10,6 +10,8 @@ import {
   TextArea,
   Flex,
   hubspot,
+  Link,
+  Divider,
 } from "@hubspot/ui-extensions";
 
 // Supabase function URLs
@@ -45,6 +47,18 @@ const Extension = ({ context, actions }) => {
     training_notes: ''
   });
   const [debugInfo, setDebugInfo] = useState({});
+  const [trainingCounts, setTrainingCounts] = useState(null);
+
+  // Add URL helper functions
+  const getHighScoreUrl = () => {
+    if (!context?.portal?.id) return '#';
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22GTE%22%2C%22value%22%3A%2280%22%7D%5D`;
+  };
+
+  const getLowScoreUrl = () => {
+    if (!context?.portal?.id) return '#';
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2250%22%7D%5D`;
+  };
 
   // Add validation helper
   const isScoreValid = (score) => {
@@ -80,6 +94,7 @@ const Extension = ({ context, actions }) => {
 
   useEffect(() => {
     fetchTrainingData();
+    fetchTrainingCounts();
   }, []);
 
   const fetchTrainingData = async () => {
@@ -111,6 +126,23 @@ const Extension = ({ context, actions }) => {
       setError(error.message || 'Failed to fetch training data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTrainingCounts = async () => {
+    try {
+      const data = await fetchWithRetry(
+        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=counts`,
+        {
+          method: 'POST'
+        }
+      );
+
+      if (data.success) {
+        setTrainingCounts(data.result.companies);
+      }
+    } catch (error) {
+      console.error('Error fetching training counts:', error);
     }
   };
 
@@ -169,6 +201,40 @@ const Extension = ({ context, actions }) => {
         {error && (
           <Alert title="Error" variant="error">
             {error}
+          </Alert>
+        )}
+
+        {trainingCounts && (
+          trainingCounts.current.ideal < trainingCounts.required.ideal || 
+          trainingCounts.current.less_ideal < trainingCounts.required.less_ideal
+        ) && (
+          <Alert variant="warning">
+            <Box>
+              <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed before companies can be scored</Text>
+              <Box margin={{ bottom: "sm" }}>
+                <Text>You will need:</Text>
+              </Box>
+              <Box margin={{ left: "md" }}>
+                <Box margin={{ bottom: "xs" }}>
+                  <Text>
+                    • At least {trainingCounts.required.ideal} records with scores above 80
+                    {' '}
+                    (you currently have <Link href={getHighScoreUrl()}>{trainingCounts.current.ideal} high scores</Link>)
+                  </Text>
+                </Box>
+                <Box margin={{ bottom: "sm" }}>
+                  <Text>
+                    • At least {trainingCounts.required.less_ideal} records with scores below 50
+                    {' '}
+                    (you currently have <Link href={getLowScoreUrl()}>{trainingCounts.current.less_ideal} low scores</Link>)
+                  </Text>
+                </Box>
+              </Box>
+              <Divider margin={{ top: "md", bottom: "md" }} />
+              <Text>
+                Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
+              </Text>
+            </Box>
           </Alert>
         )}
 
