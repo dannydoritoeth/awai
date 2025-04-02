@@ -55,20 +55,52 @@ const Extension = ({ context, actions }) => {
       );
 
       const data = await response.json();
-      setDebugInfo(prev => ({ ...prev, trainingData: data }));
+      console.log('Raw response data:', data);
+      console.log('Current record from response:', data.result.currentRecord);
+      setDebugInfo(prev => {
+        console.log('Previous debug info:', prev);
+        const newDebugInfo = { ...prev, trainingData: data };
+        console.log('New debug info:', newDebugInfo);
+        return newDebugInfo;
+      });
 
       if (data.success) {
-        const { ideal_companies, less_ideal_companies } = data.result;
+        const { companies } = data.result;
+        const hasEnoughTraining = companies.current.ideal >= companies.required.ideal && 
+                                 companies.current.less_ideal >= companies.required.less_ideal;
+        
         setTrainingCounts({ 
-          high: ideal_companies || 0, 
-          low: less_ideal_companies || 0 
+          high: companies.current.ideal || 0, 
+          low: companies.current.less_ideal || 0 
         });
-        setCanScore(ideal_companies >= REQUIRED_TRAINING_COUNT && less_ideal_companies >= REQUIRED_TRAINING_COUNT);
+        setCanScore(hasEnoughTraining);
+
+        // Set debug info
+        setDebugInfo({
+          trainingData: data,
+          scoreResponse: debugInfo.scoreResponse
+        });
+
+        // Set training error if not enough records
+        if (!hasEnoughTraining) {
+          setTrainingError({
+            current: {
+              ideal_companies: companies.current.ideal,
+              less_ideal_companies: companies.current.less_ideal
+            },
+            required: {
+              ideal_companies: companies.required.ideal,
+              less_ideal_companies: companies.required.less_ideal
+            }
+          });
+        } else {
+          setTrainingError(null);
+        }
 
         // Get current score if available
-        if (data.result.current_score) {
-          setScore(data.result.current_score);
-          setSummary(data.result.current_summary || '');
+        if (data.result.currentRecord?.ideal_client_score) {
+          setScore(data.result.currentRecord.ideal_client_score);
+          setSummary(data.result.currentRecord.ideal_client_summary || '');
         }
       } else {
         throw new Error(data.error || 'Failed to get training counts');
@@ -86,42 +118,41 @@ const Extension = ({ context, actions }) => {
       setScoring(true);
       setTrainingError(null);
 
+      const response = await hubspot.fetch(
+        `${SUPABASE_SCORE_RECORD_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}`,
+        {
+          method: 'POST'
+        }
+      );
 
-      const response = await hubspot.fetch(SUPABASE_SCORE_RECORD_URL, {
-        method: 'POST',
-        // headers: {
-        //   'Content-Type': 'application/json',
-        //   'Authorization': `Bearer ${accessToken}`
-        // },
-        body: JSON.stringify({
-          recordId: context.crm.objectId,
-          recordType: 'company',
-          portalId: context.portal.id
-        })
-      });
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Invalid response from server. Please try again.');
+      }
 
-      const data = await response.json();
+      console.log('Score response:', data);
       setDebugInfo(prev => ({ ...prev, scoreResponse: data }));
 
       if (data.success) {
-        if (data.result.canScore) {
+        if (data.result.score) {
           setScore(data.result.score);
           setSummary(data.result.summary);
-          await checkCanScore(); // Refresh training counts and current score
-        } else {
-          setTrainingError({
-            current: data.result.current,
-            required: data.result.required
-          });
         }
+        // Always refresh data after successful scoring
+        await checkCanScore();
       } else {
         setTrainingError({
-          message: data.error || 'Unable to score at this time. Please try again.'
+          message: data.error || 'Unable to score at this time. Please try again.',
+          details: data.details
         });
       }
     } catch (error) {
+      console.error('Scoring error:', error);
       setTrainingError({
-        message: 'Unable to score at this time. Please try again.'
+        message: error.message || 'Unable to score at this time. Please try again.'
       });
     } finally {
       setScoring(false);
@@ -135,7 +166,7 @@ const Extension = ({ context, actions }) => {
 
   const getLowScoreUrl = () => {
     if (!context?.portal?.id) return '#';
-    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2280%22%7D%5D`;
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2250%22%7D%5D`;
   };
 
   if (loading) {
@@ -172,22 +203,36 @@ const Extension = ({ context, actions }) => {
 
         <Box>
           {trainingError && (
-            <Alert title="More training data needed" variant="warning">
+            <Alert variant="warning">
               {trainingError.message ? (
                 <Text>{trainingError.message}</Text>
               ) : (
-                <>
-                  <Text>
-                    You will need at least {trainingError.required.companies} training records with scores above 80 and {trainingError.required.companies} training records with scores below 50.
-                  </Text>
-                  <Text>
-                    You currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link> and <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>.
-                  </Text>
-                  <Divider />
+                <Box>
+                  <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed to score this company</Text>
+                  <Box margin={{ bottom: "sm" }}>
+                    <Text>You will need:</Text>
+                  </Box>
+                  <Box margin={{ left: "md" }}>
+                    <Box margin={{ bottom: "xs" }}>
+                      <Text>
+                        • At least {trainingError.required.ideal_companies} records with scores above 80
+                        {' '}
+                        (you currently have <Link href={getHighScoreUrl()}>{trainingError.current.ideal_companies} high scores</Link>)
+                      </Text>
+                    </Box>
+                    <Box margin={{ bottom: "sm" }}>
+                      <Text>
+                        • At least {trainingError.required.less_ideal_companies} records with scores below 50
+                        {' '}
+                        (you currently have <Link href={getLowScoreUrl()}>{trainingError.current.less_ideal_companies} low scores</Link>)
+                      </Text>
+                    </Box>
+                  </Box>
+                  <Divider margin={{ top: "md", bottom: "md" }} />
                   <Text>
                     Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
                   </Text>
-                </>
+                </Box>
               )}
             </Alert>
           )}
@@ -196,8 +241,9 @@ const Extension = ({ context, actions }) => {
             variant="primary"
             onClick={handleScore}
             loading={scoring}
+            disabled={!canScore}
           >
-            {scoring ? 'Scoring...' : 'Score Company'}
+            {scoring ? 'Scoring...' : score ? 'Rescore Company' : 'Score Company'}
           </Button>
         </Box>
 
@@ -216,19 +262,28 @@ const Extension = ({ context, actions }) => {
           <Text format={{ fontWeight: "bold" }}>Companies:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.companies?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.companies?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.companies?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.companies?.required?.less_ideal || 0}
           </Text>
 
           <Text format={{ fontWeight: "bold" }}>Contacts:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.less_ideal || 0}
           </Text>
 
           <Text format={{ fontWeight: "bold" }}>Deals:</Text>
           <Text format={{ fontFamily: "monospace" }}>
             Ideal: {debugInfo?.trainingData?.result?.deals?.current?.ideal || 0}
+            {' '}Required Ideal: {debugInfo?.trainingData?.result?.deals?.required?.ideal || 0}
+            {'\n'}
             Less Ideal: {debugInfo?.trainingData?.result?.deals?.current?.less_ideal || 0}
+            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.deals?.required?.less_ideal || 0}
           </Text>
 
           <Divider />
