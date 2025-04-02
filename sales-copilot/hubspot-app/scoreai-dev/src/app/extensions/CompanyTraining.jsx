@@ -10,6 +10,9 @@ import {
   TextArea,
   Flex,
   hubspot,
+  Link,
+  Divider,
+  Toggle,
 } from "@hubspot/ui-extensions";
 
 // Supabase function URLs
@@ -39,12 +42,25 @@ const Extension = ({ context, actions }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [trainingData, setTrainingData] = useState({
     training_score: '',
     training_attributes: [],
     training_notes: ''
   });
   const [debugInfo, setDebugInfo] = useState({});
+  const [trainingCounts, setTrainingCounts] = useState(null);
+
+  // Add URL helper functions
+  const getHighScoreUrl = () => {
+    if (!context?.portal?.id) return '#';
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22GTE%22%2C%22value%22%3A%2280%22%7D%5D`;
+  };
+
+  const getLowScoreUrl = () => {
+    if (!context?.portal?.id) return '#';
+    return `https://app-na2.hubspot.com/contacts/${context.portal.id}/objects/0-2/views/all/list?filters=%5B%7B%22property%22%3A%22training_score%22%2C%22operator%22%3A%22LT%22%2C%22value%22%3A%2250%22%7D%5D`;
+  };
 
   // Add validation helper
   const isScoreValid = (score) => {
@@ -53,8 +69,34 @@ const Extension = ({ context, actions }) => {
     return Number.isInteger(num) && num >= 0 && num <= 100;
   };
 
+  const fetchWithRetry = async (url, options) => {
+    try {
+      const response = await hubspot.fetch(url, options);
+      const data = await response.json();
+      
+      // If successful, return the data
+      if (data.success !== false) {
+        return data;
+      }
+
+      // Check if it's a token expiration error
+      if (data.error?.includes('OAuth token') && data.error?.includes('expired')) {
+        // Token expired, get a fresh token and retry the request
+        await hubspot.refreshToken();
+        const retryResponse = await hubspot.fetch(url, options);
+        return retryResponse.json();
+      }
+
+      // Some other error occurred
+      throw new Error(data.error || 'Request failed');
+    } catch (error) {
+      throw error;
+    }
+  };
+
   useEffect(() => {
     fetchTrainingData();
+    fetchTrainingCounts();
   }, []);
 
   const fetchTrainingData = async () => {
@@ -62,20 +104,12 @@ const Extension = ({ context, actions }) => {
       setLoading(true);
       setError(null);
 
-      const response = await hubspot.fetch(
+      const data = await fetchWithRetry(
         `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=get`,
         {
           method: 'POST'
         }
       );
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error('Error parsing response:', parseError);
-        throw new Error('Invalid response from server. Please try again.');
-      }
 
       console.log('Training data response:', data);
       setDebugInfo(prev => ({ ...prev, fetchResponse: data }));
@@ -97,64 +131,42 @@ const Extension = ({ context, actions }) => {
     }
   };
 
+  const fetchTrainingCounts = async () => {
+    try {
+      const data = await fetchWithRetry(
+        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=counts`,
+        {
+          method: 'POST'
+        }
+      );
+
+      if (data.success) {
+        setTrainingCounts(data.result.companies);
+      }
+    } catch (error) {
+      console.error('Error fetching training counts:', error);
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       setError(null);
 
-      // Debug info for validation
-      const validationInfo = {
-        beforeValidation: {
-          value: trainingData.training_score,
-          type: typeof trainingData.training_score
-        }
-      };
-
       // Validate and prepare data for saving
       const score = Number(trainingData.training_score);
-      validationInfo.parsedScore = score;
-
       if (isNaN(score) || score < 0 || score > 100) {
         throw new Error('Score must be a number between 0 and 100');
       }
 
-      const dataToSave = {
-        training_score: score,  // Send as number, not string
-        training_attributes: trainingData.training_attributes,
-        training_notes: trainingData.training_notes
-      };
-
-      setDebugInfo(prev => ({ 
-        ...prev, 
-        validation: validationInfo,
-        dataToSave
-      }));
-
-      const response = await hubspot.fetch(
+      const data = await fetchWithRetry(
         `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=update&training_score=${score}&training_attributes=${encodeURIComponent(trainingData.training_attributes.join(','))}&training_notes=${encodeURIComponent(trainingData.training_notes || '')}`,
         {
           method: 'POST'
         }
       );
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        setDebugInfo(prev => ({ 
-          ...prev, 
-          parseError: {
-            message: parseError.message,
-            stack: parseError.stack
-          }
-        }));
-        throw new Error('Invalid response from server. Please try again.');
-      }
-
-      setDebugInfo(prev => ({ 
-        ...prev, 
-        saveResponse: data 
-      }));
+      setDebugInfo(prev => ({ ...prev, saveResponse: data }));
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to save training data');
@@ -191,6 +203,40 @@ const Extension = ({ context, actions }) => {
         {error && (
           <Alert title="Error" variant="error">
             {error}
+          </Alert>
+        )}
+
+        {trainingCounts && (
+          trainingCounts.current.ideal < trainingCounts.required.ideal || 
+          trainingCounts.current.less_ideal < trainingCounts.required.less_ideal
+        ) && (
+          <Alert variant="warning">
+            <Box>
+              <Text format={{ fontSize: "md", fontWeight: "bold" }}>More training data needed before companies can be scored</Text>
+              <Box margin={{ bottom: "sm" }}>
+                <Text>You will need:</Text>
+              </Box>
+              <Box margin={{ left: "md" }}>
+                <Box margin={{ bottom: "xs" }}>
+                  <Text>
+                    • At least {trainingCounts.required.ideal} records with scores above 80
+                    {' '}
+                    (you currently have <Link href={getHighScoreUrl()}>{trainingCounts.current.ideal} high scores</Link>)
+                  </Text>
+                </Box>
+                <Box margin={{ bottom: "sm" }}>
+                  <Text>
+                    • At least {trainingCounts.required.less_ideal} records with scores below 50
+                    {' '}
+                    (you currently have <Link href={getLowScoreUrl()}>{trainingCounts.current.less_ideal} low scores</Link>)
+                  </Text>
+                </Box>
+              </Box>
+              <Divider margin={{ top: "md", bottom: "md" }} />
+              <Text>
+                Instructions for adding training records can be found <Link href="https://acceleratewith.ai/app-success">here</Link>.
+              </Text>
+            </Box>
           </Alert>
         )}
 
@@ -263,10 +309,14 @@ const Extension = ({ context, actions }) => {
         </Box>
 
         <Box>
-          <Text format={{ fontWeight: "bold" }}>Debug Information</Text>
-          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(debugInfo, null, 2)}
-          </Text>
+          {showDebug && (
+            <>
+              <Text format={{ fontWeight: "bold" }}>Debug Information</Text>
+              <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo, null, 2)}
+              </Text>
+            </>
+          )}
         </Box>
       </Flex>
     </Box>

@@ -82,6 +82,72 @@ serve(async (req) => {
           status: 200
         }
       );
+    } else if (action === 'counts') {
+      // Get account settings from database
+      const { data: accountData, error: accountError } = await supabase
+        .from('hubspot_accounts')
+        .select(`
+          current_ideal_companies,
+          current_less_ideal_companies,
+          current_ideal_contacts,
+          current_less_ideal_contacts,
+          current_ideal_deals,
+          current_less_ideal_deals,
+          minimum_ideal_companies,
+          minimum_less_ideal_companies,
+          minimum_ideal_contacts,
+          minimum_less_ideal_contacts,
+          minimum_ideal_deals,
+          minimum_less_ideal_deals
+        `)
+        .eq('portal_id', portalId)
+        .single();
+
+      if (accountError) {
+        throw new Error(`Error fetching account data: ${accountError.message}`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: {
+            companies: {
+              current: {
+                ideal: accountData?.current_ideal_companies || 0,
+                less_ideal: accountData?.current_less_ideal_companies || 0
+              },
+              required: {
+                ideal: accountData?.minimum_ideal_companies || 0,
+                less_ideal: accountData?.minimum_less_ideal_companies || 0
+              }
+            },
+            contacts: {
+              current: {
+                ideal: accountData?.current_ideal_contacts || 0,
+                less_ideal: accountData?.current_less_ideal_contacts || 0
+              },
+              required: {
+                ideal: accountData?.minimum_ideal_contacts || 0,
+                less_ideal: accountData?.minimum_less_ideal_contacts || 0
+              }
+            },
+            deals: {
+              current: {
+                ideal: accountData?.current_ideal_deals || 0,
+                less_ideal: accountData?.current_less_ideal_deals || 0
+              },
+              required: {
+                ideal: accountData?.minimum_ideal_deals || 0,
+                less_ideal: accountData?.minimum_less_ideal_deals || 0
+              }
+            }
+          }
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        }
+      );
     } else if (action === 'update') {
       // Get training data from URL parameters
       const training_score = url.searchParams.get('training_score');
@@ -177,7 +243,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: 'Invalid action. Must be either "get" or "update"'
+        error: 'Invalid action. Must be either "get", "counts", or "update"'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

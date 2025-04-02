@@ -30,6 +30,7 @@ const Extension = ({ context, actions }) => {
   const [scoring, setScoring] = useState(false);
   const [trainingError, setTrainingError] = useState(null);
   const [debugInfo, setDebugInfo] = useState({});
+  const [showDebug, setShowDebug] = useState(false);
 
 
   useEffect(() => {
@@ -250,53 +251,57 @@ const Extension = ({ context, actions }) => {
         <Divider />
         
         <Box>
-          <Heading>Debug Information</Heading>
-          
-          <Text format={{ fontWeight: "bold" }}>Training Counts Response:</Text>
-          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(debugInfo?.trainingData?.result || {}, null, 2)}
-          </Text>
+          {showDebug && (
+            <>
+              <Heading>Debug Information</Heading>
+              
+              <Text format={{ fontWeight: "bold" }}>Training Counts Response:</Text>
+              <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo?.trainingData?.result || {}, null, 2)}
+              </Text>
 
-          <Divider />
-          
-          <Text format={{ fontWeight: "bold" }}>Companies:</Text>
-          <Text format={{ fontFamily: "monospace" }}>
-            Ideal: {debugInfo?.trainingData?.result?.companies?.current?.ideal || 0}
-            {' '}Required Ideal: {debugInfo?.trainingData?.result?.companies?.required?.ideal || 0}
-            {'\n'}
-            Less Ideal: {debugInfo?.trainingData?.result?.companies?.current?.less_ideal || 0}
-            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.companies?.required?.less_ideal || 0}
-          </Text>
+              <Divider />
+              
+              <Text format={{ fontWeight: "bold" }}>Companies:</Text>
+              <Text format={{ fontFamily: "monospace" }}>
+                Ideal: {debugInfo?.trainingData?.result?.companies?.current?.ideal || 0}
+                {' '}Required Ideal: {debugInfo?.trainingData?.result?.companies?.required?.ideal || 0}
+                {'\n'}
+                Less Ideal: {debugInfo?.trainingData?.result?.companies?.current?.less_ideal || 0}
+                {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.companies?.required?.less_ideal || 0}
+              </Text>
 
-          <Text format={{ fontWeight: "bold" }}>Contacts:</Text>
-          <Text format={{ fontFamily: "monospace" }}>
-            Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.ideal || 0}
-            {' '}Required Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.ideal || 0}
-            {'\n'}
-            Less Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.less_ideal || 0}
-            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.less_ideal || 0}
-          </Text>
+              <Text format={{ fontWeight: "bold" }}>Contacts:</Text>
+              <Text format={{ fontFamily: "monospace" }}>
+                Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.ideal || 0}
+                {' '}Required Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.ideal || 0}
+                {'\n'}
+                Less Ideal: {debugInfo?.trainingData?.result?.contacts?.current?.less_ideal || 0}
+                {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.contacts?.required?.less_ideal || 0}
+              </Text>
 
-          <Text format={{ fontWeight: "bold" }}>Deals:</Text>
-          <Text format={{ fontFamily: "monospace" }}>
-            Ideal: {debugInfo?.trainingData?.result?.deals?.current?.ideal || 0}
-            {' '}Required Ideal: {debugInfo?.trainingData?.result?.deals?.required?.ideal || 0}
-            {'\n'}
-            Less Ideal: {debugInfo?.trainingData?.result?.deals?.current?.less_ideal || 0}
-            {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.deals?.required?.less_ideal || 0}
-          </Text>
+              <Text format={{ fontWeight: "bold" }}>Deals:</Text>
+              <Text format={{ fontFamily: "monospace" }}>
+                Ideal: {debugInfo?.trainingData?.result?.deals?.current?.ideal || 0}
+                {' '}Required Ideal: {debugInfo?.trainingData?.result?.deals?.required?.ideal || 0}
+                {'\n'}
+                Less Ideal: {debugInfo?.trainingData?.result?.deals?.current?.less_ideal || 0}
+                {' '}Required Less Ideal: {debugInfo?.trainingData?.result?.deals?.required?.less_ideal || 0}
+              </Text>
 
-          <Divider />
+              <Divider />
 
-          <Text format={{ fontWeight: "bold" }}>Context:</Text>
-          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify({ portalId: context.portal.id, objectId: context.crm.objectId }, null, 2)}
-          </Text>
+              <Text format={{ fontWeight: "bold" }}>Context:</Text>
+              <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify({ portalId: context.portal.id, objectId: context.crm.objectId }, null, 2)}
+              </Text>
 
-          <Text format={{ fontWeight: "bold" }}>Score Response:</Text>
-          <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(debugInfo?.scoreResponse || {}, null, 2)}
-          </Text>
+              <Text format={{ fontWeight: "bold" }}>Score Response:</Text>
+              <Text format={{ fontFamily: "monospace" }} style={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo?.scoreResponse || {}, null, 2)}
+              </Text>
+            </>
+          )}
         </Box>
       </Flex>
     </Box>
