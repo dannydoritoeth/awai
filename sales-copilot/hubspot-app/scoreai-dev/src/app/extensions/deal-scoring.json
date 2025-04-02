@@ -1,0 +1,31 @@
+{
+  "name": "ScoreAI - Deal Score",
+  "description": "Display and manage AI scoring for deals",
+  "uid": "deal_ai_score",
+  "scopes": ["crm.objects.deals.read", "crm.objects.deals.write"],
+  "public": false,
+  "actions": {
+    "scoreDeal": {
+      "url": "${baseUrl}/hubspot-score-record",
+      "method": "POST",
+      "targetFunction": "hubspot-score-record"
+    }
+  },
+  "cards": [{
+    "name": "ScoreAI - Deal Score",
+    "location": "crm.record.tab",
+    "source": {
+      "url": "${baseUrl}/extensions/deal-scoring.html"
+    }
+  }],
+  "type": "crm-card",
+  "data": {
+    "title": "ScoreAI - Deal Score",
+    "uid": "deal-ai-score",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "DealScoring.jsx"
+    },
+    "objectTypes": [{ "name": "deals" }]
+  }
+} 

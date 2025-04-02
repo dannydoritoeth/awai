@@ -37,6 +37,18 @@
         },
         {
           "file": "./extensions/company-training.json"
+        },
+        {
+          "file": "./extensions/contact-scoring.json"
+        },
+        {
+          "file": "./extensions/contact-training.json"
+        },
+        {
+          "file": "./extensions/deal-scoring.json"
+        },
+        {
+          "file": "./extensions/deal-training.json"
         }
       ]
     }

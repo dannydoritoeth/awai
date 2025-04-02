@@ -1,0 +1,31 @@
+{
+  "name": "ScoreAI - Deal Training",
+  "description": "Display and manage AI training for deals",
+  "uid": "deal_ai_training",
+  "scopes": ["crm.objects.deals.read", "crm.objects.deals.write"],
+  "public": false,
+  "actions": {
+    "scoreDeal": {
+      "url": "${baseUrl}/hubspot-score-record",
+      "method": "POST",
+      "targetFunction": "hubspot-score-record"
+    }
+  },
+  "cards": [{
+    "name": "ScoreAI - Deal Training",
+    "location": "crm.record.tab",
+    "source": {
+      "url": "${baseUrl}/extensions/deal-training.html"
+    }
+  }],
+  "type": "crm-card",
+  "data": {
+    "title": "ScoreAI - Deal Training",
+    "uid": "deal-ai-training",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "DealTraining.jsx"
+    },
+    "objectTypes": [{ "name": "deals" }]
+  }
+} 

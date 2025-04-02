@@ -1,5 +1,5 @@
 {
-  "name": "ScoreAI",
+  "name": "ScoreAI - Company Score",
   "description": "Display and manage AI scoring for companies",
   "uid": "company_ai_score",
   "scopes": ["crm.objects.companies.read", "crm.objects.companies.write"],
@@ -12,7 +12,7 @@
     }
   },
   "cards": [{
-    "name": "ScoreAI",
+    "name": "ScoreAI - Company Score",
     "location": "crm.record.tab",
     "source": {
       "url": "${baseUrl}/extensions/company-scoring.html"
@@ -20,7 +20,7 @@
   }],
   "type": "crm-card",
   "data": {
-    "title": "ScoreAI",
+    "title": "ScoreAI - Company Score",
     "uid": "company-ai-score",
     "location": "crm.record.tab",
     "module": {

@@ -1,0 +1,31 @@
+{
+  "name": "ScoreAI - Contact Training",
+  "description": "Display and manage AI training for contacts",
+  "uid": "contact_ai_training",
+  "scopes": ["crm.objects.contacts.read", "crm.objects.contacts.write"],
+  "public": false,
+  "actions": {
+    "scoreContact": {
+      "url": "${baseUrl}/hubspot-score-record",
+      "method": "POST",
+      "targetFunction": "hubspot-score-record"
+    }
+  },
+  "cards": [{
+    "name": "ScoreAI - Contact Training",
+    "location": "crm.record.tab",
+    "source": {
+      "url": "${baseUrl}/extensions/contact-training.html"
+    }
+  }],
+  "type": "crm-card",
+  "data": {
+    "title": "ScoreAI - Contact Training",
+    "uid": "contact-ai-training",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "ContactTraining.jsx"
+    },
+    "objectTypes": [{ "name": "contacts" }]
+  }
+} 
