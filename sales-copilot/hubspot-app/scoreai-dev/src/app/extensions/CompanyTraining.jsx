@@ -6,7 +6,7 @@ import {
   Alert,
   Box,
   Input,
-  Select,
+  MultiSelect,
   TextArea,
   Flex,
   hubspot,
@@ -33,7 +33,7 @@ const TRAINING_ATTRIBUTES = [
   { label: 'Process Issues', value: 'process_issues' },
   { label: 'Technology Gaps', value: 'tech_gaps' },
   { label: 'Geographic Limitations', value: 'geographic_limitations' }
-];
+].sort((a, b) => a.label.localeCompare(b.label));
 
 const Extension = ({ context, actions }) => {
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,7 @@ const Extension = ({ context, actions }) => {
   const [saving, setSaving] = useState(false);
   const [trainingData, setTrainingData] = useState({
     training_score: '',
-    training_attributes: '',
+    training_attributes: [],
     training_notes: ''
   });
   const [debugInfo, setDebugInfo] = useState({});
@@ -76,7 +76,7 @@ const Extension = ({ context, actions }) => {
       if (data.success) {
         setTrainingData({
           training_score: data.result.training_score || '',
-          training_attributes: data.result.training_attributes || '',
+          training_attributes: data.result.training_attributes ? data.result.training_attributes.split(';') : [],
           training_notes: data.result.training_notes || ''
         });
       } else {
@@ -124,7 +124,7 @@ const Extension = ({ context, actions }) => {
       }));
 
       const response = await hubspot.fetch(
-        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=update&training_score=${score}${trainingData.training_attributes ? `&training_attributes=${encodeURIComponent(trainingData.training_attributes)}` : ''}${trainingData.training_notes ? `&training_notes=${encodeURIComponent(trainingData.training_notes)}` : ''}`,
+        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=company&recordId=${context.crm.objectId}&action=update&training_score=${score}&training_attributes=${encodeURIComponent(trainingData.training_attributes.join(','))}&training_notes=${encodeURIComponent(trainingData.training_notes || '')}`,
         {
           method: 'POST'
         }
@@ -206,10 +206,19 @@ const Extension = ({ context, actions }) => {
 
         <Box>
           <Text format={{ fontWeight: "bold" }}>Training Attributes</Text>
-          <Select
+          <MultiSelect
+            name="training_attributes"
+            label="Select training attributes"
             value={trainingData.training_attributes}
-            onChange={(value) => setTrainingData(prev => ({ ...prev, training_attributes: value }))}
+            onChange={(values) => {
+              console.log('Selected values:', values);
+              setTrainingData(prev => ({
+                ...prev,
+                training_attributes: values || []
+              }));
+            }}
             options={TRAINING_ATTRIBUTES}
+            error={error}
           />
         </Box>
 

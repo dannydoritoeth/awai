@@ -85,12 +85,12 @@ serve(async (req) => {
     } else if (action === 'update') {
       // Get training data from URL parameters
       const training_score = url.searchParams.get('training_score');
-      const training_attributes = url.searchParams.get('training_attributes');
+      const training_attributes_raw = url.searchParams.get('training_attributes');
       const training_notes = url.searchParams.get('training_notes');
 
       console.log('Received training data from params:', {
         training_score,
-        training_attributes,
+        training_attributes_raw,
         training_notes
       });
 
@@ -100,11 +100,16 @@ serve(async (req) => {
         ? receivedScore 
         : Number(receivedScore);
 
+      // Parse training attributes - keep all values for checkbox enumeration
+      const training_attributes = training_attributes_raw ? training_attributes_raw.split(',') : [];
+
       console.log('Score validation:', { 
         receivedScore,
         receivedType: typeof receivedScore,
         parsedScore: score,
-        parsedType: typeof score
+        parsedType: typeof score,
+        training_attributes,
+        raw_attributes: training_attributes_raw
       });
 
       if (isNaN(score) || score < 0 || score > 100) {
@@ -132,12 +137,11 @@ serve(async (req) => {
       // Update properties in HubSpot
       const properties: Record<string, string> = {
         training_score: score.toString(),
-        training_notes: training_notes || ''
+        training_attributes: training_attributes.join(';')  // HubSpot uses semicolon for multiple enum values
       };
 
-      // Only include training_attributes if it's set
-      if (training_attributes) {
-        properties.training_attributes = training_attributes;
+      if (training_notes) {
+        properties.training_notes = training_notes;
       }
 
       switch (recordType) {
@@ -159,8 +163,8 @@ serve(async (req) => {
           success: true,
           result: {
             training_score: score,
-            training_notes: training_notes || '',
-            ...(training_attributes ? { training_attributes } : {})
+            ...(training_attributes ? { training_attributes } : {}),
+            ...(training_notes ? { training_notes } : {})
           }
         }),
         {
