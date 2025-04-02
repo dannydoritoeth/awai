@@ -12,16 +12,6 @@ This document shows examples of how the DocumentPackager formats different types
     "type": "contact",
     "classification": "Ideal",
     "score": 85,
-    "attributes": [
-      "high_revenue",
-      "fast_sales_cycle",
-      "quick_response",
-      "high_engagement",
-      "clear_communication",
-      "industry_fit",
-      "tech_match",
-      "growth_potential"
-    ],
     "notes": "Engaged consistently with our content and quick to respond"
   },
   "properties": {
@@ -129,15 +119,6 @@ This document shows examples of how the DocumentPackager formats different types
     "type": "deal",
     "classification": "Ideal",
     "score": 92,
-    "attributes": [
-      "high_value",
-      "quick_close",
-      "clear_requirements",
-      "strong_champion",
-      "budget_approved",
-      "strategic_fit",
-      "competitive_advantage"
-    ],
     "notes": "Fast-moving enterprise deal with clear decision maker"
   },
   "properties": {
@@ -166,12 +147,7 @@ This document shows examples of how the DocumentPackager formats different types
         "industry": "Technology",
         "type": "Enterprise",
         "size_category": "Large",
-        "training_score": 88,
-        "training_attributes": [
-          "strong_financials",
-          "growth_stage",
-          "market_leader"
-        ]
+        "training_score": 88
       }
     }],
     "contacts": [
@@ -181,11 +157,7 @@ This document shows examples of how the DocumentPackager formats different types
         "name": "Contact 67890",
         "properties": {
           "jobtitle": "CTO",
-          "training_score": 85,
-          "training_attributes": [
-            "high_engagement",
-            "quick_response"
-          ]
+          "training_score": 85
         }
       },
       {
@@ -194,11 +166,7 @@ This document shows examples of how the DocumentPackager formats different types
         "name": "Contact 67891",
         "properties": {
           "jobtitle": "Engineering Manager",
-          "training_score": 75,
-          "training_attributes": [
-            "technical_knowledge",
-            "clear_requirements"
-          ]
+          "training_score": 75
         }
       }
     ]
@@ -281,67 +249,11 @@ This document shows examples of how the DocumentPackager formats different types
 }
 ```
 
-## Training Attributes by Record Type
-
-### Contact Attributes
-- **Positive**
-  - High Revenue Potential
-  - Fast Sales Cycle
-  - Quick Response Time
-  - High Engagement
-  - Clear Communication
-  - Industry Fit
-  - Technology Match
-  - Growth Potential
-- **Negative**
-  - Budget Constraints
-  - Long Sales Cycle
-  - Poor Communication
-  - Low Engagement
-  - Industry Mismatch
-  - High Support Needs
-
-### Company Attributes
-- **Positive**
-  - Strong Financials
-  - Growth Stage
-  - Market Leader
-  - Strong Leadership
-  - Innovation Focus
-  - Global Presence
-  - Efficient Processes
-  - Quality Focus
-- **Negative**
-  - Financial Instability
-  - Limited Resources
-  - Limited Market Share
-  - Process Issues
-  - Technology Gaps
-  - Geographic Limitations
-
-### Deal Attributes
-- **Positive**
-  - High Value
-  - Quick Close
-  - Clear Requirements
-  - Strong Champion
-  - Budget Approved
-  - Strategic Fit
-  - Competitive Advantage
-- **Negative**
-  - Low Value
-  - Long Sales Cycle
-  - Unclear Requirements
-  - No Champion
-  - Budget Issues
-  - High Competition
-
 ## Key Features Demonstrated
 
 1. **Record Type-Specific Training**
-   - Each record type has unique attributes relevant to its context
    - Training scores are consistent across types (>80 Ideal, <50 Less Ideal)
-   - Attributes reflect business value and fit for each type
+   - Notes reflect business value and fit for each type
 
 2. **Temporal Progression**
    - Records show complete timeline of status changes
@@ -370,7 +282,7 @@ This document shows examples of how the DocumentPackager formats different types
 
 This structured format allows the AI to:
 - Analyze progression patterns specific to each record type
-- Identify key indicators of success based on record-specific attributes
+- Identify key indicators of success based on record-specific characteristics
 - Understand engagement velocity in different contexts
 - Learn from historical patterns while respecting type-specific characteristics
 - Make predictions while respecting privacy 
@@ -388,8 +300,7 @@ This structured format allows the AI to:
    - Primary vs secondary relationships
 
 3. **Inherited Training Data**
-   - Training scores and attributes from related objects
-   - Allows for contextual analysis across relationships
+   - Training scores from related objects
    - Helps identify patterns in successful relationships
 
 4. **Privacy-Aware Related Data**

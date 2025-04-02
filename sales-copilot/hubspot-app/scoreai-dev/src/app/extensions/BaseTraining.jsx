@@ -6,7 +6,6 @@ import {
   Alert,
   Box,
   Input,
-  MultiSelect,
   TextArea,
   Flex,
   hubspot,
@@ -17,26 +16,6 @@ import {
 // Supabase function URLs
 const SUPABASE_GET_TRAINING_DETAIL_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-training-detail';
 
-// Training attributes options
-const TRAINING_ATTRIBUTES = [
-  // Positive attributes
-  { label: 'Strong Financials', value: 'strong_financials' },
-  { label: 'Growth Stage', value: 'growth_stage' },
-  { label: 'Market Leader', value: 'market_leader' },
-  { label: 'Strong Leadership', value: 'strong_leadership' },
-  { label: 'Innovation Focus', value: 'innovation_focus' },
-  { label: 'Global Presence', value: 'global_presence' },
-  { label: 'Efficient Processes', value: 'efficient_processes' },
-  { label: 'Quality Focus', value: 'quality_focus' },
-  // Negative attributes
-  { label: 'Financial Instability', value: 'financial_instability' },
-  { label: 'Limited Resources', value: 'limited_resources' },
-  { label: 'Limited Market Share', value: 'limited_market_share' },
-  { label: 'Process Issues', value: 'process_issues' },
-  { label: 'Technology Gaps', value: 'tech_gaps' },
-  { label: 'Geographic Limitations', value: 'geographic_limitations' }
-].sort((a, b) => a.label.localeCompare(b.label));
-
 const BaseTraining = ({ 
   context, 
   actions,
@@ -46,15 +25,13 @@ const BaseTraining = ({
   objectTypeId = "0-2", // Default to company, can be overridden
   customTrainingLinks = null, // Optional custom component for training links
   customTrainingForm = null, // Optional custom component for training form
-  customAttributes = null, // Optional custom training attributes
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
   const [trainingData, setTrainingData] = useState({
     training_score: '',
-    training_attributes: [],
     training_notes: ''
   });
   const [debugInfo, setDebugInfo] = useState({});
@@ -133,7 +110,6 @@ const BaseTraining = ({
       if (data.success) {
         setTrainingData({
           training_score: data.result.training_score || '',
-          training_attributes: data.result.training_attributes ? data.result.training_attributes.split(';') : [],
           training_notes: data.result.training_notes || ''
         });
       } else {
@@ -205,7 +181,7 @@ const BaseTraining = ({
       }
 
       const data = await fetchWithRetry(
-        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=${recordType}&recordId=${context.crm.objectId}&action=update&training_score=${score}&training_attributes=${encodeURIComponent(trainingData.training_attributes.join(','))}&training_notes=${encodeURIComponent(trainingData.training_notes || '')}`,
+        `${SUPABASE_GET_TRAINING_DETAIL_URL}?portalId=${context.portal.id}&recordType=${recordType}&recordId=${context.crm.objectId}&action=update&training_score=${score}&training_notes=${encodeURIComponent(trainingData.training_notes || '')}`,
         {
           method: 'POST'
         }
@@ -329,24 +305,6 @@ const BaseTraining = ({
                   !isScoreValid(trainingData.training_score) ? "Please enter a whole number between 0 and 100" : undefined
                 }
                 required
-              />
-            </Box>
-
-            <Box>
-              <Text format={{ fontWeight: "bold" }}>Training Attributes</Text>
-              <MultiSelect
-                name="training_attributes"
-                label="Select training attributes"
-                value={trainingData.training_attributes}
-                onChange={(values) => {
-                  console.log('Selected values:', values);
-                  setTrainingData(prev => ({
-                    ...prev,
-                    training_attributes: values || []
-                  }));
-                }}
-                options={customAttributes || TRAINING_ATTRIBUTES}
-                error={error}
               />
             </Box>
 

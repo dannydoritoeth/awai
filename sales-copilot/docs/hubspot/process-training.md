@@ -7,21 +7,15 @@ This document explains how to use the process training functionality in the Sale
 The following training fields are created during OAuth installation for each object type:
 
 ### Contacts
-- `training_classification` (select): "Ideal" or "Less Ideal"
 - `training_score` (number): Score from 0-100
-- `training_attributes` (checkbox): Multiple attributes that characterize the contact
 - `training_notes` (textarea): Additional context about why this contact is ideal or not
 
 ### Companies
-- `training_classification` (select): "Ideal" or "Less Ideal"
 - `training_score` (number): Score from 0-100
-- `training_attributes` (checkbox): Multiple attributes that characterize the company
 - `training_notes` (textarea): Additional context about why this company is ideal or not
 
 ### Deals
-- `training_classification` (select): "Ideal" or "Less Ideal"
 - `training_score` (number): Score from 0-100
-- `training_attributes` (checkbox): Multiple attributes that characterize the deal
 - `training_notes` (textarea): Additional context about why this deal is ideal or not
 
 ## Training Process
@@ -34,9 +28,7 @@ The following training fields are created during OAuth installation for each obj
    - Navigate to the record in HubSpot
    - Locate the "AI Scoring" section
    - Fill out all training fields:
-     - Set classification as "Ideal" or "Less Ideal"
      - Provide a score (higher scores for better fits)
-     - Select relevant attributes
      - Add detailed notes explaining the classification
 
 3. **Run Training**

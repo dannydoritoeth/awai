@@ -18,8 +18,6 @@ This guide explains how to install and configure Sales Copilot in your HubSpot p
    - Follow the OAuth authorization flow
    - Grant required permissions
    - The app will create necessary properties:
-     - `training_classification` (Ideal/Less Ideal)
-     - `training_attributes` (Characteristics)
      - `training_score` (0-100)
      - `training_notes` (Context)
 

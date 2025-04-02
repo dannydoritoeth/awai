@@ -14,12 +14,6 @@
       {
         "subscriptionType": "object.propertyChange",
         "objectName": "contact",
-        "propertyName": "training_attributes",
-        "active": true
-      },
-      {
-        "subscriptionType": "object.propertyChange",
-        "objectName": "contact",
         "propertyName": "training_notes",
         "active": true
       },
@@ -32,12 +26,6 @@
       {
         "subscriptionType": "object.propertyChange",
         "objectName": "company",
-        "propertyName": "training_attributes",
-        "active": true
-      },
-      {
-        "subscriptionType": "object.propertyChange",
-        "objectName": "company",
         "propertyName": "training_notes",
         "active": true
       },
@@ -45,12 +33,6 @@
         "subscriptionType": "object.propertyChange",
         "objectName": "deal",
         "propertyName": "training_score",
-        "active": true
-      },
-      {
-        "subscriptionType": "object.propertyChange",
-        "objectName": "deal",
-        "propertyName": "training_attributes",
         "active": true
       },
       {
