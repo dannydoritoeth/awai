@@ -1,0 +1,31 @@
+{
+  "name": "ScoreAI Training",
+  "description": "Display and manage AI training for companies",
+  "uid": "company_ai_training",
+  "scopes": ["crm.objects.companies.read", "crm.objects.companies.write"],
+  "public": false,
+  "actions": {
+    "scoreCompany": {
+      "url": "${baseUrl}/hubspot-score-record",
+      "method": "POST",
+      "targetFunction": "hubspot-score-record"
+    }
+  },
+  "cards": [{
+    "name": "ScoreAI Training",
+    "location": "crm.record.tab",
+    "source": {
+      "url": "${baseUrl}/extensions/company-training.html"
+    }
+  }],
+  "type": "crm-card",
+  "data": {
+    "title": "ScoreAI Training",
+    "uid": "company-ai-training",
+    "location": "crm.record.tab",
+    "module": {
+      "file": "CompanyTraining.jsx"
+    },
+    "objectTypes": [{ "name": "companies" }]
+  }
+} 

@@ -4,7 +4,8 @@
   "description": "AI-powered lead scoring for HubSpot. Train it on your best and worst customers to prioritize leads with scores and AI-generated summaries. Works across all tiers—no complex rules or workflows. Just smarter, faster lead qualification.",
   "allowedUrls": [
     "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-get-training-counts",
-    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record"
+    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record",
+    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-training-detail"
   ],
   "auth": {
     "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
@@ -33,6 +34,9 @@
       "cards": [
         {
           "file": "./extensions/company-scoring.json"
+        },
+        {
+          "file": "./extensions/company-training.json"
         }
       ]
     }
