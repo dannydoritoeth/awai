@@ -46,6 +46,13 @@ const Extension = ({ context, actions }) => {
   });
   const [debugInfo, setDebugInfo] = useState({});
 
+  // Add validation helper
+  const isScoreValid = (score) => {
+    if (score === '') return true; // Empty is valid while typing
+    const num = Number(score);
+    return Number.isInteger(num) && num >= 0 && num <= 100;
+  };
+
   useEffect(() => {
     fetchTrainingData();
   }, []);
@@ -190,17 +197,30 @@ const Extension = ({ context, actions }) => {
         <Box>
           <Text format={{ fontWeight: "bold" }}>Training Score (0-100)</Text>
           <Input
+            name="training_score"
             value={trainingData.training_score}
             onChange={(value) => {
-              // Only allow numbers and empty string
-              if (value === '' || /^\d+$/.test(value)) {
-                const num = value === '' ? '' : parseInt(value, 10);
-                if (num === '' || (num >= 0 && num <= 100)) {
-                  setTrainingData(prev => ({ ...prev, training_score: value }));
+              if (value === '') {
+                setTrainingData(prev => ({ ...prev, training_score: '' }));
+              } else {
+                const num = parseInt(value, 10);
+                if (!isNaN(num) && num >= 0 && num <= 100) {
+                  setTrainingData(prev => ({ ...prev, training_score: num.toString() }));
                 }
               }
             }}
-            type="text"
+            type="number"
+            min="0"
+            max="100"
+            validationState={
+              trainingData.training_score === '' ? "error" :
+              isScoreValid(trainingData.training_score) ? "success" : "error"
+            }
+            validationMessage={
+              trainingData.training_score === '' ? "Score is required" :
+              !isScoreValid(trainingData.training_score) ? "Please enter a whole number between 0 and 100" : undefined
+            }
+            required
           />
         </Box>
 
@@ -236,6 +256,7 @@ const Extension = ({ context, actions }) => {
             variant="primary"
             onClick={handleSave}
             loading={saving}
+            disabled={!isScoreValid(trainingData.training_score) || trainingData.training_score === ''}
           >
             {saving ? 'Saving...' : 'Save Training Data'}
           </Button>
