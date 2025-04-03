@@ -27,7 +27,7 @@ serve(async (req: Request) => {
     // Parse URL parameters
     const url = new URL(req.url);
     const portalId = url.searchParams.get('portal_id');
-    const planTier = url.searchParams.get('plan_tier') || 'standard';
+    const planTier = url.searchParams.get('plan_tier') || 'starter';
     const partnerId = url.searchParams.get('partner_id');
 
     if (!portalId) {
@@ -36,6 +36,21 @@ serve(async (req: Request) => {
 
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Verify HubSpot account exists and is active
+    const { data: hubspotAccount, error: accountError } = await supabase
+      .from('hubspot_accounts')
+      .select('portal_id, status')
+      .eq('portal_id', portalId)
+      .single();
+
+    if (accountError || !hubspotAccount) {
+      throw new Error('HubSpot account not found');
+    }
+
+    if (hubspotAccount.status !== 'active') {
+      throw new Error('HubSpot account is not active');
+    }
 
     // Check if customer already exists
     const { data: existingCustomer } = await supabase
@@ -142,9 +157,9 @@ serve(async (req: Request) => {
 // Helper function to get price ID based on plan tier
 async function getPriceIdForPlan(planTier: string): Promise<string> {
   const priceIds: { [key: string]: string } = {
-    standard: Deno.env.get('STRIPE_STANDARD_PRICE_ID')!,
-    premium: Deno.env.get('STRIPE_PREMIUM_PRICE_ID')!,
-    enterprise: Deno.env.get('STRIPE_ENTERPRISE_PRICE_ID')!
+    starter: Deno.env.get('STRIPE_STARTER_PRICE_ID')!,
+    pro: Deno.env.get('STRIPE_PRO_PRICE_ID')!,
+    growth: Deno.env.get('STRIPE_GROWTH_PRICE_ID')!
   };
 
   const priceId = priceIds[planTier];

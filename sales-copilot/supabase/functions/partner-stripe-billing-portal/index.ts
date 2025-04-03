@@ -35,6 +35,21 @@ serve(async (req: Request) => {
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Verify HubSpot account exists and is active
+    const { data: hubspotAccount, error: accountError } = await supabase
+      .from('hubspot_accounts')
+      .select('portal_id, status')
+      .eq('portal_id', portalId)
+      .single();
+
+    if (accountError || !hubspotAccount) {
+      throw new Error('HubSpot account not found');
+    }
+
+    if (hubspotAccount.status !== 'active') {
+      throw new Error('HubSpot account is not active');
+    }
+
     // Get customer details from database
     const { data: customer, error: customerError } = await supabase
       .from('customers')
