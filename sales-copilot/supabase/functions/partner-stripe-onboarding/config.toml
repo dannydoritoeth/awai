@@ -1,0 +1,2 @@
+[functions.partner-stripe-onboarding]
+verify_jwt = false 
