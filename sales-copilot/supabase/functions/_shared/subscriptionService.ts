@@ -161,4 +161,60 @@ export class SubscriptionService {
 
     return `Active ${status.tier} subscription`;
   }
+
+  /**
+   * Get the current period's score usage and limits
+   */
+  async getCurrentPeriodScores(portalId: string): Promise<{
+    scoresUsed: number;
+    maxScores: number;
+    periodStart: Date;
+    periodEnd: Date;
+  }> {
+    const { data, error } = await this.supabase
+      .rpc('get_current_period_score_count', { portal_id_param: portalId });
+    
+    if (error) throw error;
+
+    return {
+      scoresUsed: data.scores_used,
+      maxScores: data.max_scores,
+      periodStart: new Date(data.period_start),
+      periodEnd: new Date(data.period_end)
+    };
+  }
+
+  /**
+   * Check if a portal can score more leads
+   */
+  async canScoreLead(portalId: string): Promise<{
+    canScore: boolean;
+    remaining: number;
+    periodEnd: Date;
+  }> {
+    const usage = await this.getCurrentPeriodScores(portalId);
+    return {
+      canScore: usage.scoresUsed < usage.maxScores,
+      remaining: usage.maxScores - usage.scoresUsed,
+      periodEnd: usage.periodEnd
+    };
+  }
+
+  /**
+   * Record a new score event for a portal
+   */
+  async recordScore(portalId: string): Promise<void> {
+    const { canScore, remaining, periodEnd } = await this.canScoreLead(portalId);
+    if (!canScore) {
+      throw new Error(`Score limit reached. Next reset at ${periodEnd.toISOString()}`);
+    }
+
+    const { error } = await this.supabase
+      .from('scoring_events')
+      .insert({ portal_id: portalId });
+
+    if (error) {
+      throw new Error(`Failed to record score: ${error.message}`);
+    }
+  }
 } 

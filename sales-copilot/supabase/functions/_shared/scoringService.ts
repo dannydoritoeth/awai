@@ -3,6 +3,7 @@ import { Logger } from './logger.ts';
 import { AIConfig, HubspotAccount } from './types.ts';
 import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
 import OpenAI from 'https://esm.sh/openai@4.86.1';
+import { SubscriptionService } from "./subscriptionService.ts";
 
 declare const Deno: {
   env: {
@@ -24,28 +25,35 @@ export class ScoringService {
   private openai: OpenAI;
   private pinecone: Pinecone;
   private pineconeIndex: any;
+  private subscriptionService: SubscriptionService;
 
   constructor(
-    clientOrToken: HubspotClient | string,
+    hubspotClient: HubspotClient,
     aiConfig: AIConfig,
     portalId: string,
-    logger?: Logger
+    logger: Logger
   ) {
-    this.hubspotClient = clientOrToken instanceof HubspotClient ? clientOrToken : new HubspotClient(clientOrToken);
+    this.hubspotClient = hubspotClient;
     this.aiConfig = aiConfig;
     this.portalId = portalId;
-    this.logger = logger || new Logger('ScoringService');
+    this.logger = logger;
 
-    // Initialize AI services
+    // Initialize services
     this.openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY') || ''
+      apiKey: Deno.env.get('OPENAI_API_KEY')!
     });
 
     this.pinecone = new Pinecone({
-      apiKey: Deno.env.get('PINECONE_API_KEY') || '',
+      apiKey: Deno.env.get('PINECONE_API_KEY')!,
+      environment: Deno.env.get('PINECONE_ENVIRONMENT')!
     });
 
     this.pineconeIndex = this.pinecone.index(Deno.env.get('PINECONE_INDEX') || 'sales-copilot');
+
+    // Initialize subscription service with Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    this.subscriptionService = new SubscriptionService(supabaseUrl, supabaseKey);
   }
 
   private async getEmbeddings(record: any): Promise<number[]> {
@@ -230,7 +238,19 @@ ${JSON.stringify(data, null, 2)}`;
     return JSON.parse(data.candidates[0].content.parts[0].text);
   }
 
+  private async checkScoringLimit(): Promise<void> {
+    const { canScore, remaining, periodEnd } = await this.subscriptionService.canScoreLead(this.portalId);
+    if (!canScore) {
+      throw new Error(`Scoring limit reached. You have used all ${remaining} scores for this period. Next reset at ${periodEnd.toISOString()}`);
+    }
+  }
+
+  private async recordScoreUsage(): Promise<void> {
+    await this.subscriptionService.recordScore(this.portalId);
+  }
+
   async scoreContact(contactId: string): Promise<ScoringResult> {
+    await this.checkScoringLimit();
     this.logger.info(`Scoring contact ${contactId}`);
     
     try {
@@ -249,6 +269,7 @@ ${JSON.stringify(data, null, 2)}`;
         ideal_client_last_scored: lastScored
       });
 
+      await this.recordScoreUsage();
       return { ...result, lastScored };
     } catch (error) {
       this.logger.error('Error scoring contact:', error);
@@ -257,6 +278,7 @@ ${JSON.stringify(data, null, 2)}`;
   }
 
   async scoreCompany(companyId: string): Promise<ScoringResult> {
+    await this.checkScoringLimit();
     this.logger.info(`Scoring company ${companyId}`);
     
     try {
@@ -275,6 +297,7 @@ ${JSON.stringify(data, null, 2)}`;
         ideal_client_last_scored: lastScored
       });
 
+      await this.recordScoreUsage();
       return { ...result, lastScored };
     } catch (error) {
       this.logger.error('Error scoring company:', error);
@@ -283,6 +306,7 @@ ${JSON.stringify(data, null, 2)}`;
   }
 
   async scoreDeal(dealId: string): Promise<ScoringResult> {
+    await this.checkScoringLimit();
     this.logger.info(`Scoring deal ${dealId}`);
     
     try {
@@ -301,6 +325,7 @@ ${JSON.stringify(data, null, 2)}`;
         ideal_client_last_scored: lastScored
       });
 
+      await this.recordScoreUsage();
       return { ...result, lastScored };
     } catch (error) {
       this.logger.error('Error scoring deal:', error);
