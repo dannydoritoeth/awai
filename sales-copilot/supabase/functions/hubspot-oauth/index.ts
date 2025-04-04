@@ -338,97 +338,116 @@ async function exchangeCodeForToken(code: string): Promise<{ access_token: strin
 }
 
 async function handleOAuth(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const code = url.searchParams.get('code');
-  
-  if (!code) {
-    const failureUri = new URL(APP_INSTALL_FAILED_URI);
-    failureUri.searchParams.set('error', 'Missing authorization code');
-    return Response.redirect(failureUri.toString(), 302);
-  }
-
   try {
-    // Exchange the code for tokens
-    const { access_token, refresh_token, hub_id } = await exchangeCodeForToken(code);
-    console.log('Successfully exchanged code for tokens');
+    const url = new URL(request.url);
+    const code = url.searchParams.get('code');
+    const stateParam = url.searchParams.get('state');
+    
+    if (!code) {
+      return redirectToFailure('No authorization code provided');
+    }
 
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Encrypt the tokens before storing
-    const encryptedAccessToken = await encrypt(access_token, ENCRYPTION_KEY);
-    const encryptedRefreshToken = await encrypt(refresh_token, ENCRYPTION_KEY);
+    // Exchange code for tokens
+    const { access_token, refresh_token, hub_id } = await exchangeCodeForToken(code);
 
-    const now = new Date().toISOString();
-
-    // Store the HubSpot account information
-    const { data: accountData, error: accountError } = await supabase
+    // Check if this portal already exists
+    const { data: existingAccount } = await supabase
       .from('hubspot_accounts')
-      .upsert({
-        portal_id: hub_id.toString(),
-        access_token: encryptedAccessToken,
-        refresh_token: encryptedRefreshToken,
-        expires_at: new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: now,
-        updated_at: now,
-        status: 'active',
-        token_type: 'bearer',
-        metadata: {},
-        ai_provider: 'openai',
-        ai_model: 'gpt-4-turbo-preview',
-        ai_temperature: 0.7,
-        ai_max_tokens: 4000,
-        last_scoring_counts: { contacts: 0, companies: 0, deals: 0 }
-      }, {
-        onConflict: 'portal_id'
-      })
-      .select();
+      .select('id, partner_id')
+      .eq('portal_id', hub_id.toString())
+      .single();
 
-    if (accountError) {
-      console.error('Failed to store HubSpot account:', accountError);
-      const failureUri = new URL(APP_INSTALL_FAILED_URI);
-      failureUri.searchParams.set('error', 'Failed to store HubSpot account information');
-      return Response.redirect(failureUri.toString(), 302);
-    }
-
-    console.log('Successfully stored HubSpot account information');
-
-    let setupWarning = null;
-    try {
-      await createHubSpotProperties(access_token);
-      console.log('Successfully created HubSpot properties');
-    } catch (error) {
-      console.warn('Property setup warning:', error);
-      setupWarning = error instanceof Error ? error.message : 'Property setup warning';
-    }
-
-    // Validate required properties
-    try {
-      const hubspotClient = new HubspotClient(access_token);
-      await hubspotClient.validateProperties();
-      console.log('Successfully validated HubSpot properties');
-    } catch (error) {
-      console.warn('Property validation warning:', error);
-      if (!setupWarning) {
-        setupWarning = error instanceof Error ? error.message : 'Property validation warning';
+    // Parse state parameter to get partner_id if provided
+    let partnerId: string | null = null;
+    if (stateParam) {
+      try {
+        const state = JSON.parse(stateParam);
+        partnerId = state.partner_id;
+      } catch (e) {
+        console.error('Error parsing state parameter:', e);
       }
     }
 
-    // Redirect to success URI with portal ID and any setup warnings
-    const successUri = new URL(APP_INSTALL_SUCCESS_URI);
-    successUri.searchParams.set('portal_id', hub_id.toString());
-    if (setupWarning) {
-      successUri.searchParams.set('warning', setupWarning);
-    }
-    return Response.redirect(successUri.toString(), 302);
+    // If partner_id is provided, verify it exists
+    if (partnerId) {
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners')
+        .select('id, status')
+        .eq('id', partnerId)
+        .single();
 
+      if (partnerError || !partner || partner.status !== 'active') {
+        return redirectToFailure('Invalid or inactive partner ID');
+      }
+    }
+
+    // Encrypt tokens
+    const encryptedAccessToken = await encrypt(access_token, ENCRYPTION_KEY);
+    const encryptedRefreshToken = await encrypt(refresh_token, ENCRYPTION_KEY);
+
+    if (existingAccount) {
+      // Update existing account but don't change partner_id if it exists
+      const updateData = {
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
+        last_refreshed: new Date().toISOString(),
+        status: 'active'
+      };
+
+      const { error: updateError } = await supabase
+        .from('hubspot_accounts')
+        .update(updateData)
+        .eq('portal_id', hub_id.toString());
+
+      if (updateError) {
+        console.error('Error updating account:', updateError);
+        return redirectToFailure('Failed to update account');
+      }
+    } else {
+      // Create new account with partner_id if provided
+      const { error: insertError } = await supabase
+        .from('hubspot_accounts')
+        .insert({
+          portal_id: hub_id.toString(),
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
+          partner_id: partnerId,
+          status: 'active',
+          last_refreshed: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error('Error creating account:', insertError);
+        return redirectToFailure('Failed to create account');
+      }
+    }
+
+    // Create HubSpot properties
+    try {
+      await createHubSpotProperties(access_token);
+    } catch (error) {
+      console.error('Error creating HubSpot properties:', error);
+      // Continue despite property creation errors
+    }
+
+    return redirectToSuccess();
   } catch (error) {
-    // Only redirect to failure URI for critical errors
-    console.error('Critical OAuth process error:', error);
-    const failureUri = new URL(APP_INSTALL_FAILED_URI);
-    failureUri.searchParams.set('error', error instanceof Error ? error.message : 'Failed to complete OAuth process');
-    return Response.redirect(failureUri.toString(), 302);
+    console.error('OAuth error:', error);
+    return redirectToFailure(error.message);
   }
+}
+
+function redirectToSuccess(): Response {
+  return Response.redirect(APP_INSTALL_SUCCESS_URI);
+}
+
+function redirectToFailure(error: string): Response {
+  const failureUrl = new URL(APP_INSTALL_FAILED_URI);
+  failureUrl.searchParams.set('error', error);
+  return Response.redirect(failureUrl.toString());
 }
 
 serve(handleOAuth);
