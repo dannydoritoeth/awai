@@ -15,7 +15,6 @@ interface StructuredContent {
     type: string;
     classification: string;
     score?: number;
-    attributes: string[];
     notes?: string;
   };
   properties: {
@@ -120,7 +119,6 @@ export class DocumentPackager {
   }
 
   private async buildStructuredContent(record: any, recordType: string): Promise<StructuredContent> {
-    const attributes = record.properties.training_attributes?.split(';') || [];
     const score = parseFloat(record.properties.training_score) || undefined;
     
     // Determine classification based on score thresholds
@@ -144,7 +142,6 @@ export class DocumentPackager {
         type: recordType,
         classification,
         score,
-        attributes,
         notes
       },
       properties: {}
@@ -178,17 +175,6 @@ export class DocumentPackager {
         break;
     }
 
-    // Skip timeline and engagement history for training/scoring
-    // const timeline = await this.buildTimeline(record, recordType);
-    // if (timeline) {
-    //   content.timeline = timeline;
-    // }
-
-    // const engagement = await this.buildEngagementHistory(record, recordType);
-    // if (engagement) {
-    //   content.engagement = engagement;
-    // }
-
     return content;
   }
 
@@ -214,9 +200,6 @@ export class DocumentPackager {
     if (content.primary.score !== undefined) {
       sections.push(`Score: ${content.primary.score}`);
     }
-    if (content.primary.attributes.length > 0) {
-      sections.push(`Attributes: ${content.primary.attributes.join(', ')}`);
-    }
     if (content.primary.notes) {
       sections.push(`Notes: ${content.primary.notes}`);
     }
@@ -239,23 +222,7 @@ export class DocumentPackager {
       }
     });
 
-    // Add relationships if they exist
-    if (content.relationships) {
-      sections.push('\n## Relationships');
-      Object.entries(content.relationships).forEach(([type, items]) => {
-        sections.push(`\n### ${type}`);
-        items.forEach(item => {
-          sections.push(`- ${item.name} (${item.type})`);
-          if (item.properties) {
-            Object.entries(item.properties).forEach(([key, value]) => {
-              sections.push(`  ${key}: ${this.formatPropertyValue(value)}`);
-            });
-          }
-        });
-      });
-    }
-
-    return sections.join('\n');
+    return sections.join('\n\n');
   }
 
   private async getRelatedCompany(companyId: string): Promise<any | null> {

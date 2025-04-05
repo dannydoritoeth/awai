@@ -1,5 +1,5 @@
 {
-  "name": "ScoreAI Training",
+  "name": "ScoreAI - Company Training",
   "description": "Display and manage AI training for companies",
   "uid": "company_ai_training",
   "scopes": ["crm.objects.companies.read", "crm.objects.companies.write"],
@@ -12,7 +12,7 @@
     }
   },
   "cards": [{
-    "name": "ScoreAI Training",
+    "name": "ScoreAI - Company Training",
     "location": "crm.record.tab",
     "source": {
       "url": "${baseUrl}/extensions/company-training.html"
@@ -20,7 +20,7 @@
   }],
   "type": "crm-card",
   "data": {
-    "title": "ScoreAI Training",
+    "title": "ScoreAI - Company Training",
     "uid": "company-ai-training",
     "location": "crm.record.tab",
     "module": {

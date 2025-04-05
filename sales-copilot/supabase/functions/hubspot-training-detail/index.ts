@@ -64,7 +64,7 @@ serve(async (req) => {
 
     if (action === 'get') {
       // Fetch current training data from HubSpot
-      const properties = ['training_score', 'training_attributes', 'training_notes'];
+      const properties = ['training_score', 'training_notes'];
       const hubspotData = await hubspotClient.getRecord(recordType, recordId, properties);
       console.log('HubSpot response:', hubspotData);
 
@@ -73,8 +73,7 @@ serve(async (req) => {
           success: true,
           result: {
             training_score: hubspotData?.properties?.training_score || '',
-            training_notes: hubspotData?.properties?.training_notes || '',
-            ...(hubspotData?.properties?.training_attributes ? { training_attributes: hubspotData.properties.training_attributes } : {})
+            training_notes: hubspotData?.properties?.training_notes || ''
           }
         }),
         {
@@ -151,12 +150,10 @@ serve(async (req) => {
     } else if (action === 'update') {
       // Get training data from URL parameters
       const training_score = url.searchParams.get('training_score');
-      const training_attributes_raw = url.searchParams.get('training_attributes');
       const training_notes = url.searchParams.get('training_notes');
 
       console.log('Received training data from params:', {
         training_score,
-        training_attributes_raw,
         training_notes
       });
 
@@ -166,16 +163,11 @@ serve(async (req) => {
         ? receivedScore 
         : Number(receivedScore);
 
-      // Parse training attributes - keep all values for checkbox enumeration
-      const training_attributes = training_attributes_raw ? training_attributes_raw.split(',') : [];
-
       console.log('Score validation:', { 
         receivedScore,
         receivedType: typeof receivedScore,
         parsedScore: score,
-        parsedType: typeof score,
-        training_attributes,
-        raw_attributes: training_attributes_raw
+        parsedType: typeof score
       });
 
       if (isNaN(score) || score < 0 || score > 100) {
@@ -202,8 +194,7 @@ serve(async (req) => {
 
       // Update properties in HubSpot
       const properties: Record<string, string> = {
-        training_score: score.toString(),
-        training_attributes: training_attributes.join(';')  // HubSpot uses semicolon for multiple enum values
+        training_score: score.toString()
       };
 
       if (training_notes) {
@@ -229,7 +220,6 @@ serve(async (req) => {
           success: true,
           result: {
             training_score: score,
-            ...(training_attributes ? { training_attributes } : {}),
             ...(training_notes ? { training_notes } : {})
           }
         }),

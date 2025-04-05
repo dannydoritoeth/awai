@@ -1,0 +1,6 @@
+{
+  "name": "hubspot-get-scoring-summary",
+  "version": "1.0.0",
+  "description": "Get summary of subscription plan and scoring usage",
+  "verify_jwt": true
+} 

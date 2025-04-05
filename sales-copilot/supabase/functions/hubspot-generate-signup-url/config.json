@@ -1,0 +1,6 @@
+{
+  "name": "hubspot-generate-signup-url",
+  "version": "1.0.0",
+  "description": "Generate HubSpot signup URLs with optional partner referral",
+  "verify_jwt": true
+} 
