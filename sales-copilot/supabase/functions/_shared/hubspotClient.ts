@@ -206,25 +206,25 @@ export class HubspotClient implements HubspotClientInterface {
     return response.json();
   }
 
+  /**
+   * @deprecated Use searchRecords('contacts', request) instead
+   */
   async searchContacts(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/contacts/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('contacts', request);
   }
 
+  /**
+   * @deprecated Use searchRecords('companies', request) instead
+   */
   async searchCompanies(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/companies/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('companies', request);
   }
 
+  /**
+   * @deprecated Use searchRecords('deals', request) instead
+   */
   async searchDeals(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/deals/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('deals', request);
   }
 
   async searchRecords(objectType: string, query: any): Promise<SearchResponse<HubspotRecord>> {
