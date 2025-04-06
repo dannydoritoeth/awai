@@ -105,22 +105,43 @@ function calculateConversionDays(properties: DealCriteria): number {
   return Math.ceil((closeDate.getTime() - createDate.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-async function getDealsForTraining(hubspotClient: HubspotClient, type: 'ideal' | 'nonideal'): Promise<any[]> {
+// Add these helper functions for rate limiting and batching
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function getDealsForTraining(
+  hubspotClient: HubspotClient, 
+  type: 'ideal' | 'nonideal',
+  portalId: string,
+  refreshToken: string
+): Promise<any[]> {
   try {
     const ninety_days_ago = new Date();
     ninety_days_ago.setDate(ninety_days_ago.getDate() - 90);
+    const today = new Date();
     const allDeals: any[] = [];
     let hasMore = true;
     let after: string | null = null;
 
     while (hasMore) {
+      await sleep(2000);
+
       const searchCriteria = {
         filterGroups: [{
           filters: [
             {
               propertyName: 'createdate',
-              operator: 'LTE',
-              value: ninety_days_ago.getTime().toString()
+              operator: 'GTE',
+              value: Math.floor(ninety_days_ago.getTime() / 1000).toString()
             },
             {
               propertyName: 'dealstage',
@@ -131,7 +152,7 @@ async function getDealsForTraining(hubspotClient: HubspotClient, type: 'ideal' |
         }],
         sorts: [
           {
-            propertyName: 'amount',
+            propertyName: 'createdate',
             direction: 'DESCENDING'
           }
         ],
@@ -146,15 +167,32 @@ async function getDealsForTraining(hubspotClient: HubspotClient, type: 'ideal' |
           'hs_date_entered_closedwon',
           'hs_date_entered_closedlost'
         ],
-        limit: 100,
+        limit: 25,
+        associations: ['contacts', 'companies'],
         ...(after ? { after } : {})
       };
 
       logger.info(`Searching for ${type} deals with criteria:`, JSON.stringify(searchCriteria, null, 2));
-      const deals = await hubspotClient.searchRecords('deals', searchCriteria);
+      
+      const deals = await handleApiCall(
+        hubspotClient,
+        portalId,
+        refreshToken,
+        () => hubspotClient.searchRecords('deals', searchCriteria)
+      );
+      
       logger.info(`Found ${deals.total || 0} total ${type} deals, fetched ${deals.results?.length || 0} in this batch`);
       
       if (deals.results?.length) {
+        // Log some sample data to verify associations
+        const sampleDeal = deals.results[0];
+        logger.info('Sample deal associations:', {
+          dealId: sampleDeal.id,
+          hasAssociations: !!sampleDeal.associations,
+          contactsCount: sampleDeal.associations?.contacts?.results?.length || 0,
+          companiesCount: sampleDeal.associations?.companies?.results?.length || 0
+        });
+        
         allDeals.push(...deals.results);
       }
 
@@ -163,39 +201,107 @@ async function getDealsForTraining(hubspotClient: HubspotClient, type: 'ideal' |
 
       if (hasMore) {
         logger.info(`More deals available, continuing with after=${after}`);
+        await sleep(5000);
       }
     }
 
     logger.info(`Total ${type} deals collected: ${allDeals.length}`);
     
-    // Get full deal details with associations
-    const fullDeals = await Promise.all(
-      allDeals.map(async (deal) => {
-        try {
-          return await hubspotClient.getRecord('deals', deal.id, [
-            'dealname',
-            'amount',
-            'closedate',
-            'createdate',
-            'dealstage',
-            'pipeline',
-            'hs_lastmodifieddate',
-            'hs_date_entered_closedwon',
-            'hs_date_entered_closedlost',
-            'hs_deal_stage_probability',
-            'hs_pipeline_stage',
-            'hs_time_in_pipeline',
-            'hs_time_in_dealstage',
-            'hs_deal_stage_changes'
-          ]);
-        } catch (error) {
-          logger.error(`Error fetching full deal details for ${deal.id}:`, error);
-          return null;
-        }
-      })
-    );
+    // Process full deal details in smaller batches
+    const fullDeals: any[] = [];
+    const dealBatches = chunkArray(allDeals, 5);
 
-    return fullDeals.filter(deal => deal !== null);
+    for (const batch of dealBatches) {
+      logger.info(`Processing batch of ${batch.length} deals`);
+      
+      for (const deal of batch) {
+        try {
+          // Log the raw deal object to see what we're working with
+          logger.info('Raw deal object:', {
+            id: deal?.id,
+            properties: deal?.properties ? Object.keys(deal.properties) : 'no properties',
+            associations: deal?.associations ? Object.keys(deal.associations) : 'no associations'
+          });
+
+          // Add defensive checks
+          if (!deal) {
+            logger.error('Deal object is null or undefined');
+            continue;
+          }
+
+          if (!deal.id) {
+            logger.error('Deal has no ID');
+            continue;
+          }
+
+          await sleep(3000);
+          logger.info(`Starting to fetch full deal details for ${deal.id}`);
+
+          try {
+            const fullDeal = await handleApiCall(
+              hubspotClient,
+              portalId,
+              refreshToken,
+              () => hubspotClient.getRecord('deals', deal.id, [
+                'dealname',
+                'amount',
+                'closedate',
+                'createdate',
+                'dealstage',
+                'pipeline',
+                'hs_lastmodifieddate',
+                'hs_date_entered_closedwon',
+                'hs_date_entered_closedlost',
+                'hs_deal_stage_probability',
+                'hs_pipeline_stage',
+                'hs_time_in_pipeline',
+                'hs_time_in_dealstage',
+                'hs_deal_stage_changes'
+              ])
+            );
+
+            logger.info(`Successfully fetched full deal details for ${deal.id}`);
+            
+            if (fullDeal) {
+              // Log the full deal object
+              logger.info('Full deal details:', {
+                id: fullDeal.id,
+                properties: fullDeal.properties ? Object.keys(fullDeal.properties) : 'no properties',
+                hasAssociations: !!deal.associations
+              });
+
+              // Preserve the associations from the search results
+              fullDeal.associations = deal.associations;
+              fullDeals.push(fullDeal);
+              logger.info(`Added deal ${deal.id} to fullDeals array`);
+              await sleep(1000);
+            } else {
+              logger.error(`getRecord returned null for deal ${deal.id}`);
+            }
+          } catch (getRecordError) {
+            logger.error(`Error in getRecord for deal ${deal.id}:`, {
+              error: getRecordError.message,
+              status: getRecordError.status,
+              response: getRecordError.response,
+              stack: getRecordError.stack
+            });
+            await sleep(5000);
+          }
+        } catch (error) {
+          logger.error(`Error in main deal processing loop for deal ${deal?.id || 'unknown'}:`, {
+            error: error.message,
+            stack: error.stack,
+            dealObject: deal ? 'exists' : 'null'
+          });
+          await sleep(5000);
+        }
+      }
+
+      logger.info(`Batch processing complete. Processed ${batch.length} deals, got ${fullDeals.length} full deals`);
+      await sleep(8000);
+    }
+
+    return fullDeals;
   } catch (error) {
     logger.error(`Error fetching ${type} deals:`, error);
     throw error;
@@ -207,7 +313,13 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
   const companies: HubspotRecord[] = [];
 
   try {
-    // Get associated contacts with specific properties
+    logger.info(`Checking associations for deal ${deal.id}:`, {
+      hasAssociations: !!deal.associations,
+      contactsCount: deal.associations?.contacts?.results?.length || 0,
+      companiesCount: deal.associations?.companies?.results?.length || 0
+    });
+
+    // Get associated contacts sequentially
     if (deal.associations?.contacts?.results?.length > 0) {
       logger.info(`Fetching ${deal.associations.contacts.results.length} associated contacts for deal ${deal.id}`);
       
@@ -215,16 +327,20 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
         try {
           const contactData = await hubspotClient.getContact(contact.id);
           if (contactData) {
+            logger.info(`Successfully fetched contact ${contact.id} for deal ${deal.id}`);
             contacts.push(contactData);
           }
+          // Add delay between contact fetches
+          await sleep(1000);
         } catch (error) {
           logger.error(`Error fetching contact ${contact.id}:`, error);
-          // Continue with other contacts even if one fails
         }
       }
+    } else {
+      logger.info(`No contacts associated with deal ${deal.id}`);
     }
 
-    // Get associated companies with specific properties
+    // Get associated companies sequentially
     if (deal.associations?.companies?.results?.length > 0) {
       logger.info(`Fetching ${deal.associations.companies.results.length} associated companies for deal ${deal.id}`);
       
@@ -232,13 +348,17 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
         try {
           const companyData = await hubspotClient.getCompany(company.id);
           if (companyData) {
+            logger.info(`Successfully fetched company ${company.id} for deal ${deal.id}`);
             companies.push(companyData);
           }
+          // Add delay between company fetches
+          await sleep(1000);
         } catch (error) {
           logger.error(`Error fetching company ${company.id}:`, error);
-          // Continue with other companies even if one fails
         }
       }
+    } else {
+      logger.info(`No companies associated with deal ${deal.id}`);
     }
 
     logger.info(`Successfully fetched ${contacts.length} contacts and ${companies.length} companies for deal ${deal.id}`);
@@ -326,11 +446,11 @@ async function createDocuments(documentPackager: DocumentPackager, records: any[
         specificMetadata = calculateCompanyMetrics(record);
       }
 
-      // Create a unique document ID using recordType-recordId format
-      const documentId = `${type}-${record.id}`;
+      // Create a unique document ID using recordId-type format
+      const documentId = `${record.id}-${type}`;
 
       return {
-        id: documentId, // Add explicit id field
+        id: documentId,
         ...doc,
         metadata: {
           ...doc.metadata,
@@ -378,66 +498,49 @@ async function validateAndRefreshTokenIfNeeded(
 ): Promise<string> {
   try {
     logger.info(`[Token Validation] Starting token validation for portal ${portalId}`);
-    logger.info('[Token Validation] Making test request to HubSpot API');
-
-    // Try to make a test request to validate the token
+    
+    // Check if we need to refresh the token
     try {
-      await hubspotClient.searchRecords('contacts', { limit: 1 });
-      logger.info('[Token Validation] Token is valid');
-      return currentToken;
-    } catch (error) {
-      if (error.message.includes('401') || error.message.includes('expired')) {
-        logger.info(`[Token Validation] Token expired for portal ${portalId}, attempting refresh`);
-        
-        try {
-          const newTokens = await refreshHubSpotToken(refreshToken);
-          logger.info('[Token Validation] Successfully obtained new tokens');
-          
-          // Update tokens in database
-          logger.info('[Token Validation] Updating tokens in database');
-          const supabase = createClient(
-            Deno.env.get('SUPABASE_URL')!,
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-          );
+      const newTokens = await refreshHubSpotToken(refreshToken);
+      logger.info('[Token Validation] Successfully obtained new tokens');
+      
+      // Update tokens in database
+      logger.info('[Token Validation] Updating tokens in database');
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
 
-          const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-          const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-          
-          const { error: updateError } = await supabase
-            .from('hubspot_accounts')
-            .update({
-              access_token: newEncryptedToken,
-              refresh_token: newEncryptedRefreshToken,
-              expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('portal_id', portalId);
-            
-          if (updateError) {
-            logger.error('[Token Validation] Failed to update tokens in database:', updateError);
-            throw new Error('Failed to update HubSpot tokens');
-          }
-          
-          // Update the client with the new token
-          hubspotClient.updateToken(newTokens.access_token);
-          logger.info('[Token Validation] Successfully updated tokens in database');
-          return newTokens.access_token;
-        } catch (refreshError) {
-          logger.error('[Token Validation] Error during token refresh:', {
-            message: refreshError.message,
-            stack: refreshError.stack,
-            details: refreshError
-          });
-          throw refreshError;
-        }
+      const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+      const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+      
+      const { error: updateError } = await supabase
+        .from('hubspot_accounts')
+        .update({
+          access_token: newEncryptedToken,
+          refresh_token: newEncryptedRefreshToken,
+          expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('portal_id', portalId);
+        
+      if (updateError) {
+        logger.error('[Token Validation] Failed to update tokens in database:', updateError);
+        throw new Error('Failed to update HubSpot tokens');
       }
       
-      logger.error('[Token Validation] Unhandled error:', {
-        message: error.message,
-        stack: error.stack,
-        details: error
+      // Update the client with the new token
+      hubspotClient.updateToken(newTokens.access_token);
+      logger.info('[Token Validation] Successfully updated tokens in database');
+      return newTokens.access_token;
+      
+    } catch (refreshError) {
+      logger.error('[Token Validation] Error during token refresh:', {
+        message: refreshError.message,
+        stack: refreshError.stack,
+        details: refreshError
       });
-      throw error;
+      throw refreshError;
     }
   } catch (error) {
     logger.error(`[Token Validation] Fatal error for portal ${portalId}:`, {
@@ -445,6 +548,27 @@ async function validateAndRefreshTokenIfNeeded(
       stack: error.stack,
       details: error
     });
+    throw error;
+  }
+}
+
+// Add a new function to handle token refresh during API calls
+async function handleApiCall<T>(
+  hubspotClient: HubspotClient,
+  portalId: string,
+  refreshToken: string,
+  apiCall: () => Promise<T>
+): Promise<T> {
+  try {
+    return await apiCall();
+  } catch (error) {
+    if (error.message?.includes('401') || error.message?.includes('expired')) {
+      logger.info(`Token expired during API call for portal ${portalId}, refreshing...`);
+      const newTokens = await refreshHubSpotToken(refreshToken);
+      hubspotClient.updateToken(newTokens.access_token);
+      logger.info('Token refreshed, retrying API call');
+      return await apiCall();
+    }
     throw error;
   }
 }
@@ -459,68 +583,316 @@ async function processDeals(
   portalId: string
 ) {
   logger.info(`Starting to process ${deals.length} ${classification} deals`);
-  for (const deal of deals) {
+  
+  // Process deals in smaller batches
+  const dealBatches = chunkArray(deals, 5);
+  logger.info(`Split deals into ${dealBatches.length} batches of 5`);
+  
+  for (const batch of dealBatches) {
+    logger.info(`Starting batch processing of ${batch.length} ${classification} deals`);
+    logger.info('Batch deal IDs:', batch.map(d => d.id));
+    
+    for (const deal of batch) {
+      try {
+        logger.info(`\n=== Starting processing of deal ${deal.id} ===`);
+        logger.info('Deal details:', {
+          id: deal.id,
+          name: deal.properties?.dealname,
+          stage: deal.properties?.dealstage,
+          hasAssociations: !!deal.associations
+        });
+
+        await sleep(2000);
+        logger.info('Initial delay complete');
+
+        // Get associated records
+        logger.info(`Starting to fetch associated records for deal ${deal.id}`);
+        const { contacts, companies } = await getAssociatedRecords(hubspotClient, deal);
+        logger.info(`Completed fetching associated records: ${contacts.length} contacts, ${companies.length} companies`);
+
+        // Calculate deal metrics
+        logger.info(`Starting to calculate metrics for deal ${deal.id}`);
+        const dealMetadata = calculateDealMetrics(deal, contacts, companies);
+        logger.info('Deal metrics calculated:', dealMetadata);
+
+        // Create documents
+        logger.info(`Starting document creation for deal ${deal.id}`);
+        
+        logger.info('Creating deal documents...');
+        const dealDocs = await createDocuments(documentPackager, [deal], 'deal', portalId, classification, dealMetadata);
+        logger.info(`Created ${dealDocs.length} deal documents`);
+        await sleep(2000);
+        
+        logger.info('Creating contact documents...');
+        const contactDocs = contacts.length > 0 ? 
+          await createDocuments(documentPackager, contacts, 'contact', portalId, classification, dealMetadata) : 
+          [];
+        logger.info(`Created ${contactDocs.length} contact documents`);
+        await sleep(2000);
+        
+        logger.info('Creating company documents...');
+        const companyDocs = companies.length > 0 ? 
+          await createDocuments(documentPackager, companies, 'company', portalId, classification, dealMetadata) : 
+          [];
+        logger.info(`Created ${companyDocs.length} company documents`);
+
+        const documents = [...dealDocs, ...contactDocs, ...companyDocs];
+        logger.info(`Total documents created: ${documents.length}`);
+        logger.info('Document IDs:', documents.map(doc => doc.id));
+
+        // Get embeddings
+        logger.info(`Starting OpenAI embedding creation for ${documents.length} documents`);
+        const embeddingResponse = await openai.embeddings.create({
+          model: 'text-embedding-3-large',
+          input: documents.map(doc => doc.content)
+        });
+        logger.info(`Successfully received ${embeddingResponse.data.length} embeddings from OpenAI`);
+
+        await sleep(2000);
+        logger.info('Post-embedding delay complete');
+
+        // Prepare vectors
+        logger.info('Starting vector preparation');
+        const vectors = documents.map((doc, index) => ({
+          id: doc.id,
+          values: Array.from(embeddingResponse.data[index].embedding),
+          metadata: doc.metadata
+        }));
+
+        logger.info('Vectors prepared:', vectors.map(v => ({
+          id: v.id,
+          metadata: {
+            record_type: v.metadata.record_type,
+            deal_id: v.metadata.deal_id,
+            classification: v.metadata.classification
+          },
+          vectorLength: v.values.length
+        })));
+
+        // Upsert to Pinecone
+        const namespace = `hubspot-${portalId}`;
+        logger.info(`Starting Pinecone upsert of ${vectors.length} vectors to namespace ${namespace}`);
+        
+        try {
+          logger.info('Calling Pinecone upsert...');
+          const upsertResponse = await index.namespace(namespace).upsert(vectors);
+          logger.info('Pinecone upsert completed:', upsertResponse);
+          
+          // Verify the upsert
+          logger.info('Starting upsert verification...');
+          const sampleVector = vectors[0];
+          const queryResponse = await index.namespace(namespace).fetch([sampleVector.id]);
+          logger.info('Upsert verification complete:', {
+            queriedId: sampleVector.id,
+            found: queryResponse.records.length > 0,
+            response: queryResponse
+          });
+        } catch (pineconeError) {
+          logger.error('Pinecone operation failed:', {
+            error: pineconeError.message,
+            stack: pineconeError.stack,
+            namespace,
+            vectorCount: vectors.length,
+            sampleVectorId: vectors[0]?.id
+          });
+          throw pineconeError;
+        }
+
+        logger.info(`=== Successfully completed processing deal ${deal.id} ===\n`);
+        await sleep(3000);
+        
+      } catch (error) {
+        logger.error(`Error processing deal ${deal.id}:`, {
+          error: error.message,
+          stack: error.stack,
+          dealId: deal.id,
+          dealName: deal.properties?.dealname
+        });
+        await sleep(5000);
+      }
+    }
+    
+    logger.info(`\n=== Completed processing batch of ${batch.length} deals ===`);
+    await sleep(10000);
+  }
+  
+  logger.info(`\n=== Completed processing all ${classification} deals ===`);
+}
+
+async function processRecords(
+  records: any[], 
+  type: string, 
+  portalId: string, 
+  hubspotClient: HubspotClient,
+  refreshToken: string,
+  shouldClearNamespace: boolean = false
+) {
+  const logger = new Logger('processRecords');
+  logger.info(`Processing ${records.length} ${type} records for portal ${portalId}`);
+
+  // Query HubSpot for ideal and less ideal counts using handleApiCall
+  const idealQuery = await handleApiCall(hubspotClient, portalId, refreshToken, () =>
+    hubspotClient.searchRecords(type, {
+      filterGroups: [{
+        filters: [{
+          propertyName: 'training_score',
+          operator: 'GTE',
+          value: '80'
+        }]
+      }],
+      limit: 1,
+      after: 0
+    })
+  );
+
+  const lessIdealQuery = await handleApiCall(hubspotClient, portalId, refreshToken, () =>
+    hubspotClient.searchRecords(type, {
+      filterGroups: [{
+        filters: [{
+          propertyName: 'training_score',
+          operator: 'LT',
+          value: '50'
+        }]
+      }],
+      limit: 1,
+      after: 0
+    })
+  );
+
+  const currentIdealCount = idealQuery.total;
+  const currentLessIdealCount = lessIdealQuery.total;
+
+  // Update counts in database based on record type
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
+  const updateData = {
+    last_training_date: new Date().toISOString()
+  };
+
+  // Add the appropriate counts based on record type
+  if (type === 'contacts') {
+    Object.assign(updateData, {
+      current_ideal_contacts: currentIdealCount,
+      current_less_ideal_contacts: currentLessIdealCount
+    });
+  } else if (type === 'companies') {
+    Object.assign(updateData, {
+      current_ideal_companies: currentIdealCount,
+      current_less_ideal_companies: currentLessIdealCount
+    });
+  } else if (type === 'deals') {
+    Object.assign(updateData, {
+      current_ideal_deals: currentIdealCount,
+      current_less_ideal_deals: currentLessIdealCount
+    });
+  }
+
+  const { error: updateError } = await supabase
+    .from('hubspot_accounts')
+    .update(updateData)
+    .eq('portal_id', portalId);
+
+  if (updateError) {
+    logger.error('Failed to update training metrics:', updateError);
+    throw new Error('Failed to update training metrics');
+  }
+
+  // Initialize OpenAI client
+  const openai = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY')!
+  });
+
+  // Initialize Pinecone client
+  const pinecone = new Pinecone({
+    apiKey: Deno.env.get('PINECONE_API_KEY')!
+  });
+
+  const index = pinecone.index(Deno.env.get('PINECONE_INDEX')!);
+  const namespace = `hubspot-${portalId}`;
+
+  // Delete all existing vectors in the namespace if this is the first record type
+  if (shouldClearNamespace) {
     try {
-      logger.info(`Processing ${classification} deal ${deal.id} (${deal.properties?.dealname || 'Unnamed Deal'})`);
-
-      // Get associated records
-      logger.info(`Fetching associated records for deal ${deal.id}`);
-      const { contacts, companies } = await getAssociatedRecords(hubspotClient, deal);
-      logger.info(`Found ${contacts.length} contacts and ${companies.length} companies for deal ${deal.id}`);
-
-      // Calculate deal metrics
-      logger.info(`Calculating metrics for deal ${deal.id}`);
-      const dealMetadata = calculateDealMetrics(deal, contacts, companies);
-      logger.info(`Deal metrics calculated for ${deal.id}`);
-
-      // Create documents
-      logger.info(`Creating documents for deal ${deal.id} and associated records`);
-      const documents = await Promise.all([
-        ...await createDocuments(documentPackager, [deal], 'deal', portalId, classification, dealMetadata),
-        ...await createDocuments(documentPackager, contacts, 'contact', portalId, classification, dealMetadata),
-        ...await createDocuments(documentPackager, companies, 'company', portalId, classification, dealMetadata)
-      ]);
-      logger.info(`Created ${documents.length} documents for deal ${deal.id}`);
-
-      // Get embeddings for all documents
-      logger.info(`Getting embeddings for ${documents.length} documents`);
-      const embeddingResponse = await openai.embeddings.create({
-        model: 'text-embedding-3-large',
-        input: documents.map(doc => doc.content)
-      });
-      logger.info('Received embeddings from OpenAI');
-
-      // Prepare vectors with embeddings
-      const vectors = documents.map((doc, index) => ({
-        id: doc.id,
-        values: Array.from(embeddingResponse.data[index].embedding),
-        metadata: doc.metadata
-      }));
-      logger.info('Prepared vectors for upsert:', vectors.map(v => ({ id: v.id, type: v.metadata.record_type })));
-
-      // Upsert to Pinecone
-      await index.upsert(vectors);
-      logger.info(`Successfully upserted documents for deal ${deal.id}`);
-
-      logger.info(`Successfully processed ${classification} deal ${deal.id}`);
+      logger.info(`Attempting to delete existing vectors in namespace: ${namespace}`);
+      await index.deleteAll({ namespace });
+      logger.info(`Successfully deleted vectors in namespace: ${namespace}`);
     } catch (error) {
-      logger.error(`Error processing ${classification} deal ${deal.id}:`, {
-        error: error.message,
-        stack: error.stack,
-        details: error
-      });
-      // Continue with other deals even if one fails
+      // If the namespace doesn't exist (404), we can ignore the error
+      if (error.message.includes('404')) {
+        logger.info(`Namespace ${namespace} does not exist, skipping deletion`);
+      } else {
+        // For other errors, log them but continue processing
+        logger.warn(`Error deleting vectors in namespace ${namespace}:`, error);
+      }
     }
   }
-  logger.info(`Completed processing all ${classification} deals`);
+
+  const documentPackager = new DocumentPackager(hubspotClient);
+
+  // Process each record through the document packager
+  const documents = await Promise.all(
+    records.map(record => documentPackager.packageDocument(record, type as 'contact' | 'company' | 'deal', portalId))
+  );
+
+  logger.info(`Created ${documents.length} documents`);
+
+  // Get embeddings for all documents using OpenAI
+  const embeddingResponse = await openai.embeddings.create({
+    model: 'text-embedding-3-large',
+    input: documents.map(doc => doc.content)
+  });
+
+  logger.info('Embedding response structure:', {
+    hasData: !!embeddingResponse.data,
+    firstEmbeddingLength: embeddingResponse.data[0]?.embedding?.length,
+    isEmbeddingArray: Array.isArray(embeddingResponse.data[0]?.embedding)
+  });
+
+  // Create vectors for all documents
+  const vectors = documents.map((doc, index) => ({
+    id: doc.metadata.id.toString(),
+    values: Array.from(embeddingResponse.data[index].embedding),
+    metadata: {
+      id: doc.metadata.id.toString(),
+      recordType: doc.metadata.recordType,
+      updatedAt: doc.metadata.updatedAt
+    }
+  }));
+
+  logger.info('Vector structure:', {
+    totalVectors: vectors.length,
+    firstVector: {
+      hasId: !!vectors[0]?.id,
+      valuesLength: vectors[0]?.values?.length,
+      isValuesArray: Array.isArray(vectors[0]?.values),
+      metadata: vectors[0]?.metadata
+    },
+    namespace
+  });
+
+  try {
+    logger.info(`Attempting to upsert ${vectors.length} vectors into namespace: ${namespace}`);
+    await index.namespace(namespace).upsert(vectors);
+    logger.info(`Successfully upserted ${vectors.length} vectors into namespace: ${namespace}`);
+  } catch (error) {
+    logger.error('Error upserting vectors:', error);
+    logger.error('Error upserting vectors - first vector:', JSON.stringify(vectors[0]));
+    logger.error('Attempted namespace:', namespace);
+    throw error;
+  }
+
+  return vectors.length; // Return the number of vectors processed
 }
 
 serve(async (req) => {
   try {
-    logger.info('=== Starting auto-training function ===');
+    logger.info('Starting process training function');
     
+    // Handle CORS preflight
     if (req.method === "OPTIONS") {
-      logger.info('Handling CORS preflight request');
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -530,180 +902,141 @@ serve(async (req) => {
       });
     }
 
+    // Validate request method
     if (req.method !== "POST") {
-      logger.info(`Invalid method: ${req.method}`);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `Method ${req.method} not allowed`
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-          status: 405
-        }
-      );
+      throw new Error(`Method ${req.method} not allowed. Only POST requests are accepted.`);
     }
 
-    logger.info('Step 1: Initializing Supabase client');
+    // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    logger.info('Step 2: Fetching active HubSpot accounts');
+    // Fetch all HubSpot accounts
     const { data: accounts, error: accountsError } = await supabase
       .from('hubspot_accounts')
-      .select('*')
-      .eq('status', 'active');
+      .select('*');
 
     if (accountsError) {
-      logger.error('Error fetching accounts:', accountsError);
+      logger.error('Error fetching accounts from Supabase:', accountsError);
       throw new Error(`Failed to fetch accounts: ${accountsError.message}`);
     }
 
     if (!accounts || accounts.length === 0) {
-      logger.info('No active accounts found');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'No active HubSpot accounts found'
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-          status: 404
-        }
-      );
+      throw new Error('No HubSpot accounts found');
     }
 
-    logger.info(`Found ${accounts.length} active accounts to process`);
+    logger.info(`Found ${accounts.length} HubSpot accounts to process`);
 
-    const results = await Promise.all(
-      accounts.map(async (account) => {
-        try {
-          logger.info(`\n=== Processing portal ${account.portal_id} ===`);
-          
-          logger.info('Step 3: Decrypting tokens');
-          const decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-          const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+    // Process each account
+    const allResults = {
+      total: accounts.length,
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      portals: [] as any[]
+    };
 
-          if (!decryptedToken || !decryptedRefreshToken) {
-            logger.error(`Invalid tokens for portal ${account.portal_id}`);
-            throw new Error('Invalid tokens');
-          }
+    for (const account of accounts) {
+      const portalId = account.portal_id;
+      logger.info(`Processing portal ${portalId}`);
 
-          logger.info('Step 4: Initializing HubSpot client');
-          const hubspotClient = new HubspotClient(decryptedToken);
-          
-          logger.info('Step 5: Validating and refreshing token if needed');
-          const validToken = await validateAndRefreshTokenIfNeeded(
-            hubspotClient,
-            account.portal_id,
-            decryptedToken,
-            decryptedRefreshToken
-          );
-
-          if (validToken !== decryptedToken) {
-            logger.info('Token was refreshed successfully');
-          } else {
-            logger.info('Token is still valid');
-          }
-
-          try {
-            // Initialize OpenAI and Pinecone clients
-            logger.info('Step 6: Initializing AI services');
-            logger.info('Initializing OpenAI client...');
-            const openai = new OpenAI({
-              apiKey: Deno.env.get('OPENAI_API_KEY')!
-            });
-            logger.info('OpenAI client initialized');
-
-            logger.info('Initializing Pinecone client...');
-            const pinecone = new Pinecone({
-              apiKey: Deno.env.get('PINECONE_API_KEY')!,
-              // Optional parameters if needed:
-              // controllerHostUrl: 'https://your-controller-url',
-              // maxRetries: 3
-            });
-            logger.info('Pinecone client initialized');
-
-            const index = pinecone.index(Deno.env.get('PINECONE_INDEX')!);
-            logger.info('Pinecone index accessed');
-
-            logger.info('Initializing DocumentPackager...');
-            const documentPackager = new DocumentPackager(openai);
-            logger.info('DocumentPackager initialized');
-
-            // Process ideal and non-ideal deals
-            logger.info('Step 7: Fetching deals for training');
-            logger.info('Fetching ideal deals...');
-            const idealDeals = await getDealsForTraining(hubspotClient, 'ideal');
-            logger.info('Fetching non-ideal deals...');
-            const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal');
-
-            logger.info(`Found ${idealDeals.length} ideal deals and ${nonIdealDeals.length} non-ideal deals`);
-
-            // Process both deal types
-            logger.info('Starting parallel processing of ideal and non-ideal deals');
-            await Promise.all([
-              processDeals(idealDeals, 'ideal', hubspotClient, documentPackager, openai, index, account.portal_id),
-              processDeals(nonIdealDeals, 'nonideal', hubspotClient, documentPackager, openai, index, account.portal_id)
-            ]);
-            logger.info('Completed processing all deals');
-
-            logger.info(`=== Completed processing portal ${account.portal_id} ===\n`);
-            return {
-              portal_id: account.portal_id,
-              status: 'success',
-              token_refreshed: validToken !== decryptedToken,
-              deals_processed: {
-                ideal: idealDeals.length,
-                nonideal: nonIdealDeals.length
-              }
-            };
-          } catch (error) {
-            logger.error(`Error processing portal ${account.portal_id}:`, {
-              error: error.message,
-              stack: error.stack,
-              status: error.status,
-              details: error
-            });
-            return {
-              portal_id: account.portal_id,
-              status: 'error',
-              error: error.message
-            };
-          }
-        } catch (error) {
-          logger.error(`Error processing portal ${account.portal_id}:`, {
-            error: error.message,
-            stack: error.stack,
-            status: error.status,
-            details: error
-          });
-          return {
-            portal_id: account.portal_id,
-            status: 'error',
-            error: error.message
-          };
+      try {
+        // Decrypt tokens
+        let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+        const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+        
+        if (!decryptedToken || !decryptedRefreshToken) {
+          throw new Error('HubSpot tokens are missing or invalid');
         }
-      })
-    );
 
-    logger.info('=== Auto-training function completed ===');
+        // Initialize HubSpot client with current token
+        const hubspotClient = new HubspotClient(decryptedToken);
+
+        // Test token and refresh if needed
+        try {
+          await handleApiCall(hubspotClient, portalId, decryptedRefreshToken, () => 
+            hubspotClient.searchRecords('contacts', { limit: 1 })
+          );
+          logger.info('Token validation successful');
+        } catch (error) {
+          logger.error(`Token validation failed for portal ${portalId}:`, error);
+          throw error;
+        }
+
+        // Process each record type
+        const recordTypes = ['contacts', 'companies', 'deals'];
+        const portalResults = {
+          portalId,
+          contacts: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          companies: { processed: 0, successful: 0, failed: 0, errors: [] as any[] },
+          deals: { processed: 0, successful: 0, failed: 0, errors: [] as any[] }
+        };
+
+        for (const type of recordTypes) {
+          try {
+            logger.info(`Processing ${type} for portal ${portalId}`);
+            
+            // Use handleApiCall for the search
+            const searchResponse = await handleApiCall(hubspotClient, portalId, decryptedRefreshToken, () =>
+              hubspotClient.searchRecords(type, {
+                limit: 100
+              })
+            );
+
+            if (searchResponse.total > 0) {
+              portalResults[type].processed = searchResponse.total;
+              await processRecords(
+                searchResponse.results, 
+                type, 
+                portalId.toString(), 
+                hubspotClient,
+                decryptedRefreshToken,
+                type === 'contacts'
+              );
+              portalResults[type].successful = searchResponse.total;
+            }
+          } catch (error) {
+            portalResults[type].failed = 1;
+            const errorDetails = {
+              message: error.message,
+              stack: error.stack,
+              cause: error.cause,
+              type: error.name
+            };
+            portalResults[type].errors.push(errorDetails);
+            logger.error(`Error processing ${type} for portal ${portalId}:`, errorDetails);
+          }
+        }
+
+        allResults.portals.push(portalResults);
+        allResults.successful++;
+      } catch (error) {
+        allResults.failed++;
+        logger.error(`Failed to process portal ${portalId}:`, error);
+        allResults.portals.push({
+          portalId,
+          error: error.message
+        });
+      }
+
+      allResults.processed++;
+    }
+
     return new Response(
-      JSON.stringify({ success: true, results }),
+      JSON.stringify({
+        success: true,
+        message: `Processed ${allResults.processed} portals`,
+        results: allResults
+      }),
       {
         headers: { "Content-Type": "application/json" },
-        status: 200
+        status: 200,
       }
     );
-
   } catch (error) {
-    logger.error('Fatal error:', {
-      error: error.message,
-      stack: error.stack,
-      details: error
-    });
+    logger.error('Error in process training function:', error);
     return new Response(
       JSON.stringify({
         success: false,
@@ -711,7 +1044,7 @@ serve(async (req) => {
       }),
       {
         headers: { "Content-Type": "application/json" },
-        status: 500
+        status: 500,
       }
     );
   }

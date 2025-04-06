@@ -86,9 +86,10 @@ export class HubspotClient implements HubspotClientInterface {
   private logger: Logger;
   private baseUrl = 'https://api.hubapi.com';
   private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
-  private rateLimitDelay = 250; // Increased from 100ms to 250ms between requests
-  private maxRetries = 5; // Increased from 3 to 5 retries
-  private baseRetryDelay = 1000; // Base delay for exponential backoff (1 second)
+  private rateLimitDelay = 500; // Increased from 250ms to 500ms between requests
+  private maxRetries = 5;
+  private baseRetryDelay = 2000; // Increased base delay to 2 seconds
+  private maxRetryDelay = 32000; // Maximum retry delay of 32 seconds
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -99,29 +100,47 @@ export class HubspotClient implements HubspotClientInterface {
     this.accessToken = newAccessToken;
   }
 
+  // Add jitter helper function
+  private getJitter(base: number): number {
+    // Add random jitter of ±25% to the base delay
+    const jitterFactor = 0.75 + Math.random() * 0.5; // Random number between 0.75 and 1.25
+    return Math.floor(base * jitterFactor);
+  }
+
   private async rateLimitedRequest<T>(fn: () => Promise<T>, retryCount = 0): Promise<T> {
     try {
+      // Add initial delay with jitter before the request
+      const initialDelay = this.getJitter(this.rateLimitDelay);
+      await new Promise(resolve => setTimeout(resolve, initialDelay));
+
       const result = await fn();
-      // Add delay between requests
-      await new Promise(resolve => setTimeout(resolve, this.rateLimitDelay));
       return result;
     } catch (error) {
       const customError = error as CustomError;
-      // Check for rate limit errors
+      
       if (customError.status === 429 && retryCount < this.maxRetries) {
-        // Calculate exponential backoff delay
+        // Calculate exponential backoff delay with jitter
         const retryAfter = customError.headers?.get('Retry-After');
-        const backoffDelay = retryAfter 
-          ? parseInt(retryAfter, 10) * 1000 
-          : Math.min(this.baseRetryDelay * Math.pow(2, retryCount), 30000); // Max 30 seconds
+        let backoffDelay: number;
+        
+        if (retryAfter) {
+          // Use the server's retry-after value with jitter
+          backoffDelay = this.getJitter(parseInt(retryAfter, 10) * 1000);
+        } else {
+          // Calculate exponential backoff with jitter
+          const baseDelay = Math.min(
+            this.baseRetryDelay * Math.pow(2, retryCount),
+            this.maxRetryDelay
+          );
+          backoffDelay = this.getJitter(baseDelay);
+        }
 
         this.logger.info(`Rate limited. Retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
-        
         await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        
         return this.rateLimitedRequest(fn, retryCount + 1);
       }
       
-      // If we've exhausted retries or it's not a rate limit error
       if (customError.status === 429) {
         this.logger.error('Rate limit exceeded and max retries reached');
         throw new Error('HubSpot rate limit exceeded. Please try again later.');
