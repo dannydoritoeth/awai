@@ -100,6 +100,53 @@ export class HubspotClient implements HubspotClientInterface {
     this.accessToken = newAccessToken;
   }
 
+  /**
+   * Alias for updateToken
+   */
+  setToken(newAccessToken: string) {
+    this.updateToken(newAccessToken);
+  }
+
+  /**
+   * Refreshes the HubSpot OAuth token
+   */
+  async refreshToken(
+    refreshToken: string,
+    clientId: string,
+    clientSecret: string
+  ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+    this.logger.info('Refreshing HubSpot token...');
+    
+    try {
+      const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error('Failed to refresh token:', errorText);
+        const error = new Error(`Failed to refresh HubSpot token: ${errorText}`);
+        throw error;
+      }
+
+      const result = await response.json();
+      this.logger.info('Successfully refreshed HubSpot token');
+      return result;
+    } catch (error) {
+      this.logger.error('Error in refreshToken:', error);
+      throw error;
+    }
+  }
+
   // Add jitter helper function
   private getJitter(base: number): number {
     // Add random jitter of ±25% to the base delay
