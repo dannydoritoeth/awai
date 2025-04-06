@@ -431,6 +431,24 @@ function calculateCompanyMetrics(company: any): CompanyMetadata {
   };
 }
 
+// Add this new helper function near the other metadata calculation functions
+function enrichMetadataWithDealInfo(baseMetadata: any, dealMetadata: DealMetadata | null = null): any {
+  if (!dealMetadata) {
+    return baseMetadata;
+  }
+
+  return {
+    ...baseMetadata,
+    deal_id: dealMetadata.deal_id,
+    deal_value: dealMetadata.deal_value,
+    conversion_days: dealMetadata.conversion_days,
+    pipeline: dealMetadata.pipeline,
+    dealstage: dealMetadata.dealstage,
+    days_in_pipeline: dealMetadata.days_in_pipeline
+  };
+}
+
+// Modify the createDocuments function to use the new helper
 async function createDocuments(documentPackager: DocumentPackager, records: any[], type: 'deal' | 'contact' | 'company', portalId: string, classification: 'ideal' | 'nonideal', dealMetadata: any) {
   return Promise.all(
     records.map(async (record) => {
@@ -446,21 +464,19 @@ async function createDocuments(documentPackager: DocumentPackager, records: any[
         specificMetadata = calculateCompanyMetrics(record);
       }
 
-      // Create a unique document ID using recordId-type format
-      const documentId = `${record.id}-${type}`;
+      // Enrich the metadata with deal information
+      const enrichedMetadata = enrichMetadataWithDealInfo(
+        { ...doc.metadata, ...specificMetadata },
+        type === 'deal' ? specificMetadata : dealMetadata
+      );
 
       return {
-        id: documentId,
         ...doc,
         metadata: {
-          ...doc.metadata,
-          ...specificMetadata,
+          ...enrichedMetadata,
           classification,
           source: 'auto-train',
-          record_type: type,
-          deal_id: dealMetadata.deal_id,
-          deal_value: dealMetadata.deal_value,
-          conversion_days: dealMetadata.conversion_days
+          record_type: type
         }
       };
     })
