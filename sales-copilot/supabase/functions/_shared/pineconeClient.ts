@@ -57,34 +57,25 @@ export class PineconeClient {
     }
   ): Promise<any> {
     try {
-      this.logger.info(`Starting upsert of ${documents.length} documents to namespace ${namespace}`);
+      this.logger.info(`Upserting ${documents.length} documents to namespace ${namespace}`);
       
       // Verify we have an initialized index
       if (!this.index) {
         this.logger.error('Pinecone client not initialized');
         throw new Error('Pinecone client not initialized. Call initialize() first.');
       }
-      this.logger.info('Pinecone index is initialized and ready');
       
       // Verify document and embedding counts match
       if (documents.length !== embeddings.length) {
-        this.logger.error('Document count doesn\'t match embedding count', {
-          docCount: documents.length,
-          embeddingCount: embeddings.length
-        });
+        this.logger.error('Document count doesn\'t match embedding count');
         throw new Error(`Document count (${documents.length}) doesn't match embedding count (${embeddings.length})`);
       }
-      this.logger.info('Document and embedding counts match');
       
       // Create vectors with deal metadata
-      this.logger.info('Creating vectors with deal metadata');
       const vectors = documents.map((doc, index) => {
         // Verify embedding exists and is an array
         if (!embeddings[index]?.embedding || !Array.isArray(embeddings[index].embedding)) {
-          this.logger.error('Invalid embedding found', {
-            index,
-            embedding: embeddings[index]
-          });
+          this.logger.error('Invalid embedding found');
           throw new Error(`Invalid embedding at index ${index}`);
         }
         
@@ -104,49 +95,13 @@ export class PineconeClient {
         };
       });
       
-      this.logger.info(`Created ${vectors.length} vectors for upsert`);
-      
-      // Sample logging to verify metadata is correct
-      if (vectors.length > 0) {
-        this.logger.info('First vector sample:', {
-          id: vectors[0].id,
-          metadata_keys: Object.keys(vectors[0].metadata),
-          deal_id: vectors[0].metadata.deal_id,
-          record_type: vectors[0].metadata.recordType,
-          embedding_size: vectors[0].values.length
-        });
-      }
-      
       // Perform the upsert operation
-      this.logger.info(`Executing upsert to namespace ${namespace}`);
       const result = await this.index.namespace(namespace).upsert(vectors);
-      this.logger.info('Upsert operation completed successfully', result);
-      
-      // Verify with a fetch of the first vector
-      if (vectors.length > 0) {
-        this.logger.info(`Verifying upsert by fetching first vector (id: ${vectors[0].id})`);
-        try {
-          const verification = await this.index.namespace(namespace).fetch([vectors[0].id]);
-          if (verification.records && verification.records.length > 0) {
-            this.logger.info('Verification successful:', {
-              found: true,
-              id: vectors[0].id,
-              deal_id: verification.records[0]?.metadata?.deal_id,
-              metadata_keys: Object.keys(verification.records[0]?.metadata || {})
-            });
-          } else {
-            this.logger.error('Verification failed - vector not found');
-          }
-        } catch (verifyError) {
-          this.logger.error('Error during verification fetch:', verifyError);
-        }
-      }
+      this.logger.info(`Upserted ${vectors.length} vectors to namespace ${namespace}`);
       
       return result;
     } catch (error) {
-      this.logger.error('Error upserting vectors:', error);
-      // Include stack trace for better debugging
-      this.logger.error('Stack trace:', error.stack);
+      this.logger.error('Error upserting vectors:', error.message);
       throw error;
     }
   }
@@ -163,7 +118,7 @@ export class PineconeClient {
         includeMetadata: true
       });
     } catch (error) {
-      this.logger.error('Error querying Pinecone:', error);
+      this.logger.error('Error querying Pinecone:', error.message);
       throw error;
     }
   }
@@ -173,7 +128,7 @@ export class PineconeClient {
    */
   async deleteNamespace(namespace: string): Promise<any> {
     try {
-      this.logger.info(`Deleting all vectors in namespace ${namespace}`);
+      this.logger.info(`Deleting namespace ${namespace}`);
       return await this.index.deleteAll({ namespace });
     } catch (error) {
       // Don't throw if namespace doesn't exist (404)
@@ -181,7 +136,7 @@ export class PineconeClient {
         this.logger.info(`Namespace ${namespace} does not exist, nothing to delete`);
         return { success: true, message: 'Namespace does not exist' };
       }
-      this.logger.error(`Error deleting namespace ${namespace}:`, error);
+      this.logger.error(`Error deleting namespace ${namespace}:`, error.message);
       throw error;
     }
   }
@@ -200,7 +155,7 @@ export class PineconeClient {
     namespace: string
   ): Promise<any> {
     try {
-      this.logger.info(`Starting upsert of ${documentsWithEmbeddings.length} documents to namespace ${namespace}`);
+      this.logger.info(`Upserting ${documentsWithEmbeddings.length} documents to namespace ${namespace}`);
       
       // Verify we have an initialized index
       if (!this.index) {
@@ -212,11 +167,7 @@ export class PineconeClient {
       const vectors = documentsWithEmbeddings.map(doc => {
         // Verify embedding exists and is an array
         if (!doc.embedding || !Array.isArray(doc.embedding)) {
-          this.logger.error('Invalid embedding found', {
-            id: doc.id,
-            hasEmbedding: !!doc.embedding,
-            embeddingType: typeof doc.embedding
-          });
+          this.logger.error('Invalid embedding found');
           throw new Error(`Invalid embedding for document ${doc.id}`);
         }
         
@@ -230,45 +181,13 @@ export class PineconeClient {
         };
       });
       
-      // Sample logging to verify metadata is correct
-      if (vectors.length > 0) {
-        const sample = vectors[0];
-        this.logger.info('First vector sample:', {
-          id: sample.id,
-          metadata_keys: Object.keys(sample.metadata),
-          deal_id: sample.metadata.deal_id,
-          embedding_size: sample.values.length
-        });
-      }
-      
       // Perform the upsert operation
-      this.logger.info(`Executing upsert to namespace ${namespace}`);
       const result = await this.index.namespace(namespace).upsert(vectors);
-      this.logger.info('Upsert completed successfully', result);
-      
-      // Verify with a fetch of the first vector
-      if (vectors.length > 0) {
-        this.logger.info(`Verifying upsert by fetching first vector (id: ${vectors[0].id})`);
-        try {
-          const verification = await this.index.namespace(namespace).fetch([vectors[0].id]);
-          if (verification.records && verification.records.length > 0) {
-            this.logger.info('Verification successful:', {
-              found: true,
-              id: vectors[0].id,
-              metadata_keys: Object.keys(verification.records[0]?.metadata || {})
-            });
-          } else {
-            this.logger.error('Verification failed - vector not found');
-          }
-        } catch (verifyError) {
-          this.logger.error('Error during verification fetch:', verifyError);
-        }
-      }
+      this.logger.info(`Upserted ${vectors.length} vectors to namespace ${namespace}`);
       
       return result;
     } catch (error) {
-      this.logger.error('Error upserting vectors:', error);
-      this.logger.error('Stack trace:', error.stack);
+      this.logger.error('Error upserting vectors:', error.message);
       throw error;
     }
   }

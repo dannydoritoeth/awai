@@ -304,8 +304,6 @@ async function processSingleDeal(
   
   try {
     // Get all contacts and companies associated with this deal
-    logger.info(`Getting associated records for deal ${deal.id}`);
-    
     // Always fetch fresh associations to ensure we're getting all related records
     try {
       const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
@@ -315,7 +313,7 @@ async function processSingleDeal(
         const companyIds = associationsResult.results.companies?.map(a => a.id) || [];
         
         const totalAssociations = contactIds.length + companyIds.length;
-        logger.info(`Fresh associations for deal ${deal.id}: ${totalAssociations} total (${contactIds.length} contacts, ${companyIds.length} companies)`);
+        logger.info(`Found ${totalAssociations} associations for deal ${deal.id}`);
         
         // Create or update the associations structure
         if (!deal.associations) deal.associations = {};
@@ -331,12 +329,10 @@ async function processSingleDeal(
         }
       }
     } catch (associationsError) {
-      logger.error(`Error fetching fresh associations: ${associationsError.message}`);
+      logger.error(`Error fetching associations: ${associationsError.message}`);
     }
     
     const associatedRecords = await getAssociatedRecords(hubspotClient, deal);
-    
-    logger.info(`Retrieved ${associatedRecords.contacts.length} contacts and ${associatedRecords.companies.length} companies`);
     
     // Process deal records
     logger.info(`Creating documents...`);
@@ -414,7 +410,7 @@ async function processSingleDeal(
       }))
     ];
     
-    logger.info(`Created ${allDocuments.length} total documents for deal ${deal.id}`);
+    logger.info(`Created ${allDocuments.length} documents for deal ${deal.id}`);
     
     if (allDocuments.length === 0) {
       logger.warn(`No documents created for deal ${deal.id}. Skipping embeddings.`);
@@ -454,7 +450,7 @@ async function processSingleDeal(
     }
     
     if (documentsWithEmbeddings.length === 0) {
-      logger.warn(`No documents with embeddings created for deal ${deal.id}. Skipping Pinecone operations.`);
+      logger.warn(`No documents with embeddings created for deal ${deal.id}.`);
       return;
     }
     
@@ -497,8 +493,6 @@ async function processSingleDeal(
           }
         }
         
-        logger.info(`Found ${existingVectors.size} existing vectors out of ${vectorIds.length}`);
-        
         // Filter vectors that have changed
         const vectorsToUpsert = vectors.filter(vector => {
           // If vector doesn't exist, include it
@@ -520,12 +514,11 @@ async function processSingleDeal(
           return dealMetadataChanged;
         });
         
-        logger.info(`${vectorsToUpsert.length} vectors need to be upserted (${vectors.length - vectorsToUpsert.length} unchanged)`);
-        
         // Only upsert if there are changes
         if (vectorsToUpsert.length > 0) {
-          // Upsert to Pinecone
-          logger.info(`Upserting ${vectorsToUpsert.length} vectors to Pinecone`);
+          logger.info(`Upserting ${vectorsToUpsert.length} changed vectors`);
+          
+          // Prepare deal info for upserting
           const dealInfo = {
             deal_id: deal.id,
             deal_value: parseFloat(deal.properties?.amount) || 0,
@@ -536,7 +529,7 @@ async function processSingleDeal(
           };
           
           // Call the proper upsert method
-          const result = await pineconeClient.upsertVectorsWithDealMetadata(
+          await pineconeClient.upsertVectorsWithDealMetadata(
             namespace,
             documentsWithEmbeddings.filter(doc => 
               vectorsToUpsert.some(v => v.id === doc.metadata.id.toString())
@@ -546,16 +539,14 @@ async function processSingleDeal(
               .map(doc => ({ embedding: doc.embedding })),
             dealInfo
           );
-          logger.info(`Pinecone upsert complete`, result);
         } else {
-          logger.info(`No vectors need to be upserted - all existing vectors are up to date`);
+          logger.info(`No vectors changed, skipping upsert for deal ${deal.id}`);
         }
       } catch (fetchError) {
         // If error fetching (like namespace doesn't exist), just upsert all
         logger.warn(`Error checking existing vectors: ${fetchError.message}. Will upsert all vectors.`);
         
         // Upsert to Pinecone
-        logger.info(`Upserting all ${vectors.length} vectors to Pinecone`);
         const dealInfo = {
           deal_id: deal.id,
           deal_value: parseFloat(deal.properties?.amount) || 0,
@@ -566,13 +557,12 @@ async function processSingleDeal(
         };
         
         // Call the proper upsert method
-        const result = await pineconeClient.upsertVectorsWithDealMetadata(
+        await pineconeClient.upsertVectorsWithDealMetadata(
           namespace,
           documentsWithEmbeddings,
           documentsWithEmbeddings.map(doc => ({ embedding: doc.embedding })),
           dealInfo
         );
-        logger.info(`Pinecone upsert complete`, result);
       }
       
     } catch (pineconeError) {
@@ -598,11 +588,8 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
   const companies: HubspotRecord[] = [];
 
   try {
-    logger.info(`Getting associated records for deal ${deal.id}`);
-    
     // If we don't have associations but have a deal ID, try to fetch associations directly
     if ((!deal.associations || (!deal.associations?.contacts?.results?.length && !deal.associations?.companies?.results?.length)) && deal.id) {
-      logger.info(`No associations found in deal object. Fetching directly...`);
       try {
         // Fetch associations directly using the HubSpot API
         const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
@@ -611,8 +598,6 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
           // Extract contact and company IDs
           const contactIds = associationsResult.results.contacts?.map(a => a.id) || [];
           const companyIds = associationsResult.results.companies?.map(a => a.id) || [];
-          
-          logger.info(`Found ${contactIds.length} contacts and ${companyIds.length} companies via direct association fetch`);
           
           // Create a synthetic associations structure for processing below
           if (!deal.associations) deal.associations = {};
@@ -628,14 +613,12 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
           }
         }
       } catch (associationsError) {
-        logger.error(`Error fetching associations directly: ${associationsError.message}`);
+        logger.error(`Error fetching associations: ${associationsError.message}`);
       }
     }
     
     // Check for associated contacts
     if (deal.associations?.contacts?.results?.length > 0) {
-      logger.info(`Fetching ${deal.associations.contacts.results.length} contacts for deal ${deal.id}`);
-      
       for (const contact of deal.associations.contacts.results) {
         try {
           const contactData = await hubspotClient.getContact(contact.id);
@@ -644,17 +627,13 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
           }
           await sleep(1000); // Rate limiting
         } catch (error) {
-          logger.error(`Error fetching contact ${contact.id}:`, error);
+          logger.error(`Error fetching contact ${contact.id}: ${error.message}`);
         }
       }
-    } else {
-      logger.info(`No contacts found for deal ${deal.id}`);
     }
 
     // Check for associated companies
     if (deal.associations?.companies?.results?.length > 0) {
-      logger.info(`Fetching ${deal.associations.companies.results.length} companies for deal ${deal.id}`);
-      
       for (const company of deal.associations.companies.results) {
         try {
           const companyData = await hubspotClient.getCompany(company.id);
@@ -663,17 +642,14 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
           }
           await sleep(1000); // Rate limiting
         } catch (error) {
-          logger.error(`Error fetching company ${company.id}:`, error);
+          logger.error(`Error fetching company ${company.id}: ${error.message}`);
         }
       }
-    } else {
-      logger.info(`No companies found for deal ${deal.id}`);
     }
 
-    logger.info(`Completed fetching records: ${contacts.length} contacts, ${companies.length} companies`);
     return { contacts, companies };
   } catch (error) {
-    logger.error(`Error fetching associated records for deal ${deal.id}:`, error);
+    logger.error(`Error fetching associated records: ${error.message}`);
     // Return whatever we managed to retrieve
     return { contacts, companies };
   }
