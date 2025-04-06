@@ -586,8 +586,83 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async getRecord(objectType: string, recordId: string, properties: string[]): Promise<any> {
-    const endpoint = `/crm/v3/objects/${objectType}/${recordId}?properties=${properties.join(',')}`;
-    const response = await this.makeRequest(endpoint);
-    return response.json();
+    try {
+      const endpoint = `${this.crmBaseUrl}/objects/${objectType}/${recordId}?properties=${properties.join(',')}`;
+      return await this.makeJsonRequest<any>(endpoint);
+    } catch (error) {
+      this.logger.error(`Error getting ${objectType} record ${recordId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all associations for a specific object ID using Associations V3 API
+   * @param objectId The ID of the object to get associations for
+   * @param objectType The type of object (deal, contact, company)
+   * @returns Object containing associations grouped by type
+   */
+  async getAssociations(objectId: string, objectType: string): Promise<any> {
+    this.logger.info(`Fetching associations for ${objectType} ${objectId}`);
+    
+    try {
+      // For deals, we're typically interested in contacts and companies
+      const toObjectTypes = ['contacts', 'companies'];
+      const results: Record<string, any[]> = {};
+      
+      // Initialize empty results for each type
+      for (const toType of toObjectTypes) {
+        results[toType] = [];
+      }
+      
+      // Use the batch read endpoint for each type of association
+      for (const toObjectType of toObjectTypes) {
+        try {
+          // The correct endpoint format for Associations V3 API
+          // Singular for fromObjectType, plural for toObjectType
+          const endpoint = `${this.crmBaseUrl}/associations/${objectType}/${toObjectType}/batch/read`;
+          
+          // Make the request with the input array of IDs
+          const response = await this.makeJsonRequest(endpoint, {
+            method: 'POST',
+            body: JSON.stringify({
+              inputs: [{ id: objectId }]
+            })
+          });
+          
+          // Process the response
+          if (response && Array.isArray(response.results) && response.results.length > 0) {
+            const associationResult = response.results[0];
+            
+            // If we have associations, add them to the results
+            if (associationResult && Array.isArray(associationResult.to)) {
+              const associatedIds = associationResult.to.map((assoc: any) => ({
+                id: assoc.id,
+                type: assoc.type || 'default'
+              }));
+              
+              results[toObjectType] = associatedIds;
+            }
+          }
+        } catch (typeError) {
+          this.logger.error(`Error fetching ${toObjectType} associations for ${objectType} ${objectId}:`, typeError);
+          // Continue with other types if one fails
+        }
+      }
+      
+      // Log the results
+      const totalAssociations = Object.values(results).reduce(
+        (sum, associations) => sum + associations.length, 0
+      );
+      
+      this.logger.info(`Found ${totalAssociations} total associations for ${objectType} ${objectId}`, {
+        contactsCount: results.contacts?.length || 0,
+        companiesCount: results.companies?.length || 0
+      });
+      
+      return { results };
+    } catch (error) {
+      this.logger.error(`Error fetching associations for ${objectType} ${objectId}:`, error);
+      return { results: {} };
+    }
   }
 } 

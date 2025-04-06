@@ -53,14 +53,13 @@ async function handleApiCall<T>(
   apiCall: () => Promise<T>
 ): Promise<T> {
   try {
-    logger.info(`Making API call for portal ${portalId}`);
     return await apiCall();
   } catch (error) {
-    logger.error(`API call error:`, { message: error.message, status: error.status });
+    logger.error(`API call error for portal ${portalId}:`, { message: error.message, status: error.status });
 
     // Check if the error is due to token expiration
     if (error.status === 401) {
-      logger.info(`Token expired for portal ${portalId}, refreshing token...`);
+      logger.info(`Refreshing expired token for portal ${portalId}`);
       
       try {
         // Refresh the token
@@ -107,10 +106,9 @@ async function handleApiCall<T>(
           throw new Error(`Failed to update tokens in database: ${updateError.message}`);
         }
 
-        logger.info(`Successfully refreshed and updated token for portal ${portalId}`);
+        logger.info(`Successfully refreshed token for portal ${portalId}`);
 
         // Retry the API call with the new token
-        logger.info(`Retrying API call with new token for portal ${portalId}`);
         return await apiCall();
       } catch (refreshError) {
         logger.error(`Token refresh failed for portal ${portalId}:`, refreshError);
@@ -146,8 +144,7 @@ async function getDealsForTraining(
     let processedDeals = 0;
     const namespace = `hubspot-${portalId}`;
 
-    // Instead of clearing the namespace, we'll check for existing records and only update changed ones
-    logger.info(`Using namespace ${namespace} for ${type} deals - will check for existing records and only update changes`);
+    logger.info(`Fetching ${type} deals using namespace ${namespace}`);
 
     // Pagination loop to fetch deals in batches
     while (hasMore) {
@@ -189,8 +186,6 @@ async function getDealsForTraining(
         associations: ['contacts', 'companies'],
         ...(after ? { after } : {})
       };
-
-      logger.info(`Searching for ${type} deals with criteria:`, JSON.stringify(searchCriteria, null, 2));
       
       // Make API call with token refresh handling
       const dealsResponse = await handleApiCall(
@@ -246,7 +241,6 @@ async function getDealsForTraining(
                 fullDeal.associations = deal.associations;
                 
                 // Process this single deal right away
-                logger.info(`Processing deal ${fullDeal.id} immediately`);
                 await processSingleDeal(
                   fullDeal,
                   type,
@@ -258,7 +252,7 @@ async function getDealsForTraining(
                   namespace
                 );
                 processedDeals++;
-                logger.info(`Successfully processed deal ${fullDeal.id}, (${processedDeals}/${totalDeals} so far)`);
+                logger.info(`Successfully processed deal ${fullDeal.id} (${processedDeals}/${totalDeals})`);
               }
             } catch (error) {
               logger.error(`Error processing deal ${deal.id}:`, error);
@@ -270,7 +264,7 @@ async function getDealsForTraining(
           }
         }
 
-        logger.info(`Completed processing batch of ${dealBatch.length} deals (total processed: ${processedDeals}/${totalDeals})`);
+        logger.info(`Completed batch of ${dealBatch.length} deals (total: ${processedDeals}/${totalDeals})`);
         await sleep(5000); // Rate limiting between batches
       }
 
@@ -283,7 +277,7 @@ async function getDealsForTraining(
       }
     }
 
-    logger.info(`Completed processing ${type} deals: ${processedDeals} processed out of ${totalDeals} total`);
+    logger.info(`Completed processing ${type} deals: ${processedDeals}/${totalDeals}`);
     return { total: totalDeals, processed: processedDeals };
   } catch (error) {
     logger.error(`Error fetching and processing ${type} deals:`, error);
@@ -306,18 +300,46 @@ async function processSingleDeal(
 ): Promise<void> {
   const processingStart = Date.now();
   
-  logger.info(`-------- PROCESSING SINGLE DEAL ${deal.id} --------`);
-  logger.info(`Using namespace: ${namespace} for deal classification: ${classification}`);
+  logger.info(`Processing deal ${deal.id} (${classification})`);
   
   try {
     // Get all contacts and companies associated with this deal
     logger.info(`Getting associated records for deal ${deal.id}`);
+    
+    // Always fetch fresh associations to ensure we're getting all related records
+    try {
+      const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
+      if (associationsResult?.results) {
+        // Extract contact and company IDs from associations
+        const contactIds = associationsResult.results.contacts?.map(a => a.id) || [];
+        const companyIds = associationsResult.results.companies?.map(a => a.id) || [];
+        
+        const totalAssociations = contactIds.length + companyIds.length;
+        logger.info(`Fresh associations for deal ${deal.id}: ${totalAssociations} total (${contactIds.length} contacts, ${companyIds.length} companies)`);
+        
+        // Create or update the associations structure
+        if (!deal.associations) deal.associations = {};
+        if (contactIds.length > 0) {
+          deal.associations.contacts = {
+            results: contactIds.map(id => ({ id }))
+          };
+        }
+        if (companyIds.length > 0) {
+          deal.associations.companies = {
+            results: companyIds.map(id => ({ id }))
+          };
+        }
+      }
+    } catch (associationsError) {
+      logger.error(`Error fetching fresh associations: ${associationsError.message}`);
+    }
+    
     const associatedRecords = await getAssociatedRecords(hubspotClient, deal);
     
-    logger.info(`Got associated records: ${associatedRecords.contacts.length} contacts and ${associatedRecords.companies.length} companies`);
+    logger.info(`Retrieved ${associatedRecords.contacts.length} contacts and ${associatedRecords.companies.length} companies`);
     
     // Process deal records
-    logger.info(`-------- CREATING DEAL DOCUMENTS --------`);
+    logger.info(`Creating documents...`);
     const dealDocuments = [];
     
     try {
@@ -325,14 +347,11 @@ async function processSingleDeal(
       if (dealDocs) {
         dealDocuments.push(dealDocs);
       }
-      
-      logger.info(`Created ${dealDocuments.length} deal documents`);
     } catch (dealError) {
       logger.error(`Error creating deal document: ${dealError.message}`);
     }
     
     // Process contact records
-    logger.info(`-------- CREATING CONTACT DOCUMENTS --------`);
     const contactDocuments = [];
     
     try {
@@ -346,14 +365,11 @@ async function processSingleDeal(
           logger.error(`Error packaging contact ${contact.id}: ${contactError.message}`);
         }
       }
-      
-      logger.info(`Created ${contactDocuments.length} contact documents`);
     } catch (contactsError) {
       logger.error(`Error creating contact documents: ${contactsError.message}`);
     }
     
     // Process company records
-    logger.info(`-------- CREATING COMPANY DOCUMENTS --------`);
     const companyDocuments = [];
     
     try {
@@ -367,8 +383,6 @@ async function processSingleDeal(
           logger.error(`Error packaging company ${company.id}: ${companyError.message}`);
         }
       }
-      
-      logger.info(`Created ${companyDocuments.length} company documents`);
     } catch (companiesError) {
       logger.error(`Error creating company documents: ${companiesError.message}`);
     }
@@ -400,7 +414,7 @@ async function processSingleDeal(
       }))
     ];
     
-    logger.info(`Total documents created: ${allDocuments.length}`);
+    logger.info(`Created ${allDocuments.length} total documents for deal ${deal.id}`);
     
     if (allDocuments.length === 0) {
       logger.warn(`No documents created for deal ${deal.id}. Skipping embeddings.`);
@@ -408,7 +422,7 @@ async function processSingleDeal(
     }
     
     // Generate embeddings for all documents
-    logger.info(`-------- GENERATING EMBEDDINGS --------`);
+    logger.info(`Generating embeddings for ${allDocuments.length} documents`);
     let documentsWithEmbeddings = [];
     
     try {
@@ -416,7 +430,6 @@ async function processSingleDeal(
       const batchSize = 10;
       for (let i = 0; i < allDocuments.length; i += batchSize) {
         const batch = allDocuments.slice(i, i + batchSize);
-        logger.info(`Processing embeddings batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(allDocuments.length/batchSize)}: ${batch.length} documents`);
         
         const embeddingResponse = await openai.embeddings.create({
           model: "text-embedding-3-large",
@@ -435,8 +448,6 @@ async function processSingleDeal(
           await sleep(500);
         }
       }
-      
-      logger.info(`Generated embeddings for ${documentsWithEmbeddings.length} documents`);
     } catch (embeddingsError) {
       logger.error(`Error generating embeddings: ${embeddingsError.message}`);
       throw embeddingsError;
@@ -448,10 +459,8 @@ async function processSingleDeal(
     }
     
     // Upsert to Pinecone
-    logger.info(`-------- UPSERTING TO PINECONE --------`);
+    logger.info(`Upserting ${documentsWithEmbeddings.length} vectors to namespace ${namespace}`);
     try {
-      logger.info(`Upserting ${documentsWithEmbeddings.length} vectors to namespace ${namespace}`);
-      
       // Create vectors
       const vectors = documentsWithEmbeddings.map(doc => ({
         id: doc.metadata.id.toString(),
@@ -461,20 +470,8 @@ async function processSingleDeal(
         }
       }));
       
-      // Log first vector for debugging
-      if (vectors.length > 0) {
-        logger.info(`Sample vector:`, {
-          id: vectors[0].id,
-          metadata_keys: Object.keys(vectors[0].metadata),
-          embedding_length: vectors[0].values.length
-        });
-      }
-      
       // Before upserting, check if these vectors already exist with the same deal metadata
-      // Fetch vector IDs to see if they already exist
       const vectorIds = vectors.map(v => v.id);
-      logger.info(`Checking if ${vectorIds.length} vectors already exist in namespace ${namespace}`);
-      
       try {
         // Fetch existing vectors in batches (limit by Pinecone API)
         const batchSize = 100;
@@ -482,17 +479,11 @@ async function processSingleDeal(
         
         for (let i = 0; i < vectorIds.length; i += batchSize) {
           const batchIds = vectorIds.slice(i, i + batchSize);
-          logger.info(`Checking batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(vectorIds.length / batchSize)}: ${batchIds.length} vectors`);
           
           try {
-            // Use proper Pinecone fetch method instead of direct index access
             const fetchResult = await pineconeClient.query(namespace, null, { id: { $in: batchIds } }, batchIds.length);
             
             if (fetchResult.matches?.length > 0) {
-              // Count existing vectors
-              const existingCount = fetchResult.matches.length;
-              logger.info(`Found ${existingCount} existing vectors in namespace ${namespace}`);
-              
               // Store existing vectors to compare later
               fetchResult.matches.forEach(vector => {
                 existingVectors.set(vector.id, {
@@ -506,7 +497,7 @@ async function processSingleDeal(
           }
         }
         
-        logger.info(`Total existing vectors found: ${existingVectors.size} out of ${vectorIds.length}`);
+        logger.info(`Found ${existingVectors.size} existing vectors out of ${vectorIds.length}`);
         
         // Filter vectors that have changed
         const vectorsToUpsert = vectors.filter(vector => {
@@ -534,7 +525,7 @@ async function processSingleDeal(
         // Only upsert if there are changes
         if (vectorsToUpsert.length > 0) {
           // Upsert to Pinecone
-          logger.info(`Calling pineconeClient.upsertVectorsWithDealMetadata with ${vectorsToUpsert.length} vectors`);
+          logger.info(`Upserting ${vectorsToUpsert.length} vectors to Pinecone`);
           const dealInfo = {
             deal_id: deal.id,
             deal_value: parseFloat(deal.properties?.amount) || 0,
@@ -555,7 +546,7 @@ async function processSingleDeal(
               .map(doc => ({ embedding: doc.embedding })),
             dealInfo
           );
-          logger.info(`Upsert result:`, result);
+          logger.info(`Pinecone upsert complete`, result);
         } else {
           logger.info(`No vectors need to be upserted - all existing vectors are up to date`);
         }
@@ -564,7 +555,7 @@ async function processSingleDeal(
         logger.warn(`Error checking existing vectors: ${fetchError.message}. Will upsert all vectors.`);
         
         // Upsert to Pinecone
-        logger.info(`Calling pineconeClient.upsertVectorsWithDealMetadata with all ${vectors.length} vectors`);
+        logger.info(`Upserting all ${vectors.length} vectors to Pinecone`);
         const dealInfo = {
           deal_id: deal.id,
           deal_value: parseFloat(deal.properties?.amount) || 0,
@@ -581,22 +572,20 @@ async function processSingleDeal(
           documentsWithEmbeddings.map(doc => ({ embedding: doc.embedding })),
           dealInfo
         );
-        logger.info(`Upsert result:`, result);
+        logger.info(`Pinecone upsert complete`, result);
       }
       
     } catch (pineconeError) {
       logger.error(`Error in Pinecone operations: ${pineconeError.message}`);
-      logger.error(`Stack: ${pineconeError.stack}`);
       throw pineconeError;
     }
     
     const processingDuration = (Date.now() - processingStart) / 1000;
-    logger.info(`-------- DEAL ${deal.id} PROCESSED IN ${processingDuration.toFixed(2)} SECONDS --------`);
+    logger.info(`Deal ${deal.id} processed in ${processingDuration.toFixed(2)} seconds`);
     
   } catch (error) {
     const processingDuration = (Date.now() - processingStart) / 1000;
-    logger.error(`-------- DEAL ${deal.id} PROCESSING FAILED AFTER ${processingDuration.toFixed(2)} SECONDS --------`);
-    logger.error(`Error: ${error.message}`);
+    logger.error(`Deal ${deal.id} processing failed after ${processingDuration.toFixed(2)} seconds: ${error.message}`);
     throw error;
   }
 }
@@ -609,29 +598,49 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
   const companies: HubspotRecord[] = [];
 
   try {
-    logger.info(`!!!!!!!!!! START GET ASSOCIATED RECORDS FOR DEAL ${deal.id} !!!!!!!!!!`);
+    logger.info(`Getting associated records for deal ${deal.id}`);
     
-    // Log deal structure
-    logger.info(`Deal associations structure:`, {
-      has_associations: !!deal.associations,
-      association_types: deal.associations ? Object.keys(deal.associations) : [],
-      contacts_object: deal.associations?.contacts ? JSON.stringify(deal.associations.contacts).substring(0, 200) + '...' : 'null',
-      companies_object: deal.associations?.companies ? JSON.stringify(deal.associations.companies).substring(0, 200) + '...' : 'null',
-    });
+    // If we don't have associations but have a deal ID, try to fetch associations directly
+    if ((!deal.associations || (!deal.associations?.contacts?.results?.length && !deal.associations?.companies?.results?.length)) && deal.id) {
+      logger.info(`No associations found in deal object. Fetching directly...`);
+      try {
+        // Fetch associations directly using the HubSpot API
+        const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
+        
+        if (associationsResult?.results) {
+          // Extract contact and company IDs
+          const contactIds = associationsResult.results.contacts?.map(a => a.id) || [];
+          const companyIds = associationsResult.results.companies?.map(a => a.id) || [];
+          
+          logger.info(`Found ${contactIds.length} contacts and ${companyIds.length} companies via direct association fetch`);
+          
+          // Create a synthetic associations structure for processing below
+          if (!deal.associations) deal.associations = {};
+          if (contactIds.length > 0) {
+            deal.associations.contacts = {
+              results: contactIds.map(id => ({ id }))
+            };
+          }
+          if (companyIds.length > 0) {
+            deal.associations.companies = {
+              results: companyIds.map(id => ({ id }))
+            };
+          }
+        }
+      } catch (associationsError) {
+        logger.error(`Error fetching associations directly: ${associationsError.message}`);
+      }
+    }
     
     // Check for associated contacts
     if (deal.associations?.contacts?.results?.length > 0) {
-      logger.info(`!!!!!!!!!! FETCHING ${deal.associations.contacts.results.length} CONTACTS FOR DEAL ${deal.id} !!!!!!!!!!`);
+      logger.info(`Fetching ${deal.associations.contacts.results.length} contacts for deal ${deal.id}`);
       
       for (const contact of deal.associations.contacts.results) {
         try {
-          logger.info(`Fetching contact: ${contact.id}`);
           const contactData = await hubspotClient.getContact(contact.id);
           if (contactData) {
             contacts.push(contactData);
-            logger.info(`Successfully retrieved contact ${contact.id}`);
-          } else {
-            logger.info(`No data returned for contact ${contact.id}`);
           }
           await sleep(1000); // Rate limiting
         } catch (error) {
@@ -639,22 +648,18 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
         }
       }
     } else {
-      logger.info(`!!!!!!!!!! NO CONTACTS FOUND FOR DEAL ${deal.id} !!!!!!!!!!`);
+      logger.info(`No contacts found for deal ${deal.id}`);
     }
 
     // Check for associated companies
     if (deal.associations?.companies?.results?.length > 0) {
-      logger.info(`!!!!!!!!!! FETCHING ${deal.associations.companies.results.length} COMPANIES FOR DEAL ${deal.id} !!!!!!!!!!`);
+      logger.info(`Fetching ${deal.associations.companies.results.length} companies for deal ${deal.id}`);
       
       for (const company of deal.associations.companies.results) {
         try {
-          logger.info(`Fetching company: ${company.id}`);
           const companyData = await hubspotClient.getCompany(company.id);
           if (companyData) {
             companies.push(companyData);
-            logger.info(`Successfully retrieved company ${company.id}`);
-          } else {
-            logger.info(`No data returned for company ${company.id}`);
           }
           await sleep(1000); // Rate limiting
         } catch (error) {
@@ -662,13 +667,13 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
         }
       }
     } else {
-      logger.info(`!!!!!!!!!! NO COMPANIES FOUND FOR DEAL ${deal.id} !!!!!!!!!!`);
+      logger.info(`No companies found for deal ${deal.id}`);
     }
 
-    logger.info(`!!!!!!!!!! COMPLETED FETCHING ASSOCIATED RECORDS FOR DEAL ${deal.id}: ${contacts.length} contacts, ${companies.length} companies !!!!!!!!!!`);
+    logger.info(`Completed fetching records: ${contacts.length} contacts, ${companies.length} companies`);
     return { contacts, companies };
   } catch (error) {
-    logger.error(`!!!!!!!!!! ERROR FETCHING ASSOCIATED RECORDS FOR DEAL ${deal.id} !!!!!!!!!!`, error);
+    logger.error(`Error fetching associated records for deal ${deal.id}:`, error);
     // Return whatever we managed to retrieve
     return { contacts, companies };
   }
@@ -731,7 +736,7 @@ serve(async (req) => {
     // Process each account
     for (const account of accounts) {
       const portalId = account.portal_id;
-      logger.info(`\n=== Processing portal ${portalId} ===`);
+      logger.info(`Processing portal ${portalId}`);
 
       try {
         // Initialize clients and services
@@ -742,27 +747,17 @@ serve(async (req) => {
           throw new Error('Invalid HubSpot tokens');
         }
         
-        logger.info(`!!!!!!!!!! INITIALIZING SERVICES !!!!!!!!!!`);
+        logger.info(`Initializing services for portal ${portalId}`);
 
-        logger.info(`!!!!!!!!!! INITIALIZING HUBSPOT CLIENT !!!!!!!!!!`);
         const hubspotClient = new HubspotClient(decryptedToken);
-
-        logger.info(`!!!!!!!!!! INITIALIZING OPENAI CLIENT !!!!!!!!!!`);
         const openaiApiKey = Deno.env.get('OPENAI_API_KEY')!;
-        logger.info(`OpenAI API Key length: ${openaiApiKey?.length || 0}`);
         const openai = new OpenAI({ apiKey: openaiApiKey });
-
-        logger.info(`!!!!!!!!!! INITIALIZING PINECONE CLIENT !!!!!!!!!!`);
         const pineconeApiKey = Deno.env.get('PINECONE_API_KEY')!;
         const pineconeIndex = Deno.env.get('PINECONE_INDEX')!;
-        logger.info(`Pinecone config: API Key length: ${pineconeApiKey?.length || 0}, Index: ${pineconeIndex}`);
         const pineconeClient = new PineconeClient();
         await pineconeClient.initialize(pineconeApiKey, pineconeIndex);
-        logger.info(`!!!!!!!!!! PINECONE CLIENT INITIALIZED !!!!!!!!!!`);
-
-        logger.info(`!!!!!!!!!! INITIALIZING DOCUMENT PACKAGER !!!!!!!!!!`);
         const documentPackager = new DocumentPackager(hubspotClient);
-        logger.info(`!!!!!!!!!! ALL SERVICES INITIALIZED !!!!!!!!!!`);
+        logger.info(`Services initialized for portal ${portalId}`);
         
         // Validate token
         logger.info(`Validating token for portal ${portalId}`);
@@ -779,96 +774,26 @@ serve(async (req) => {
         
         // Process ideal deals
         try {
-          logger.info(`******************************************************************`);
-          logger.info(`STARTING IDEAL DEALS PROCESSING FLOW`);
-          logger.info(`******************************************************************`);
+          logger.info(`Starting ideal deals processing for portal ${portalId}`);
           
-          logger.info(`Fetching ideal deals for portal ${portalId}`);
-          let idealDeals;
-          try {
-            idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
-            logger.info(`SUCCESS: Got ${idealDeals?.length || 0} ideal deals from getDealsForTraining`);
-          } catch (dealsError) {
-            logger.error(`******************************************************************`);
-            logger.error(`ERROR IN getDealsForTraining: ${dealsError.message}`);
-            logger.error(`STACK: ${dealsError.stack}`);
-            logger.error(`******************************************************************`);
-            throw dealsError;
-          }
+          const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
           
           portalResult.ideal.total = idealDeals.total;
           portalResult.ideal.processed = idealDeals.processed;
           
-          logger.info(`******************************************************************`);
-          logger.info(`AFTER GET_DEALS_FOR_TRAINING - GOT ${idealDeals.processed} IDEAL DEALS`);
-          logger.info(`******************************************************************`);
+          logger.info(`Processed ${idealDeals.processed} ideal deals for portal ${portalId}`);
           
-          // Log deal structure for debugging
-          if (idealDeals.processed > 0) {
-            try {
-              const sampleDeal = "Sample deal processed";
-              logger.info(`!!!!!!!!!! SAMPLE IDEAL DEAL STRUCTURE !!!!!!!!!!`, {
-                processed_count: idealDeals.processed,
-                total_count: idealDeals.total
-              });
-              
-              // Log warning about associations
-              logger.warn(`WARNING: Some deals may have no associations. These deals will still be processed but without contacts/companies.`);
-            } catch (sampleError) {
-              logger.error(`Error examining sample deal: ${sampleError.message}`);
-            }
-          }
-          
-          logger.info(`******************************************************************`);
-          logger.info(`CHECKING IF IDEAL DEALS EXIST: idealDeals.processed = ${idealDeals.processed}`);
-          logger.info(`******************************************************************`);
-          
-          if (idealDeals.processed > 0) {
-            logger.info(`******************************************************************`);
-            logger.info(`ABOUT TO CALL PROCESS_DEALS FOR ${idealDeals.processed} IDEAL DEALS`);
-            logger.info(`******************************************************************`);
-            
-            try {
-              // Validate the idealDeals array to make sure it's properly formatted
-              logger.info(`Validating idealDeals processed: ${idealDeals.processed}`);
-              
-              // Directly log the first step of processDeals to confirm if it's being called
-              logger.info(`DIRECT LOG TEST: Processed ${idealDeals.processed} ideal deals`);
-              
-              // We don't need to call processDeals anymore since each deal was processed individually
-              logger.info(`******************************************************************`);
-              logger.info(`ALL IDEAL DEALS WERE PROCESSED INDIVIDUALLY: ${idealDeals.processed} DEALS`);
-              logger.info(`******************************************************************`);
-            } catch (error) {
-              logger.error(`******************************************************************`);
-              logger.error(`ERROR CALLING PROCESS_DEALS: ${error.message}`);
-              logger.error(`ERROR STACK: ${error.stack}`);
-              logger.error(`******************************************************************`);
-              
-              // Rethrow to make sure it's not swallowed
-              throw new Error(`Failed to process ideal deals: ${error.message}`);
-            }
-          } else {
-            logger.info(`******************************************************************`);
-            logger.info(`NO IDEAL DEALS TO PROCESS - SKIPPING PROCESS_DEALS CALL`);
-            logger.info(`******************************************************************`);
-          }
         } catch (idealDealsError) {
-          logger.error(`******************************************************************`);
-          logger.error(`CRITICAL ERROR IN IDEAL DEALS PROCESSING: ${idealDealsError.message}`);
-          logger.error(`STACK: ${idealDealsError.stack}`);
-          logger.error(`******************************************************************`);
+          logger.error(`Error processing ideal deals for portal ${portalId}: ${idealDealsError.message}`);
         }
         
         // Process non-ideal deals
-        logger.info(`Fetching non-ideal deals for portal ${portalId}`);
+        logger.info(`Starting non-ideal deals processing for portal ${portalId}`);
         const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
         portalResult.nonideal.total = nonIdealDeals.total;
         portalResult.nonideal.processed = nonIdealDeals.processed;
         
-        if (nonIdealDeals.processed > 0) {
-          logger.info(`!!!!!!!!!! PROCESSED ${nonIdealDeals.processed} NON-IDEAL DEALS INDIVIDUALLY !!!!!!!!!!`);
-        }
+        logger.info(`Processed ${nonIdealDeals.processed} non-ideal deals for portal ${portalId}`);
         
         // Update database with metrics
         await supabase
@@ -887,7 +812,7 @@ serve(async (req) => {
       } catch (error) {
         // Track failure
         results.failed++;
-        logger.error(`Failed to process portal ${portalId}:`, error);
+        logger.error(`Failed to process portal ${portalId}: ${error.message}`);
         results.portals.push({
           portalId,
           error: error.message
