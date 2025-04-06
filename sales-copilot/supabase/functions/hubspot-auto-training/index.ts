@@ -6,12 +6,12 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
 import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { HubspotClient, HubspotRecord } from '../_shared/hubspotClient.ts';
 import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
 import { DocumentPackager } from '../_shared/documentPackager.ts';
+import { PineconeClient } from '../_shared/pineconeClient.ts';
 
 declare const Deno: {
   env: {
@@ -595,7 +595,7 @@ async function processDeals(
   hubspotClient: HubspotClient,
   documentPackager: DocumentPackager,
   openai: OpenAI,
-  index: any,
+  pineconeClient: PineconeClient,
   portalId: string
 ) {
   logger.info(`Starting to process ${deals.length} ${classification} deals`);
@@ -654,7 +654,7 @@ async function processDeals(
 
         const documents = [...dealDocs, ...contactDocs, ...companyDocs];
         logger.info(`Total documents created: ${documents.length}`);
-        logger.info('Document IDs:', documents.map(doc => doc.id));
+        logger.info('Document metadata IDs:', documents.map(doc => doc.metadata.id));
 
         // Get embeddings
         logger.info(`Starting OpenAI embedding creation for ${documents.length} documents`);
@@ -667,49 +667,37 @@ async function processDeals(
         await sleep(2000);
         logger.info('Post-embedding delay complete');
 
-        // Prepare vectors
-        logger.info('Starting vector preparation');
-        const vectors = documents.map((doc, index) => ({
-          id: doc.id,
-          values: Array.from(embeddingResponse.data[index].embedding),
-          metadata: doc.metadata
-        }));
+        // Create deal info object for metadata consistency
+        const dealInfo = {
+          deal_id: deal.id,
+          deal_value: parseFloat(deal.properties?.amount) || 0,
+          conversion_days: calculateConversionDays(deal.properties),
+          pipeline: deal.properties?.pipeline || 'unknown',
+          dealstage: deal.properties?.dealstage || 'unknown',
+          days_in_pipeline: parseInt(deal.properties?.hs_time_in_pipeline) || 0
+        };
 
-        logger.info('Vectors prepared:', vectors.map(v => ({
-          id: v.id,
-          metadata: {
-            record_type: v.metadata.record_type,
-            deal_id: v.metadata.deal_id,
-            classification: v.metadata.classification
-          },
-          vectorLength: v.values.length
-        })));
-
-        // Upsert to Pinecone
+        // Use the Pinecone client to upsert vectors with deal metadata
         const namespace = `hubspot-${portalId}`;
-        logger.info(`Starting Pinecone upsert of ${vectors.length} vectors to namespace ${namespace}`);
-        
         try {
-          logger.info('Calling Pinecone upsert...');
-          const upsertResponse = await index.namespace(namespace).upsert(vectors);
-          logger.info('Pinecone upsert completed:', upsertResponse);
+          logger.info(`Deleting namespace ${namespace} if it exists`);
+          await pineconeClient.deleteNamespace(namespace);
+          logger.info(`Successfully deleted namespace ${namespace}`);
           
-          // Verify the upsert
-          logger.info('Starting upsert verification...');
-          const sampleVector = vectors[0];
-          const queryResponse = await index.namespace(namespace).fetch([sampleVector.id]);
-          logger.info('Upsert verification complete:', {
-            queriedId: sampleVector.id,
-            found: queryResponse.records.length > 0,
-            response: queryResponse
-          });
+          logger.info(`Upserting vectors to namespace ${namespace} with deal ID ${dealInfo.deal_id}`);
+          const upsertResult = await pineconeClient.upsertVectorsWithDealMetadata(
+            namespace,
+            documents,
+            embeddingResponse.data,
+            dealInfo
+          );
+          logger.info('Pinecone upsert completed:', upsertResult);
         } catch (pineconeError) {
           logger.error('Pinecone operation failed:', {
             error: pineconeError.message,
             stack: pineconeError.stack,
             namespace,
-            vectorCount: vectors.length,
-            sampleVectorId: vectors[0]?.id
+            dealId: deal.id
           });
           throw pineconeError;
         }
@@ -822,18 +810,16 @@ async function processRecords(
   });
 
   // Initialize Pinecone client
-  const pinecone = new Pinecone({
-    apiKey: Deno.env.get('PINECONE_API_KEY')!
-  });
-
-  const index = pinecone.index(Deno.env.get('PINECONE_INDEX')!);
+  const pineconeClient = new PineconeClient();
+  await pineconeClient.initialize(Deno.env.get('PINECONE_API_KEY')!, Deno.env.get('PINECONE_INDEX')!);
+  
   const namespace = `hubspot-${portalId}`;
 
   // Delete all existing vectors in the namespace if this is the first record type
   if (shouldClearNamespace) {
     try {
       logger.info(`Attempting to delete existing vectors in namespace: ${namespace}`);
-      await index.deleteAll({ namespace });
+      await pineconeClient.deleteNamespace(namespace);
       logger.info(`Successfully deleted vectors in namespace: ${namespace}`);
     } catch (error) {
       // If the namespace doesn't exist (404), we can ignore the error
@@ -891,7 +877,19 @@ async function processRecords(
 
   try {
     logger.info(`Attempting to upsert ${vectors.length} vectors into namespace: ${namespace}`);
-    await index.namespace(namespace).upsert(vectors);
+    await pineconeClient.upsertVectorsWithDealMetadata(
+      namespace,
+      documents,
+      embeddingResponse.data,
+      { 
+        deal_id: '', 
+        deal_value: 0, 
+        conversion_days: 0, 
+        pipeline: '', 
+        dealstage: '',
+        days_in_pipeline: 0
+      }
+    );
     logger.info(`Successfully upserted ${vectors.length} vectors into namespace: ${namespace}`);
   } catch (error) {
     logger.error('Error upserting vectors:', error);
