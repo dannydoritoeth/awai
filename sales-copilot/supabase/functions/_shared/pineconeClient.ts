@@ -109,14 +109,42 @@ export class PineconeClient {
   /**
    * Query Pinecone index
    */
-  async query(namespace: string, vector: number[], filter: any = {}, topK: number = 10): Promise<any> {
+  async query(namespace: string, vector: number[] | null, filter: any = {}, topK: number = 10): Promise<any> {
     try {
-      return await this.index.namespace(namespace).query({
+      this.logger.info(`Querying Pinecone namespace ${namespace} with filter: ${JSON.stringify(filter)}`);
+      
+      // Special handling for querying by exact ID (not in batch)
+      if (!vector && filter && typeof filter === 'string') {
+        this.logger.info(`Querying for single ID: ${filter}`);
+        return await this.fetchByIds([filter], namespace);
+      }
+      
+      // Special handling for ID-only batch queries
+      if (!vector && filter && filter.id) {
+        // Handle direct ID match (string)
+        if (typeof filter.id === 'string') {
+          this.logger.info(`ID-only query for single vector ID: ${filter.id}`);
+          return await this.fetchByIds([filter.id], namespace);
+        }
+        
+        // Handle $in operator (array of IDs)
+        if (filter.id.$in && Array.isArray(filter.id.$in)) {
+          this.logger.info(`ID-only query for ${filter.id.$in.length} vectors in namespace ${namespace}`);
+          return await this.fetchByIds(filter.id.$in, namespace);
+        }
+      }
+      
+      // If we get here, it's a regular vector query
+      const queryParams = {
         vector,
         topK,
         filter,
         includeMetadata: true
-      });
+      };
+      
+      const response = await this.index.namespace(namespace).query(queryParams);
+      this.logger.info(`Query returned ${response.matches ? response.matches.length : 0} vectors`);
+      return response;
     } catch (error) {
       this.logger.error('Error querying Pinecone:', error.message);
       throw error;
@@ -144,7 +172,8 @@ export class PineconeClient {
       const key = apiKey || Deno.env.get('PINECONE_API_KEY');
       
       if (!host || !key) {
-        throw new Error('Missing Pinecone index host or API key. Provide as parameters or set PINECONE_INDEX_HOST and PINECONE_API_KEY environment variables.');
+        this.logger.warn('Missing Pinecone index host or API key. Cannot fetch vectors by ID.');
+        return { matches: [] }; // Return empty result instead of throwing
       }
       
       // Fix: Ensure host doesn't already contain https:// to avoid duplication

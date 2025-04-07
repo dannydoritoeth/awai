@@ -25,6 +25,40 @@ export async function processSingleDeal(
   logger.info(`Processing deal ${deal.id} (${classification}) in namespace ${namespace}`);
   
   try {
+    // First, check if this deal is already in Pinecone with the same metadata
+    try {
+      const dealVectorId = `deal-${portalId}-${deal.id}`;
+      logger.info(`Checking if deal ${deal.id} already exists in Pinecone`);
+      
+      const fetchResult = await pineconeClient.query(namespace, null, dealVectorId, 1);
+      
+      if (fetchResult.matches && fetchResult.matches.length > 0) {
+        const existingVector = fetchResult.matches[0];
+        
+        // Check if deal metadata is the same
+        const currentValue = parseFloat(deal.properties?.amount) || 0;
+        const currentPipeline = deal.properties?.pipeline || 'unknown';
+        const currentDealstage = deal.properties?.dealstage || 'unknown';
+        const currentDaysInPipeline = parseInt(deal.properties?.hs_time_in_pipeline) || 0;
+        
+        // Compare with existing metadata
+        if (existingVector.metadata && 
+            existingVector.metadata.deal_value === currentValue &&
+            existingVector.metadata.pipeline === currentPipeline &&
+            existingVector.metadata.dealstage === currentDealstage) {
+          
+          logger.info(`Deal ${deal.id} already exists in Pinecone with the same metadata. Skipping processing.`);
+          return; // Skip processing this deal
+        } else {
+          logger.info(`Deal ${deal.id} exists but metadata has changed. Will update.`);
+        }
+      } else {
+        logger.info(`Deal ${deal.id} not found in Pinecone. Will process.`);
+      }
+    } catch (checkError) {
+      logger.warn(`Error checking if deal exists: ${checkError.message}. Will proceed with processing.`);
+    }
+    
     // Get all contacts and companies associated with this deal
     try {
       const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
@@ -221,6 +255,7 @@ export async function processSingleDeal(
       
       // Before upserting, check if these vectors already exist with the same deal metadata
       const vectorIds = vectors.map(v => v.id);
+      logger.info(`Checking if ${vectorIds.length} vectors already exist in namespace ${namespace}`);
       try {
         // Fetch existing vectors in batches (limit by Pinecone API)
         const batchSize = 100;
@@ -230,21 +265,27 @@ export async function processSingleDeal(
           const batchIds = vectorIds.slice(i, i + batchSize);
           
           try {
+            logger.info(`Querying for batch of ${batchIds.length} vectors`);
             const fetchResult = await pineconeClient.query(namespace, null, { id: { $in: batchIds } }, batchIds.length);
             
             if (fetchResult.matches?.length > 0) {
               // Store existing vectors to compare later
+              logger.info(`Found ${fetchResult.matches.length} existing vectors`);
               fetchResult.matches.forEach(vector => {
                 existingVectors.set(vector.id, {
                   metadata: vector.metadata
                 });
               });
+            } else {
+              logger.info(`No matching vectors found in this batch`);
             }
           } catch (fetchBatchError) {
             logger.error(`Error fetching batch of vectors: ${fetchBatchError.message}`);
             // Continue with next batch
           }
         }
+
+        logger.info(`Total existing vectors found: ${existingVectors.size}`);
         
         // Filter vectors that have changed
         const vectorsToUpsert = vectors.filter(vector => {
