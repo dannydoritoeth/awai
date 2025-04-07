@@ -86,9 +86,10 @@ export class HubspotClient implements HubspotClientInterface {
   private logger: Logger;
   private baseUrl = 'https://api.hubapi.com';
   private crmBaseUrl = 'https://api.hubspot.com/crm/v3';
-  private rateLimitDelay = 250; // Increased from 100ms to 250ms between requests
-  private maxRetries = 5; // Increased from 3 to 5 retries
-  private baseRetryDelay = 1000; // Base delay for exponential backoff (1 second)
+  private rateLimitDelay = 500; // Increased from 250ms to 500ms between requests
+  private maxRetries = 5;
+  private baseRetryDelay = 2000; // Increased base delay to 2 seconds
+  private maxRetryDelay = 32000; // Maximum retry delay of 32 seconds
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -99,29 +100,94 @@ export class HubspotClient implements HubspotClientInterface {
     this.accessToken = newAccessToken;
   }
 
+  /**
+   * Alias for updateToken
+   */
+  setToken(newAccessToken: string) {
+    this.updateToken(newAccessToken);
+  }
+
+  /**
+   * Refreshes the HubSpot OAuth token
+   */
+  async refreshToken(
+    refreshToken: string,
+    clientId: string,
+    clientSecret: string
+  ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+    this.logger.info('Refreshing HubSpot token...');
+    
+    try {
+      const response = await fetch('https://api.hubapi.com/oauth/v1/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+        }).toString(),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error('Failed to refresh token:', errorText);
+        const error = new Error(`Failed to refresh HubSpot token: ${errorText}`);
+        throw error;
+      }
+
+      const result = await response.json();
+      this.logger.info('Successfully refreshed HubSpot token');
+      return result;
+    } catch (error) {
+      this.logger.error('Error in refreshToken:', error);
+      throw error;
+    }
+  }
+
+  // Add jitter helper function
+  private getJitter(base: number): number {
+    // Add random jitter of ±25% to the base delay
+    const jitterFactor = 0.75 + Math.random() * 0.5; // Random number between 0.75 and 1.25
+    return Math.floor(base * jitterFactor);
+  }
+
   private async rateLimitedRequest<T>(fn: () => Promise<T>, retryCount = 0): Promise<T> {
     try {
+      // Add initial delay with jitter before the request
+      const initialDelay = this.getJitter(this.rateLimitDelay);
+      await new Promise(resolve => setTimeout(resolve, initialDelay));
+
       const result = await fn();
-      // Add delay between requests
-      await new Promise(resolve => setTimeout(resolve, this.rateLimitDelay));
       return result;
     } catch (error) {
       const customError = error as CustomError;
-      // Check for rate limit errors
+      
       if (customError.status === 429 && retryCount < this.maxRetries) {
-        // Calculate exponential backoff delay
+        // Calculate exponential backoff delay with jitter
         const retryAfter = customError.headers?.get('Retry-After');
-        const backoffDelay = retryAfter 
-          ? parseInt(retryAfter, 10) * 1000 
-          : Math.min(this.baseRetryDelay * Math.pow(2, retryCount), 30000); // Max 30 seconds
+        let backoffDelay: number;
+        
+        if (retryAfter) {
+          // Use the server's retry-after value with jitter
+          backoffDelay = this.getJitter(parseInt(retryAfter, 10) * 1000);
+        } else {
+          // Calculate exponential backoff with jitter
+          const baseDelay = Math.min(
+            this.baseRetryDelay * Math.pow(2, retryCount),
+            this.maxRetryDelay
+          );
+          backoffDelay = this.getJitter(baseDelay);
+        }
 
         this.logger.info(`Rate limited. Retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
-        
         await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        
         return this.rateLimitedRequest(fn, retryCount + 1);
       }
       
-      // If we've exhausted retries or it's not a rate limit error
       if (customError.status === 429) {
         this.logger.error('Rate limit exceeded and max retries reached');
         throw new Error('HubSpot rate limit exceeded. Please try again later.');
@@ -206,25 +272,25 @@ export class HubspotClient implements HubspotClientInterface {
     return response.json();
   }
 
+  /**
+   * @deprecated Use searchRecords('contacts', request) instead
+   */
   async searchContacts(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/contacts/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('contacts', request);
   }
 
+  /**
+   * @deprecated Use searchRecords('companies', request) instead
+   */
   async searchCompanies(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/companies/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('companies', request);
   }
 
+  /**
+   * @deprecated Use searchRecords('deals', request) instead
+   */
   async searchDeals(request: SearchRequest): Promise<SearchResponse<HubspotRecord>> {
-    return this.makeJsonRequest('/objects/deals/search', {
-      method: 'POST',
-      body: JSON.stringify(request)
-    });
+    return this.searchRecords('deals', request);
   }
 
   async searchRecords(objectType: string, query: any): Promise<SearchResponse<HubspotRecord>> {
@@ -520,8 +586,83 @@ export class HubspotClient implements HubspotClientInterface {
   }
 
   async getRecord(objectType: string, recordId: string, properties: string[]): Promise<any> {
-    const endpoint = `/crm/v3/objects/${objectType}/${recordId}?properties=${properties.join(',')}`;
-    const response = await this.makeRequest(endpoint);
-    return response.json();
+    try {
+      const endpoint = `${this.crmBaseUrl}/objects/${objectType}/${recordId}?properties=${properties.join(',')}`;
+      return await this.makeJsonRequest<any>(endpoint);
+    } catch (error) {
+      this.logger.error(`Error getting ${objectType} record ${recordId}:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all associations for a specific object ID using Associations V3 API
+   * @param objectId The ID of the object to get associations for
+   * @param objectType The type of object (deal, contact, company)
+   * @returns Object containing associations grouped by type
+   */
+  async getAssociations(objectId: string, objectType: string): Promise<any> {
+    this.logger.info(`Fetching associations for ${objectType} ${objectId}`);
+    
+    try {
+      // For deals, we're typically interested in contacts and companies
+      const toObjectTypes = ['contacts', 'companies'];
+      const results: Record<string, any[]> = {};
+      
+      // Initialize empty results for each type
+      for (const toType of toObjectTypes) {
+        results[toType] = [];
+      }
+      
+      // Use the batch read endpoint for each type of association
+      for (const toObjectType of toObjectTypes) {
+        try {
+          // The correct endpoint format for Associations V3 API
+          // Singular for fromObjectType, plural for toObjectType
+          const endpoint = `${this.crmBaseUrl}/associations/${objectType}/${toObjectType}/batch/read`;
+          
+          // Make the request with the input array of IDs
+          const response = await this.makeJsonRequest(endpoint, {
+            method: 'POST',
+            body: JSON.stringify({
+              inputs: [{ id: objectId }]
+            })
+          });
+          
+          // Process the response
+          if (response && Array.isArray(response.results) && response.results.length > 0) {
+            const associationResult = response.results[0];
+            
+            // If we have associations, add them to the results
+            if (associationResult && Array.isArray(associationResult.to)) {
+              const associatedIds = associationResult.to.map((assoc: any) => ({
+                id: assoc.id,
+                type: assoc.type || 'default'
+              }));
+              
+              results[toObjectType] = associatedIds;
+            }
+          }
+        } catch (typeError) {
+          this.logger.error(`Error fetching ${toObjectType} associations for ${objectType} ${objectId}:`, typeError);
+          // Continue with other types if one fails
+        }
+      }
+      
+      // Log the results
+      const totalAssociations = Object.values(results).reduce(
+        (sum, associations) => sum + associations.length, 0
+      );
+      
+      this.logger.info(`Found ${totalAssociations} total associations for ${objectType} ${objectId}`, {
+        contactsCount: results.contacts?.length || 0,
+        companiesCount: results.companies?.length || 0
+      });
+      
+      return { results };
+    } catch (error) {
+      this.logger.error(`Error fetching associations for ${objectType} ${objectId}:`, error);
+      return { results: {} };
+    }
   }
 } 

@@ -70,7 +70,7 @@ serve(async (req) => {
       let after: string | null = null;
 
       while (hasMore) {
-        const response = await hubspotClient.searchContacts({
+        const response = await hubspotClient.searchRecords('contacts', {
           filterGroups: [{
             filters: [{
               propertyName: 'lastmodifieddate',
@@ -97,7 +97,7 @@ serve(async (req) => {
       after = null;
 
       while (hasMore) {
-        const response = await hubspotClient.searchCompanies({
+        const response = await hubspotClient.searchRecords('companies', {
           filterGroups: [{
             filters: [{
               propertyName: 'lastmodifieddate',
@@ -124,7 +124,7 @@ serve(async (req) => {
       after = null;
 
       while (hasMore) {
-        const response = await hubspotClient.searchDeals({
+        const response = await hubspotClient.searchRecords('deals', {
           filterGroups: [{
             filters: [{
               propertyName: 'lastmodifieddate',
