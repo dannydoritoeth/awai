@@ -179,8 +179,9 @@ async function getDealsForTraining(
   refreshToken: string,
   documentPackager: DocumentPackager,
   openai: any,
-  pineconeClient: PineconeClient
-): Promise<{ total: number, processed: number }> {
+  pineconeClient: PineconeClient,
+  supabase: any // Add supabase client parameter
+): Promise<{ total: number, processed: number, dealAmounts: number[] }> {
   try {
     const dealStage = type === 'ideal' ? 'closedwon' : 'closedlost';
     
@@ -204,6 +205,8 @@ async function getDealsForTraining(
     let totalDeals = 0;
     let processedDeals = 0;
     const namespace = `hubspot-${portalId}`;
+    // Track all deal amounts for statistics
+    const dealAmounts: number[] = [];
     
     logger.info(`Fetching ${dealStage} deals using namespace ${namespace}`);
     
@@ -211,6 +214,10 @@ async function getDealsForTraining(
     let after: string | null = null;
 
     logger.info(`Fetching ${type} deals using namespace ${namespace}`);
+
+    // Incremental statistics tracking
+    let batchCount = 0;
+    const batchSize = 5; // Update stats every 5 batches processed
 
     // Pagination loop to fetch deals in batches
     while (hasMore) {
@@ -251,13 +258,51 @@ async function getDealsForTraining(
         () => hubspotClient.searchRecords('deals', searchCriteria)
       );
       
-      logger.info(`Found ${dealsResponse.total || 0} total ${type} deals, fetched ${dealsResponse.results?.length || 0} in this batch`);
+      // Fix for linter error - ensure dealsResponse is properly handled
+      if (!dealsResponse || typeof dealsResponse !== 'object') {
+        logger.error(`Invalid response from deals search: ${JSON.stringify(dealsResponse)}`);
+        continue;
+      }
       
-      if (dealsResponse.results?.length) {
-        totalDeals += dealsResponse.results.length;
+      // Type assertion to work with the response safely
+      const typedResponse = dealsResponse as { 
+        total?: number; 
+        results?: any[]; 
+        paging?: { next?: { after?: string } } 
+      };
+      
+      logger.info(`Found ${typedResponse.total || 0} total ${type} deals, fetched ${typedResponse.results?.length || 0} in this batch`);
+      
+      if (typedResponse.results?.length) {
+        totalDeals += typedResponse.results.length;
         
         // Get the batch of deals to process
-        let dealBatch = dealsResponse.results;
+        let dealBatch = typedResponse.results;
+        
+        // Explicit log of batch retrieval
+        logger.info(`BATCH TRACKING: Retrieved batch of ${dealBatch.length} deals for processing`);
+        
+        // Collect deal amounts for statistics before filtering
+        logger.info(`BATCH TRACKING: Processing ${dealBatch.length} deals for amount statistics`);
+        let amountsCollected = 0;
+        let amountsBefore = dealAmounts.length;
+        
+        dealBatch.forEach(deal => {
+          if (deal.properties?.amount) {
+            const amount = parseFloat(deal.properties.amount);
+            if (!isNaN(amount) && amount > 0) {
+              dealAmounts.push(amount);
+              amountsCollected++;
+              logger.info(`AMOUNTS: Added deal amount ${amount} for deal ${deal.id} (${amountsCollected} collected so far)`);
+            } else {
+              logger.info(`AMOUNTS: Deal ${deal.id} has invalid amount: ${deal.properties.amount}`);
+            }
+          } else {
+            logger.info(`AMOUNTS: Deal ${deal.id} has no amount property`);
+          }
+        });
+        
+        logger.info(`AMOUNTS SUMMARY: Total amount array length: ${dealAmounts.length}, Added this batch: ${amountsCollected}, Previous total: ${amountsBefore}`);
         
         // Get the deal IDs from this batch
         const batchDealIds = dealBatch.map(deal => deal.id.toString());
@@ -272,7 +317,7 @@ async function getDealsForTraining(
             
             // Filter to only deals that need updating using our enhanced function
             dealBatch = filterVectorsToUpdate(dealBatch, existingVectors);
-            logger.info(`After filtering: ${dealBatch.length} out of ${dealsResponse.results.length} deals need updating`);
+            logger.info(`After filtering: ${dealBatch.length} out of ${typedResponse.results.length} deals need updating`);
           } else {
             logger.info(`No existing vectors found in namespace ${namespace}, will process all deals`);
           }
@@ -351,20 +396,185 @@ async function getDealsForTraining(
         }
 
         logger.info(`Completed batch of ${dealBatch.length} deals (total: ${processedDeals}/${totalDeals})`);
+        
+        // Increment batch counter
+        batchCount++;
+
+        logger.info(`dealAmounts length: ${dealAmounts.length}`);
+        
+        // Update the statistics after each batch of deals rather than waiting
+        if (dealAmounts.length > 0) {
+          try {
+            const currentStats = calculateDealStatistics(dealAmounts);
+            logger.info(`BATCH TRACKING: Updating incremental statistics for ${type} deals after batch ${batchCount}:`, currentStats);
+            
+            // Prepare update data for this deal type
+            const statUpdateData: any = {
+              last_training_date: new Date().toISOString()
+            };
+            
+            // Add the right fields based on deal type
+            if (type === 'ideal') {
+              statUpdateData.ideal_low = currentStats.low;
+              statUpdateData.ideal_high = currentStats.high;
+              statUpdateData.ideal_median = currentStats.median;
+              statUpdateData.ideal_count = currentStats.count;
+              statUpdateData.ideal_last_trained = new Date().toISOString();
+              statUpdateData.current_ideal_deals = processedDeals;
+            } else {
+              statUpdateData.nonideal_low = currentStats.low;
+              statUpdateData.nonideal_high = currentStats.high;
+              statUpdateData.nonideal_median = currentStats.median;
+              statUpdateData.nonideal_count = currentStats.count;
+              statUpdateData.nonideal_last_trained = new Date().toISOString();
+              statUpdateData.current_less_ideal_deals = processedDeals;
+            }
+            
+            // Log detailed information about the update
+            logger.info(`INCREMENTAL UPDATE: Starting database update for ${type} deals (${batchCount} batches)`);
+            logger.info(`INCREMENTAL UPDATE: Portal ID: ${portalId}`);
+            logger.info(`INCREMENTAL UPDATE: Update data:`, JSON.stringify(statUpdateData, null, 2));
+            
+            // Make sure supabase is valid
+            if (!supabase) {
+              logger.error(`INCREMENTAL UPDATE: Supabase client is null or undefined. Cannot update database.`);
+              throw new Error('Supabase client is not available for incremental update');
+            }
+            
+            // Update the database with detailed logging
+            try {
+              logger.info(`INCREMENTAL UPDATE: Executing query to table 'hubspot_accounts' for portal ${portalId}`);
+              const updateResult = await supabase
+                .from('hubspot_accounts')
+                .update(statUpdateData)
+                .eq('portal_id', portalId);
+              
+              logger.info(`INCREMENTAL UPDATE: Query completed. Response:`, JSON.stringify(updateResult, null, 2));
+              
+              if (updateResult.error) {
+                logger.error(`INCREMENTAL UPDATE: Error in database update for ${type} deals:`, updateResult.error);
+                throw updateResult.error;
+              } else {
+                logger.info(`INCREMENTAL UPDATE: Successfully updated ${type} statistics incrementally`);
+                
+                // Log the actual values that should have been updated
+                logger.info(`INCREMENTAL UPDATE: Updated ${type} stats:`, {
+                  ...(type === 'ideal' ? {
+                    ideal_low: currentStats.low,
+                    ideal_high: currentStats.high,
+                    ideal_median: currentStats.median,
+                    ideal_count: currentStats.count
+                  } : {
+                    nonideal_low: currentStats.low,
+                    nonideal_high: currentStats.high,
+                    nonideal_median: currentStats.median,
+                    nonideal_count: currentStats.count
+                  })
+                });
+              }
+            } catch (dbError) {
+              logger.error(`INCREMENTAL UPDATE: Exception during database update:`, dbError);
+              throw dbError;
+            }
+          } catch (statsError) {
+            logger.error(`INCREMENTAL UPDATE: Error calculating or updating incremental statistics:`, statsError);
+          }
+        } else {
+          logger.info(`BATCH TRACKING: Skipping statistics update because dealAmounts is empty (length: ${dealAmounts.length})`);
+        }
+        
         await sleep(5000); // Rate limiting between batches
       }
 
       // Check if more pages are available
-      hasMore = dealsResponse.paging?.next?.after !== undefined;
-      after = dealsResponse.paging?.next?.after || null;
+      hasMore = typedResponse.paging?.next?.after !== undefined;
+      after = typedResponse.paging?.next?.after || null;
 
       if (hasMore) {
         logger.info(`More deals available, continuing with after=${after}`);
       }
     }
 
+    // One final statistics update at the end if needed
+    if (dealAmounts.length > 0 && batchCount % batchSize !== 0) {
+      try {
+        const finalStats = calculateDealStatistics(dealAmounts);
+        logger.info(`Updating final statistics for ${type} deals:`, finalStats);
+        
+        // Prepare update data for this deal type
+        const finalUpdateData: any = {};
+        
+        // Add the right fields based on deal type
+        if (type === 'ideal') {
+          finalUpdateData.ideal_low = finalStats.low;
+          finalUpdateData.ideal_high = finalStats.high;
+          finalUpdateData.ideal_median = finalStats.median;
+          finalUpdateData.ideal_count = finalStats.count;
+          finalUpdateData.ideal_last_trained = new Date().toISOString();
+          finalUpdateData.current_ideal_deals = processedDeals;
+        } else {
+          finalUpdateData.nonideal_low = finalStats.low;
+          finalUpdateData.nonideal_high = finalStats.high;
+          finalUpdateData.nonideal_median = finalStats.median;
+          finalUpdateData.nonideal_count = finalStats.count;
+          finalUpdateData.nonideal_last_trained = new Date().toISOString();
+          finalUpdateData.current_less_ideal_deals = processedDeals;
+        }
+        
+        // Log detailed information about the update
+        logger.info(`FINAL UPDATE: Starting database update for ${type} deals`);
+        logger.info(`FINAL UPDATE: Portal ID: ${portalId}`);
+        logger.info(`FINAL UPDATE: Update data:`, JSON.stringify(finalUpdateData, null, 2));
+        
+        // Make sure supabase is valid
+        if (!supabase) {
+          logger.error(`FINAL UPDATE: Supabase client is null or undefined. Cannot update database.`);
+          throw new Error('Supabase client is not available for final update');
+        }
+        
+        // Update the database with detailed logging
+        try {
+          logger.info(`FINAL UPDATE: Executing query to table 'hubspot_accounts' for portal ${portalId}`);
+          const updateResult = await supabase
+            .from('hubspot_accounts')
+            .update(finalUpdateData)
+            .eq('portal_id', portalId);
+          
+          logger.info(`FINAL UPDATE: Query completed. Response:`, JSON.stringify(updateResult, null, 2));
+          
+          if (updateResult.error) {
+            logger.error(`FINAL UPDATE: Error in database update for ${type} deals:`, updateResult.error);
+            throw updateResult.error;
+          } else {
+            logger.info(`FINAL UPDATE: Successfully updated ${type} statistics with final values`);
+            
+            // Log the actual values that should have been updated
+            logger.info(`FINAL UPDATE: Updated ${type} stats:`, {
+              ...(type === 'ideal' ? {
+                ideal_low: finalStats.low,
+                ideal_high: finalStats.high,
+                ideal_median: finalStats.median,
+                ideal_count: finalStats.count
+              } : {
+                nonideal_low: finalStats.low,
+                nonideal_high: finalStats.high,
+                nonideal_median: finalStats.median,
+                nonideal_count: finalStats.count
+              })
+            });
+          }
+        } catch (dbError) {
+          logger.error(`FINAL UPDATE: Exception during database update:`, dbError);
+          throw dbError;
+        }
+      } catch (statsError) {
+        logger.error(`FINAL UPDATE: Error calculating or updating final statistics:`, statsError);
+      }
+    }
+
     logger.info(`Completed processing ${type} deals: ${processedDeals}/${totalDeals}`);
-    return { total: totalDeals, processed: processedDeals };
+    logger.info(`Collected ${dealAmounts.length} deal amounts for statistics`);
+    return { total: totalDeals, processed: processedDeals, dealAmounts };
   } catch (error) {
     logger.error(`Error fetching and processing ${type} deals:`, error);
     throw error;
@@ -806,6 +1016,45 @@ async function getExistingVectors(
 }
 
 /**
+ * Calculates statistics for deal amounts
+ */
+function calculateDealStatistics(dealAmounts: number[]): {
+  low: number;
+  high: number;
+  median: number;
+  count: number;
+} {
+  if (!dealAmounts.length) {
+    return { low: 0, high: 0, median: 0, count: 0 };
+  }
+  
+  // Sort the deal amounts for calculating median
+  const sortedAmounts = [...dealAmounts].sort((a, b) => a - b);
+  
+  const low = sortedAmounts[0];
+  const high = sortedAmounts[sortedAmounts.length - 1];
+  
+  // Calculate median
+  let median: number;
+  const mid = Math.floor(sortedAmounts.length / 2);
+  
+  if (sortedAmounts.length % 2 === 0) {
+    // Even number of amounts
+    median = (sortedAmounts[mid - 1] + sortedAmounts[mid]) / 2;
+  } else {
+    // Odd number of amounts
+    median = sortedAmounts[mid];
+  }
+  
+  return {
+    low,
+    high,
+    median,
+    count: dealAmounts.length
+  };
+}
+
+/**
  * Main handler for the edge function
  */
 serve(async (req) => {
@@ -916,6 +1165,42 @@ serve(async (req) => {
         const documentPackager = new DocumentPackager(hubspotClient);
         logger.info(`Services initialized for portal ${portalId}`);
         
+        // Ensure supabase client is available and log it
+        if (!supabase) {
+          logger.error(`Supabase client is null or undefined. This will cause database update failures.`);
+        } else {
+          logger.info(`Supabase client is available for database updates.`);
+          
+          // Test the database connection with a simple query
+          try {
+            logger.info(`Testing database connection for portal ${portalId}`);
+            const { data: testData, error: testError } = await supabase
+              .from('hubspot_accounts')
+              .select('id, portal_id, ideal_low, ideal_high, ideal_median, nonideal_low, nonideal_high, nonideal_median')
+              .eq('portal_id', portalId)
+              .limit(1);
+            
+            if (testError) {
+              logger.error(`Database test query failed: ${testError.message}`, testError);
+            } else if (testData && testData.length > 0) {
+              logger.info(`Database test query successful. Found record with ID ${testData[0].id}`);
+              // Log the current values of the statistics fields to verify schema
+              logger.info(`Current statistics values in database:`, {
+                ideal_low: testData[0].ideal_low,
+                ideal_high: testData[0].ideal_high,
+                ideal_median: testData[0].ideal_median,
+                nonideal_low: testData[0].nonideal_low,
+                nonideal_high: testData[0].nonideal_high,
+                nonideal_median: testData[0].nonideal_median
+              });
+            } else {
+              logger.warn(`Database test query returned no results for portal ${portalId}`);
+            }
+          } catch (dbTestError) {
+            logger.error(`Exception during database test: ${dbTestError.message}`);
+          }
+        }
+        
         // Validate token
         logger.info(`Validating token for portal ${portalId}`);
         await handleApiCall(hubspotClient, portalId, decryptedRefreshToken, () => 
@@ -925,8 +1210,16 @@ serve(async (req) => {
         // Track portal results
         const portalResult = {
           portalId,
-          ideal: { total: 0, processed: 0 },
-          nonideal: { total: 0, processed: 0 }
+          ideal: { 
+            total: 0, 
+            processed: 0,
+            stats: null as { low: number; high: number; median: number; count: number } | null
+          },
+          nonideal: { 
+            total: 0, 
+            processed: 0,
+            stats: null as { low: number; high: number; median: number; count: number } | null
+          }
         };
         
         // Process ideal deals if no deal_type is specified or deal_type is 'ideal'
@@ -934,10 +1227,17 @@ serve(async (req) => {
           try {
             logger.info(`Starting ideal deals processing for portal ${portalId}`);
             
-            const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
+            const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient, supabase);
             
             portalResult.ideal.total = idealDeals.total;
             portalResult.ideal.processed = idealDeals.processed;
+            
+            // Calculate statistics for ideal deals
+            const idealStats = calculateDealStatistics(idealDeals.dealAmounts);
+            logger.info(`Ideal deal statistics - Count: ${idealStats.count}, Low: ${idealStats.low}, High: ${idealStats.high}, Median: ${idealStats.median}`);
+            
+            // Store the statistics for later database update
+            portalResult.ideal.stats = idealStats;
             
             logger.info(`Processed ${idealDeals.processed} ideal deals for portal ${portalId}`);
             
@@ -951,10 +1251,17 @@ serve(async (req) => {
           try {
             logger.info(`Starting non-ideal deals processing for portal ${portalId}`);
             
-            const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
+            const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient, supabase);
             
             portalResult.nonideal.total = nonIdealDeals.total;
             portalResult.nonideal.processed = nonIdealDeals.processed;
+            
+            // Calculate statistics for non-ideal deals
+            const nonIdealStats = calculateDealStatistics(nonIdealDeals.dealAmounts);
+            logger.info(`Non-ideal deal statistics - Count: ${nonIdealStats.count}, Low: ${nonIdealStats.low}, High: ${nonIdealStats.high}, Median: ${nonIdealStats.median}`);
+            
+            // Store the statistics for later database update
+            portalResult.nonideal.stats = nonIdealStats;
             
             logger.info(`Processed ${nonIdealDeals.processed} non-ideal deals for portal ${portalId}`);
           } catch (nonIdealDealsError) {
@@ -967,18 +1274,90 @@ serve(async (req) => {
           last_training_date: new Date().toISOString()
         };
 
-        if (!deal_type || deal_type === 'ideal') {
+        // Check and log stats availability
+        logger.info(`Checking ideal stats for portal ${portalId}`);
+        logger.info(`deal_type: ${deal_type || 'both'}, has ideal stats: ${portalResult.ideal.stats !== null}`);
+        if (portalResult.ideal.stats) {
+          logger.info(`Ideal stats details - Count: ${portalResult.ideal.stats.count}, Low: ${portalResult.ideal.stats.low}, High: ${portalResult.ideal.stats.high}, Median: ${portalResult.ideal.stats.median}`);
+        }
+
+        // Update ideal deal metrics if processed
+        if ((!deal_type || deal_type === 'ideal') && portalResult.ideal.stats) {
+          logger.info(`Adding ideal stats to updateData`);
           updateData.current_ideal_deals = portalResult.ideal.processed;
+          updateData.ideal_low = portalResult.ideal.stats.low;
+          updateData.ideal_high = portalResult.ideal.stats.high;
+          updateData.ideal_median = portalResult.ideal.stats.median;
+          updateData.ideal_count = portalResult.ideal.stats.count;
+          updateData.ideal_last_trained = new Date().toISOString();
+        } else {
+          logger.info(`Skipping ideal stats update: condition not met`);
+          if (deal_type && deal_type !== 'ideal') {
+            logger.info(`Reason: deal_type is ${deal_type}, not 'ideal'`);
+          }
+          if (!portalResult.ideal.stats) {
+            logger.info(`Reason: portalResult.ideal.stats is null`);
+          }
         }
 
-        if (!deal_type || deal_type === 'nonideal') {
+        // Check and log stats availability for non-ideal
+        logger.info(`Checking non-ideal stats for portal ${portalId}`);
+        logger.info(`deal_type: ${deal_type || 'both'}, has non-ideal stats: ${portalResult.nonideal.stats !== null}`);
+        if (portalResult.nonideal.stats) {
+          logger.info(`Non-ideal stats details - Count: ${portalResult.nonideal.stats.count}, Low: ${portalResult.nonideal.stats.low}, High: ${portalResult.nonideal.stats.high}, Median: ${portalResult.nonideal.stats.median}`);
+        }
+
+        // Update non-ideal deal metrics if processed
+        if ((!deal_type || deal_type === 'nonideal') && portalResult.nonideal.stats) {
+          logger.info(`Adding non-ideal stats to updateData`);
           updateData.current_less_ideal_deals = portalResult.nonideal.processed;
+          updateData.nonideal_low = portalResult.nonideal.stats.low;
+          updateData.nonideal_high = portalResult.nonideal.stats.high;
+          updateData.nonideal_median = portalResult.nonideal.stats.median;
+          updateData.nonideal_count = portalResult.nonideal.stats.count;
+          updateData.nonideal_last_trained = new Date().toISOString();
+        } else {
+          logger.info(`Skipping non-ideal stats update: condition not met`);
+          if (deal_type && deal_type !== 'nonideal') {
+            logger.info(`Reason: deal_type is ${deal_type}, not 'nonideal'`);
+          }
+          if (!portalResult.nonideal.stats) {
+            logger.info(`Reason: portalResult.nonideal.stats is null`);
+          }
         }
 
-        await supabase
-          .from('hubspot_accounts')
-          .update(updateData)
-          .eq('portal_id', portalId);
+        // Log the update data for debugging
+        logger.info(`Attempting to update database for portal ${portalId} with data:`, JSON.stringify(updateData, null, 2));
+        
+        // Additional debug logging
+        logger.info('Update data keys:', Object.keys(updateData));
+        logger.info('Ideal data fields:', {
+          ideal_low: updateData.ideal_low,
+          ideal_high: updateData.ideal_high,
+          ideal_median: updateData.ideal_median,
+          ideal_count: updateData.ideal_count
+        });
+        logger.info('Nonideal data fields:', {
+          nonideal_low: updateData.nonideal_low,
+          nonideal_high: updateData.nonideal_high,
+          nonideal_median: updateData.nonideal_median,
+          nonideal_count: updateData.nonideal_count
+        });
+
+        try {
+          const { data: updateResult, error: updateError } = await supabase
+            .from('hubspot_accounts')
+            .update(updateData)
+            .eq('portal_id', portalId);
+          
+          if (updateError) {
+            logger.error(`Database update error for portal ${portalId}:`, updateError);
+          } else {
+            logger.info(`Successfully updated database for portal ${portalId}`);
+          }
+        } catch (dbError) {
+          logger.error(`Exception during database update for portal ${portalId}:`, dbError);
+        }
         
         // Track success
         results.portals.push(portalResult);
@@ -1023,4 +1402,4 @@ serve(async (req) => {
       }
     );
   }
-}); 
+});
