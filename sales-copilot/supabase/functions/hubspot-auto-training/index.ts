@@ -929,37 +929,55 @@ serve(async (req) => {
           nonideal: { total: 0, processed: 0 }
         };
         
-        // Process ideal deals
-        try {
-          logger.info(`Starting ideal deals processing for portal ${portalId}`);
-          
-          const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
-          
-          portalResult.ideal.total = idealDeals.total;
-          portalResult.ideal.processed = idealDeals.processed;
-          
-          logger.info(`Processed ${idealDeals.processed} ideal deals for portal ${portalId}`);
-          
-        } catch (idealDealsError) {
-          logger.error(`Error processing ideal deals for portal ${portalId}: ${idealDealsError.message}`);
+        // Process ideal deals if no deal_type is specified or deal_type is 'ideal'
+        if (!deal_type || deal_type === 'ideal') {
+          try {
+            logger.info(`Starting ideal deals processing for portal ${portalId}`);
+            
+            const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
+            
+            portalResult.ideal.total = idealDeals.total;
+            portalResult.ideal.processed = idealDeals.processed;
+            
+            logger.info(`Processed ${idealDeals.processed} ideal deals for portal ${portalId}`);
+            
+          } catch (idealDealsError) {
+            logger.error(`Error processing ideal deals for portal ${portalId}: ${idealDealsError.message}`);
+          }
         }
         
-        // Process non-ideal deals
-        logger.info(`Starting non-ideal deals processing for portal ${portalId}`);
-        const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
-        portalResult.nonideal.total = nonIdealDeals.total;
-        portalResult.nonideal.processed = nonIdealDeals.processed;
+        // Process non-ideal deals if no deal_type is specified or deal_type is 'nonideal'
+        if (!deal_type || deal_type === 'nonideal') {
+          try {
+            logger.info(`Starting non-ideal deals processing for portal ${portalId}`);
+            
+            const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient);
+            
+            portalResult.nonideal.total = nonIdealDeals.total;
+            portalResult.nonideal.processed = nonIdealDeals.processed;
+            
+            logger.info(`Processed ${nonIdealDeals.processed} non-ideal deals for portal ${portalId}`);
+          } catch (nonIdealDealsError) {
+            logger.error(`Error processing non-ideal deals for portal ${portalId}: ${nonIdealDealsError.message}`);
+          }
+        }
         
-        logger.info(`Processed ${nonIdealDeals.processed} non-ideal deals for portal ${portalId}`);
-        
-        // Update database with metrics
+        // Update database with metrics - only update the counts for the deal types that were processed
+        const updateData: any = {
+          last_training_date: new Date().toISOString()
+        };
+
+        if (!deal_type || deal_type === 'ideal') {
+          updateData.current_ideal_deals = portalResult.ideal.processed;
+        }
+
+        if (!deal_type || deal_type === 'nonideal') {
+          updateData.current_less_ideal_deals = portalResult.nonideal.processed;
+        }
+
         await supabase
           .from('hubspot_accounts')
-          .update({
-            last_training_date: new Date().toISOString(),
-            current_ideal_deals: portalResult.ideal.processed,
-            current_less_ideal_deals: portalResult.nonideal.processed
-          })
+          .update(updateData)
           .eq('portal_id', portalId);
         
         // Track success
@@ -984,6 +1002,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: `Processed ${results.processed} HubSpot accounts`,
+        deal_type: deal_type || 'both',
         results
       }),
       {
