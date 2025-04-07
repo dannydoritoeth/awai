@@ -121,6 +121,54 @@ async function handleApiCall<T>(
   }
 }
 
+// Enhance filterVectorsToUpdate to check for existing vectors
+function filterVectorsToUpdate(
+  dealsToProcess: any[], 
+  existingVectors: any[]
+): any[] {
+  try {
+    // Create a map of existing vectors by ID for faster lookup
+    const existingVectorsMap = new Map<string, any>();
+    
+    if (Array.isArray(existingVectors) && existingVectors.length > 0) {
+      existingVectors.forEach(vector => {
+        if (vector && vector.id) {
+          existingVectorsMap.set(vector.id.toString(), vector);
+          logger.info(`Adding vector ${vector.id} to existing vectors map`);
+        }
+      });
+      
+      logger.info(`Created existing vectors map with ${existingVectorsMap.size} entries`);
+    } else {
+      logger.info('No existing vectors found, will process all deals');
+      return dealsToProcess;
+    }
+    
+    // Filter deals to only include those that need updating
+    const dealsToUpdate = dealsToProcess.filter(deal => {
+      const dealId = deal.id.toString();
+      
+      // Check if vector exists in existing vectors
+      const existingVector = existingVectorsMap.get(dealId);
+      
+      if (!existingVector) {
+        logger.info(`Deal ${dealId} not found in existing vectors, will process`);
+        return true;
+      }
+      
+      logger.info(`Deal ${dealId} already exists in Pinecone, skipping update`);
+      return false;
+    });
+    
+    logger.info(`Filtered deals to update: ${dealsToUpdate.length} out of ${dealsToProcess.length}`);
+    return dealsToUpdate;
+  } catch (error) {
+    logger.error(`Error filtering vectors to update: ${error.message}`);
+    // If filtering fails, return all deals to be safe
+    return dealsToProcess;
+  }
+}
+
 /**
  * Fetches deals for training from HubSpot
  */
@@ -134,15 +182,33 @@ async function getDealsForTraining(
   pineconeClient: PineconeClient
 ): Promise<{ total: number, processed: number }> {
   try {
+    const dealStage = type === 'ideal' ? 'closedwon' : 'closedlost';
+    
     // Define time range - last 90 days
     const ninety_days_ago = new Date();
     ninety_days_ago.setDate(ninety_days_ago.getDate() - 90);
     
-    let hasMore = true;
-    let after: string | null = null;
+    // Define propertyNames to fetch
+    const propertyNames = [
+      'dealname',
+      'createdate',
+      'closedate',
+      'amount',
+      'dealstage',
+      'hs_lastmodifieddate',
+      'hs_object_id',
+      'description',
+      'notes_last_updated'
+    ];
+    
     let totalDeals = 0;
     let processedDeals = 0;
     const namespace = `hubspot-${portalId}`;
+    
+    logger.info(`Fetching ${dealStage} deals using namespace ${namespace}`);
+    
+    let hasMore = true;
+    let after: string | null = null;
 
     logger.info(`Fetching ${type} deals using namespace ${namespace}`);
 
@@ -161,7 +227,7 @@ async function getDealsForTraining(
             {
               propertyName: 'dealstage',
               operator: 'EQ',
-              value: type === 'ideal' ? 'closedwon' : 'closedlost'
+              value: dealStage
             }
           ]
         }],
@@ -171,17 +237,7 @@ async function getDealsForTraining(
             direction: 'DESCENDING'
           }
         ],
-        properties: [
-          'dealname',
-          'amount',
-          'closedate',
-          'createdate',
-          'dealstage',
-          'pipeline',
-          'hs_lastmodifieddate',
-          'hs_date_entered_closedwon',
-          'hs_date_entered_closedlost'
-        ],
+        properties: propertyNames,
         limit: 10, // Fetch 10 at a time (reduced from 25 for more manageable batches)
         associations: ['contacts', 'companies'],
         ...(after ? { after } : {})
@@ -200,8 +256,38 @@ async function getDealsForTraining(
       if (dealsResponse.results?.length) {
         totalDeals += dealsResponse.results.length;
         
-        // Process each deal in this batch individually
-        const dealBatch = dealsResponse.results;
+        // Get the batch of deals to process
+        let dealBatch = dealsResponse.results;
+        
+        // Get the deal IDs from this batch
+        const batchDealIds = dealBatch.map(deal => deal.id.toString());
+        logger.info(`Fetched ${batchDealIds.length} deals in this batch for ${namespace}, checking which ones need updating`);
+        
+        // Fetch existing vectors for just these deals using the correct namespace
+        try {
+          const existingVectors = await getExistingVectors(pineconeClient, batchDealIds, namespace);
+          
+          if (existingVectors.length > 0) {
+            logger.info(`Found ${existingVectors.length} existing vectors in namespace ${namespace}, filtering deals`);
+            
+            // Filter to only deals that need updating using our enhanced function
+            dealBatch = filterVectorsToUpdate(dealBatch, existingVectors);
+            logger.info(`After filtering: ${dealBatch.length} out of ${dealsResponse.results.length} deals need updating`);
+          } else {
+            logger.info(`No existing vectors found in namespace ${namespace}, will process all deals`);
+          }
+        } catch (filterError) {
+          logger.error(`Error filtering vectors to update for ${namespace}: ${filterError.message}`);
+          // Continue with all deals if filtering fails
+        }
+        
+        // Skip further processing if no deals need updating
+        if (dealBatch.length === 0) {
+          logger.info(`All deals in this batch already exist in Pinecone, skipping processing`);
+          continue;
+        }
+        
+        // Process each deal in this filtered batch individually
         for (const deal of dealBatch) {
           try {
             // Defensive checks
@@ -300,7 +386,7 @@ async function processSingleDeal(
 ): Promise<void> {
   const processingStart = Date.now();
   
-  logger.info(`Processing deal ${deal.id} (${classification})`);
+  logger.info(`Processing deal ${deal.id} (${classification}) in namespace ${namespace}`);
   
   try {
     // Get all contacts and companies associated with this deal
@@ -652,6 +738,70 @@ async function getAssociatedRecords(hubspotClient: HubspotClient, deal: any) {
     logger.error(`Error fetching associated records: ${error.message}`);
     // Return whatever we managed to retrieve
     return { contacts, companies };
+  }
+}
+
+/**
+ * Get existing vectors for a list of deal IDs
+ */
+async function getExistingVectors(
+  pineconeClient: PineconeClient,
+  dealIds: string[],
+  namespace: string
+): Promise<any[]> {
+  try {
+    logger.info(`Fetching existing vectors for ${dealIds.length} deals from namespace ${namespace}`);
+    logger.info(`Deal IDs to check: ${dealIds.join(', ')}`);
+    
+    if (!dealIds.length) {
+      logger.info('No deal IDs provided, returning empty array');
+      return [];
+    }
+    
+    // Get index host and API key from environment
+    const pineconeIndexHost = Deno.env.get('PINECONE_INDEX_HOST');
+    const pineconeApiKey = Deno.env.get('PINECONE_API_KEY');
+    
+    if (!pineconeIndexHost || !pineconeApiKey) {
+      logger.error('Missing PINECONE_INDEX_HOST or PINECONE_API_KEY environment variables');
+      return [];
+    }
+    
+    // Use direct fetchByIds method which is more reliable than query
+    try {
+      logger.info(`Trying direct fetch by IDs for ${dealIds.length} deals in namespace: ${namespace}`);
+      const fetchResult = await pineconeClient.fetchByIds(
+        dealIds.map(id => id.toString()), 
+        namespace,
+        pineconeIndexHost,
+        pineconeApiKey
+      );
+      
+      logger.info(`Direct fetch result structure: ${JSON.stringify(Object.keys(fetchResult))}`);
+      
+      // Check for matches property (pineconeClient.fetchByIds returns matches, not vectors)
+      if (fetchResult.matches && fetchResult.matches.length > 0) {
+        logger.info(`Found ${fetchResult.matches.length} vectors with IDs: ${fetchResult.matches.map(m => m.id).join(', ')}`);
+        
+        // Log more details about what we found
+        if (fetchResult.matches[0].metadata) {
+          logger.info(`Vector sample metadata keys: ${Object.keys(fetchResult.matches[0].metadata || {}).join(', ')}`);
+        }
+        
+        // Return the matches directly since they're already in the format we need
+        logger.info(`Successfully found ${fetchResult.matches.length} vectors from result`);
+        return fetchResult.matches;
+      }
+      
+      logger.info('No matching vectors found with direct fetch');
+      return [];
+    } catch (fetchError) {
+      logger.error(`Error fetching vectors by ID: ${fetchError.message}`);
+      return [];
+    }
+  } catch (error) {
+    logger.error(`Error getting existing vectors: ${error.message}`);
+    return [];
   }
 }
 
