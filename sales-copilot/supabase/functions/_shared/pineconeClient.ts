@@ -124,6 +124,86 @@ export class PineconeClient {
   }
   
   /**
+   * Fetch vectors directly by their IDs using a direct HTTP request
+   * @param ids Array of vector IDs to fetch
+   * @param namespace Namespace to fetch vectors from
+   * @param indexHost The host of the Pinecone index (e.g., "example-index.svc.region.pinecone.io")
+   * @param apiKey Pinecone API key
+   */
+  async fetchByIds(
+    ids: string[], 
+    namespace: string, 
+    indexHost?: string,
+    apiKey?: string
+  ): Promise<any> {
+    try {
+      this.logger.info(`Fetching ${ids.length} vectors by ID from namespace ${namespace}`);
+      
+      // Get API key and host from parameters or try to get from environment
+      const host = indexHost || Deno.env.get('PINECONE_INDEX_HOST');
+      const key = apiKey || Deno.env.get('PINECONE_API_KEY');
+      
+      if (!host || !key) {
+        throw new Error('Missing Pinecone index host or API key. Provide as parameters or set PINECONE_INDEX_HOST and PINECONE_API_KEY environment variables.');
+      }
+      
+      // Fix: Ensure host doesn't already contain https:// to avoid duplication
+      const cleanHost = host.replace(/^https?:\/\//, '');
+      
+      // Build the URL with the repeated ids parameter
+      let url = `https://${cleanHost}/vectors/fetch?`;
+      
+      // Add each ID as a separate query parameter
+      ids.forEach(id => {
+        url += `ids=${encodeURIComponent(id.toString())}&`;
+      });
+      
+      // Add namespace
+      url += `namespace=${encodeURIComponent(namespace)}`;
+      
+      this.logger.info(`Making direct fetch request to: ${url}`);
+      
+      // Make the HTTP request
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Api-Key': key,
+          'X-Pinecone-API-Version': '2025-01',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Pinecone fetch request failed: ${response.status} ${response.statusText} ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Log the result
+      if (result.vectors && Object.keys(result.vectors).length > 0) {
+        const foundIds = Object.keys(result.vectors);
+        this.logger.info(`Found ${foundIds.length} vectors by ID lookup`);
+        
+        // Transform to match the format from query for consistency
+        const matches = foundIds.map(id => ({
+          id,
+          metadata: result.vectors[id].metadata,
+          score: 1.0 // Default score for direct fetches
+        }));
+        
+        return { matches };
+      } else {
+        this.logger.info('No vectors found with fetchByIds');
+        return { matches: [] };
+      }
+    } catch (error) {
+      this.logger.error(`Error fetching vectors by ID: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Delete all vectors in a namespace
    */
   async deleteNamespace(namespace: string): Promise<any> {
