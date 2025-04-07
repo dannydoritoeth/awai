@@ -12,11 +12,17 @@ import { Logger } from '../_shared/logger.ts';
 import { decrypt, encrypt } from '../_shared/encryption.ts';
 import { DocumentPackager } from '../_shared/documentPackager.ts';
 import { PineconeClient } from '../_shared/pineconeClient.ts';
+import { createDealsSearchCriteria } from '../_shared/hubspotQueries.ts';
 
 declare const Deno: {
   env: {
     get(key: string): string | undefined;
   };
+};
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const logger = new Logger('hubspot-auto-training-v2');
@@ -220,35 +226,21 @@ async function getDealsForTraining(
     const batchSize = 5; // Update stats every 5 batches processed
 
     // Pagination loop to fetch deals in batches
+    let paginationErrors = 0;
+    const maxPaginationErrors = 3; // Maximum number of consecutive pagination errors before giving up
+    
     while (hasMore) {
+      try {
       await sleep(2000); // Rate limiting
 
-      const searchCriteria = {
-        filterGroups: [{
-          filters: [
-            {
-              propertyName: 'createdate',
-              operator: 'GTE',
-              value: Math.floor(ninety_days_ago.getTime() / 1000).toString()
-            },
-            {
-              propertyName: 'dealstage',
-              operator: 'EQ',
-              value: dealStage
-            }
-          ]
-        }],
-        sorts: [
-          {
-            propertyName: 'createdate',
-            direction: 'DESCENDING'
-          }
-        ],
-        properties: propertyNames,
-        limit: 10, // Fetch 10 at a time (reduced from 25 for more manageable batches)
-        associations: ['contacts', 'companies'],
-        ...(after ? { after } : {})
-      };
+        // Log pagination attempt
+        logger.info(`PAGINATION: Attempting to fetch ${type} deals batch, after=${after || 'null'}`);
+
+        // Use shared search criteria function to ensure consistency
+        const searchCriteria = createDealsSearchCriteria(type, 25, after);
+        
+        // Log the search criteria for debugging
+        logger.info(`SEARCH CRITERIA: ${JSON.stringify(searchCriteria)}`);
       
       // Make API call with token refresh handling
       const dealsResponse = await handleApiCall(
@@ -258,34 +250,78 @@ async function getDealsForTraining(
         () => hubspotClient.searchRecords('deals', searchCriteria)
       );
       
-      // Fix for linter error - ensure dealsResponse is properly handled
-      if (!dealsResponse || typeof dealsResponse !== 'object') {
-        logger.error(`Invalid response from deals search: ${JSON.stringify(dealsResponse)}`);
-        continue;
-      }
-      
-      // Type assertion to work with the response safely
-      const typedResponse = dealsResponse as { 
-        total?: number; 
-        results?: any[]; 
-        paging?: { next?: { after?: string } } 
-      };
-      
-      logger.info(`Found ${typedResponse.total || 0} total ${type} deals, fetched ${typedResponse.results?.length || 0} in this batch`);
-      
-      if (typedResponse.results?.length) {
-        totalDeals += typedResponse.results.length;
+        // Log the raw response structure to debug pagination issues
+        logger.info(`RAW RESPONSE KEYS: ${Object.keys(dealsResponse || {}).join(', ')}`);
+        if (dealsResponse && typeof dealsResponse === 'object' && 'paging' in dealsResponse) {
+          logger.info(`RAW PAGING INFO: ${JSON.stringify(dealsResponse.paging)}`);
+        }
+        
+        // Fix for linter error - ensure dealsResponse is properly handled
+        if (!dealsResponse || typeof dealsResponse !== 'object') {
+          logger.error(`Invalid response from deals search: ${JSON.stringify(dealsResponse)}`);
+          continue;
+        }
+        
+        // Special handling for HubSpot API pagination
+        // The response format may vary depending on the API version and endpoint
+        let paginationToken = null;
+        
+        // Try to extract pagination token - HubSpot may format it in different ways
+        if (typeof dealsResponse === 'object') {
+          // Check common pagination formats
+          if ('paging' in dealsResponse && dealsResponse.paging?.next?.after) {
+            // Standard format
+            paginationToken = dealsResponse.paging.next.after;
+            logger.info(`PAGINATION FORMAT: Standard paging.next.after format detected`);
+          } else if ('paging' in dealsResponse && dealsResponse.paging?.next?.link) {
+            // URL link format - extract token from URL
+            const nextUrl = dealsResponse.paging.next.link;
+            logger.info(`PAGINATION FORMAT: URL link format detected: ${nextUrl}`);
+            try {
+              const url = new URL(nextUrl);
+              paginationToken = url.searchParams.get('after');
+              logger.info(`PAGINATION FORMAT: Extracted token from URL: ${paginationToken}`);
+            } catch (e) {
+              logger.error(`PAGINATION FORMAT: Failed to parse URL: ${e.message}`);
+            }
+          } else if ('offset' in dealsResponse) {
+            // Offset format
+            paginationToken = dealsResponse.offset?.toString();
+            logger.info(`PAGINATION FORMAT: Offset format detected: ${paginationToken}`);
+          }
+        }
+        
+        // Type assertion to work with the response safely
+        const typedResponse = dealsResponse as { 
+          total?: number; 
+          results?: any[]; 
+          paging?: { next?: { after?: string; link?: string } } 
+        };
+        
+        // Log the total number of deals and pagination info for debugging
+        logger.info(`PAGINATION: Found ${typedResponse.total || 0} total ${type} deals, fetched ${typedResponse.results?.length || 0} in this batch`);
+        logger.info(`PAGINATION: Paging info: ${JSON.stringify(typedResponse.paging || {})}`);
+        
+        // Check if we have pagination information and token
+        if (typedResponse.paging?.next?.after) {
+          logger.info(`PAGINATION: Found pagination token: ${typedResponse.paging.next.after}`);
+        } else {
+          logger.info(`PAGINATION: No pagination token found in response`);
+        }
+        
+        if (typedResponse.results?.length) {
+          totalDeals += typedResponse.results.length;
         
         // Get the batch of deals to process
-        let dealBatch = typedResponse.results;
-        
-        // Explicit log of batch retrieval
-        logger.info(`BATCH TRACKING: Retrieved batch of ${dealBatch.length} deals for processing`);
+          let dealBatch = typedResponse.results;
+          
+          // Explicit log of batch retrieval
+          logger.info(`BATCH TRACKING: Retrieved batch of ${dealBatch.length} deals for processing`);
         
         // Collect deal amounts for statistics before filtering
-        logger.info(`BATCH TRACKING: Processing ${dealBatch.length} deals for amount statistics`);
+          logger.info(`BATCH TRACKING: Processing ${dealBatch.length} deals for amount statistics`);
         let amountsCollected = 0;
-        let amountsBefore = dealAmounts.length;
+          let amountsBefore = dealAmounts.length;
         
         dealBatch.forEach(deal => {
           if (deal.properties?.amount) {
@@ -293,16 +329,16 @@ async function getDealsForTraining(
             if (!isNaN(amount) && amount > 0) {
               dealAmounts.push(amount);
               amountsCollected++;
-              logger.info(`AMOUNTS: Added deal amount ${amount} for deal ${deal.id} (${amountsCollected} collected so far)`);
+                logger.info(`AMOUNTS: Added deal amount ${amount} for deal ${deal.id} (${amountsCollected} collected so far)`);
             } else {
-              logger.info(`AMOUNTS: Deal ${deal.id} has invalid amount: ${deal.properties.amount}`);
+                logger.info(`AMOUNTS: Deal ${deal.id} has invalid amount: ${deal.properties.amount}`);
             }
           } else {
-            logger.info(`AMOUNTS: Deal ${deal.id} has no amount property`);
+              logger.info(`AMOUNTS: Deal ${deal.id} has no amount property`);
           }
         });
         
-        logger.info(`AMOUNTS SUMMARY: Total amount array length: ${dealAmounts.length}, Added this batch: ${amountsCollected}, Previous total: ${amountsBefore}`);
+          logger.info(`AMOUNTS SUMMARY: Total amount array length: ${dealAmounts.length}, Added this batch: ${amountsCollected}, Previous total: ${amountsBefore}`);
         
         // Get the deal IDs from this batch
         const batchDealIds = dealBatch.map(deal => deal.id.toString());
@@ -317,7 +353,7 @@ async function getDealsForTraining(
             
             // Filter to only deals that need updating using our enhanced function
             dealBatch = filterVectorsToUpdate(dealBatch, existingVectors);
-            logger.info(`After filtering: ${dealBatch.length} out of ${typedResponse.results.length} deals need updating`);
+              logger.info(`After filtering: ${dealBatch.length} out of ${typedResponse.results.length} deals need updating`);
           } else {
             logger.info(`No existing vectors found in namespace ${namespace}, will process all deals`);
           }
@@ -396,102 +432,123 @@ async function getDealsForTraining(
         }
 
         logger.info(`Completed batch of ${dealBatch.length} deals (total: ${processedDeals}/${totalDeals})`);
-        
-        // Increment batch counter
-        batchCount++;
+          
+          // Increment batch counter
+          batchCount++;
 
-        logger.info(`dealAmounts length: ${dealAmounts.length}`);
-        
-        // Update the statistics after each batch of deals rather than waiting
-        if (dealAmounts.length > 0) {
-          try {
-            const currentStats = calculateDealStatistics(dealAmounts);
-            logger.info(`BATCH TRACKING: Updating incremental statistics for ${type} deals after batch ${batchCount}:`, currentStats);
-            
-            // Prepare update data for this deal type
-            const statUpdateData: any = {
-              last_training_date: new Date().toISOString()
-            };
-            
-            // Add the right fields based on deal type
-            if (type === 'ideal') {
-              statUpdateData.ideal_low = currentStats.low;
-              statUpdateData.ideal_high = currentStats.high;
-              statUpdateData.ideal_median = currentStats.median;
-              statUpdateData.ideal_count = currentStats.count;
-              statUpdateData.ideal_last_trained = new Date().toISOString();
-              statUpdateData.current_ideal_deals = processedDeals;
-            } else {
-              statUpdateData.nonideal_low = currentStats.low;
-              statUpdateData.nonideal_high = currentStats.high;
-              statUpdateData.nonideal_median = currentStats.median;
-              statUpdateData.nonideal_count = currentStats.count;
-              statUpdateData.nonideal_last_trained = new Date().toISOString();
-              statUpdateData.current_less_ideal_deals = processedDeals;
-            }
-            
-            // Log detailed information about the update
-            logger.info(`INCREMENTAL UPDATE: Starting database update for ${type} deals (${batchCount} batches)`);
-            logger.info(`INCREMENTAL UPDATE: Portal ID: ${portalId}`);
-            logger.info(`INCREMENTAL UPDATE: Update data:`, JSON.stringify(statUpdateData, null, 2));
-            
-            // Make sure supabase is valid
-            if (!supabase) {
-              logger.error(`INCREMENTAL UPDATE: Supabase client is null or undefined. Cannot update database.`);
-              throw new Error('Supabase client is not available for incremental update');
-            }
-            
-            // Update the database with detailed logging
+          logger.info(`dealAmounts length: ${dealAmounts.length}`);
+          
+          // Update the statistics after each batch of deals rather than waiting
+          if (dealAmounts.length > 0) {
             try {
-              logger.info(`INCREMENTAL UPDATE: Executing query to table 'hubspot_accounts' for portal ${portalId}`);
-              const updateResult = await supabase
-                .from('hubspot_accounts')
-                .update(statUpdateData)
-                .eq('portal_id', portalId);
+              const currentStats = calculateDealStatistics(dealAmounts);
+              logger.info(`BATCH TRACKING: Updating incremental statistics for ${type} deals after batch ${batchCount}:`, currentStats);
               
-              logger.info(`INCREMENTAL UPDATE: Query completed. Response:`, JSON.stringify(updateResult, null, 2));
+              // Prepare update data for this deal type
+              const statUpdateData: any = {
+                last_training_date: new Date().toISOString()
+              };
               
-              if (updateResult.error) {
-                logger.error(`INCREMENTAL UPDATE: Error in database update for ${type} deals:`, updateResult.error);
-                throw updateResult.error;
+              // Add the right fields based on deal type
+              if (type === 'ideal') {
+                statUpdateData.ideal_low = currentStats.low;
+                statUpdateData.ideal_high = currentStats.high;
+                statUpdateData.ideal_median = currentStats.median;
+                statUpdateData.ideal_count = currentStats.count;
+                statUpdateData.ideal_last_trained = new Date().toISOString();
+                statUpdateData.current_ideal_deals = processedDeals;
               } else {
-                logger.info(`INCREMENTAL UPDATE: Successfully updated ${type} statistics incrementally`);
-                
-                // Log the actual values that should have been updated
-                logger.info(`INCREMENTAL UPDATE: Updated ${type} stats:`, {
-                  ...(type === 'ideal' ? {
-                    ideal_low: currentStats.low,
-                    ideal_high: currentStats.high,
-                    ideal_median: currentStats.median,
-                    ideal_count: currentStats.count
-                  } : {
-                    nonideal_low: currentStats.low,
-                    nonideal_high: currentStats.high,
-                    nonideal_median: currentStats.median,
-                    nonideal_count: currentStats.count
-                  })
-                });
+                statUpdateData.nonideal_low = currentStats.low;
+                statUpdateData.nonideal_high = currentStats.high;
+                statUpdateData.nonideal_median = currentStats.median;
+                statUpdateData.nonideal_count = currentStats.count;
+                statUpdateData.nonideal_last_trained = new Date().toISOString();
+                statUpdateData.current_less_ideal_deals = processedDeals;
               }
-            } catch (dbError) {
-              logger.error(`INCREMENTAL UPDATE: Exception during database update:`, dbError);
-              throw dbError;
+              
+              // Log detailed information about the update
+              logger.info(`INCREMENTAL UPDATE: Starting database update for ${type} deals (${batchCount} batches)`);
+              logger.info(`INCREMENTAL UPDATE: Portal ID: ${portalId}`);
+              logger.info(`INCREMENTAL UPDATE: Update data:`, JSON.stringify(statUpdateData, null, 2));
+              
+              // Make sure supabase is valid
+              if (!supabase) {
+                logger.error(`INCREMENTAL UPDATE: Supabase client is null or undefined. Cannot update database.`);
+                throw new Error('Supabase client is not available for incremental update');
+              }
+              
+              // Update the database with detailed logging
+              try {
+                logger.info(`INCREMENTAL UPDATE: Executing query to table 'hubspot_accounts' for portal ${portalId}`);
+                const updateResult = await supabase
+                  .from('hubspot_accounts')
+                  .update(statUpdateData)
+                  .eq('portal_id', portalId);
+                
+                logger.info(`INCREMENTAL UPDATE: Query completed. Response:`, JSON.stringify(updateResult, null, 2));
+                
+                if (updateResult.error) {
+                  logger.error(`INCREMENTAL UPDATE: Error in database update for ${type} deals:`, updateResult.error);
+                  throw updateResult.error;
+                } else {
+                  logger.info(`INCREMENTAL UPDATE: Successfully updated ${type} statistics incrementally`);
+                  
+                  // Log the actual values that should have been updated
+                  logger.info(`INCREMENTAL UPDATE: Updated ${type} stats:`, {
+                    ...(type === 'ideal' ? {
+                      ideal_low: currentStats.low,
+                      ideal_high: currentStats.high,
+                      ideal_median: currentStats.median,
+                      ideal_count: currentStats.count
+                    } : {
+                      nonideal_low: currentStats.low,
+                      nonideal_high: currentStats.high,
+                      nonideal_median: currentStats.median,
+                      nonideal_count: currentStats.count
+                    })
+                  });
+                }
+              } catch (dbError) {
+                logger.error(`INCREMENTAL UPDATE: Exception during database update:`, dbError);
+                throw dbError;
+              }
+            } catch (statsError) {
+              logger.error(`INCREMENTAL UPDATE: Error calculating or updating incremental statistics:`, statsError);
             }
-          } catch (statsError) {
-            logger.error(`INCREMENTAL UPDATE: Error calculating or updating incremental statistics:`, statsError);
+          } else {
+            logger.info(`BATCH TRACKING: Skipping statistics update because dealAmounts is empty (length: ${dealAmounts.length})`);
           }
-        } else {
-          logger.info(`BATCH TRACKING: Skipping statistics update because dealAmounts is empty (length: ${dealAmounts.length})`);
-        }
-        
+          
         await sleep(5000); // Rate limiting between batches
       }
 
-      // Check if more pages are available
-      hasMore = typedResponse.paging?.next?.after !== undefined;
-      after = typedResponse.paging?.next?.after || null;
+        // Check if more pages are available based on our extracted token
+        hasMore = paginationToken !== null && paginationToken !== undefined;
+        after = paginationToken !== null ? paginationToken : null;
+        
+        logger.info(`PAGINATION TOKEN: ${paginationToken}, Has more: ${hasMore}`);
+        logger.info(`PAGINATION: Has more pages: ${hasMore}, Next token: ${after || 'NONE'}`);
 
       if (hasMore) {
-        logger.info(`More deals available, continuing with after=${after}`);
+          logger.info(`PAGINATION: More deals available, continuing with after=${after}`);
+        } else {
+          logger.info(`PAGINATION: No more deals available, finishing this search query`);
+        }
+        
+        // If we've processed enough deals, stop pagination to avoid excessive processing
+        // Set this as a very high number to process all deals, or set to a lower number to limit processing for testing
+        const maxDealsToProcess = 1000; // Set high to process all deals or lower for testing
+        if (totalDeals >= maxDealsToProcess) {
+          logger.info(`PAGINATION: Reached maximum deals to process (${maxDealsToProcess}), stopping pagination`);
+          hasMore = false;
+        }
+      } catch (error) {
+        logger.error(`Error in pagination loop: ${error.message}`);
+        paginationErrors++;
+        if (paginationErrors > maxPaginationErrors) {
+          logger.error(`Max pagination errors reached. Stopping pagination. Error: ${error.message}`);
+          hasMore = false;
+        }
       }
     }
 
@@ -1058,54 +1115,26 @@ function calculateDealStatistics(dealAmounts: number[]): {
  * Main handler for the edge function
  */
 serve(async (req) => {
+  const logger = new Logger('hubspot-auto-training');
   try {
-    logger.info('Starting hubspot-auto-training');
-    
-    // Get URL parameters
+    // Parse request parameters
     const url = new URL(req.url);
     const portal_id = url.searchParams.get('portal_id');
-    const deal_type = url.searchParams.get('deal_type');
+    const deal_type = url.searchParams.get('deal_type') as 'ideal' | 'nonideal';
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
     
-    // Validate deal_type if provided
-    if (deal_type && !['ideal', 'nonideal'].includes(deal_type)) {
+    if (!portal_id || !deal_type) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Invalid deal_type parameter. Must be 'ideal' or 'nonideal'."
-        }),
-        {
-          headers: { "Content-Type": "application/json" },
-          status: 400,
-        }
+        JSON.stringify({ error: 'Missing required parameters: portal_id and deal_type are required' }),
+        { status: 400, headers: corsHeaders }
       );
     }
-    
-    if (portal_id) {
-      logger.info(`Portal ID specified: ${portal_id}, will only process this portal`);
-    } else {
-      logger.info('No portal ID specified, will process all portals');
-    }
-    
-    if (deal_type) {
-      logger.info(`Deal type specified: ${deal_type}, will only process ${deal_type} deals`);
-    } else {
-      logger.info('No deal type specified, will process both ideal and nonideal deals');
-    }
-    
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-      });
-    }
 
-    // Validate request method
-    if (req.method !== "POST") {
-      throw new Error(`Method ${req.method} not allowed. Only POST requests are accepted.`);
+    if (isNaN(page) || page < 1) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid page parameter: must be a positive integer' }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
     // Initialize Supabase client
@@ -1114,266 +1143,235 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Fetch all HubSpot accounts
-    const { data: accounts, error: accountsError } = await supabase
+    // Fetch HubSpot account details
+    const { data: accountData, error: accountError } = await supabase
       .from('hubspot_accounts')
       .select('*')
-      .eq('status', 'active');
+      .eq('portal_id', portal_id)
+      .eq('status', 'active')
+      .single();
 
-    if (accountsError) {
-      throw new Error(`Failed to fetch accounts: ${accountsError.message}`);
+    if (accountError || !accountData) {
+      throw new Error(`Failed to fetch HubSpot account: ${accountError?.message || 'Account not found'}`);
     }
 
-    if (!accounts || accounts.length === 0) {
-      throw new Error('No active HubSpot accounts found');
+    // Decrypt tokens
+    const accessToken = await decrypt(accountData.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+    const refreshToken = await decrypt(accountData.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+
+    if (!accessToken || !refreshToken) {
+      throw new Error('Invalid HubSpot tokens');
     }
 
-    logger.info(`Found ${accounts.length} active HubSpot accounts to process`);
+    // Initialize HubSpot client
+    const hubspotClient = new HubspotClient(accessToken);
 
-    // Track results
+    // Initialize results tracking
     const results = {
-      total: accounts.length,
       processed: 0,
       successful: 0,
       failed: 0,
-      portals: [] as any[]
+      deals: [] as any[]
     };
 
-    // Process each account
-    for (const account of accounts) {
-      const portalId = account.portal_id;
-      logger.info(`Processing portal ${portalId}`);
+    // Calculate pagination token for requested page
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
+    let paginationToken: string | null = null;
 
+    // Skip to the requested page
+    while (currentPage < page) {
+      logger.info(`Fetching intermediate page ${currentPage} to reach target page ${page}`);
+      const searchCriteria = createDealsSearchCriteria(deal_type, PAGE_SIZE, paginationToken);
+      const response = await handleApiCall(
+        hubspotClient,
+        portal_id,
+        refreshToken,
+        () => hubspotClient.searchRecords('deals', searchCriteria)
+      );
+
+      if (!('results' in response) || !response.results) {
+        throw new Error('No more pages available');
+      }
+
+      // Update pagination token for next page
+      if ('paging' in response && response.paging?.next?.after) {
+        paginationToken = response.paging.next.after;
+      } else {
+        throw new Error(`Requested page ${page} is beyond available results`);
+      }
+      
+      currentPage++;
+      await sleep(2000); // Rate limiting between pagination requests
+    }
+
+    // Now process the requested page
+    logger.info(`Processing page ${page} with pagination token: ${paginationToken || 'null'}`);
+    const searchCriteria = createDealsSearchCriteria(deal_type, PAGE_SIZE, paginationToken);
+    const dealsResponse = await handleApiCall(
+      hubspotClient,
+      portal_id,
+      refreshToken,
+      () => hubspotClient.searchRecords('deals', searchCriteria)
+    );
+
+    if (!('results' in dealsResponse) || !dealsResponse.results) {
+      throw new Error('No results found for the specified page');
+    }
+
+    // Process the deals from this page
+    const deals = dealsResponse.results;
+    logger.info(`Processing ${deals.length} deals from page ${page}`);
+
+    // Initialize OpenAI and Pinecone clients
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! });
+    const pineconeClient = new PineconeClient();
+    await pineconeClient.initialize(
+      Deno.env.get('PINECONE_API_KEY')!,
+      Deno.env.get('PINECONE_INDEX')!
+    );
+
+    // Initialize document packager
+    const documentPackager = new DocumentPackager(hubspotClient);
+
+    // Process each deal in this batch
+    const namespace = `hubspot-${portal_id}`;
+    const dealAmounts: number[] = [];
+
+    for (const deal of deals) {
       try {
-        // Initialize clients and services
-        const decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-        const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-        
-        if (!decryptedToken || !decryptedRefreshToken) {
-          throw new Error('Invalid HubSpot tokens');
-        }
-        
-        logger.info(`Initializing services for portal ${portalId}`);
-
-        const hubspotClient = new HubspotClient(decryptedToken);
-        const openaiApiKey = Deno.env.get('OPENAI_API_KEY')!;
-        const openai = new OpenAI({ apiKey: openaiApiKey });
-        const pineconeApiKey = Deno.env.get('PINECONE_API_KEY')!;
-        const pineconeIndex = Deno.env.get('PINECONE_INDEX')!;
-        const pineconeClient = new PineconeClient();
-        await pineconeClient.initialize(pineconeApiKey, pineconeIndex);
-        const documentPackager = new DocumentPackager(hubspotClient);
-        logger.info(`Services initialized for portal ${portalId}`);
-        
-        // Ensure supabase client is available and log it
-        if (!supabase) {
-          logger.error(`Supabase client is null or undefined. This will cause database update failures.`);
-        } else {
-          logger.info(`Supabase client is available for database updates.`);
-          
-          // Test the database connection with a simple query
-          try {
-            logger.info(`Testing database connection for portal ${portalId}`);
-            const { data: testData, error: testError } = await supabase
-              .from('hubspot_accounts')
-              .select('id, portal_id, ideal_low, ideal_high, ideal_median, nonideal_low, nonideal_high, nonideal_median')
-              .eq('portal_id', portalId)
-              .limit(1);
-            
-            if (testError) {
-              logger.error(`Database test query failed: ${testError.message}`, testError);
-            } else if (testData && testData.length > 0) {
-              logger.info(`Database test query successful. Found record with ID ${testData[0].id}`);
-              // Log the current values of the statistics fields to verify schema
-              logger.info(`Current statistics values in database:`, {
-                ideal_low: testData[0].ideal_low,
-                ideal_high: testData[0].ideal_high,
-                ideal_median: testData[0].ideal_median,
-                nonideal_low: testData[0].nonideal_low,
-                nonideal_high: testData[0].nonideal_high,
-                nonideal_median: testData[0].nonideal_median
-              });
-            } else {
-              logger.warn(`Database test query returned no results for portal ${portalId}`);
-            }
-          } catch (dbTestError) {
-            logger.error(`Exception during database test: ${dbTestError.message}`);
-          }
-        }
-        
-        // Validate token
-        logger.info(`Validating token for portal ${portalId}`);
-        await handleApiCall(hubspotClient, portalId, decryptedRefreshToken, () => 
-          hubspotClient.searchRecords('contacts', { limit: 1 })
+        // Get full details for the deal
+        const fullDeal = await handleApiCall(
+          hubspotClient,
+          portal_id,
+          refreshToken,
+          () => hubspotClient.getRecord('deals', deal.id, [
+            'dealname',
+            'amount',
+            'closedate',
+            'createdate',
+            'dealstage',
+            'pipeline',
+            'hs_lastmodifieddate',
+            'hs_date_entered_closedwon',
+            'hs_date_entered_closedlost',
+            'hs_deal_stage_probability',
+            'hs_pipeline_stage',
+            'hs_time_in_pipeline',
+            'hs_time_in_dealstage',
+            'hs_deal_stage_changes'
+          ])
         );
-        
-        // Track portal results
-        const portalResult = {
-          portalId,
-          ideal: { 
-            total: 0, 
-            processed: 0,
-            stats: null as { low: number; high: number; median: number; count: number } | null
-          },
-          nonideal: { 
-            total: 0, 
-            processed: 0,
-            stats: null as { low: number; high: number; median: number; count: number } | null
-          }
-        };
-        
-        // Process ideal deals if no deal_type is specified or deal_type is 'ideal'
-        if (!deal_type || deal_type === 'ideal') {
-          try {
-            logger.info(`Starting ideal deals processing for portal ${portalId}`);
-            
-            const idealDeals = await getDealsForTraining(hubspotClient, 'ideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient, supabase);
-            
-            portalResult.ideal.total = idealDeals.total;
-            portalResult.ideal.processed = idealDeals.processed;
-            
-            // Calculate statistics for ideal deals
-            const idealStats = calculateDealStatistics(idealDeals.dealAmounts);
-            logger.info(`Ideal deal statistics - Count: ${idealStats.count}, Low: ${idealStats.low}, High: ${idealStats.high}, Median: ${idealStats.median}`);
-            
-            // Store the statistics for later database update
-            portalResult.ideal.stats = idealStats;
-            
-            logger.info(`Processed ${idealDeals.processed} ideal deals for portal ${portalId}`);
-            
-          } catch (idealDealsError) {
-            logger.error(`Error processing ideal deals for portal ${portalId}: ${idealDealsError.message}`);
-          }
-        }
-        
-        // Process non-ideal deals if no deal_type is specified or deal_type is 'nonideal'
-        if (!deal_type || deal_type === 'nonideal') {
-          try {
-            logger.info(`Starting non-ideal deals processing for portal ${portalId}`);
-            
-            const nonIdealDeals = await getDealsForTraining(hubspotClient, 'nonideal', portalId, decryptedRefreshToken, documentPackager, openai, pineconeClient, supabase);
-            
-            portalResult.nonideal.total = nonIdealDeals.total;
-            portalResult.nonideal.processed = nonIdealDeals.processed;
-            
-            // Calculate statistics for non-ideal deals
-            const nonIdealStats = calculateDealStatistics(nonIdealDeals.dealAmounts);
-            logger.info(`Non-ideal deal statistics - Count: ${nonIdealStats.count}, Low: ${nonIdealStats.low}, High: ${nonIdealStats.high}, Median: ${nonIdealStats.median}`);
-            
-            // Store the statistics for later database update
-            portalResult.nonideal.stats = nonIdealStats;
-            
-            logger.info(`Processed ${nonIdealDeals.processed} non-ideal deals for portal ${portalId}`);
-          } catch (nonIdealDealsError) {
-            logger.error(`Error processing non-ideal deals for portal ${portalId}: ${nonIdealDealsError.message}`);
-          }
-        }
-        
-        // Update database with metrics - only update the counts for the deal types that were processed
-        const updateData: any = {
-          last_training_date: new Date().toISOString()
-        };
 
-        // Check and log stats availability
-        logger.info(`Checking ideal stats for portal ${portalId}`);
-        logger.info(`deal_type: ${deal_type || 'both'}, has ideal stats: ${portalResult.ideal.stats !== null}`);
-        if (portalResult.ideal.stats) {
-          logger.info(`Ideal stats details - Count: ${portalResult.ideal.stats.count}, Low: ${portalResult.ideal.stats.low}, High: ${portalResult.ideal.stats.high}, Median: ${portalResult.ideal.stats.median}`);
-        }
-
-        // Update ideal deal metrics if processed
-        if ((!deal_type || deal_type === 'ideal') && portalResult.ideal.stats) {
-          logger.info(`Adding ideal stats to updateData`);
-          updateData.current_ideal_deals = portalResult.ideal.processed;
-          updateData.ideal_low = portalResult.ideal.stats.low;
-          updateData.ideal_high = portalResult.ideal.stats.high;
-          updateData.ideal_median = portalResult.ideal.stats.median;
-          updateData.ideal_count = portalResult.ideal.stats.count;
-          updateData.ideal_last_trained = new Date().toISOString();
-        } else {
-          logger.info(`Skipping ideal stats update: condition not met`);
-          if (deal_type && deal_type !== 'ideal') {
-            logger.info(`Reason: deal_type is ${deal_type}, not 'ideal'`);
-          }
-          if (!portalResult.ideal.stats) {
-            logger.info(`Reason: portalResult.ideal.stats is null`);
-          }
-        }
-
-        // Check and log stats availability for non-ideal
-        logger.info(`Checking non-ideal stats for portal ${portalId}`);
-        logger.info(`deal_type: ${deal_type || 'both'}, has non-ideal stats: ${portalResult.nonideal.stats !== null}`);
-        if (portalResult.nonideal.stats) {
-          logger.info(`Non-ideal stats details - Count: ${portalResult.nonideal.stats.count}, Low: ${portalResult.nonideal.stats.low}, High: ${portalResult.nonideal.stats.high}, Median: ${portalResult.nonideal.stats.median}`);
-        }
-
-        // Update non-ideal deal metrics if processed
-        if ((!deal_type || deal_type === 'nonideal') && portalResult.nonideal.stats) {
-          logger.info(`Adding non-ideal stats to updateData`);
-          updateData.current_less_ideal_deals = portalResult.nonideal.processed;
-          updateData.nonideal_low = portalResult.nonideal.stats.low;
-          updateData.nonideal_high = portalResult.nonideal.stats.high;
-          updateData.nonideal_median = portalResult.nonideal.stats.median;
-          updateData.nonideal_count = portalResult.nonideal.stats.count;
-          updateData.nonideal_last_trained = new Date().toISOString();
-        } else {
-          logger.info(`Skipping non-ideal stats update: condition not met`);
-          if (deal_type && deal_type !== 'nonideal') {
-            logger.info(`Reason: deal_type is ${deal_type}, not 'nonideal'`);
-          }
-          if (!portalResult.nonideal.stats) {
-            logger.info(`Reason: portalResult.nonideal.stats is null`);
-          }
-        }
-
-        // Log the update data for debugging
-        logger.info(`Attempting to update database for portal ${portalId} with data:`, JSON.stringify(updateData, null, 2));
-        
-        // Additional debug logging
-        logger.info('Update data keys:', Object.keys(updateData));
-        logger.info('Ideal data fields:', {
-          ideal_low: updateData.ideal_low,
-          ideal_high: updateData.ideal_high,
-          ideal_median: updateData.ideal_median,
-          ideal_count: updateData.ideal_count
-        });
-        logger.info('Nonideal data fields:', {
-          nonideal_low: updateData.nonideal_low,
-          nonideal_high: updateData.nonideal_high,
-          nonideal_median: updateData.nonideal_median,
-          nonideal_count: updateData.nonideal_count
-        });
-
-        try {
-          const { data: updateResult, error: updateError } = await supabase
-            .from('hubspot_accounts')
-            .update(updateData)
-            .eq('portal_id', portalId);
+        if (fullDeal) {
+          // Preserve the associations from the search results
+          fullDeal.associations = deal.associations;
           
-          if (updateError) {
-            logger.error(`Database update error for portal ${portalId}:`, updateError);
-          } else {
-            logger.info(`Successfully updated database for portal ${portalId}`);
+          // Process this single deal
+          await processSingleDeal(
+            fullDeal,
+            deal_type,
+            hubspotClient,
+            documentPackager,
+            openai,
+            pineconeClient, 
+            portal_id,
+            namespace
+          );
+
+          // Track deal amount for statistics if available
+          if (fullDeal.properties?.amount) {
+            const amount = parseFloat(fullDeal.properties.amount);
+            if (!isNaN(amount) && amount > 0) {
+              dealAmounts.push(amount);
+            }
           }
-        } catch (dbError) {
-          logger.error(`Exception during database update for portal ${portalId}:`, dbError);
+
+          results.successful++;
+          results.deals.push({
+            id: fullDeal.id,
+            name: fullDeal.properties?.dealname || 'Unnamed Deal',
+            status: 'processed'
+          });
         }
-        
-        // Track success
-        results.portals.push(portalResult);
-        results.successful++;
-        logger.info(`Successfully processed portal ${portalId}`);
       } catch (error) {
-        // Track failure
+        logger.error(`Error processing deal ${deal.id}:`, error);
         results.failed++;
-        logger.error(`Failed to process portal ${portalId}: ${error.message}`);
-        results.portals.push({
-          portalId,
+        results.deals.push({
+          id: deal.id,
+          name: deal.properties?.dealname || 'Unnamed Deal',
+          status: 'failed',
           error: error.message
         });
       }
       
       results.processed++;
+      await sleep(2000); // Rate limiting between deals
+    }
+
+    // Update statistics in the database if we processed any deals
+    if (dealAmounts.length > 0) {
+      // First, get current statistics
+      const { data: currentStats, error: statsError } = await supabase
+        .from('hubspot_accounts')
+        .select(`
+          ideal_count,
+          nonideal_count,
+          current_ideal_deals,
+          current_less_ideal_deals
+        `)
+        .eq('portal_id', portal_id)
+        .single();
+
+      if (statsError) {
+        logger.error(`Error fetching current statistics: ${statsError.message}`);
+      }
+
+      const stats = calculateDealStatistics(dealAmounts);
+        const updateData: any = {
+          last_training_date: new Date().toISOString()
+        };
+
+      if (deal_type === 'ideal') {
+        // Only update high/low if the new values are more extreme
+        if (!currentStats?.ideal_high || stats.high > currentStats.ideal_high) {
+          updateData.ideal_high = stats.high;
+        }
+        if (!currentStats?.ideal_low || stats.low < currentStats.ideal_low) {
+          updateData.ideal_low = stats.low;
+        }
+        updateData.ideal_median = stats.median;
+        updateData.ideal_count = (currentStats?.ideal_count || 0) + stats.count;
+          updateData.ideal_last_trained = new Date().toISOString();
+        updateData.current_ideal_deals = (currentStats?.current_ideal_deals || 0) + results.processed;
+        } else {
+        // Only update high/low if the new values are more extreme
+        if (!currentStats?.nonideal_high || stats.high > currentStats.nonideal_high) {
+          updateData.nonideal_high = stats.high;
+        }
+        if (!currentStats?.nonideal_low || stats.low < currentStats.nonideal_low) {
+          updateData.nonideal_low = stats.low;
+        }
+        updateData.nonideal_median = stats.median;
+        updateData.nonideal_count = (currentStats?.nonideal_count || 0) + stats.count;
+          updateData.nonideal_last_trained = new Date().toISOString();
+        updateData.current_less_ideal_deals = (currentStats?.current_less_ideal_deals || 0) + results.processed;
+      }
+
+      try {
+        const { error: updateError } = await supabase
+            .from('hubspot_accounts')
+            .update(updateData)
+          .eq('portal_id', portal_id);
+          
+          if (updateError) {
+          logger.error(`Error updating statistics: ${updateError.message}`);
+          } else {
+          logger.info(`Successfully updated accumulated statistics for ${deal_type} deals`);
+          }
+        } catch (dbError) {
+        logger.error(`Database update error: ${dbError.message}`);
+      }
     }
 
     // Return the response
@@ -1402,4 +1400,4 @@ serve(async (req) => {
       }
     );
   }
-});
+}); 

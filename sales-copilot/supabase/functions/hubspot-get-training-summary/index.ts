@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { HubspotClient } from '../_shared/hubspotClient.ts'
 import { decrypt, encrypt } from '../_shared/encryption.ts'
+import { createIdealDealsSearchCriteria, createNonIdealDealsSearchCriteria } from '../_shared/hubspotQueries.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -184,55 +185,18 @@ serve(async (req) => {
 
         // Count deals that need training
         try {
-          // Define time range - last 90 days
-          const ninety_days_ago = new Date();
-          ninety_days_ago.setDate(ninety_days_ago.getDate() - 90);
-          const timestamp = Math.floor(ninety_days_ago.getTime() / 1000).toString();
-
           // Count ideal deals (won in last 90 days)
           console.log('Counting ideal deals (won in last 90 days)...');
-          const idealSearchCriteria = {
-            filterGroups: [{
-              filters: [
-                {
-                  propertyName: 'createdate',
-                  operator: 'GTE',
-                  value: timestamp
-                },
-                {
-                  propertyName: 'dealstage',
-                  operator: 'EQ',
-                  value: 'closedwon'
-                }
-              ]
-            }],
-            limit: 1
-          };
-
+          const idealSearchCriteria = createIdealDealsSearchCriteria(1);
+          
           const idealDealsResponse = await hubspotClient.searchRecords('deals', idealSearchCriteria);
           ideal_deals_to_train = idealDealsResponse.total || 0;
           console.log(`Found ${ideal_deals_to_train} ideal deals (won in last 90 days) to train`);
 
           // Count non-ideal deals (lost in last 90 days)
           console.log('Counting non-ideal deals (lost in last 90 days)...');
-          const nonIdealSearchCriteria = {
-            filterGroups: [{
-              filters: [
-                {
-                  propertyName: 'createdate',
-                  operator: 'GTE',
-                  value: timestamp
-                },
-                {
-                  propertyName: 'dealstage',
-                  operator: 'EQ',
-                  value: 'closedlost'
-                }
-              ]
-            }],
-            limit: 1
-          };
-
+          const nonIdealSearchCriteria = createNonIdealDealsSearchCriteria(1);
+          
           const nonIdealDealsResponse = await hubspotClient.searchRecords('deals', nonIdealSearchCriteria);
           nonideal_deals_to_train = nonIdealDealsResponse.total || 0;
           console.log(`Found ${nonideal_deals_to_train} non-ideal deals (lost in last 90 days) to train`);
@@ -257,6 +221,7 @@ serve(async (req) => {
     }
 
     // Prepare the deal statistics data
+    const PAGE_SIZE = 5; // Match the page size used in auto-training
     const dealStatistics = {
       ideal: {
         low: accountData?.ideal_low || 0,
@@ -264,7 +229,8 @@ serve(async (req) => {
         median: accountData?.ideal_median || 0,
         count: accountData?.ideal_count || 0,
         last_trained: accountData?.ideal_last_trained || null,
-        to_train: ideal_deals_to_train
+        to_train: ideal_deals_to_train,
+        total_pages: Math.ceil(ideal_deals_to_train / PAGE_SIZE)
       },
       nonideal: {
         low: accountData?.nonideal_low || 0,
@@ -272,7 +238,8 @@ serve(async (req) => {
         median: accountData?.nonideal_median || 0,
         count: accountData?.nonideal_count || 0,
         last_trained: accountData?.nonideal_last_trained || null,
-        to_train: nonideal_deals_to_train
+        to_train: nonideal_deals_to_train,
+        total_pages: Math.ceil(nonideal_deals_to_train / PAGE_SIZE)
       }
     };
 
