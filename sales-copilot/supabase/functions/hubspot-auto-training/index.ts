@@ -810,7 +810,38 @@ async function getExistingVectors(
  */
 serve(async (req) => {
   try {
-    logger.info('Starting hubspot-auto-training-v2');
+    logger.info('Starting hubspot-auto-training');
+    
+    // Get URL parameters
+    const url = new URL(req.url);
+    const portal_id = url.searchParams.get('portal_id');
+    const deal_type = url.searchParams.get('deal_type');
+    
+    // Validate deal_type if provided
+    if (deal_type && !['ideal', 'nonideal'].includes(deal_type)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid deal_type parameter. Must be 'ideal' or 'nonideal'."
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
+    
+    if (portal_id) {
+      logger.info(`Portal ID specified: ${portal_id}, will only process this portal`);
+    } else {
+      logger.info('No portal ID specified, will process all portals');
+    }
+    
+    if (deal_type) {
+      logger.info(`Deal type specified: ${deal_type}, will only process ${deal_type} deals`);
+    } else {
+      logger.info('No deal type specified, will process both ideal and nonideal deals');
+    }
     
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
