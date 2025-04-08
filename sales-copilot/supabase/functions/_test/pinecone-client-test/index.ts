@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { PineconeClient } from "../_shared/pineconeClient.ts";
-import { Logger } from "../_shared/logger.ts";
+import { PineconeClient } from "../../_shared/pineconeClient.ts";
+import { Logger } from "../../_shared/logger.ts";
 
 const logger = new Logger("pinecone-client-test");
 
