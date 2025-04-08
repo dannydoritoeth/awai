@@ -393,8 +393,8 @@ async function handleOAuth(request: Request): Promise<Response> {
       const updateData = {
         access_token: encryptedAccessToken,
         refresh_token: encryptedRefreshToken,
-        last_refreshed: new Date().toISOString(),
-        status: 'active'
+        status: 'active',
+        expires_at: new Date(Date.now() + 1000 * 60 * 60 * 6).toISOString() // 6 hours from now
       };
 
       const { error: updateError } = await supabase
@@ -416,7 +416,7 @@ async function handleOAuth(request: Request): Promise<Response> {
           refresh_token: encryptedRefreshToken,
           partner_id: partnerId,
           status: 'active',
-          last_refreshed: new Date().toISOString()
+          expires_at: new Date(Date.now() + 1000 * 60 * 60 * 6).toISOString() // 6 hours from now
         });
 
       if (insertError) {
@@ -431,6 +431,49 @@ async function handleOAuth(request: Request): Promise<Response> {
     } catch (error) {
       console.error('Error creating HubSpot properties:', error);
       // Continue despite property creation errors
+    }
+
+    // Call hubspot-train-sync and wait for it to complete
+    try {
+      console.log(`Calling hubspot-train-sync for portal ${hub_id}...`);
+      const syncUrl = `${SUPABASE_URL}/functions/v1/hubspot-train-sync?portal_id=${hub_id}`;
+      
+      const syncResponse = await fetch(syncUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!syncResponse.ok) {
+        console.error(`Error from hubspot-train-sync: ${syncResponse.status} ${await syncResponse.text()}`);
+      } else {
+        console.log(`Successfully synced training objects for portal ${hub_id}`);
+      }
+    } catch (syncError) {
+      console.error('Error calling hubspot-train-sync:', syncError);
+      // Continue despite sync errors
+    }
+    
+    // Call hubspot-train-deal-batch without waiting for it to complete
+    try {
+      console.log(`Initiating hubspot-train-deal-batch...`);
+      const batchUrl = `${SUPABASE_URL}/functions/v1/hubspot-train-deal-batch`;
+      
+      // Fire and forget - don't await
+      fetch(batchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log(`Triggered batch training process`);
+    } catch (batchError) {
+      console.error('Error triggering hubspot-train-deal-batch:', batchError);
+      // Continue despite batch errors
     }
 
     return redirectToSuccess();
