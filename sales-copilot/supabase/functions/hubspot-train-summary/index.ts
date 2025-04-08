@@ -221,7 +221,6 @@ serve(async (req) => {
     }
 
     // Prepare the deal statistics data
-    const PAGE_SIZE = 5; // Match the page size used in auto-training
     const dealStatistics = {
       ideal: {
         low: accountData?.ideal_low || 0,
@@ -229,8 +228,7 @@ serve(async (req) => {
         median: accountData?.ideal_median || 0,
         count: accountData?.ideal_count || 0,
         last_trained: accountData?.ideal_last_trained || null,
-        to_train: ideal_deals_to_train,
-        total_pages: Math.ceil(ideal_deals_to_train / PAGE_SIZE)
+        to_train: ideal_deals_to_train
       },
       nonideal: {
         low: accountData?.nonideal_low || 0,
@@ -238,8 +236,7 @@ serve(async (req) => {
         median: accountData?.nonideal_median || 0,
         count: accountData?.nonideal_count || 0,
         last_trained: accountData?.nonideal_last_trained || null,
-        to_train: nonideal_deals_to_train,
-        total_pages: Math.ceil(nonideal_deals_to_train / PAGE_SIZE)
+        to_train: nonideal_deals_to_train
       }
     };
 
