@@ -162,11 +162,13 @@ serve(async (req) => {
             .from('hubspot_accounts')
             .select(`
               ideal_count,
-              nonideal_count,
               ideal_high,
               ideal_low,
+              ideal_median,
+              nonideal_count,
               nonideal_high,
               nonideal_low,
+              nonideal_median,
               current_ideal_deals,
               current_less_ideal_deals
             `)
@@ -181,26 +183,84 @@ serve(async (req) => {
 
             // Update appropriate statistics based on classification
             if (recordStatus.classification === 'ideal') {
+              // Get all the amounts for proper median calculation
+              const amounts = [];
+              
+              // If we have existing data and count, create a synthetic array based on existing median
+              if (currentStats.ideal_count > 0 && currentStats.ideal_median !== null) {
+                // Simulate the existing distribution using the current median
+                for (let i = 0; i < currentStats.ideal_count; i++) {
+                  amounts.push(currentStats.ideal_median);
+                }
+              }
+              
+              // Add the new amount
+              amounts.push(amount);
+              
+              // Calculate new statistics with all amounts
+              const newStats = calculateDealStatistics(amounts);
+              
               updateData.ideal_count = (currentStats.ideal_count || 0) + 1;
               updateData.ideal_high = Math.max(stats.high, currentStats.ideal_high || 0);
               updateData.ideal_low = currentStats.ideal_low === null 
                 ? stats.low 
                 : Math.min(stats.low, currentStats.ideal_low);
+              updateData.ideal_median = newStats.median;
+              updateData.ideal_last_trained = new Date().toISOString();
               updateData.current_ideal_deals = (currentStats.current_ideal_deals || 0) + 1;
+              
+              logger.info(`Ideal deal update: count=${updateData.ideal_count}, high=${updateData.ideal_high}, low=${updateData.ideal_low}, median=${updateData.ideal_median}`);
             } else {
+              // Get all the amounts for proper median calculation
+              const amounts = [];
+              
+              logger.info(`Processing NONIDEAL deal with amount: ${amount}`);
+              logger.info(`Current nonideal stats: count=${currentStats.nonideal_count}, high=${currentStats.nonideal_high}, low=${currentStats.nonideal_low}, median=${currentStats.nonideal_median}`);
+              
+              // If we have existing data and count, create a synthetic array based on existing median
+              if (currentStats.nonideal_count > 0 && currentStats.nonideal_median !== null) {
+                logger.info(`Using existing nonideal_median: ${currentStats.nonideal_median} × ${currentStats.nonideal_count} times`);
+                // Simulate the existing distribution using the current median
+                for (let i = 0; i < currentStats.nonideal_count; i++) {
+                  amounts.push(currentStats.nonideal_median);
+                }
+              } else {
+                logger.info(`No existing nonideal median or count is zero/null`);
+              }
+              
+              // Add the new amount
+              amounts.push(amount);
+              logger.info(`Added new amount ${amount} to amounts array. Total length: ${amounts.length}`);
+              
+              // Calculate new statistics with all amounts
+              const newStats = calculateDealStatistics(amounts);
+              logger.info(`New calculated stats: low=${newStats.low}, high=${newStats.high}, median=${newStats.median}, count=${newStats.count}`);
+              
               updateData.nonideal_count = (currentStats.nonideal_count || 0) + 1;
               updateData.nonideal_high = Math.max(stats.high, currentStats.nonideal_high || 0);
               updateData.nonideal_low = currentStats.nonideal_low === null 
                 ? stats.low 
                 : Math.min(stats.low, currentStats.nonideal_low);
+              updateData.nonideal_median = newStats.median;
+              updateData.nonideal_last_trained = new Date().toISOString();
               updateData.current_less_ideal_deals = (currentStats.current_less_ideal_deals || 0) + 1;
+              
+              logger.info(`Nonideal deal update: count=${updateData.nonideal_count}, high=${updateData.nonideal_high}, low=${updateData.nonideal_low}, median=${updateData.nonideal_median}`);
             }
 
             // Update statistics
-            await supabase
+            logger.info(`Updating statistics for portal ${recordStatus.portal_id}`);
+            
+            const { data: updateResult, error: updateStatsError } = await supabase
               .from('hubspot_accounts')
               .update(updateData)
               .eq('portal_id', recordStatus.portal_id);
+              
+            if (updateStatsError) {
+              logger.error(`Error updating statistics: ${updateStatsError.message}`);
+            } else {
+              logger.info(`Statistics updated successfully`);
+            }
           }
         }
       }
@@ -237,7 +297,7 @@ serve(async (req) => {
         .from('hubspot_object_status')
         .update({ 
           training_status: 'failed',
-          error_message: error.message
+          training_error: error.message
         })
         .eq('object_id', object_id);
 
@@ -257,4 +317,4 @@ serve(async (req) => {
       { status: 500, headers: corsHeaders }
     );
   }
-}); 
+});
