@@ -142,15 +142,84 @@ serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true, 
-        message: `Processing batch of ${dealIds.length} deals for portal ${portalId}`,
-        deals: dealIds,
-        results: results
-      }),
+    // After processing the current batch, check if there are still pending records
+    const { count: remainingCount, error: countError } = await supabase
+      .from('hubspot_object_status')
+      .select('*', { count: 'exact', head: true })
+      .eq('portal_id', portalId)
+      .eq('training_status', 'pending')
+      .eq('object_type', 'deal');
+
+    let recursionInitiated = false;
+    
+    if (countError) {
+      logger.error('Error checking for remaining pending deals:', countError);
+    } else {
+      logger.info(`Remaining pending deals for portal ${portalId}: ${remainingCount}`);
+      
+      if (remainingCount > 0) {
+        // Indicate that recursion should happen
+        recursionInitiated = true;
+        logger.info(`Found ${remainingCount} more pending deals to process in the next batch`);
+      } else {
+        logger.info('No more pending deals, batch processing complete');
+      }
+    }
+
+    // Create response object to return
+    const responseObj = {
+      success: true, 
+      message: `Processing batch of ${dealIds.length} deals for portal ${portalId}`,
+      deals: dealIds,
+      results: results,
+      remaining_deals: remainingCount || 0
+    };
+    
+    // Prepare to return response
+    const response = new Response(
+      JSON.stringify(responseObj),
       { status: 200, headers: corsHeaders }
     );
+    
+    // Before returning response, trigger next batch if needed
+    if (recursionInitiated) {
+      // We need to trigger the next batch but not wait for it to complete
+      try {
+        logger.info('Initiating next batch processing');
+        
+        // Explicit absolute URL with full URL construction
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
+        
+        logger.info(`Making absolute request to: ${batchUrl}`);
+        
+        // Make the request with explicit external fetch
+        const fetchPromise = fetch(batchUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        // Use Promise.race with a short timeout to ensure we don't wait too long
+        await Promise.race([
+          fetchPromise.then(res => {
+            logger.info(`Next batch triggered with status: ${res.status}`);
+          }).catch(err => {
+            logger.error(`Failed to trigger next batch: ${err.message}`);
+          }),
+          // Add a short timeout promise just to be safe
+          new Promise(resolve => setTimeout(resolve, 500))
+        ]);
+        
+        logger.info(`Triggered next batch processing via absolute URL`);
+      } catch (error) {
+        logger.error(`Error initiating next batch: ${error.message}`);
+      }
+    }
+    
+    return response;
 
   } catch (error) {
     logger.error('Unexpected error:', error);
