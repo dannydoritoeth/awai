@@ -73,7 +73,7 @@ const BaseScoring = ({
       // Also try to get additional metadata from Supabase
       try {
         const summaryResponse = await hubspot.fetch(
-          `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}`,
+          `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`,
           {
             method: 'GET'
           }
@@ -83,12 +83,13 @@ const BaseScoring = ({
         console.log('Score summary data:', summaryData);
         
         // If we didn't get data from HubSpot but have it in the summary, use that
-        if (summaryData.success && summaryData.result) {
-          if (!score && summaryData.result.score) {
-            setScore(summaryData.result.score);
+        if (summaryData.success && summaryData.result && summaryData.result.currentRecord) {
+          const currentRecord = summaryData.result.currentRecord;
+          if (!score && currentRecord.ideal_client_score) {
+            setScore(currentRecord.ideal_client_score);
           }
-          if (!summary && summaryData.result.summary) {
-            setSummary(summaryData.result.summary);
+          if (!summary && currentRecord.ideal_client_summary) {
+            setSummary(currentRecord.ideal_client_summary);
           }
         }
       } catch (summaryError) {

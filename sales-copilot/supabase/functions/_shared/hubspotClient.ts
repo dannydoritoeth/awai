@@ -236,16 +236,16 @@ export class HubspotClient implements HubspotClientInterface {
     return response.json();
   }
 
-  async getContact(id: string): Promise<HubspotRecord> {
-    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/contacts/${id}`);
+  async getContact(id: string, properties?: string[]): Promise<HubspotRecord> {
+    return this.getRecord('contacts', id, properties || []);
   }
 
-  async getCompany(id: string): Promise<HubspotRecord> {
-    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/companies/${id}`);
+  async getCompany(id: string, properties?: string[]): Promise<HubspotRecord> {
+    return this.getRecord('companies', id, properties || []);
   }
 
-  async getDeal(id: string): Promise<HubspotRecord> {
-    return this.makeJsonRequest(`${this.crmBaseUrl}/objects/deals/${id}`);
+  async getDeal(id: string, properties?: string[]): Promise<HubspotRecord> {
+    return this.getRecord('deals', id, properties || []);
   }
 
   async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
