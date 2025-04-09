@@ -1,5 +1,12 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
+// Add Deno declaration for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 export interface Subscription {
   id: string;
   status: 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
@@ -269,16 +276,67 @@ export class SubscriptionService {
 
   /**
    * Record a new score event for a portal
+   * @param portalId The HubSpot portal ID
+   * @param scoringDetails Optional details about the scoring event for logging
    */
-  async recordScore(portalId: string): Promise<void> {
+  async recordScore(
+    portalId: string, 
+    scoringDetails?: {
+      recordId?: string;
+      recordType?: string;
+      inputs?: any;
+      outputs?: any;
+      aiProvider?: string;
+      aiModel?: string;
+      duration?: number;
+    }
+  ): Promise<void> {
+    // Check scoring limits
     const { canScore, remaining, periodEnd } = await this.canScoreLead(portalId);
     if (!canScore) {
       throw new Error(`Score limit reached. Next reset at ${periodEnd.toISOString()}`);
     }
 
+    // Check if logging is enabled via environment variable
+    const logPortalId = Deno.env.get('LOG_PORTAL_ID_SCORE');
+    const shouldLog = logPortalId && (logPortalId === '*' || logPortalId === portalId);
+    
+    // Create basic event record
+    const eventRecord: Record<string, any> = { 
+      portal_id: portalId 
+    };
+    
+    // Add scoring details in the single log_data column if logging is enabled
+    if (shouldLog && scoringDetails) {
+      // Create a combined log object with all details
+      const logData = {
+        // Record information
+        recordId: scoringDetails.recordId,
+        recordType: scoringDetails.recordType,
+        
+        // AI configuration
+        aiProvider: scoringDetails.aiProvider,
+        aiModel: scoringDetails.aiModel,
+        
+        // Performance metrics
+        duration: scoringDetails.duration,
+        
+        // Full context data
+        inputs: scoringDetails.inputs,
+        outputs: scoringDetails.outputs,
+        
+        // Add timestamp for when this log was created
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store everything in a single JSON column
+      eventRecord.log_data = logData;
+    }
+    
+    // Insert the record into the database
     const { error } = await this.supabase
       .from('scoring_events')
-      .insert({ portal_id: portalId });
+      .insert(eventRecord);
 
     if (error) {
       throw new Error(`Failed to record score: ${error.message}`);
