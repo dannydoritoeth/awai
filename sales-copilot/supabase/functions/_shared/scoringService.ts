@@ -1,9 +1,9 @@
 import { HubspotClient } from './hubspotClient.ts';
 import { Logger } from './logger.ts';
 import { AIConfig, HubspotAccount } from './types.ts';
-import { Pinecone } from 'https://esm.sh/@pinecone-database/pinecone@5.1.1';
 import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { SubscriptionService } from "./subscriptionService.ts";
+import { PineconeClient } from './pineconeClient.ts';
 
 declare const Deno: {
   env: {
@@ -23,8 +23,7 @@ export class ScoringService {
   private aiConfig: AIConfig;
   private portalId: string;
   private openai: OpenAI;
-  private pinecone: Pinecone;
-  private pineconeIndex: any;
+  private pineconeClient: PineconeClient;
   private subscriptionService: SubscriptionService;
 
   constructor(
@@ -43,12 +42,12 @@ export class ScoringService {
       apiKey: Deno.env.get('OPENAI_API_KEY')!
     });
 
-    this.pinecone = new Pinecone({
-      apiKey: Deno.env.get('PINECONE_API_KEY')!,
-      environment: Deno.env.get('PINECONE_ENVIRONMENT')!
-    });
-
-    this.pineconeIndex = this.pinecone.index(Deno.env.get('PINECONE_INDEX') || 'sales-copilot');
+    // Use our custom PineconeClient instead of direct SDK
+    this.pineconeClient = new PineconeClient();
+    this.pineconeClient.initialize(
+      Deno.env.get('PINECONE_API_KEY')!,
+      Deno.env.get('PINECONE_INDEX') || 'sales-copilot'
+    );
 
     // Initialize subscription service with Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -83,12 +82,12 @@ export class ScoringService {
       const embedding = await this.getEmbeddings(record);
       
       // Query Pinecone using portal ID as namespace
-      const queryResponse = await this.pineconeIndex.query({
-        vector: embedding,
-        namespace: `${this.portalId}-${type}`,
-        topK: 5,
-        includeMetadata: true
-      });
+      const queryResponse = await this.pineconeClient.query(
+        `${this.portalId}-${type}`,
+        embedding,
+        {},
+        5
+      );
 
       return queryResponse.matches.map(match => match.metadata);
     } catch (error) {
@@ -101,11 +100,12 @@ export class ScoringService {
     try {
       const embedding = await this.getEmbeddings(record);
       
-      await this.pineconeIndex.upsert([{
+      await this.pineconeClient.upsertDocumentsWithEmbeddings([{
         id: record.id,
-        values: embedding,
-        metadata: record
-      }]);
+        text: JSON.stringify(record),
+        metadata: record,
+        embedding: embedding
+      }], `${this.portalId}-${type}`);
     } catch (error) {
       this.logger.error('Error storing embedding:', error);
       // Don't throw the error as this is not critical for scoring
@@ -239,9 +239,39 @@ ${JSON.stringify(data, null, 2)}`;
   }
 
   private async checkScoringLimit(): Promise<void> {
-    const { canScore, remaining, periodEnd } = await this.subscriptionService.canScoreLead(this.portalId);
-    if (!canScore) {
-      throw new Error(`Scoring limit reached. You have used all ${remaining} scores for this period. Next reset at ${periodEnd.toISOString()}`);
+    try {
+      const { canScore, remaining, periodEnd } = await this.subscriptionService.canScoreLead(this.portalId);
+      
+      // Validate the remaining value
+      const remainingScores = Number.isNaN(remaining) ? 0 : remaining;
+      
+      if (!canScore) {
+        // Safely format the date or provide a fallback
+        let periodEndText = "the end of the current period";
+        try {
+          if (periodEnd && periodEnd instanceof Date && !isNaN(periodEnd.getTime())) {
+            periodEndText = periodEnd.toISOString();
+          }
+        } catch (dateError) {
+          this.logger.warn('Invalid date format in period end:', dateError);
+        }
+        
+        throw new Error(`Scoring limit reached. You have used all ${remainingScores} scores for this period. Next reset at ${periodEndText}`);
+      }
+    } catch (error) {
+      // Catch and log any errors from the subscription service
+      if (error.message && error.message.includes('Invalid time value')) {
+        this.logger.error('Error checking scoring limit - invalid date:', error);
+        throw new Error('Unable to check scoring limits due to a date formatting issue. Please contact support.');
+      }
+      
+      // Add specific handling for NaN error
+      if (error.message && error.message.includes('NaN scores')) {
+        this.logger.error('Error with score count calculation:', error);
+        throw new Error('Unable to calculate remaining scores. Please contact support.');
+      }
+      
+      throw error;
     }
   }
 

@@ -171,17 +171,62 @@ export class SubscriptionService {
     periodStart: Date;
     periodEnd: Date;
   }> {
-    const { data, error } = await this.supabase
-      .rpc('get_current_period_score_count', { portal_id_param: portalId });
-    
-    if (error) throw error;
-
-    return {
-      scoresUsed: data.scores_used,
-      maxScores: data.max_scores,
-      periodStart: new Date(data.period_start),
-      periodEnd: new Date(data.period_end)
-    };
+    try {
+      const { data, error } = await this.supabase
+        .rpc('get_current_period_score_count', { portal_id_param: portalId });
+      
+      if (error) throw error;
+      
+      // Validate all numeric fields to prevent NaN
+      const scoresUsed = data?.scores_used !== null && !isNaN(data?.scores_used) ? 
+                        Number(data.scores_used) : 0;
+      
+      const maxScores = data?.max_scores !== null && !isNaN(data?.max_scores) ? 
+                       Number(data.max_scores) : 50; // Default to 50 if not specified
+      
+      // Use current date as fallback if dates are invalid
+      const now = new Date();
+      const oneMonthLater = new Date(now);
+      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+      
+      // Validate dates
+      let periodStart, periodEnd;
+      try {
+        periodStart = data?.period_start ? new Date(data.period_start) : now;
+        // Check if date is valid
+        if (isNaN(periodStart.getTime())) periodStart = now;
+      } catch (e) {
+        periodStart = now;
+      }
+      
+      try {
+        periodEnd = data?.period_end ? new Date(data.period_end) : oneMonthLater;
+        // Check if date is valid
+        if (isNaN(periodEnd.getTime())) periodEnd = oneMonthLater;
+      } catch (e) {
+        periodEnd = oneMonthLater;
+      }
+      
+      return {
+        scoresUsed,
+        maxScores,
+        periodStart,
+        periodEnd
+      };
+    } catch (error) {
+      console.error('Error getting current period scores:', error);
+      // Return default values on error
+      const now = new Date();
+      const oneMonthLater = new Date(now);
+      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+      
+      return {
+        scoresUsed: 0,
+        maxScores: 50, // Default free tier limit
+        periodStart: now,
+        periodEnd: oneMonthLater
+      };
+    }
   }
 
   /**
@@ -192,12 +237,34 @@ export class SubscriptionService {
     remaining: number;
     periodEnd: Date;
   }> {
-    const usage = await this.getCurrentPeriodScores(portalId);
-    return {
-      canScore: usage.scoresUsed < usage.maxScores,
-      remaining: usage.maxScores - usage.scoresUsed,
-      periodEnd: usage.periodEnd
-    };
+    try {
+      const usage = await this.getCurrentPeriodScores(portalId);
+      
+      // Calculate remaining scores and ensure it's a valid number
+      let remaining = usage.maxScores - usage.scoresUsed;
+      if (isNaN(remaining)) {
+        console.warn(`Invalid remaining calculation: ${usage.maxScores} - ${usage.scoresUsed} = ${remaining}`);
+        remaining = 0; // Default to 0 if we can't calculate properly
+      }
+      
+      return {
+        canScore: usage.scoresUsed < usage.maxScores,
+        remaining,
+        periodEnd: usage.periodEnd
+      };
+    } catch (error) {
+      console.error('Error in canScoreLead:', error);
+      
+      // Return default fallback values if we encounter an error
+      const fallbackDate = new Date();
+      fallbackDate.setMonth(fallbackDate.getMonth() + 1);
+      
+      return {
+        canScore: false, // Prevent scoring on error to be safe
+        remaining: 0,
+        periodEnd: fallbackDate
+      };
+    }
   }
 
   /**
