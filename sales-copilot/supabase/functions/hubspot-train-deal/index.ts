@@ -99,7 +99,7 @@ serve(async (req) => {
       Deno.env.get('PINECONE_INDEX')!
     );
     
-    const documentPackager = new DocumentPackager(hubspotClient);
+    const documentPackager = new DocumentPackager(hubspotClient, refreshToken, recordStatus.portal_id);
 
     // Get deal details
     const deal = await handleApiCall(
@@ -150,7 +150,8 @@ serve(async (req) => {
         openai,
         pineconeClient,
         recordStatus.portal_id,
-        namespace
+        namespace,
+        refreshToken
       );
 
       // Update statistics if amount is available

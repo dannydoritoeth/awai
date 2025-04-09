@@ -2,6 +2,7 @@ import { Logger } from './logger.ts';
 import { DocumentPackager } from './documentPackager.ts';
 import { PineconeClient } from './pineconeClient.ts';
 import { HubspotClient } from './hubspotClient.ts';
+import { handleApiCall } from './apiHandler.ts';
 import { sleep } from './utils.ts';
 import { calculateConversionDays } from './statistics.ts';
 
@@ -18,7 +19,8 @@ export async function processSingleDeal(
   openai: any,
   pineconeClient: PineconeClient,
   portalId: string,
-  namespace: string
+  namespace: string,
+  refreshToken?: string // Add refresh token parameter for API call handling
 ): Promise<void> {
   const processingStart = Date.now();
   
@@ -61,7 +63,19 @@ export async function processSingleDeal(
     
     // Get all contacts and companies associated with this deal
     try {
-      const associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
+      // Check if we have refresh token for API call handling
+      let associationsResult;
+      if (refreshToken) {
+        associationsResult = await handleApiCall(
+          hubspotClient,
+          portalId,
+          refreshToken,
+          () => hubspotClient.getAssociations(deal.id, 'deal')
+        );
+      } else {
+        associationsResult = await hubspotClient.getAssociations(deal.id, 'deal');
+      }
+      
       if (associationsResult?.results) {
         // Extract contact and company IDs from associations
         const contactIds = associationsResult.results.contacts?.map(a => a.id) || [];
@@ -97,7 +111,18 @@ export async function processSingleDeal(
     if (deal.associations?.contacts?.results) {
       for (const contact of deal.associations.contacts.results) {
         try {
-          const contactRecord = await hubspotClient.getContact(contact.id);
+          let contactRecord;
+          if (refreshToken) {
+            contactRecord = await handleApiCall(
+              hubspotClient,
+              portalId,
+              refreshToken,
+              () => hubspotClient.getContact(contact.id)
+            );
+          } else {
+            contactRecord = await hubspotClient.getContact(contact.id);
+          }
+          
           if (contactRecord) {
             associatedRecords.contacts.push(contactRecord);
           }
@@ -111,7 +136,18 @@ export async function processSingleDeal(
     if (deal.associations?.companies?.results) {
       for (const company of deal.associations.companies.results) {
         try {
-          const companyRecord = await hubspotClient.getCompany(company.id);
+          let companyRecord;
+          if (refreshToken) {
+            companyRecord = await handleApiCall(
+              hubspotClient,
+              portalId,
+              refreshToken,
+              () => hubspotClient.getCompany(company.id)
+            );
+          } else {
+            companyRecord = await hubspotClient.getCompany(company.id);
+          }
+          
           if (companyRecord) {
             associatedRecords.companies.push(companyRecord);
           }

@@ -109,7 +109,13 @@ export class PineconeClient {
   /**
    * Query Pinecone index
    */
-  async query(namespace: string, vector: number[] | null, filter: any = {}, topK: number = 10): Promise<any> {
+  async query(
+    namespace: string, 
+    vector: number[] | null, 
+    filter: any = {}, 
+    topK: number = 10,
+    minScore: number = 0
+  ): Promise<any> {
     try {
       this.logger.info(`Querying Pinecone namespace ${namespace} with filter: ${JSON.stringify(filter)}`);
       
@@ -143,6 +149,14 @@ export class PineconeClient {
       };
       
       const response = await this.index.namespace(namespace).query(queryParams);
+      
+      // If minScore was provided, we manually filter the results
+      if (minScore > 0 && response.matches && response.matches.length > 0) {
+        this.logger.info(`Filtering ${response.matches.length} results by minimum score ${minScore}`);
+        response.matches = response.matches.filter(match => match.score >= minScore);
+        this.logger.info(`After filtering: ${response.matches.length} results remain`);
+      }
+      
       this.logger.info(`Query returned ${response.matches ? response.matches.length : 0} vectors`);
       return response;
     } catch (error) {

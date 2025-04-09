@@ -4,6 +4,7 @@ import { AIConfig, HubspotAccount } from './types.ts';
 import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { SubscriptionService } from "./subscriptionService.ts";
 import { PineconeClient } from './pineconeClient.ts';
+import { handleApiCall } from './apiHandler.ts';
 
 declare const Deno: {
   env: {
@@ -36,17 +37,20 @@ export class ScoringService {
   private openai: OpenAI;
   private pineconeClient: PineconeClient;
   private subscriptionService: SubscriptionService;
+  private refreshToken?: string;
 
   constructor(
     hubspotClient: HubspotClient,
     aiConfig: AIConfig,
     portalId: string,
-    logger: Logger
+    logger: Logger,
+    refreshToken?: string
   ) {
     this.hubspotClient = hubspotClient;
     this.aiConfig = aiConfig;
     this.portalId = portalId;
     this.logger = logger;
+    this.refreshToken = refreshToken;
 
     // Initialize services
     this.openai = new OpenAI({
@@ -92,9 +96,10 @@ export class ScoringService {
       // Get embeddings for the current record
       const embedding = await this.getEmbeddings(record);
       
-      // Query Pinecone using portal ID as namespace
+      // Query Pinecone using the correct namespace format
+      const namespace = `hubspot-${this.portalId}`;
       const queryResponse = await this.pineconeClient.query(
-        `${this.portalId}-${type}`,
+        namespace,
         embedding,
         {
           portalId: this.portalId,
@@ -107,22 +112,6 @@ export class ScoringService {
     } catch (error) {
       this.logger.error(`Error getting similar ${type}s:`, error);
       return []; // Return empty array if similarity search fails
-    }
-  }
-
-  private async storeEmbedding(record: any, type: 'contact' | 'company' | 'deal'): Promise<void> {
-    try {
-      const embedding = await this.getEmbeddings(record);
-      
-      await this.pineconeClient.upsertDocumentsWithEmbeddings([{
-        id: record.id,
-        text: JSON.stringify(record),
-        metadata: record,
-        embedding: embedding
-      }], `${this.portalId}-${type}`);
-    } catch (error) {
-      this.logger.error('Error storing embedding:', error);
-      // Don't throw the error as this is not critical for scoring
     }
   }
 
@@ -312,8 +301,29 @@ ${JSON.stringify(data, null, 2)}`;
     this.logger.info(`Scoring contact ${contactId}`);
     
     try {
-      const contact = await this.hubspotClient.getContact(contactId);
-      const similarContacts = await this.getSimilarRecords(contact, 'contact');
+      let contact;
+      if (this.refreshToken) {
+        contact = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getContact(contactId)
+        );
+      } else {
+        contact = await this.hubspotClient.getContact(contactId);
+      }
+      
+      let similarContacts;
+      if (this.refreshToken) {
+        similarContacts = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.getSimilarRecords(contact, 'contact')
+        );
+      } else {
+        similarContacts = await this.getSimilarRecords(contact, 'contact');
+      }
       
       // Prepare inputs for logging
       const inputs = {
@@ -325,15 +335,25 @@ ${JSON.stringify(data, null, 2)}`;
       const result = await this.getAIResponse('Score this contact', contact, similarContacts);
       const lastScored = new Date().toISOString();
 
-      // Store the embedding for future similarity searches
-      await this.storeEmbedding(contact, 'contact');
-
       // Update the contact in HubSpot
-      await this.hubspotClient.updateContact(contactId, {
-        ideal_client_score: result.score.toString(),
-        ideal_client_summary: result.summary,
-        ideal_client_last_scored: lastScored
-      });
+      if (this.refreshToken) {
+        await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.updateContact(contactId, {
+            ideal_client_score: result.score.toString(),
+            ideal_client_summary: result.summary,
+            ideal_client_last_scored: lastScored
+          })
+        );
+      } else {
+        await this.hubspotClient.updateContact(contactId, {
+          ideal_client_score: result.score.toString(),
+          ideal_client_summary: result.summary,
+          ideal_client_last_scored: lastScored
+        });
+      }
 
       // Prepare outputs for logging
       const outputs = {
@@ -359,8 +379,29 @@ ${JSON.stringify(data, null, 2)}`;
     this.logger.info(`Scoring company ${companyId}`);
     
     try {
-      const company = await this.hubspotClient.getCompany(companyId);
-      const similarCompanies = await this.getSimilarRecords(company, 'company');
+      let company;
+      if (this.refreshToken) {
+        company = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getCompany(companyId)
+        );
+      } else {
+        company = await this.hubspotClient.getCompany(companyId);
+      }
+      
+      let similarCompanies;
+      if (this.refreshToken) {
+        similarCompanies = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.getSimilarRecords(company, 'company')
+        );
+      } else {
+        similarCompanies = await this.getSimilarRecords(company, 'company');
+      }
       
       // Prepare inputs for logging
       const inputs = {
@@ -372,22 +413,31 @@ ${JSON.stringify(data, null, 2)}`;
       const result = await this.getAIResponse('Score this company', company, similarCompanies);
       const lastScored = new Date().toISOString();
 
-      // Store the embedding for future similarity searches
-      await this.storeEmbedding(company, 'company');
-
       // Update the company in HubSpot
-      await this.hubspotClient.updateCompany(companyId, {
-        ideal_client_score: result.score.toString(),
-        ideal_client_summary: result.summary,
-        ideal_client_last_scored: lastScored
-      });
+      if (this.refreshToken) {
+        await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.updateCompany(companyId, {
+            ideal_client_score: result.score.toString(),
+            ideal_client_summary: result.summary,
+            ideal_client_last_scored: lastScored
+          })
+        );
+      } else {
+        await this.hubspotClient.updateCompany(companyId, {
+          ideal_client_score: result.score.toString(),
+          ideal_client_summary: result.summary,
+          ideal_client_last_scored: lastScored
+        });
+      }
 
       // Prepare outputs for logging
       const outputs = {
         score: result.score,
         summary: result.summary,
         lastScored,
-        // Include the full prompt that was sent to the AI
         fullPrompt: result.fullPrompt
       };
 
@@ -408,7 +458,17 @@ ${JSON.stringify(data, null, 2)}`;
     try {
       // 1. Fetch the deal with all properties
       this.logger.info(`Fetching deal ${dealId} from HubSpot`);
-      const deal = await this.hubspotClient.getDeal(dealId);
+      let deal;
+      if (this.refreshToken) {
+        deal = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getDeal(dealId)
+        );
+      } else {
+        deal = await this.hubspotClient.getDeal(dealId);
+      }
       if (!deal) {
         throw new Error(`Deal ${dealId} not found`);
       }
@@ -416,7 +476,17 @@ ${JSON.stringify(data, null, 2)}`;
       
       // 2. Fetch associated contacts and companies for the deal
       this.logger.info(`Fetching associations for deal ${dealId}`);
-      const associationsData = await this.hubspotClient.getDealAssociations(dealId);
+      let associationsData;
+      if (this.refreshToken) {
+        associationsData = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getDealAssociations(dealId)
+        );
+      } else {
+        associationsData = await this.hubspotClient.getDealAssociations(dealId);
+      }
       this.logger.info(`Retrieved associations data:`, JSON.stringify(associationsData));
       
       // 3. Process contacts
@@ -429,7 +499,18 @@ ${JSON.stringify(data, null, 2)}`;
           associationsData.results.contacts.map(async (association: any) => {
             try {
               this.logger.info(`Fetching contact ${association.id}`);
-              return await this.hubspotClient.getContact(association.id);
+              let contact;
+              if (this.refreshToken) {
+                contact = await handleApiCall(
+                  this.hubspotClient,
+                  this.portalId,
+                  this.refreshToken,
+                  () => this.hubspotClient.getContact(association.id)
+                );
+              } else {
+                contact = await this.hubspotClient.getContact(association.id);
+              }
+              return contact;
             } catch (error) {
               this.logger.warn(`Failed to fetch associated contact ${association.id}:`, error);
               return null;
@@ -453,7 +534,18 @@ ${JSON.stringify(data, null, 2)}`;
           associationsData.results.companies.map(async (association: any) => {
             try {
               this.logger.info(`Fetching company ${association.id}`);
-              return await this.hubspotClient.getCompany(association.id);
+              let company;
+              if (this.refreshToken) {
+                company = await handleApiCall(
+                  this.hubspotClient,
+                  this.portalId,
+                  this.refreshToken,
+                  () => this.hubspotClient.getCompany(association.id)
+                );
+              } else {
+                company = await this.hubspotClient.getCompany(association.id);
+              }
+              return company;
             } catch (error) {
               this.logger.warn(`Failed to fetch associated company ${association.id}:`, error);
               return null;
@@ -489,7 +581,7 @@ ${JSON.stringify(data, null, 2)}`;
       // 7. Find similar deals in Pinecone
       const similarDeals: SimilarDeal[] = [];
       if (embedding && embedding.length > 0) {
-        this.logger.info(`Searching for similar deals in Pinecone namespace: ${this.portalId}-deal`);
+        this.logger.info(`Searching for similar deals in Pinecone namespace: hubspot-${this.portalId}`);
         try {
           // Create a detailed filter based on what we know about the deal
           const filter = {
@@ -497,13 +589,15 @@ ${JSON.stringify(data, null, 2)}`;
             recordType: 'deal'
           };
           
-          this.logger.info(`Pinecone query params: namespace=${this.portalId}-deal, filter=${JSON.stringify(filter)}`);
+          const namespace = `hubspot-${this.portalId}`;
+          this.logger.info(`Pinecone query params: namespace=${namespace}, filter=${JSON.stringify(filter)}`);
           
           const similarDealsResponse = await this.pineconeClient.query(
-            `${this.portalId}-deal`,
+            namespace,
             embedding,
             filter,
-            5
+            10,  // Increase from 5 to 10 to get more potential matches
+            0.01  // Set minimum similarity threshold very low to get results even if not very similar
           );
           
           this.logger.info(`Pinecone query returned ${similarDealsResponse.matches?.length || 0} matches`);
@@ -534,7 +628,17 @@ ${JSON.stringify(data, null, 2)}`;
                   // If not in metadata, try to fetch from HubSpot
                   this.logger.info(`Fetching deal ${matchId} from HubSpot to get score`);
                   try {
-                    const matchDeal = await this.hubspotClient.getDeal(matchId);
+                    let matchDeal;
+                    if (this.refreshToken) {
+                      matchDeal = await handleApiCall(
+                        this.hubspotClient,
+                        this.portalId,
+                        this.refreshToken,
+                        () => this.hubspotClient.getDeal(matchId)
+                      );
+                    } else {
+                      matchDeal = await this.hubspotClient.getDeal(matchId);
+                    }
                     if (matchDeal.properties && matchDeal.properties.ideal_client_score) {
                       this.logger.info(`Found score in HubSpot: ${matchDeal.properties.ideal_client_score}`);
                       existingScore = {
@@ -561,6 +665,8 @@ ${JSON.stringify(data, null, 2)}`;
                 this.logger.warn(`Failed to process similar deal:`, error);
               }
             }
+          } else {
+            this.logger.info(`No similar deals found in Pinecone, proceeding with empty similarDeals array`);
           }
         } catch (pineconeError) {
           this.logger.error(`Error querying Pinecone:`, pineconeError);
@@ -585,31 +691,26 @@ ${JSON.stringify(data, null, 2)}`;
       const lastScored = new Date().toISOString();
       this.logger.info(`AI returned score: ${result.score}/100`);
 
-      // 11. Store the embedding for future similarity searches
-      if (embedding && embedding.length > 0) {
-        this.logger.info(`Storing embeddings for deal ${dealId} in Pinecone`);
-        try {
-          const dealWithScoreData = {
-            ...completeRecord.deal,
+      // 12. Update the deal in HubSpot
+      this.logger.info(`Updating deal ${dealId} in HubSpot with score ${result.score}`);
+      if (this.refreshToken) {
+        await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.updateDeal(dealId, {
             ideal_client_score: result.score.toString(),
             ideal_client_summary: result.summary,
             ideal_client_last_scored: lastScored
-          };
-          
-          await this.storeEmbedding(dealWithScoreData, 'deal');
-          this.logger.info(`Successfully stored embeddings for deal ${dealId}`);
-        } catch (embeddingError) {
-          this.logger.warn(`Failed to store embedding, continuing with scoring:`, embeddingError);
-        }
+          })
+        );
+      } else {
+        await this.hubspotClient.updateDeal(dealId, {
+          ideal_client_score: result.score.toString(),
+          ideal_client_summary: result.summary,
+          ideal_client_last_scored: lastScored
+        });
       }
-
-      // 12. Update the deal in HubSpot
-      this.logger.info(`Updating deal ${dealId} in HubSpot with score ${result.score}`);
-      await this.hubspotClient.updateDeal(dealId, {
-        ideal_client_score: result.score.toString(),
-        ideal_client_summary: result.summary,
-        ideal_client_last_scored: lastScored
-      });
       this.logger.info(`Successfully updated deal ${dealId} in HubSpot`);
 
       // 13. Prepare outputs for logging
@@ -639,11 +740,13 @@ ${JSON.stringify(data, null, 2)}`;
   ): Promise<{ score: number; summary: string; fullPrompt: string }> {
     const { provider, model, temperature, maxTokens, scoringPrompt } = this.aiConfig;
     
-    // Log complete record for debugging
-    this.logger.info('Complete record for AI analysis:', JSON.stringify(completeRecord, null, 2).substring(0, 1000) + '...');
+    // Log complete record for debugging - with PII redaction
+    const redactedRecord = this.redactPII(JSON.parse(JSON.stringify(completeRecord)));
+    this.logger.info('Complete record for AI analysis:', JSON.stringify(redactedRecord, null, 2).substring(0, 1000) + '...');
     this.logger.info('Similar deals count:', similarDeals.length);
     if (similarDeals.length > 0) {
-      this.logger.info('First similar deal:', JSON.stringify(similarDeals[0], null, 2).substring(0, 1000) + '...');
+      const redactedSimilarDeal = this.redactPII(JSON.parse(JSON.stringify(similarDeals[0])));
+      this.logger.info('First similar deal:', JSON.stringify(redactedSimilarDeal, null, 2).substring(0, 1000) + '...');
     }
     
     const defaultPrompt = `You are an expert at analyzing business deals and determining how well they match an ideal client profile. 
@@ -904,5 +1007,64 @@ Format your response as a JSON object with 'score' and 'summary' fields.`;
       this.logger.error('Error getting enhanced AI response:', error);
       throw error;
     }
+  }
+
+  // Helper method to redact PII from records before logging
+  private redactPII(record: any): any {
+    // If it's an array, process each item
+    if (Array.isArray(record)) {
+      return record.map(item => this.redactPII(item));
+    }
+    
+    // If it's not an object or is null, return as is
+    if (typeof record !== 'object' || record === null) {
+      return record;
+    }
+    
+    // Create a new object to avoid mutating the original
+    const redacted = { ...record };
+    
+    // Process contacts
+    if (redacted.contacts) {
+      redacted.contacts = redacted.contacts.map((contact: any) => {
+        if (contact && contact.properties) {
+          return {
+            ...contact,
+            properties: {
+              ...contact.properties,
+              // Redact PII fields
+              email: contact.properties.email ? '[REDACTED EMAIL]' : undefined,
+              firstname: contact.properties.firstname ? '[REDACTED FIRSTNAME]' : undefined,
+              lastname: contact.properties.lastname ? '[REDACTED LASTNAME]' : undefined,
+              phone: contact.properties.phone ? '[REDACTED PHONE]' : undefined
+            }
+          };
+        }
+        return contact;
+      });
+    }
+    
+    // Process single contact
+    if (redacted.properties && (redacted.recordType === 'contact' || record.metadata?.recordType === 'contact')) {
+      redacted.properties = {
+        ...redacted.properties,
+        email: redacted.properties.email ? '[REDACTED EMAIL]' : undefined,
+        firstname: redacted.properties.firstname ? '[REDACTED FIRSTNAME]' : undefined,
+        lastname: redacted.properties.lastname ? '[REDACTED LASTNAME]' : undefined,
+        phone: redacted.properties.phone ? '[REDACTED PHONE]' : undefined
+      };
+    }
+    
+    // Process deal name (may contain customer names)
+    if (redacted.properties && redacted.properties.dealname) {
+      redacted.properties.dealname = '[REDACTED DEAL NAME]';
+    }
+    
+    // Process record property
+    if (redacted.record && typeof redacted.record === 'object') {
+      redacted.record = this.redactPII(redacted.record);
+    }
+    
+    return redacted;
   }
 } 

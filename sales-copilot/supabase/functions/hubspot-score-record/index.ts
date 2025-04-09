@@ -5,6 +5,7 @@ import { Logger } from "../_shared/logger.ts";
 import { AIConfig } from "../_shared/types.ts";
 import { decrypt, encrypt } from "../_shared/encryption.ts";
 import { HubspotClient } from "../_shared/hubspotClient.ts";
+import { handleApiCall } from "../_shared/apiHandler.ts";
 
 const logger = new Logger("score-record");
 
@@ -80,38 +81,48 @@ serve(async (req) => {
       scoringPrompt: account.scoring_prompt
     };
 
-    // Create scoring service with the HubSpot client
+    // Create scoring service with the HubSpot client and pass the refreshToken
     const scoringService = new ScoringService(
-      hubspotClient, // Pass the client instead of just the token
+      hubspotClient,
       aiConfig,
       portalId,
-      logger
+      logger,
+      decryptedRefreshToken  // Pass the refresh token to ScoringService
     );
 
     // Score the record
     logger.info(`Scoring ${recordType} ${recordId}`);
     let result;
     try {
-      switch (recordType) {
-        case 'contact':
-          result = await scoringService.scoreContact(recordId);
-          break;
-        case 'company':
-          result = await scoringService.scoreCompany(recordId);
-          break;
-        case 'deal':
-          result = await scoringService.scoreDeal(recordId);
-          break;
-        default:
-          return new Response(
-            JSON.stringify({ success: false, error: 'Invalid record type. Must be contact, company, or deal' }),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, "Content-Type": "application/json" } 
-            }
-          );
-      }
+      // Use handleApiCall to automatically handle token expiration
+      result = await handleApiCall(
+        hubspotClient,
+        portalId,
+        decryptedRefreshToken,
+        async () => {
+          switch (recordType) {
+            case 'contact':
+              return await scoringService.scoreContact(recordId);
+            case 'company':
+              return await scoringService.scoreCompany(recordId);
+            case 'deal':
+              return await scoringService.scoreDeal(recordId);
+            default:
+              throw new Error('Invalid record type. Must be contact, company, or deal');
+          }
+        }
+      );
     } catch (scoringError) {
+      if (scoringError.message?.includes('Invalid record type')) {
+        return new Response(
+          JSON.stringify({ success: false, error: scoringError.message }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
+      
       logger.error(`Error scoring ${recordType}:`, {
         error: scoringError,
         message: scoringError.message,
