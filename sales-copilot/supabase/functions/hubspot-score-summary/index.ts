@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @deno-types="npm:@supabase/supabase-js@2.38.4"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { SubscriptionService } from "../_shared/subscriptionService.ts";
 import { Logger } from "../_shared/logger.ts";
 
 // Add Deno types
@@ -44,44 +43,65 @@ serve(async (req) => {
       );
     }
 
-    // Initialize SubscriptionService
-    const subscriptionService = new SubscriptionService(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    // Create Supabase client directly
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
-    // Get subscription status and scoring usage
-    const [status, usage] = await Promise.all([
-      subscriptionService.getSubscriptionStatus(portalId),
-      subscriptionService.getCurrentPeriodScores(portalId)
-    ]);
+    // Get current period score count directly using the function from the migration
+    const { data: scoreData, error: scoreError } = await supabaseClient
+      .rpc('get_current_period_score_count', { portal_id_param: portalId })
+      .single();
 
-    // Format the response
+    if (scoreError) {
+      logger.error('Error getting score count:', {
+        error: scoreError,
+        portalId
+      });
+    }
+
+    // Get subscription status directly for plan details
+    const { data: subscription, error: subError } = await supabaseClient
+      .from('subscriptions')
+      .select('*')
+      .filter('metadata->>portal_id', 'eq', portalId.toString())
+      .eq('status', 'active')
+      .single();
+
+    if (subError) {
+      logger.error('Error getting subscription:', {
+        error: subError,
+        portalId
+      });
+    }
+
+    // Format the response with available data
     const summary = {
       plan: {
-        tier: status?.tier || 'FREE',
-        isActive: status?.isActive || false,
-        isCanceledButActive: status?.isCanceledButActive || false,
-        expiresAt: status?.expiresAt || null,
-        isExpiringSoon: status?.isExpiringSoon || false,
-        amount: status?.amount || 0,
-        currency: status?.currency || 'USD',
-        billingInterval: status?.billingInterval || null
+        tier: subscription?.plan_tier || 'FREE',
+        isActive: !!subscription,
+        isCanceledButActive: subscription?.cancel_at_period_end || false,
+        expiresAt: subscription?.cancel_at || null,
+        isExpiringSoon: false, // Can calculate this if needed
+        amount: 0, // Price amount would need to be retrieved from prices table if needed
+        currency: 'USD',
+        billingInterval: 'month' // Default to monthly
       },
       scoring: {
-        used: usage.scoresUsed,
-        total: usage.maxScores,
-        remaining: usage.maxScores - usage.scoresUsed,
-        periodStart: usage.periodStart,
-        periodEnd: usage.periodEnd,
-        percentageUsed: Math.round((usage.scoresUsed / usage.maxScores) * 100)
+        used: scoreData?.scores_used || 0,
+        total: scoreData?.max_scores || 50, // Default to 50 for free tier
+        remaining: (scoreData?.max_scores || 50) - (scoreData?.scores_used || 0),
+        periodStart: scoreData?.period_start || new Date().toISOString(),
+        periodEnd: scoreData?.period_end || new Date().toISOString(),
+        percentageUsed: Math.round(((scoreData?.scores_used || 0) / (scoreData?.max_scores || 50)) * 100)
       }
     };
 
     return new Response(
       JSON.stringify({
         success: true,
-        summary
+        result: summary
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

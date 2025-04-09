@@ -33,6 +33,10 @@ returns table (
 ) language plpgsql as $$
 declare
     sub record;
+    scores_used bigint := 0;
+    period_start timestamp with time zone;
+    period_end timestamp with time zone;
+    max_scores integer := 0;
 begin
     -- Get current subscription period
     select 
@@ -42,24 +46,25 @@ begin
         s.status
     into sub
     from subscriptions s
-    where s.portal_id = portal_id_param
+    where s.metadata->>'portal_id' = portal_id_param
     and s.status = 'active'
     order by s.created_at desc
     limit 1;
 
-    -- Set max scores based on plan tier
-    max_scores := case
-        when sub.plan_tier = 'PRO' then 3000
-        when sub.plan_tier = 'GROWTH' then 7500
-        when sub.plan_tier = 'STARTER' then 750
-        else 50  -- FREE tier
-    end;
-
-    -- If no active subscription, use rolling 30-day window
-    if sub.current_period_start is null then
+    -- If no active subscription, use fallback
+    if sub is null then
         period_start := date_trunc('day', now()) - interval '30 days';
         period_end := date_trunc('day', now()) + interval '1 day';
+        max_scores := 50;
     else
+        -- Set max scores based on plan tier
+        max_scores := case
+            when sub.plan_tier = 'PRO' then 3000
+            when sub.plan_tier = 'GROWTH' then 7500
+            when sub.plan_tier = 'STARTER' then 750
+            else 50  -- FREE tier or unknown
+        end;
+
         period_start := sub.current_period_start;
         period_end := sub.current_period_end;
     end if;
@@ -74,4 +79,4 @@ begin
 
     return next;
 end;
-$$; 
+$$;
