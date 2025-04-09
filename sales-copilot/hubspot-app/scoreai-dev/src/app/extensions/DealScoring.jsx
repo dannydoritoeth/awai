@@ -18,6 +18,6 @@ const Extension = ({ context, actions }) => (
 hubspot.extend(({ context, actions }) => (
   <Extension
     context={context}
-    actions={actions}
+    actions={actions} 
   />
 )); 

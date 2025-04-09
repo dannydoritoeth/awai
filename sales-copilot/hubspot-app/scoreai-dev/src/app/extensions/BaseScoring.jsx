@@ -250,7 +250,7 @@ const BaseScoring = ({
         </Box>
 
         <Button
-          variant="primary"
+          variant="secondary"
           onClick={handleScore}
           loading={scoring}
         >
