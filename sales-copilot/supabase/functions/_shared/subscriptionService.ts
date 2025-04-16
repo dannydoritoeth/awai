@@ -303,7 +303,10 @@ export class SubscriptionService {
     
     // Create basic event record
     const eventRecord: Record<string, any> = { 
-      portal_id: portalId 
+      portal_id: portalId,
+      event_type: 'score',
+      object_type: scoringDetails?.recordType,
+      object_id: scoringDetails?.recordId
     };
     
     // Add scoring details in the single log_data column if logging is enabled
@@ -335,11 +338,45 @@ export class SubscriptionService {
     
     // Insert the record into the database
     const { error } = await this.supabase
-      .from('scoring_events')
+      .from('ai_events')
       .insert(eventRecord);
 
     if (error) {
       throw new Error(`Failed to record score: ${error.message}`);
+    }
+  }
+
+  /**
+   * Record a new training event for a portal
+   * @param portalId The HubSpot portal ID
+   * @param objectType The type of object being trained (deal, contact, company)
+   * @param objectId The ID of the object being trained
+   * @param classification The classification of the object (ideal, less ideal)
+   * @param documentData The document data used for training
+   */
+  async recordTrainingEvent(
+    portalId: string,
+    objectType: string,
+    objectId: string,
+    classification: string,
+    documentData: any
+  ): Promise<void> {
+    const eventRecord = {
+      portal_id: portalId,
+      event_type: 'train',
+      object_type: objectType,
+      object_id: objectId,
+      classification,
+      document_data: documentData,
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await this.supabase
+      .from('ai_events')
+      .insert(eventRecord);
+
+    if (error) {
+      throw new Error(`Failed to record training event: ${error.message}`);
     }
   }
 } 

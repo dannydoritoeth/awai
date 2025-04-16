@@ -5,6 +5,8 @@ import { HubspotClient } from './hubspotClient.ts';
 import { handleApiCall } from './apiHandler.ts';
 import { sleep } from './utils.ts';
 import { calculateConversionDays } from './statistics.ts';
+import { SubscriptionService } from './subscriptionService.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
 const logger = new Logger('dealProcessor');
 
@@ -27,6 +29,12 @@ export async function processSingleDeal(
   logger.info(`Processing deal ${deal.id} (${classification}) in namespace ${namespace}`);
   
   try {
+    // Initialize subscription service
+    const subscriptionService = new SubscriptionService(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
     // First, check if this deal is already in Pinecone with the same metadata
     try {
       const dealVectorId = `deal-${portalId}-${deal.id}`;
@@ -216,6 +224,20 @@ export async function processSingleDeal(
       days_in_pipeline: parseInt(deal.properties?.hs_time_in_pipeline) || 0,
       classification
     };
+    
+    // Record training event before generating embeddings
+    await subscriptionService.recordTrainingEvent(
+      portalId,
+      'deal',
+      deal.id,
+      classification,
+      {
+        dealDocuments,
+        contactDocuments,
+        companyDocuments,
+        dealMetadata
+      }
+    );
     
     // Combine all documents and add metadata
     const allDocuments = [

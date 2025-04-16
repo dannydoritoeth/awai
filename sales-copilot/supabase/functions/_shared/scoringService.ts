@@ -5,6 +5,7 @@ import OpenAI from 'https://esm.sh/openai@4.86.1';
 import { SubscriptionService } from "./subscriptionService.ts";
 import { PineconeClient } from './pineconeClient.ts';
 import { handleApiCall } from './apiHandler.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 declare const Deno: {
   env: {
@@ -26,6 +27,8 @@ interface SimilarDeal {
     score: string | number;
     summary: string;
     lastScored: string;
+    derivedScore?: number;
+    classification?: string;
   } | null;
 }
 
@@ -348,11 +351,11 @@ ${JSON.stringify(data, null, 2)}`;
           })
         );
       } else {
-        await this.hubspotClient.updateContact(contactId, {
-          ideal_client_score: result.score.toString(),
-          ideal_client_summary: result.summary,
-          ideal_client_last_scored: lastScored
-        });
+      await this.hubspotClient.updateContact(contactId, {
+        ideal_client_score: result.score.toString(),
+        ideal_client_summary: result.summary,
+        ideal_client_last_scored: lastScored
+      });
       }
 
       // Prepare outputs for logging
@@ -426,11 +429,11 @@ ${JSON.stringify(data, null, 2)}`;
           })
         );
       } else {
-        await this.hubspotClient.updateCompany(companyId, {
-          ideal_client_score: result.score.toString(),
-          ideal_client_summary: result.summary,
-          ideal_client_last_scored: lastScored
-        });
+      await this.hubspotClient.updateCompany(companyId, {
+        ideal_client_score: result.score.toString(),
+        ideal_client_summary: result.summary,
+        ideal_client_last_scored: lastScored
+      });
       }
 
       // Prepare outputs for logging
@@ -448,6 +451,70 @@ ${JSON.stringify(data, null, 2)}`;
     } catch (error) {
       this.logger.error('Error scoring company:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Derive a score for a deal based on its value and how it compares to
+   * the ideal/nonideal metrics stored in the hubspot_accounts table
+   * @param dealValue The deal amount
+   * @param classification 'ideal' or 'nonideal'
+   * @param metrics Object containing high, low, median values
+   * @returns A score between 0-100
+   */
+  private derivedScore(
+    dealValue: number,
+    classification: string,
+    metrics: {
+      ideal_high: number;
+      ideal_low: number;
+      ideal_median: number;
+      nonideal_high: number;
+      nonideal_low: number;
+      nonideal_median: number;
+    }
+  ): number {
+    // Return default scores if no deal value
+    if (!dealValue || dealValue <= 0) {
+      return classification === 'ideal' ? 90 : 30;
+    }
+
+    if (classification === 'ideal') {
+      // For ideal deals, score between 80-100
+      const { ideal_high, ideal_low, ideal_median } = metrics;
+      
+      // If we don't have ideal metrics yet
+      if (ideal_low === null || ideal_high === null || ideal_median === null) {
+        return 90; // Default ideal score
+      }
+
+      // Calculate how close the deal value is to the median
+      // Closer to median = higher score
+      const range = Math.max(ideal_high - ideal_low, 1); // Avoid division by zero
+      const distanceFromMedian = Math.abs(dealValue - ideal_median);
+      const normalizedDistance = Math.min(distanceFromMedian / range, 1);
+      
+      // Score between 80-100, with 100 being at the median
+      // and decreasing as we move away from the median
+      return 100 - (normalizedDistance * 20);
+    } else {
+      // For nonideal deals, score between 0-50
+      const { nonideal_high, nonideal_low, nonideal_median } = metrics;
+      
+      // If we don't have nonideal metrics yet
+      if (nonideal_low === null || nonideal_high === null || nonideal_median === null) {
+        return 30; // Default nonideal score
+      }
+
+      // Calculate how close the deal value is to the median
+      // Closer to median = lower score (for nonideal)
+      const range = Math.max(nonideal_high - nonideal_low, 1); // Avoid division by zero
+      const distanceFromMedian = Math.abs(dealValue - nonideal_median);
+      const normalizedDistance = Math.min(distanceFromMedian / range, 1);
+      
+      // Score between 0-50, with 0 being at the median
+      // and increasing as we move away from the median
+      return normalizedDistance * 50;
     }
   }
 
@@ -602,29 +669,83 @@ ${JSON.stringify(data, null, 2)}`;
           
           this.logger.info(`Pinecone query returned ${similarDealsResponse.matches?.length || 0} matches`);
           
-          // 8. Process similar deals to include their scores and other relevant information
+          // 8. Get metrics from hubspot_accounts table
+          const supabase = createClient(
+            Deno.env.get('SUPABASE_URL')!,
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+          );
+          
+          const { data: accountMetrics } = await supabase
+            .from('hubspot_accounts')
+            .select(`
+              ideal_high,
+              ideal_low,
+              ideal_median,
+              nonideal_high,
+              nonideal_low,
+              nonideal_median
+            `)
+            .eq('portal_id', this.portalId)
+            .single();
+            
+          const metrics = accountMetrics || {
+            ideal_high: null,
+            ideal_low: null,
+            ideal_median: null,
+            nonideal_high: null,
+            nonideal_low: null,
+            nonideal_median: null
+          };
+          
+          this.logger.info(`Account metrics: ${JSON.stringify(metrics)}`);
+          
+          // 9. Process similar deals to include their scores and other relevant information
           if (similarDealsResponse.matches && similarDealsResponse.matches.length > 0) {
             for (const match of similarDealsResponse.matches) {
-              if (match.id === dealId) {
-                this.logger.info(`Skipping current deal ${dealId} from similar deals`);
-                continue; // Skip the current deal if it appears in results
-              }
-              
               try {
-                // Extract the deal ID from the match
+                // Skip the current deal if it somehow appears in the results
+                if (match.id === dealId) continue;
+                
                 const matchId = match.id;
                 this.logger.info(`Processing similar deal ${matchId} with similarity ${match.score}`);
                 
-                // Try to fetch the current score if it exists
-                let existingScore: SimilarDeal['existingScore'] = null;
-                if (match.metadata && match.metadata.ideal_client_score) {
-                  this.logger.info(`Using score from metadata: ${match.metadata.ideal_client_score}`);
-                  existingScore = {
-                    score: match.metadata.ideal_client_score,
-                    summary: match.metadata.ideal_client_summary || 'No summary available',
-                    lastScored: match.metadata.ideal_client_last_scored || 'Unknown'
-                  };
-                } else {
+                // Default for existingScore
+                let existingScore = null;
+                
+                // Check if we have existing score in metadata
+                if (match.metadata) {
+                  // Get deal value from metadata
+                  const dealValue = parseFloat(match.metadata.deal_value) || 0;
+                  const classification = match.metadata.classification || 'unknown';
+                  
+                  // Calculate derived score based on metrics
+                  const score = this.derivedScore(dealValue, classification, metrics);
+                  
+                  this.logger.info(`Deal ${matchId} has value ${dealValue}, classification ${classification}, derived score ${score}`);
+                  
+                  // If we have ideal_client_score in metadata, use that
+                  if (match.metadata.ideal_client_score) {
+                    existingScore = {
+                      score: match.metadata.ideal_client_score,
+                      summary: match.metadata.ideal_client_summary || 'No summary available',
+                      lastScored: match.metadata.ideal_client_last_scored || 'Unknown',
+                      derivedScore: score,
+                      classification: classification
+                    };
+                  } else {
+                    // If no existing score, use derived score
+                    existingScore = {
+                      score: score,
+                      summary: `Derived score based on ${classification} deal value of ${dealValue}`,
+                      lastScored: 'N/A',
+                      derivedScore: score,
+                      classification: classification
+                    };
+                  }
+                }
+                
+                // If no score yet, try to fetch from HubSpot
+                if (!existingScore) {
                   // If not in metadata, try to fetch from HubSpot
                   this.logger.info(`Fetching deal ${matchId} from HubSpot to get score`);
                   try {
@@ -639,12 +760,23 @@ ${JSON.stringify(data, null, 2)}`;
                     } else {
                       matchDeal = await this.hubspotClient.getDeal(matchId);
                     }
+                    
                     if (matchDeal.properties && matchDeal.properties.ideal_client_score) {
                       this.logger.info(`Found score in HubSpot: ${matchDeal.properties.ideal_client_score}`);
+                      
+                      // Get deal value from properties
+                      const dealValue = parseFloat(matchDeal.properties.amount) || 0;
+                      const classification = matchDeal.properties.training_classification || 'unknown';
+                      
+                      // Calculate derived score
+                      const score = this.derivedScore(dealValue, classification, metrics);
+                      
                       existingScore = {
                         score: matchDeal.properties.ideal_client_score,
                         summary: matchDeal.properties.ideal_client_summary || 'No summary available',
-                        lastScored: matchDeal.properties.ideal_client_last_scored || 'Unknown'
+                        lastScored: matchDeal.properties.ideal_client_last_scored || 'Unknown',
+                        derivedScore: score,
+                        classification: classification
                       };
                     } else {
                       this.logger.info(`No score found for deal ${matchId}`);
@@ -678,14 +810,14 @@ ${JSON.stringify(data, null, 2)}`;
       
       this.logger.info(`Found ${similarDeals.length} similar deals for comparison`);
       
-      // 9. Prepare inputs for logging
+      // 10. Prepare inputs for logging
       const inputs = {
         completeRecord,
         similarDeals,
         aiConfig: { ...this.aiConfig }
       };
       
-      // 10. Build a comprehensive prompt and get AI response
+      // 11. Build a comprehensive prompt and get AI response
       this.logger.info(`Generating AI prompt for scoring deal ${dealId}`);
       const result = await this.getEnhancedAIResponse(completeRecord, similarDeals);
       const lastScored = new Date().toISOString();
@@ -705,11 +837,11 @@ ${JSON.stringify(data, null, 2)}`;
           })
         );
       } else {
-        await this.hubspotClient.updateDeal(dealId, {
-          ideal_client_score: result.score.toString(),
-          ideal_client_summary: result.summary,
-          ideal_client_last_scored: lastScored
-        });
+      await this.hubspotClient.updateDeal(dealId, {
+        ideal_client_score: result.score.toString(),
+        ideal_client_summary: result.summary,
+        ideal_client_last_scored: lastScored
+      });
       }
       this.logger.info(`Successfully updated deal ${dealId} in HubSpot`);
 

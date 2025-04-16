@@ -154,167 +154,62 @@ serve(async (req) => {
         refreshToken
       );
 
-      // Update statistics if amount is available
-      if (deal.properties?.amount) {
-        const amount = parseFloat(deal.properties.amount);
-        if (!isNaN(amount) && amount > 0) {
-          // Get current statistics
-          const { data: currentStats, error: statsError } = await supabase
-            .from('hubspot_accounts')
-            .select(`
-              ideal_count,
-              ideal_high,
-              ideal_low,
-              ideal_median,
-              nonideal_count,
-              nonideal_high,
-              nonideal_low,
-              nonideal_median,
-              current_ideal_deals,
-              current_less_ideal_deals
-            `)
-            .eq('portal_id', recordStatus.portal_id)
-            .single();
-
-          if (!statsError && currentStats) {
-            const stats = calculateDealStatistics([amount]);
-            const updateData: any = {
-              last_training_date: new Date().toISOString()
-            };
-
-            // Update appropriate statistics based on classification
-            if (recordStatus.classification === 'ideal') {
-              // Get all the amounts for proper median calculation
-              const amounts = [];
-              
-              // If we have existing data and count, create a synthetic array based on existing median
-              if (currentStats.ideal_count > 0 && currentStats.ideal_median !== null) {
-                // Simulate the existing distribution using the current median
-                for (let i = 0; i < currentStats.ideal_count; i++) {
-                  amounts.push(currentStats.ideal_median);
-                }
-              }
-              
-              // Add the new amount
-              amounts.push(amount);
-              
-              // Calculate new statistics with all amounts
-              const newStats = calculateDealStatistics(amounts);
-              
-              updateData.ideal_count = (currentStats.ideal_count || 0) + 1;
-              updateData.ideal_high = Math.max(stats.high, currentStats.ideal_high || 0);
-              updateData.ideal_low = currentStats.ideal_low === null 
-                ? stats.low 
-                : Math.min(stats.low, currentStats.ideal_low);
-              updateData.ideal_median = newStats.median;
-              updateData.ideal_last_trained = new Date().toISOString();
-              updateData.current_ideal_deals = (currentStats.current_ideal_deals || 0) + 1;
-              
-              logger.info(`Ideal deal update: count=${updateData.ideal_count}, high=${updateData.ideal_high}, low=${updateData.ideal_low}, median=${updateData.ideal_median}`);
-            } else {
-              // Get all the amounts for proper median calculation
-              const amounts = [];
-              
-              logger.info(`Processing NONIDEAL deal with amount: ${amount}`);
-              logger.info(`Current nonideal stats: count=${currentStats.nonideal_count}, high=${currentStats.nonideal_high}, low=${currentStats.nonideal_low}, median=${currentStats.nonideal_median}`);
-              
-              // If we have existing data and count, create a synthetic array based on existing median
-              if (currentStats.nonideal_count > 0 && currentStats.nonideal_median !== null) {
-                logger.info(`Using existing nonideal_median: ${currentStats.nonideal_median} × ${currentStats.nonideal_count} times`);
-                // Simulate the existing distribution using the current median
-                for (let i = 0; i < currentStats.nonideal_count; i++) {
-                  amounts.push(currentStats.nonideal_median);
-                }
-              } else {
-                logger.info(`No existing nonideal median or count is zero/null`);
-              }
-              
-              // Add the new amount
-              amounts.push(amount);
-              logger.info(`Added new amount ${amount} to amounts array. Total length: ${amounts.length}`);
-              
-              // Calculate new statistics with all amounts
-              const newStats = calculateDealStatistics(amounts);
-              logger.info(`New calculated stats: low=${newStats.low}, high=${newStats.high}, median=${newStats.median}, count=${newStats.count}`);
-              
-              updateData.nonideal_count = (currentStats.nonideal_count || 0) + 1;
-              updateData.nonideal_high = Math.max(stats.high, currentStats.nonideal_high || 0);
-              updateData.nonideal_low = currentStats.nonideal_low === null 
-                ? stats.low 
-                : Math.min(stats.low, currentStats.nonideal_low);
-              updateData.nonideal_median = newStats.median;
-              updateData.nonideal_last_trained = new Date().toISOString();
-              updateData.current_less_ideal_deals = (currentStats.current_less_ideal_deals || 0) + 1;
-              
-              logger.info(`Nonideal deal update: count=${updateData.nonideal_count}, high=${updateData.nonideal_high}, low=${updateData.nonideal_low}, median=${updateData.nonideal_median}`);
-            }
-
-            // Update statistics
-            logger.info(`Updating statistics for portal ${recordStatus.portal_id}`);
-            
-            const { data: updateResult, error: updateStatsError } = await supabase
-              .from('hubspot_accounts')
-              .update(updateData)
-              .eq('portal_id', recordStatus.portal_id);
-              
-            if (updateStatsError) {
-              logger.error(`Error updating statistics: ${updateStatsError.message}`);
-            } else {
-              logger.info(`Statistics updated successfully`);
-            }
-          }
-        }
-      }
-
       // Update status to completed
+      logger.info(`Updating status to completed for deal ${deal.id}`);
+      const now = new Date().toISOString();
       const { error: updateError } = await supabase
         .from('hubspot_object_status')
         .update({ 
           training_status: 'completed',
-          training_error: null // Clear any previous error message
+          training_date: now,
+          last_processed: now
         })
         .eq('object_id', object_id);
 
       if (updateError) {
-        logger.error('Error updating status to completed:', updateError);
-        throw new Error('Failed to update record status to completed');
+        logger.error(`Failed to update status to completed: ${updateError.message}`);
+        throw new Error(`Failed to update training status: ${updateError.message}`);
       }
+
+      logger.info(`Successfully updated status to completed for deal ${deal.id}`);
 
       return new Response(
         JSON.stringify({ 
-          success: true,
+          success: true, 
           message: 'Deal processed successfully',
-          deal_id: deal.id,
-          status: 'completed'
+          deal_id: deal.id
         }),
         { status: 200, headers: corsHeaders }
       );
-
     } catch (error) {
-      logger.error('Error processing deal:', error);
-
+      logger.error(`Error processing deal ${deal.id}:`, error);
+      
       // Update status to failed
       await supabase
         .from('hubspot_object_status')
         .update({ 
           training_status: 'failed',
-          training_error: error.message
+          error_message: error.message,
+          last_processed: new Date().toISOString()
         })
         .eq('object_id', object_id);
 
       return new Response(
         JSON.stringify({ 
-          error: 'Failed to process deal',
-          details: error.message
+          success: false, 
+          error: error.message,
+          deal_id: deal.id
         }),
         { status: 500, headers: corsHeaders }
       );
     }
-
   } catch (error) {
-    logger.error('Unexpected error:', error);
+    logger.error('Function error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message 
+      }),
       { status: 500, headers: corsHeaders }
     );
   }
