@@ -46,7 +46,7 @@ $edgeFunctions = @{
     "stripe-onboarding" = $false
     "hubspot-train-summary" = $false
     "hubspot-oauth" = $true
-    "hubspot-score-record" = $false
+    "hubspot-score-record" = $true
     "hubspot-score-record-batch" = $false
 }
 
