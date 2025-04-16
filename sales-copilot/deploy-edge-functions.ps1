@@ -38,7 +38,7 @@ $edgeFunctions = @{
     "hubspot-train-sync" = $false
     "hubspot-train-deal" = $false
     "hubspot-partner-signup-url" = $true
-    "hubspot-score-summary" = $true
+    "hubspot-score-summary" = $false
     "stripe-payment-webhook" = $true
     "hubspot-stripe-create-checkout-session" = $false
     "stripe-dashboard" = $false
@@ -46,7 +46,7 @@ $edgeFunctions = @{
     "stripe-onboarding" = $false
     "hubspot-train-summary" = $false
     "hubspot-oauth" = $true
-    "hubspot-score-record" = $true
+    "hubspot-score-record" = $false
     "hubspot-score-record-batch" = $false
 }
 

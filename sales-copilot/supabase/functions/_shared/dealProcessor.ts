@@ -57,8 +57,26 @@ export async function processSingleDeal(
             existingVector.metadata.pipeline === currentPipeline &&
             existingVector.metadata.dealstage === currentDealstage) {
           
-          logger.info(`Deal ${deal.id} already exists in Pinecone with the same metadata. Skipping processing.`);
-          return; // Skip processing this deal
+          logger.info(`Deal ${deal.id} already exists in Pinecone with the same metadata. Marking as completed.`);
+          // Record training event even when skipping processing
+          await subscriptionService.recordTrainingEvent(
+            portalId,
+            'deal',
+            deal.id,
+            classification,
+            {
+              dealMetadata: {
+                deal_id: deal.id,
+                deal_value: currentValue,
+                pipeline: currentPipeline,
+                dealstage: currentDealstage,
+                classification
+              },
+              skipped: true,
+              reason: 'Already exists in Pinecone with same metadata'
+            }
+          );
+          return; // Skip further processing since deal exists
         } else {
           logger.info(`Deal ${deal.id} exists but metadata has changed. Will update.`);
         }

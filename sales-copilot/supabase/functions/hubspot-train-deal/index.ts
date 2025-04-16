@@ -142,6 +142,7 @@ serve(async (req) => {
     // Process the deal
     const namespace = `hubspot-${recordStatus.portal_id}`;
     try {
+      logger.info(`Starting deal processing for ${deal.id} (${recordStatus.classification})`);
       await processSingleDeal(
         deal,
         recordStatus.classification,
@@ -162,7 +163,8 @@ serve(async (req) => {
         .update({ 
           training_status: 'completed',
           training_date: now,
-          last_processed: now
+          last_processed: now,
+          training_error: null // Clear any previous error
         })
         .eq('object_id', object_id);
 
