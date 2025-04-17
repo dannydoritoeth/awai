@@ -12,11 +12,7 @@ export default function Home() {
       <Header />
       <main>
         <HeroSection />
-        <NarrativeSection />
-        <OfferingSection />
-        <GuaranteeSection />
         <FAQSection />
-        <CTASection />
       </main>
     </>
   );
