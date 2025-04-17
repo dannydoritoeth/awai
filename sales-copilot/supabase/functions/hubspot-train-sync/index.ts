@@ -83,7 +83,7 @@ serve(async (req) => {
             object_type: 'deal',
             object_id: deal.id,
             classification: 'ideal',
-            training_status: 'pending'
+            training_status: 'queued'
           }, {
             onConflict: 'portal_id,object_type,object_id',
             ignoreDuplicates: true
@@ -123,7 +123,7 @@ serve(async (req) => {
             object_type: 'deal',
             object_id: deal.id,
             classification: 'nonideal',
-            training_status: 'pending'
+            training_status: 'queued'
           }, {
             onConflict: 'portal_id,object_type,object_id',
             ignoreDuplicates: true

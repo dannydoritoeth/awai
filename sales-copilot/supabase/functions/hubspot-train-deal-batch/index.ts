@@ -22,7 +22,7 @@ serve(async (req) => {
     const { data: portalIds, error: portalError } = await supabase
       .from('hubspot_object_status')
       .select('portal_id')
-      .eq('training_status', 'pending')
+      .eq('training_status', 'queued')
       .eq('object_type', 'deal')
       .limit(1);
 
@@ -47,9 +47,9 @@ serve(async (req) => {
     // Get up to 10 pending records for this portal
     const { data: pendingDeals, error: dealsError } = await supabase
       .from('hubspot_object_status')
-      .select('object_id')
+      .select('*')
+      .eq('training_status', 'queued')
       .eq('portal_id', portalId)
-      .eq('training_status', 'pending')
       .eq('object_type', 'deal')
       .limit(10);
 
@@ -147,7 +147,7 @@ serve(async (req) => {
       .from('hubspot_object_status')
       .select('*', { count: 'exact', head: true })
       .eq('portal_id', portalId)
-      .eq('training_status', 'pending')
+      .eq('training_status', 'queued')
       .eq('object_type', 'deal');
 
     let recursionInitiated = false;

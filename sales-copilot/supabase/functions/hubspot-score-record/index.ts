@@ -1,162 +1,71 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { ScoringService } from "../_shared/scoringService.ts";
 import { Logger } from "../_shared/logger.ts";
-import { AIConfig } from "../_shared/types.ts";
-import { decrypt, encrypt } from "../_shared/encryption.ts";
-import { HubspotClient } from "../_shared/hubspotClient.ts";
-import { handleApiCall } from "../_shared/apiHandler.ts";
+import { corsHeaders } from '../_shared/cors.ts'
 
 const logger = new Logger("score-record");
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
+
   try {
-    // Parse URL parameters
-    const url = new URL(req.url);
-    const portalId = url.searchParams.get('portalId');
-    const recordType = url.searchParams.get('recordType');
-    const recordId = url.searchParams.get('recordId');
+    // Create a Supabase client
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-    // Validate required parameters
+    // Get the portal ID, record type, and record ID from the query parameters
+    const url = new URL(req.url)
+    const portalId = url.searchParams.get('portalId')
+    const recordType = url.searchParams.get('recordType')
+    const recordId = url.searchParams.get('recordId')
+
     if (!portalId || !recordType || !recordId) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Missing required parameters: portalId, recordType, and recordId must be provided in URL'
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400
-        }
-      );
+      throw new Error('Missing required parameters')
     }
 
-    // Get HubSpot account from Supabase
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Create a new scoring job
+    const { data: job, error } = await supabaseClient
+      .from('scoring_jobs')
+      .insert({
+        portal_id: portalId,
+        record_type: recordType,
+        record_id: recordId,
+        status: 'processing',
+        progress: 0
+      })
+      .select()
+      .single()
 
-    const { data: account, error } = await supabase
-      .from('hubspot_accounts')
-      .select('*')
-      .eq('portal_id', portalId)
-      .eq('status', 'active')
-      .single();
-
-    if (error || !account) {
-      logger.error('Account fetch error:', error);
-      return new Response(
-        JSON.stringify({ error: 'HubSpot account not found or inactive' }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+    if (error) {
+      throw error
     }
 
-    // Decrypt tokens
-    let decryptedToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const decryptedRefreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-
-    if (!decryptedToken || !decryptedRefreshToken) {
-      throw new Error('HubSpot tokens are missing or invalid');
-    }
-
-    // Initialize HubSpot client with current token
-    const hubspotClient = new HubspotClient(decryptedToken);
-
-    // Create AI configuration from account settings
-    const aiConfig: AIConfig = {
-      provider: account.ai_provider,
-      model: account.ai_model,
-      temperature: account.ai_temperature,
-      maxTokens: account.ai_max_tokens,
-      scoringPrompt: account.scoring_prompt
-    };
-
-    // Create scoring service with the HubSpot client and pass the refreshToken
-    const scoringService = new ScoringService(
-      hubspotClient,
-      aiConfig,
-      portalId,
-      logger,
-      decryptedRefreshToken  // Pass the refresh token to ScoringService
-    );
-
-    // Score the record
-    logger.info(`Scoring ${recordType} ${recordId}`);
-    let result;
-    try {
-      // Use handleApiCall to automatically handle token expiration
-      result = await handleApiCall(
-        hubspotClient,
-        portalId,
-        decryptedRefreshToken,
-        async () => {
-          switch (recordType) {
-            case 'contact':
-              return await scoringService.scoreContact(recordId);
-            case 'company':
-              return await scoringService.scoreCompany(recordId);
-            case 'deal':
-              return await scoringService.scoreDeal(recordId);
-            default:
-              throw new Error('Invalid record type. Must be contact, company, or deal');
-          }
-        }
-      );
-    } catch (scoringError) {
-      if (scoringError.message?.includes('Invalid record type')) {
-        return new Response(
-          JSON.stringify({ success: false, error: scoringError.message }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          }
-        );
-      }
-      
-      logger.error(`Error scoring ${recordType}:`, {
-        error: scoringError,
-        message: scoringError.message,
-        stack: scoringError.stack
-      });
-      throw scoringError;
-    }
-
+    // Return the job ID to the client
     return new Response(
-      JSON.stringify({ success: true, result }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      JSON.stringify({
+        success: true,
+        jobId: job.id
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
 
   } catch (error) {
-    logger.error('Scoring error:', {
-      error,
-      message: error.message,
-      stack: error.stack
-    });
-    
-    // Ensure we have a proper error message
-    const errorMessage = error.message || 'Internal server error';
-    const errorDetails = error.stack || 'No stack trace available';
-    
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
-        error: errorMessage,
-        details: errorDetails
+        error: error.message
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    );
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
   }
-}); 
+}) 
