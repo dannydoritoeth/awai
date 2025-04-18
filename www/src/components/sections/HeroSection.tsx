@@ -49,7 +49,7 @@ export function HeroSection() {
   return (
     <section className="bg-[#1B2A47] min-h-screen">
       {/* Hero Content */}
-      <div className="container mx-auto px-4 py-16 text-center max-w-[1120px]">
+      <div className="container mx-auto px-4 py-20 text-center max-w-[1120px]">
         <h2 className="text-xl text-white mb-2">HUBSPOT SALES PROFESSIONALS</h2>
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
           Close More HubSpot Deals<br />
