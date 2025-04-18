@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer className="bg-gray-50 border-t border-gray-100" role="contentinfo">
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Brand Section */}
           <div className="flex flex-col items-center md:items-start">
             <Link href="/" aria-label="Home">
@@ -23,25 +23,6 @@ export function Footer() {
               AI-powered solutions for business growth and efficiency
             </p>
           </div>
-
-          {/* Navigation Section */}
-          <nav className="flex flex-col items-center md:items-start" aria-label="Footer navigation">
-            <h3 className="font-semibold text-gray-900 mb-4">Quick Links</h3>
-            <div className="flex flex-col gap-2">
-              <Link 
-                href="/contact"
-                className="text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Contact
-              </Link>
-              <Link 
-                href="/30-minute-strategy-session"
-                className="text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                Book Strategy Session
-              </Link>
-            </div>
-          </nav>
 
           {/* Legal Section */}
           <nav className="flex flex-col items-center md:items-start" aria-label="Legal navigation">
