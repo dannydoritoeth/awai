@@ -54,12 +54,12 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
       />
 
       {/* Modal */}
-      <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg w-full max-w-2xl">
+      <div className="relative min-h-screen flex items-center justify-center p-2">
+        <div className="relative bg-white rounded-lg w-[1100px] mx-auto">
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -67,14 +67,16 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
           </button>
 
           {/* Modal Content */}
-          <div className="p-8">
-            <div className="mb-8 text-center">
-              <h2 className="text-2xl font-bold mb-3">
-                Book a Free 30-Minute Lead Scoring Audit
-              </h2>
-              <p className="text-gray-600">
-                Discover which leads are ready to buy — and how to close more deals faster.
-              </p>
+          <div className="p-4">
+            <div className="flex items-center justify-center min-h-[80px]">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold mb-1">
+                  Book a Free 30-Minute Lead Scoring Audit
+                </h2>
+                <p className="text-gray-600">
+                  Discover which leads are ready to buy — and how to close more deals faster.
+                </p>
+              </div>
             </div>
             
             {/* Loading State */}
@@ -89,8 +91,8 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
               className="calendly-inline-widget"
               data-url={`${CALENDLY_URL}?hide_gdpr_banner=1&background_color=ffffff&text_color=333333&primary_color=0066FF`}
               style={{ 
-                minWidth: '320px',
-                height: '630px' 
+                minWidth: '100%',
+                height: '650px'
               }}
             />
           </div>
