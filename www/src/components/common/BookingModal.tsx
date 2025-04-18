@@ -55,7 +55,7 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
       {/* Modal */}
       <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg w-full max-w-4xl">
+        <div className="relative bg-white rounded-lg w-full max-w-2xl">
           {/* Close Button */}
           <button
             onClick={onClose}
@@ -68,57 +68,13 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
           {/* Modal Content */}
           <div className="p-8">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-center">
-                Get Your Free Custom Paid Marketing Strategy
+            <div className="mb-8 text-center">
+              <h2 className="text-2xl font-bold mb-3">
+                Book a Free 30-Minute Lead Scoring Audit
               </h2>
-              <div className="flex justify-center mb-6">
-                <div className="bg-[#9FE870]/10 px-4 py-2 rounded-full border border-[#9FE870]/20">
-                  <span className="text-[#9FE870] font-bold">$2,500 Value - Yours Free</span>
-                </div>
-              </div>
-              
-              {/* Benefits List */}
-              <div className="bg-gray-50 p-6 rounded-lg mb-6">
-                <p className="text-gray-700 mb-4">
-                  After your free 30-minute strategy call we will go away and do some research and provide you with your custom paid marketing plan including:
-                </p>
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#9FE870] mt-1">✓</span>
-                    <span>Ideal client profile and pain point identification</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#9FE870] mt-1">✓</span>
-                    <span>Detailed marketing strategy for both immediate wins and long-term pipeline building</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#9FE870] mt-1">✓</span>
-                    <span>Step-by-step implementation guide - not just high-level theory</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#9FE870] mt-1">✓</span>
-                    <span>90-day Action Plan with clear milestones and targets</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#9FE870] mt-1">✓</span>
-                    <span>Ready for your team to execute immediately</span>
-                  </li>
-                </ul>
-                <p className="text-sm text-gray-500 mt-4 italic">
-                  Yours to keep - no strings attached, whether you work with us or not
-                </p>
-
-                {/* Why We Do This */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <p className="text-gray-700 text-sm">
-                    <span className="text-[#0A2E4D] font-semibold">Why give away such valuable insights for free?</span>
-                    <br />
-                    Because we practice what we preach - leading with value. We're demonstrating our expertise and building trust 
-                    by actually helping you first. It's the best way to show you we know what we're talking about.
-                  </p>
-                </div>
-              </div>
+              <p className="text-gray-600">
+                Discover which leads are ready to buy — and how to close more deals faster.
+              </p>
             </div>
             
             {/* Loading State */}
@@ -134,7 +90,7 @@ export function BookingModal({ isOpen, onClose }: BookingModalProps) {
               data-url={`${CALENDLY_URL}?hide_gdpr_banner=1&background_color=ffffff&text_color=333333&primary_color=0066FF`}
               style={{ 
                 minWidth: '320px',
-                height: '700px' 
+                height: '630px' 
               }}
             />
           </div>
