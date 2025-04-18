@@ -6,7 +6,7 @@ export function HeroSection() {
   const { openModal } = useBookingModal();
   
   return (
-    <section className="bg-[#1B2A47] min-h-screen pt-20">
+    <section className="bg-[#1B2A47] min-h-screen">
       {/* Hero Content */}
       <div className="container mx-auto px-4 py-16 text-center">
         <h2 className="text-xl text-white mb-2">HUBSPOT SALES PROFESSIONALS</h2>
@@ -23,17 +23,17 @@ export function HeroSection() {
       </div>
 
       {/* Problem Statement Section */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-4">
         <div className="bg-white rounded-lg p-8 flex flex-col md:flex-row items-center gap-8">
           <div className="md:w-1/2">
             <img 
-              src="/assets/meeting-image.jpg" 
+              src="/assets/1.png" 
               alt="Team meeting" 
               className="rounded-lg"
             />
           </div>
           <div className="md:w-1/2">
-            <h2 className="text-2xl font-bold mb-4">Struggling to Close Deals?<br />Here's Why.</h2>
+            <h2 className="text-2xl font-bold mb-4">Struggling to Close Deals? Here's Why.</h2>
             <ul className="space-y-4">
               <li className="flex items-start gap-2">
                 <span className="text-red-500">🔴</span>
@@ -190,7 +190,7 @@ export function HeroSection() {
           </div>
           <div className="md:w-1/2">
             <img 
-              src="/assets/team-working.jpg" 
+              src="/assets/2.png" 
               alt="Team working" 
               className="rounded-lg"
             />
