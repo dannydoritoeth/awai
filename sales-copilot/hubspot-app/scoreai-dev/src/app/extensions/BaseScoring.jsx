@@ -225,13 +225,13 @@ const BaseScoring = ({
           </>
         )}
         
-        <Flex gap="md" alignItems="center">
+        {/* <Flex gap="md" alignItems="center">
           <Toggle 
             checked={showDebug}
             onChange={value => setShowDebug(value)}
           />
           <Text>Show Debug Info</Text>
-        </Flex>
+        </Flex> */}
         
         {showDebug && (
           <>
