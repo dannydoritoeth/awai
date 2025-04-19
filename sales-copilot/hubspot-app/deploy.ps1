@@ -42,51 +42,64 @@ $devPath = Join-Path $rootPath "scoreai-dev"
 $prodPath = Join-Path $rootPath "scoreai"
 
 if ($Environment -eq "dev") {
-    Write-Status "Deploying to development environment..."
-    
-    # Deploy development version
-    try {
-        Set-Location $devPath
-        hs project upload --account=ai-dev
-        Write-Status "Development deployment completed successfully!" -Type "success"
-    }
-    catch {
-        Write-Status "Error during development deployment: $_" -Type "error"
-        exit 1
-    }
+    Write-Status "Ready for development deployment..." -Type "success"
+    Write-Status "To deploy, run: cd scoreai-dev && hs project upload --account=ai-dev" -Type "info"
 }
 else {
-    Write-Status "Deploying to production environment..."
+    Write-Status "Preparing production environment..." -Type "info"
     
     # Clean up production directory
     if (Test-Path $prodPath) {
-        Write-Status "Cleaning up production directory..."
+        Write-Status "Cleaning up production directory..." -Type "info"
         Remove-Item -Path $prodPath -Recurse -Force
     }
     
     # Create production directory
     New-Item -ItemType Directory -Path $prodPath -Force | Out-Null
+
+    # First, copy and log configuration files
+    Write-Status "Copying production configuration files:" -Type "info"
+    $configFiles = @(
+        @{Source="$devPath\src\app\public-app.live.json"; Dest="$prodPath\src\app\public-app.json"},
+        @{Source="$devPath\src\app\config.live.ts"; Dest="$prodPath\src\app\config.ts"},
+        @{Source="$devPath\hsproject.live.json"; Dest="$prodPath\hsproject.json"}
+    )
     
-    # Copy development files to production
-    Write-Status "Copying files to production..."
-    Copy-Item -Path "$devPath\*" -Destination $prodPath -Recurse -Force
-    
-    # Copy live configuration files
-    Write-Status "Updating production configuration..."
-    Copy-Item -Path "$devPath\src\app\public-app.live.json" -Destination "$prodPath\src\app\public-app.json" -Force
-    Copy-Item -Path "$devPath\src\app\config.live.ts" -Destination "$prodPath\src\app\config.ts" -Force
-    Copy-Item -Path "$devPath\hsproject.live.json" -Destination "$prodPath\hsproject.json" -Force
-    
-    # Deploy production version
-    try {
-        Set-Location $prodPath
-        hs project upload --account=ai-live
-        Write-Status "Production deployment completed successfully!" -Type "success"
+    foreach ($file in $configFiles) {
+        # Create the target directory if it doesn't exist
+        $targetDir = Split-Path -Parent $file.Dest
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        Copy-Item -Path $file.Source -Destination $file.Dest -Force
+        Write-Status "Updated: $($file.Dest.Substring($prodPath.Length + 1))" -Type "success"
     }
-    catch {
-        Write-Status "Error during production deployment: $_" -Type "error"
-        exit 1
+    
+    # Then copy all other files, excluding .live files
+    Write-Status "`nCopying remaining files to production..." -Type "info"
+    Get-ChildItem -Path "$devPath" -Recurse -File | Where-Object {
+        $_.Name -notlike "*.live.*" -and 
+        $_.Name -ne "public-app.json" -and 
+        $_.Name -ne "config.ts" -and 
+        $_.Name -ne "hsproject.json" -and
+        $_.FullName -notlike "*\node_modules\*"
+    } | ForEach-Object {
+        $relativePath = $_.FullName.Substring($devPath.Length + 1)
+        $targetPath = Join-Path $prodPath $relativePath
+        
+        # Create the target directory if it doesn't exist
+        $targetDir = Split-Path -Parent $targetPath
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        
+        # Copy the file
+        Copy-Item -Path $_.FullName -Destination $targetPath -Force
+        Write-Status "Copied: $relativePath" -Type "info"
     }
+    
+    Write-Status "`nProduction files prepared successfully!" -Type "success"
+    Write-Status "To deploy, run: cd scoreai && hs project upload" -Type "info"
 }
 
 # Return to original directory
