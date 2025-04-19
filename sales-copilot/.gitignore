@@ -33,6 +33,7 @@ logs
 /build
 **/dist
 **/build
+/hubspot-app/scoreai/*
 
 # Testing
 /coverages

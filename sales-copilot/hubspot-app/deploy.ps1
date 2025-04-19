@@ -47,7 +47,7 @@ if ($Environment -eq "dev") {
     # Deploy development version
     try {
         Set-Location $devPath
-        hs project upload scoreai-dev
+        hs project upload --account=ai-dev
         Write-Status "Development deployment completed successfully!" -Type "success"
     }
     catch {
@@ -75,11 +75,12 @@ else {
     Write-Status "Updating production configuration..."
     Copy-Item -Path "$devPath\src\app\public-app.live.json" -Destination "$prodPath\src\app\public-app.json" -Force
     Copy-Item -Path "$devPath\src\app\config.live.ts" -Destination "$prodPath\src\app\config.ts" -Force
+    Copy-Item -Path "$devPath\hsproject.live.json" -Destination "$prodPath\hsproject.json" -Force
     
     # Deploy production version
     try {
         Set-Location $prodPath
-        hs project upload scoreai
+        hs project upload --account=ai-live
         Write-Status "Production deployment completed successfully!" -Type "success"
     }
     catch {
