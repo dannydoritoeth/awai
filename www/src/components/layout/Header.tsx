@@ -17,7 +17,18 @@ export function Header() {
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
-            {/* Navigation links removed */}
+            <Link 
+              href="/pricing" 
+              className="text-white hover:text-gray-200 transition-colors"
+            >
+              Pricing
+            </Link>
+            <Link 
+              href="/partner" 
+              className="text-white hover:text-gray-200 transition-colors"
+            >
+              Partner Program
+            </Link>
           </nav>
 
           {/* Mobile Menu Button */}
@@ -41,7 +52,20 @@ export function Header() {
         {isMenuOpen && (
           <nav className="md:hidden mt-4 py-4 border-t border-white/20" aria-label="Mobile navigation">
             <div className="flex flex-col gap-4">
-              {/* Navigation links removed */}
+              <Link 
+                href="/pricing" 
+                className="text-white hover:text-gray-200 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Pricing
+              </Link>
+              <Link 
+                href="/partner" 
+                className="text-white hover:text-gray-200 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Partner Program
+              </Link>
             </div>
           </nav>
         )}
