@@ -73,9 +73,6 @@ export default function PartnerPage() {
                 <li>Refer a Pro customer ($249/mo) → Earn $99.60/mo</li>
                 <li>Refer 10 Growth users → Earn $1,996/mo</li>
               </ul>
-              <p className="text-gray-300 mt-4">
-                Plus: 10% of revenue goes to token buybacks — partners help grow the whole ecosystem.
-              </p>
             </div>
           </div>
 
