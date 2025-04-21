@@ -92,12 +92,33 @@ export default function HubSpotSetupPage() {
             </div>
 
             {/* Step 3 */}
-            <div>
+            <div className="mb-8">
               <h3 className="text-xl font-bold text-white mb-4">
                 Step 3: View Deal Scores in HubSpot
               </h3>
               <p className="text-gray-300 mb-4">
-                Open any Deal record in your CRM and click the ScoreAI tab. You'll see:
+                First, add the ScoreAI card to your deal records:
+              </p>
+              <ol className="space-y-3 text-gray-300 mb-6">
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0066FF]">1.</span>
+                  Go to Settings {'->'} Deals {'->'} Record Customization
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0066FF]">2.</span>
+                  Click on "Default View"
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0066FF]">3.</span>
+                  Click "Add Card"
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#0066FF]">4.</span>
+                  Select "ScoreAI - Deal Score"
+                </li>
+              </ol>
+              <p className="text-gray-300 mb-4">
+                Once configured, open any Deal record in your CRM and you'll see:
               </p>
               <ul className="space-y-3 text-gray-300">
                 <li className="flex items-start gap-3">
@@ -117,6 +138,50 @@ export default function HubSpotSetupPage() {
                   Your usage (free or paid tier)
                 </li>
               </ul>
+            </div>
+
+            {/* Step 4 */}
+            <div>
+              <h3 className="text-xl font-bold text-white mb-4">
+                Step 4: AI Deal Scoring
+              </h3>
+              <div className="space-y-6">
+                <div className="bg-white/5 rounded-lg p-6">
+                  <h4 className="text-lg font-semibold text-white mb-3">Free Plan</h4>
+                  <ul className="space-y-3 text-gray-300">
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      Click the "Score Deal" button to manually score up to 50 deals per month
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      Perfect for testing the system and seeing how it works with your data
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-white/5 rounded-lg p-6">
+                  <h4 className="text-lg font-semibold text-white mb-3">Paid Plans</h4>
+                  <ul className="space-y-3 text-gray-300">
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      Automatic scoring of all new and updated deals
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      Scores update in real-time as deal data changes
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      AI model continuously learns from your closed deals
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#0066FF]">•</span>
+                      Higher monthly deal scoring limits based on your plan
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
 
