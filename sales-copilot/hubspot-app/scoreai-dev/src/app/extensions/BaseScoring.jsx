@@ -173,7 +173,17 @@ const BaseScoring = ({
               <Text format={{ fontWeight: "bold" }} variant="h1">
                 {score}
               </Text>
-              <Text>{summary}</Text>
+              <Flex direction="column" gap="md">
+                {summary?.split('\n\n').map((section, sectionIndex) => (
+                  <Flex key={sectionIndex} direction="column">
+                    {section.split('\n').map((line, lineIndex) => (
+                      <Text key={`${sectionIndex}-${lineIndex}`} format={{ lineHeight: "1.1" }}>
+                        {line}
+                      </Text>
+                    ))}
+                  </Flex>
+                ))}
+              </Flex>
               
               {usageStats && (
                 <Box marginTop="md">
