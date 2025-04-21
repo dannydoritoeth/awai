@@ -37,7 +37,7 @@ export default function AppFailedPage() {
           
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-600">
-              Need help? <a href="mailto:support@acceleratewith.ai" className="text-blue-600 hover:underline">Contact our support team</a>
+              Need help? <a href="mailto:scott@acceleratewith.ai" className="text-blue-600 hover:underline">Contact our support team</a>
             </p>
           </div>
         </div>

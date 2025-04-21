@@ -166,20 +166,19 @@ export function HeroSection() {
       {/* Why AI Lead Scoring Works */}
       <div className="container mx-auto px-4 text-white max-w-[1120px]">
         <h2 className="text-3xl font-bold text-center mb-8">Why AI Lead Scoring Works</h2>
-        <p className="text-center text-xl mb-8">AI-based lead scoring is already transforming sales teams:</p>
         <div className="bg-[#243456] p-8 rounded-lg">
           <ul className="space-y-4">
             <li className="flex items-start gap-2">
               <span className="text-green-500">✅</span>
-              <span>Companies using AI lead scoring report up to 20% higher conversion rates.</span>
+              <span>Companies using AI-powered lead scoring have reported up to 20% improvements in conversion rates.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-500">✅</span>
-              <span>AI reduces time spent on low-quality leads by up to 85% — letting your team focus on closing deals.</span>
+              <span>Sales teams reduce time spent on low-quality leads by up to 85% when using AI to prioritize.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-500">✅</span>
-              <span>Businesses using AI for lead prioritization see a 13%–31% drop in churn rates.</span>
+              <span>AI-first sales processes often see improved retention by focusing on better-fit customers from the start.</span>
             </li>
           </ul>
         </div>

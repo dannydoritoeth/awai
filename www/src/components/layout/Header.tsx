@@ -18,6 +18,12 @@ export function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
             <Link 
+              href="/hubspot-setup" 
+              className="text-white hover:text-gray-200 transition-colors"
+            >
+              Setup Guide
+            </Link>
+            <Link 
               href="/pricing" 
               className="text-white hover:text-gray-200 transition-colors"
             >
@@ -52,6 +58,13 @@ export function Header() {
         {isMenuOpen && (
           <nav className="md:hidden mt-4 py-4 border-t border-white/20" aria-label="Mobile navigation">
             <div className="flex flex-col gap-4">
+              <Link 
+                href="/hubspot-setup" 
+                className="text-white hover:text-gray-200 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Setup Guide
+              </Link>
               <Link 
                 href="/pricing" 
                 className="text-white hover:text-gray-200 transition-colors"
