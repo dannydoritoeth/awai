@@ -186,7 +186,7 @@ const BaseScoring = ({
               </Flex>
               
               {usageStats && (
-                <Box marginTop="md">
+                <Box marginTop="xl">
                   <Text format={{ fontWeight: "bold" }} variant="body">
                     Usage: {usageStats.used}/{usageStats.total} ({usageStats.remaining} remaining)
                   </Text>
