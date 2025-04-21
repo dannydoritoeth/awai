@@ -201,22 +201,18 @@ export function HeroSection() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-red-500">❌</span>
-                <span>High costs with no guaranteed results</span>
+                <span>Lots of static rules that don't adapt to your business</span>
               </li>
             </ul>
             <p className="font-bold mb-4">That's NOT how we work.</p>
             <ul className="space-y-4 mb-6">
               <li className="flex items-start gap-2">
                 <span className="text-green-500">✅</span>
-                <span>We handle the setup — you focus on closing deals.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-green-500">✅</span>
                 <span>It integrates directly with HubSpot in minutes.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500">✅</span>
-                <span>We only succeed when you succeed — our incentives are aligned.</span>
+                <span>AI Training is automatic — no manual effort required initially or to keep it up to date</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500">✅</span>
