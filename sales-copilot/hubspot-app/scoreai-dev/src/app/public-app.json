@@ -8,7 +8,7 @@
     "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record"
   ],
   "auth": {
-    "redirectUrls": ["https://acceleratewith.ai/hubspot-setup"],
+    "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
     "requiredScopes": [
       "crm.objects.contacts.read",
       "crm.objects.companies.read",
