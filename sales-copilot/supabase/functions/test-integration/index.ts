@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { corsHeaders } from '../_shared/cors.ts'
+import { PineconeClient } from '../_shared/pineconeClient.ts'
 
 interface TestAction {
   type: string;
@@ -34,6 +35,13 @@ serve(async (req) => {
     if (!testPortalId) {
       throw new Error('TEST_PORTAL_ID environment variable is required');
     }
+
+    // Initialize Pinecone client
+    const pineconeClient = new PineconeClient();
+    await pineconeClient.initialize(
+      Deno.env.get('PINECONE_API_KEY')!,
+      Deno.env.get('PINECONE_INDEX')!
+    );
 
     // Handle different test actions
     switch (action.type) {
@@ -132,6 +140,39 @@ serve(async (req) => {
             success: true, 
             count: statusData.length,
             data: statusData 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
+      case 'cleanup_pinecone':
+        // Clean up Pinecone records for the test portal
+        const namespace = `hubspot-${action.params.portal_id}`;
+        await pineconeClient.deleteAll(namespace);
+        
+        return new Response(
+          JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
+      case 'verify_pinecone_record':
+        // Verify a record exists in Pinecone
+        const { portal_id, deal_id } = action.params;
+        const recordNamespace = `hubspot-${portal_id}`;
+        
+        // Query Pinecone for the record
+        const queryResponse = await pineconeClient.query({
+          namespace: recordNamespace,
+          topK: 1,
+          filter: { deal_id: deal_id }
+        });
+
+        const exists = queryResponse.matches.length > 0;
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            exists,
+            matches: queryResponse.matches
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
