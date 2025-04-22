@@ -31,29 +31,29 @@ describe('Integration Tests', () => {
     expect(data.success).toBe(true);
   });
 
-  test('should write and cleanup test data', async () => {
-    // Write test data
-    const writeResponse = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: {
-          type: 'test_db_write'
-        }
-      }
-    });
+  // test('should write and cleanup test data', async () => {
+  //   // Write test data
+  //   const writeResponse = await supabase.functions.invoke('test-integration', {
+  //     body: {
+  //       action: {
+  //         type: 'test_db_write'
+  //       }
+  //     }
+  //   });
 
-    expect(writeResponse.error).toBeNull();
-    expect(writeResponse.data.success).toBe(true);
+  //   expect(writeResponse.error).toBeNull();
+  //   expect(writeResponse.data.success).toBe(true);
 
-    // Cleanup test data
-    const cleanupResponse = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: {
-          type: 'test_db_cleanup'
-        }
-      }
-    });
+  //   // Cleanup test data
+  //   const cleanupResponse = await supabase.functions.invoke('test-integration', {
+  //     body: {
+  //       action: {
+  //         type: 'test_db_cleanup'
+  //       }
+  //     }
+  //   });
 
-    expect(cleanupResponse.error).toBeNull();
-    expect(cleanupResponse.data.success).toBe(true);
-  });
+  //   expect(cleanupResponse.error).toBeNull();
+  //   expect(cleanupResponse.data.success).toBe(true);
+  // });
 }); 

@@ -29,6 +29,8 @@ serve(async (req) => {
 
     // Get test portal ID from environment
     const testPortalId = Deno.env.get('TEST_PORTAL_ID');
+    console.log('TEST_PORTAL_ID:', testPortalId ? 'set' : 'not set');
+    
     if (!testPortalId) {
       throw new Error('TEST_PORTAL_ID environment variable is required');
     }
@@ -57,6 +59,7 @@ serve(async (req) => {
         )
 
       case 'test_db_write':
+        console.log('Attempting to write test data with portal_id:', testPortalId);
         // Test database write
         const { data: writeData, error: writeError } = await supabaseClient
           .from('hubspot_accounts')
@@ -67,8 +70,12 @@ serve(async (req) => {
           }])
           .select()
         
-        if (writeError) throw writeError
+        if (writeError) {
+          console.error('Write error:', writeError);
+          throw writeError;
+        }
         
+        console.log('Write successful:', writeData);
         return new Response(
           JSON.stringify({ success: true, data: writeData }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -115,6 +122,7 @@ serve(async (req) => {
         throw new Error(`Unknown test action: ${action.type}`)
     }
   } catch (error) {
+    console.error('Function error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

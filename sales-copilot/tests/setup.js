@@ -37,8 +37,6 @@ async function cleanupTestData() {
       return;
     }
 
-    console.log('Starting cleanup for portal:', testPortalId);
-
     // Call the edge function to cleanup test tables
     const { data: cleanupData, error: cleanupError } = await supabase.functions.invoke('test-integration', {
       body: {
@@ -54,22 +52,20 @@ async function cleanupTestData() {
     }
 
     // Log cleanup results
-    cleanupData.results.forEach((result: { table: string; success: boolean; error?: string }) => {
+    cleanupData.results.forEach(result => {
       if (result.success) {
         console.log(`Cleaned up ${result.table}`);
       } else {
         console.error(`Error cleaning up ${result.table}:`, result.error);
       }
     });
-
-    console.log('Test data cleanup completed for portal:', testPortalId);
   } catch (error) {
     console.error('Error during cleanup:', error);
   }
 }
 
-// Run cleanup before tests
-cleanupTestData();
-
-// Log that environment variables are loaded (without exposing sensitive data)
-console.log('Environment variables loaded successfully'); 
+// Export setup function for Jest globalSetup
+module.exports = async () => {
+  console.log('Environment variables loaded successfully');
+  await cleanupTestData();
+}; 
