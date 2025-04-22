@@ -19,6 +19,13 @@ export interface ScoringResult {
   lastScored: string;
 }
 
+interface AIResponse {
+  score: number;
+  positives: string[];
+  negatives: string[];
+  summary: string;
+}
+
 // Interface for similar deals 
 interface SimilarDeal {
   record: any;
@@ -121,23 +128,38 @@ export class ScoringService {
   private async getAIResponse(prompt: string, data: any, similarRecords: any[] = []): Promise<{ score: number; summary: string; fullPrompt: string }> {
     const { provider, model, temperature, maxTokens, scoringPrompt } = this.aiConfig;
     
-    const defaultPrompt = `You are an expert at analyzing business records and determining how well they match an ideal client profile. 
-Your task is to analyze the given record and provide:
-1. A score from 0-100 indicating how well this record matches an ideal client profile
-2. A brief summary explaining the score and key factors considered
+    const defaultPrompt = `You are an expert at analyzing sales and CRM data to determine how well a deal aligns with an ideal client profile.
 
-Please format your response as a JSON object with two fields:
-- score: number between 0-100
-- summary: string explaining the score
+Your task is to review the provided record (including metadata, related contact and company info, and past engagement), and output a structured evaluation in the following format:
 
-Consider factors such as:
-- Industry and company size
-- Job title and seniority
-- Deal size and stage
-- Past interactions and engagement
-- Similar successful records provided for context
+Return a JSON object with the following fields:
+- score: number from 0 to 100 (whole number only)
+- positives: array of 1–3 short bullets identifying positive signals
+- negatives: array of 1–3 short bullets identifying risk factors or missing data
+- summary: 3–5 sentence executive summary explaining the score and reasoning behind it in plain language
 
-Base your analysis on the record data and any similar records provided for context.`;
+Example format:
+{
+  "score": 88,
+  "positives": [
+    "Deal Amount is $98,698 — well-aligned with high-value ideal clients",
+    "Deal Stage is qualified to buy — strong buying intent",
+    "Similar Closed Deals scored 90/100 with values between $27,063 and $95,074"
+  ],
+  "negatives": [
+    "Missing Company Info — industry, size, and revenue not provided",
+    "Missing Contact Details — no title, seniority, or engagement data"
+  ],
+  "summary": "This deal scores 88/100 based on its similarity to high-value, high-conversion deals in your historical dataset. The financial fit is strong, and the deal stage indicates readiness to purchase. However, the absence of detailed company and contact metadata slightly lowers confidence in full alignment with your ideal client profile. Still, based on monetary potential and sales progression alone, this is a high-potential opportunity."
+}
+
+Important:
+- Be concise and focused in each section.
+- Use dollar formatting for deal values.
+- Avoid repeating the same points in both positives and summary.
+- Tailor the analysis to the record's data and similarity results from the Pinecone index.
+
+`;
 
     // Construct the full prompt with similar records context
     const fullPrompt = `${scoringPrompt || defaultPrompt}
@@ -149,7 +171,7 @@ ${JSON.stringify(similarRecords, null, 2)}
 ${JSON.stringify(data, null, 2)}`;
 
     try {
-      let response;
+      let response: AIResponse;
       
       switch (provider) {
         case 'openai':
@@ -165,15 +187,22 @@ ${JSON.stringify(data, null, 2)}`;
           throw new Error(`Unsupported AI provider: ${provider}`);
       }
 
-      // Include the full prompt in the response
-      return { ...response, fullPrompt };
+      // Format the summary to include positives and negatives
+      const formattedSummary = this.formatSummaryFromResponse(response);
+
+      // Return the score and formatted summary
+      return { 
+        score: response.score, 
+        summary: formattedSummary,
+        fullPrompt 
+      };
     } catch (error) {
       this.logger.error('Error getting AI response:', error);
       throw error;
     }
   }
 
-  private async callOpenAI(model: string, prompt: string, temperature: number, maxTokens: number): Promise<{ score: number; summary: string }> {
+  private async callOpenAI(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -197,7 +226,7 @@ ${JSON.stringify(data, null, 2)}`;
     return JSON.parse(data.choices[0].message.content);
   }
 
-  private async callAnthropic(model: string, prompt: string, temperature: number, maxTokens: number): Promise<{ score: number; summary: string }> {
+  private async callAnthropic(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -221,7 +250,7 @@ ${JSON.stringify(data, null, 2)}`;
     return JSON.parse(data.content[0].text);
   }
 
-  private async callGoogle(model: string, prompt: string, temperature: number, maxTokens: number): Promise<{ score: number; summary: string }> {
+  private async callGoogle(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
     const response = await fetch('https://generativelanguage.googleapis.com/v1/models/${model}:generateContent', {
       method: 'POST',
       headers: {
@@ -243,6 +272,15 @@ ${JSON.stringify(data, null, 2)}`;
 
     const data = await response.json();
     return JSON.parse(data.candidates[0].content.parts[0].text);
+  }
+
+  private formatSummaryFromResponse(response: AIResponse): string {
+    // Format exactly as shown in UI
+    const positivesList = response.positives.length > 0 ? '✓ Top Positives\n' + response.positives.map(p => `- ${p}`).join('\n') : '';
+    const negativesList = response.negatives.length > 0 ? '\n\n⚠ Top Negatives\n' + response.negatives.map(n => `- ${n}`).join('\n') : '';
+    const execSummary = '\n\n📋 Executive Summary\n' + response.summary;
+    
+    return `${positivesList}${negativesList}${execSummary}`;
   }
 
   private async checkScoringLimit(): Promise<void> {
@@ -1117,7 +1155,7 @@ Format your response as a JSON object with 'score' and 'summary' fields.`;
     this.logger.info('Full AI prompt (first 1000 chars):', fullPrompt.substring(0, 1000) + '...');
 
     try {
-      let response;
+      let response: AIResponse;
       
       switch (provider) {
         case 'openai':
@@ -1133,8 +1171,15 @@ Format your response as a JSON object with 'score' and 'summary' fields.`;
           throw new Error(`Unsupported AI provider: ${provider}`);
       }
 
-      // Include the full prompt in the response
-      return { ...response, fullPrompt };
+      // Format the summary to include positives and negatives
+      const formattedSummary = this.formatSummaryFromResponse(response);
+
+      // Return the score and formatted summary
+      return { 
+        score: response.score, 
+        summary: formattedSummary,
+        fullPrompt 
+      };
     } catch (error) {
       this.logger.error('Error getting enhanced AI response:', error);
       throw error;
