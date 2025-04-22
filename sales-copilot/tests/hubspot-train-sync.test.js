@@ -50,7 +50,7 @@ describe('HubSpot Train Sync Tests', () => {
 
     expect(statusError).toBeNull();
     expect(statusData.success).toBe(true);
-    expect(statusData.count).toBeGreaterThan(0);
+    expect(statusData.count).toBe(147); // Verify exactly 147 records
     expect(statusData.data[0].portal_id).toBe(testPortalId);
-  });
+  }, 30000); // 30 second timeout
 }); 

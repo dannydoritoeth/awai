@@ -118,6 +118,22 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
+      case 'check_hubspot_object_status':
+        // Check hubspot_object_status table for test data
+        const { data: statusData, error: statusError } = await supabaseClient
+          .from('hubspot_object_status')
+          .select('*')
+
+        if (statusError) throw statusError;
+
+          JSON.stringify({ 
+            success: true, 
+            count: statusData.length,
+            data: statusData 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
       default:
         throw new Error(`Unknown test action: ${action.type}`)
     }
