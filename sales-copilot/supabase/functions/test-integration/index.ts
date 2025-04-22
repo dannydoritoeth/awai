@@ -123,9 +123,11 @@ serve(async (req) => {
         const { data: statusData, error: statusError } = await supabaseClient
           .from('hubspot_object_status')
           .select('*')
+          .eq('portal_id', testPortalId);
 
         if (statusError) throw statusError;
 
+        return new Response(
           JSON.stringify({ 
             success: true, 
             count: statusData.length,
