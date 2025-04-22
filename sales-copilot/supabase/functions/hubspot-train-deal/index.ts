@@ -9,210 +9,146 @@ import { handleApiCall } from '../_shared/apiHandler.ts';
 import { processSingleDeal } from '../_shared/dealProcessor.ts';
 import { calculateDealStatistics } from '../_shared/statistics.ts';
 import { PineconeClient } from '../_shared/pineconeClient.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+import { Database } from '../_shared/database.types.ts';
+import { Deal } from '../_shared/types.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 seconds
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   const logger = new Logger('hubspot-train-deal');
   try {
-    // Parse URL parameters
-    const url = new URL(req.url);
-    const object_id = url.searchParams.get('object_id');
-
-    if (!object_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required parameter: object_id' }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseClient = createClient<Database>(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false
+        }
+      }
     );
 
-    // Get record status
-    const { data: recordStatus, error: statusError } = await supabase
-      .from('hubspot_object_status')
-      .select('*')
-      .eq('object_id', object_id)
-      .single();
+    const hubspotClient = new HubspotClient();
 
-    if (statusError || !recordStatus) {
-      return new Response(
-        JSON.stringify({ error: 'Record not found in status table' }),
-        { status: 404, headers: corsHeaders }
-      );
+    const { dealId } = await req.json();
+
+    if (!dealId) {
+      throw new Error('dealId is required');
     }
 
-    // Check if record is already processed
-    if (recordStatus.training_status === 'completed') {
-      return new Response(
-        JSON.stringify({ message: 'Record already processed', status: recordStatus }),
-        { status: 200, headers: corsHeaders }
-      );
+    // Get deal details from Supabase
+    const { data: deal, error: dealError } = await supabaseClient
+      .from('deals')
+      .select('*')
+      .eq('id', dealId)
+      .single();
+
+    if (dealError) {
+      throw new Error(`Failed to fetch deal: ${dealError.message}`);
+    }
+
+    if (!deal) {
+      throw new Error(`Deal ${dealId} not found`);
     }
 
     // Update status to in_progress
-    await supabase
-      .from('hubspot_object_status')
-      .update({ training_status: 'in_progress' })
-      .eq('object_id', object_id);
+    const { error: statusError } = await supabaseClient
+      .from('deals')
+      .update({ status: 'in_progress' })
+      .eq('id', dealId);
 
-    // Get HubSpot account details
-    const { data: account, error: accountError } = await supabase
-      .from('hubspot_accounts')
-      .select('*')
-      .eq('portal_id', recordStatus.portal_id)
-      .eq('status', 'active')
-      .single();
-
-    if (accountError || !account) {
-      await supabase
-        .from('hubspot_object_status')
-        .update({ 
-          training_status: 'failed',
-          error_message: 'HubSpot account not found or inactive'
-        })
-        .eq('object_id', object_id);
-
-      return new Response(
-        JSON.stringify({ error: 'HubSpot account not found or inactive' }),
-        { status: 404, headers: corsHeaders }
-      );
+    if (statusError) {
+      throw new Error(`Failed to update deal status: ${statusError.message}`);
     }
 
-    // Initialize clients
-    const accessToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const refreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const hubspotClient = new HubspotClient(accessToken);
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! });
-    
-    // Initialize Pinecone client
-    const pineconeClient = new PineconeClient();
-    await pineconeClient.initialize(
-      Deno.env.get('PINECONE_API_KEY')!,
-      Deno.env.get('PINECONE_INDEX')!
-    );
-    
-    const documentPackager = new DocumentPackager(hubspotClient, refreshToken, recordStatus.portal_id);
+    // Process the deal with retry logic
+    let retryCount = 0;
+    let lastError = null;
 
-    // Get deal details
-    const deal = await handleApiCall(
-      hubspotClient,
-      recordStatus.portal_id,
-      refreshToken,
-      () => hubspotClient.getRecord('deals', object_id, [
-        'dealname',
-        'amount',
-        'closedate',
-        'createdate',
-        'dealstage',
-        'pipeline',
-        'hs_lastmodifieddate',
-        'hs_date_entered_closedwon',
-        'hs_date_entered_closedlost',
-        'hs_deal_stage_probability',
-        'hs_pipeline_stage',
-        'hs_time_in_pipeline',
-        'hs_time_in_dealstage',
-        'hs_deal_stage_changes'
-      ])
-    );
+    while (retryCount < MAX_RETRIES) {
+      try {
+        // Get deal details from HubSpot
+        const hubspotDeal = await hubspotClient.getDeal(deal.hubspot_id);
+        if (!hubspotDeal) {
+          throw new Error('Failed to fetch deal from HubSpot');
+        }
 
-    if (!deal) {
-      await supabase
-        .from('hubspot_object_status')
-        .update({ 
-          training_status: 'failed',
-          error_message: 'Deal not found in HubSpot'
-        })
-        .eq('object_id', object_id);
+        // Get associated contacts
+        const contacts = await hubspotClient.getDealContacts(deal.hubspot_id);
+        if (!contacts || contacts.length === 0) {
+          throw new Error('No contacts found for deal');
+        }
 
-      return new Response(
-        JSON.stringify({ error: 'Deal not found in HubSpot' }),
-        { status: 404, headers: corsHeaders }
-      );
-    }
+        // Get contact details
+        const contactDetails = await Promise.all(
+          contacts.map(contact => hubspotClient.getContact(contact.id))
+        );
 
-    // Process the deal
-    const namespace = `hubspot-${recordStatus.portal_id}`;
-    try {
-      logger.info(`Starting deal processing for ${deal.id} (${recordStatus.classification})`);
-      await processSingleDeal(
-        deal,
-        recordStatus.classification,
-        hubspotClient,
-        documentPackager,
-        openai,
-        pineconeClient,
-        recordStatus.portal_id,
-        namespace,
-        refreshToken
-      );
+        // Get company details
+        const companyDetails = await Promise.all(
+          contacts
+            .filter(contact => contact.associatedCompanyId)
+            .map(contact => hubspotClient.getCompany(contact.associatedCompanyId!))
+        );
 
-      // Update status to completed
-      logger.info(`Updating status to completed for deal ${deal.id}`);
-      const now = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from('hubspot_object_status')
-        .update({ 
-          training_status: 'completed',
-          training_date: now,
-          last_processed: now,
-          training_error: null // Clear any previous error
-        })
-        .eq('object_id', object_id);
+        // Update deal in Supabase with enriched data
+        const { error: updateError } = await supabaseClient
+          .from('deals')
+          .update({
+            status: 'completed',
+            processed_at: new Date().toISOString(),
+            data: {
+              ...deal.data,
+              hubspot_deal: hubspotDeal,
+              contacts: contactDetails,
+              companies: companyDetails
+            }
+          })
+          .eq('id', dealId);
 
-      if (updateError) {
-        logger.error(`Failed to update status to completed: ${updateError.message}`);
-        throw new Error(`Failed to update training status: ${updateError.message}`);
+        if (updateError) {
+          throw new Error(`Failed to update deal: ${updateError.message}`);
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, dealId }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          },
+        );
+      } catch (error) {
+        lastError = error;
+        retryCount++;
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        }
       }
-
-      logger.info(`Successfully updated status to completed for deal ${deal.id}`);
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Deal processed successfully',
-          deal_id: deal.id
-        }),
-        { status: 200, headers: corsHeaders }
-      );
-    } catch (error) {
-      logger.error(`Error processing deal ${deal.id}:`, error);
-      
-      // Update status to failed
-      await supabase
-        .from('hubspot_object_status')
-        .update({ 
-          training_status: 'failed',
-          error_message: error.message,
-          last_processed: new Date().toISOString()
-        })
-        .eq('object_id', object_id);
-
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: error.message,
-          deal_id: deal.id
-        }),
-        { status: 500, headers: corsHeaders }
-      );
     }
+
+    // If we get here, all retries failed
+    const { error: errorStatusError } = await supabaseClient
+      .from('deals')
+      .update({ status: 'error' })
+      .eq('id', dealId);
+
+    if (errorStatusError) {
+      console.error('Failed to update deal status to error:', errorStatusError);
+    }
+
+    throw lastError;
   } catch (error) {
-    logger.error('Function error:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      },
     );
   }
 });

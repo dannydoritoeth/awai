@@ -68,23 +68,6 @@ serve(async (req) => {
       );
     }
 
-    // Update status to in_progress for all deals in this batch
-    const dealIds = pendingDeals.map(deal => deal.object_id);
-    const { error: updateError } = await supabase
-      .from('hubspot_object_status')
-      .update({ training_status: 'in_progress' })
-      .eq('portal_id', portalId)
-      .eq('object_type', 'deal')
-      .in('object_id', dealIds);
-
-    if (updateError) {
-      logger.error('Error updating deal status:', updateError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to update deal status', details: updateError.message }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
     // Get the base URL for the hubspot-train-deal function
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal`;
@@ -92,18 +75,18 @@ serve(async (req) => {
     logger.info(`Train deal URL: ${trainDealUrl}`);
 
     // Process each deal
-    logger.info(`Starting to process ${dealIds.length} deals`);
+    logger.info(`Starting to process ${pendingDeals.length} deals`);
     
     const results = [];
     
-    for (let i = 0; i < dealIds.length; i++) {
-      const dealId = dealIds[i];
+    for (let i = 0; i < pendingDeals.length; i++) {
+      const deal = pendingDeals[i];
       
       try {
-        logger.info(`Calling training for deal ${dealId} (${i + 1}/${dealIds.length})`);
+        logger.info(`Calling training for deal ${deal.object_id} (${i + 1}/${pendingDeals.length})`);
         
         // Actually await the fetch to ensure it gets called and to capture any errors
-        const response = await fetch(`${trainDealUrl}?object_id=${dealId}`, {
+        const response = await fetch(`${trainDealUrl}?object_id=${deal.object_id}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
@@ -119,22 +102,22 @@ serve(async (req) => {
           responseText = 'Could not get response text';
         }
         
-        logger.info(`Training initiated for deal ${dealId}: status ${responseStatus}`);
+        logger.info(`Training initiated for deal ${deal.object_id}: status ${responseStatus}`);
         
         results.push({
-          dealId,
+          dealId: deal.object_id,
           status: responseStatus,
           response: responseText.substring(0, 100) // Just log first 100 chars
         });
         
         // Add a small delay between requests
-        if (i < dealIds.length - 1) {
+        if (i < pendingDeals.length - 1) {
           await sleep(500); // 0.5 second delay
         }
       } catch (fetchError) {
-        logger.error(`Error initiating training for deal ${dealId}:`, fetchError);
+        logger.error(`Error initiating training for deal ${deal.object_id}:`, fetchError);
         results.push({
-          dealId,
+          dealId: deal.object_id,
           status: 'error',
           error: fetchError.message
         });
@@ -169,8 +152,8 @@ serve(async (req) => {
     // Create response object to return
     const responseObj = {
       success: true, 
-      message: `Processing batch of ${dealIds.length} deals for portal ${portalId}`,
-      deals: dealIds,
+      message: `Processing batch of ${pendingDeals.length} deals for portal ${portalId}`,
+      deals: pendingDeals.map(deal => deal.object_id),
       results: results,
       remaining_deals: remainingCount || 0
     };
