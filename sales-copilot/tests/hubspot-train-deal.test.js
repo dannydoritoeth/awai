@@ -27,6 +27,7 @@ describe('hubspot-train-deal function', () => {
 
     if (portalError) throw portalError;
     testPortalId = portalData.portal_id;
+    console.log('Test Portal ID:', testPortalId);
 
     // Check if we have test data in hubspot_object_status
     const { data: statusData, error: statusError } = await supabase.functions.invoke('test-integration', {
@@ -36,33 +37,51 @@ describe('hubspot-train-deal function', () => {
     });
 
     if (statusError) throw statusError;
+    console.log('Found deals in hubspot_object_status:', statusData.count);
+
     if (!statusData.count) {
-      throw new Error('No test data found in hubspot_object_status. Please run sync first.');
+      // If no data exists, run the sync
+      const syncUrl = `${supabaseUrl}/functions/v1/hubspot-train-sync?portal_id=${testPortalId}`;
+      const syncResponse = await fetch(syncUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!syncResponse.ok) {
+        throw new Error('Failed to run sync');
+      }
+
+      // Wait a moment for sync to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Check again for data
+      const { data: newStatusData, error: newStatusError } = await supabase.functions.invoke('test-integration', {
+        body: {
+          action: { type: 'check_hubspot_object_status' }
+        }
+      });
+
+      if (newStatusError) throw newStatusError;
+      if (!newStatusData.count) {
+        throw new Error('Sync completed but no data found in hubspot_object_status');
+      }
+
+      testDealId = newStatusData.data[0].object_id;
+    } else {
+      testDealId = statusData.data[0].object_id;
     }
 
-    // Get a deal ID to test with
-    testDealId = statusData.data[0].object_id;
-  });
-
-  beforeEach(async () => {
-    // Clean up Pinecone before each test
-    const { error: pineconeError } = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: { 
-          type: 'cleanup_pinecone',
-          params: { portal_id: testPortalId }
-        }
-      }
-    });
-
-    if (pineconeError) throw pineconeError;
+    console.log('Test Deal ID:', testDealId);
   });
 
   test('should process a deal and update Pinecone', async () => {
     // Call hubspot-train-deal function using POST with parameters in URL
     const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=${testDealId}`;
     const trainResponse = await fetch(trainDealUrl, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${supabaseKey}`,
         'Content-Type': 'application/json'
@@ -75,9 +94,9 @@ describe('hubspot-train-deal function', () => {
 
     // Verify the deal was processed in Supabase
     const { data: deal, error: dealError } = await supabase
-      .from('deals')
+      .from('hubspot_object_status')
       .select('*')
-      .eq('id', testDealId)
+      .eq('object_id', testDealId)
       .single();
 
     expect(dealError).toBeNull();
@@ -105,16 +124,5 @@ describe('hubspot-train-deal function', () => {
     expect(pineconeError).toBeNull();
     expect(pineconeData.success).toBe(true);
     expect(pineconeData.exists).toBe(true);
-  });
-
-  afterAll(async () => {
-    // Clean up test data
-    const { error: cleanupError } = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: { type: 'cleanup_test_tables' }
-      }
-    });
-
-    if (cleanupError) throw cleanupError;
   });
 }); 

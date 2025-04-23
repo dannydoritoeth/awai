@@ -10,7 +10,6 @@ import { processSingleDeal } from '../_shared/dealProcessor.ts';
 import { calculateDealStatistics } from '../_shared/statistics.ts';
 import { PineconeClient } from '../_shared/pineconeClient.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { Database } from '../_shared/database.types.ts';
 import { Deal } from '../_shared/types.ts';
 
 const MAX_RETRIES = 3;
@@ -23,7 +22,7 @@ serve(async (req) => {
 
   const logger = new Logger('hubspot-train-deal');
   try {
-    const supabaseClient = createClient<Database>(
+    const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
@@ -33,37 +32,65 @@ serve(async (req) => {
       }
     );
 
-    const hubspotClient = new HubspotClient();
+    // Get objectId from query parameters
+    const url = new URL(req.url);
+    const objectId = url.searchParams.get('object_id');
 
-    const { dealId } = await req.json();
-
-    if (!dealId) {
-      throw new Error('dealId is required');
+    if (!objectId) {
+      throw new Error('object_id is required as a query parameter');
     }
 
-    // Get deal details from Supabase
-    const { data: deal, error: dealError } = await supabaseClient
-      .from('deals')
+    // Get deal status from hubspot_object_status table
+    const { data: dealStatus, error: statusError } = await supabaseClient
+      .from('hubspot_object_status')
       .select('*')
-      .eq('id', dealId)
+      .eq('object_id', objectId)
+      .eq('object_type', 'deal')
       .single();
 
-    if (dealError) {
-      throw new Error(`Failed to fetch deal: ${dealError.message}`);
+    if (statusError) {
+      throw new Error(`Failed to fetch deal status: ${statusError.message}`);
     }
 
-    if (!deal) {
-      throw new Error(`Deal ${dealId} not found`);
+    if (!dealStatus) {
+      throw new Error(`Deal ${objectId} not found in hubspot_object_status`);
     }
+
+    // Get HubSpot account details
+    const { data: hubspotAccount, error: hsAccountError } = await supabaseClient
+      .from('hubspot_accounts')
+      .select('access_token, refresh_token, expires_at')
+      .eq('portal_id', dealStatus.portal_id)
+      .single();
+
+    if (hsAccountError) {
+      throw new Error(`Failed to get HubSpot account: ${hsAccountError.message}`);
+    }
+
+    if (!hubspotAccount) {
+      throw new Error('HubSpot account not found');
+    }
+
+    // Decrypt tokens
+    const accessToken = await decrypt(hubspotAccount.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+    const refreshToken = await decrypt(hubspotAccount.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+
+    // Initialize HubSpot client
+    const hubspotClient = new HubspotClient(accessToken);
 
     // Update status to in_progress
-    const { error: statusError } = await supabaseClient
-      .from('deals')
-      .update({ status: 'in_progress' })
-      .eq('id', dealId);
+    const { error: updateError } = await supabaseClient
+      .from('hubspot_object_status')
+      .update({ 
+        training_status: 'in_progress',
+        training_date: new Date().toISOString()
+      })
+      .eq('object_id', objectId)
+      .eq('object_type', 'deal')
+      .eq('portal_id', dealStatus.portal_id);
 
-    if (statusError) {
-      throw new Error(`Failed to update deal status: ${statusError.message}`);
+    if (updateError) {
+      throw new Error(`Failed to update deal status: ${updateError.message}`);
     }
 
     // Process the deal with retry logic
@@ -73,50 +100,99 @@ serve(async (req) => {
     while (retryCount < MAX_RETRIES) {
       try {
         // Get deal details from HubSpot
-        const hubspotDeal = await hubspotClient.getDeal(deal.hubspot_id);
+        const hubspotDeal = await handleApiCall(
+          hubspotClient,
+          dealStatus.portal_id,
+          refreshToken,
+          () => hubspotClient.getDeal(objectId)
+        );
+
         if (!hubspotDeal) {
           throw new Error('Failed to fetch deal from HubSpot');
         }
 
-        // Get associated contacts
-        const contacts = await hubspotClient.getDealContacts(deal.hubspot_id);
+        // Get associated contacts and companies
+        const associations = await handleApiCall(
+          hubspotClient,
+          dealStatus.portal_id,
+          refreshToken,
+          () => hubspotClient.getDealAssociations(objectId)
+        );
+        const contacts = associations.results['contacts'] || [];
+        const companies = associations.results['companies'] || [];
+        
         if (!contacts || contacts.length === 0) {
           throw new Error('No contacts found for deal');
         }
 
         // Get contact details
         const contactDetails = await Promise.all(
-          contacts.map(contact => hubspotClient.getContact(contact.id))
+          contacts.map(contact => handleApiCall(
+            hubspotClient,
+            dealStatus.portal_id,
+            refreshToken,
+            () => hubspotClient.getContact(contact.id)
+          ))
         );
 
-        // Get company details
-        const companyDetails = await Promise.all(
-          contacts
+        // Get company details from both sources
+        const companyDetails = await Promise.all([
+          // Get companies associated with contacts
+          ...contacts
             .filter(contact => contact.associatedCompanyId)
-            .map(contact => hubspotClient.getCompany(contact.associatedCompanyId!))
-        );
+            .map(contact => handleApiCall(
+              hubspotClient,
+              dealStatus.portal_id,
+              refreshToken,
+              () => hubspotClient.getCompany(contact.associatedCompanyId!)
+            )),
+          // Get companies directly associated with the deal
+          ...companies.map(company => handleApiCall(
+            hubspotClient,
+            dealStatus.portal_id,
+            refreshToken,
+            () => hubspotClient.getCompany(company.id)
+          ))
+        ]);
 
-        // Update deal in Supabase with enriched data
-        const { error: updateError } = await supabaseClient
-          .from('deals')
-          .update({
-            status: 'completed',
-            processed_at: new Date().toISOString(),
-            data: {
-              ...deal.data,
+        // Record training event
+        const { error: eventError } = await supabaseClient
+          .from('ai_events')
+          .insert({
+            portal_id: dealStatus.portal_id,
+            event_type: 'train',
+            object_type: 'deal',
+            object_id: objectId,
+            classification: 'deal',
+            document_data: {
               hubspot_deal: hubspotDeal,
               contacts: contactDetails,
               companies: companyDetails
-            }
-          })
-          .eq('id', dealId);
+            },
+            created_at: new Date().toISOString()
+          });
 
-        if (updateError) {
-          throw new Error(`Failed to update deal: ${updateError.message}`);
+        if (eventError) {
+          throw new Error(`Failed to record training event: ${eventError.message}`);
+        }
+
+        // Update status to completed
+        const { error: completeError } = await supabaseClient
+          .from('hubspot_object_status')
+          .update({ 
+            training_status: 'completed',
+            training_date: new Date().toISOString()
+          })
+          .eq('object_id', objectId)
+          .eq('object_type', 'deal')
+          .eq('portal_id', dealStatus.portal_id);
+
+        if (completeError) {
+          throw new Error(`Failed to update deal status: ${completeError.message}`);
         }
 
         return new Response(
-          JSON.stringify({ success: true, dealId }),
+          JSON.stringify({ success: true, objectId }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
@@ -133,9 +209,15 @@ serve(async (req) => {
 
     // If we get here, all retries failed
     const { error: errorStatusError } = await supabaseClient
-      .from('deals')
-      .update({ status: 'error' })
-      .eq('id', dealId);
+      .from('hubspot_object_status')
+      .update({ 
+        training_status: 'failed',
+        training_error: lastError?.message || 'Unknown error',
+        training_date: new Date().toISOString()
+      })
+      .eq('object_id', objectId)
+      .eq('object_type', 'deal')
+      .eq('portal_id', dealStatus.portal_id);
 
     if (errorStatusError) {
       console.error('Failed to update deal status to error:', errorStatusError);
