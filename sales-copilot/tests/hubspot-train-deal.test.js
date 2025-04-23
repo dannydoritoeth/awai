@@ -27,7 +27,7 @@ describe('hubspot-train-deal function', () => {
 
     if (portalError) throw portalError;
     testPortalId = portalData.portal_id;
-    console.log('Test Portal ID:', testPortalId);
+    // console.log('Test Portal ID:', testPortalId);
 
     // Check if we have test data in hubspot_object_status
     const { data: statusData, error: statusError } = await supabase.functions.invoke('test-integration', {
@@ -37,7 +37,7 @@ describe('hubspot-train-deal function', () => {
     });
 
     if (statusError) throw statusError;
-    console.log('Found deals in hubspot_object_status:', statusData.count);
+    // console.log('Found deals in hubspot_object_status:', statusData.count);
 
     if (!statusData.count) {
       // If no data exists, run the sync
@@ -74,10 +74,40 @@ describe('hubspot-train-deal function', () => {
       testDealId = statusData.data[0].object_id;
     }
 
-    console.log('Test Deal ID:', testDealId);
+    // console.log('Test Deal ID:', testDealId);
   });
 
-  test('should process a deal and update Pinecone', async () => {
+  test('should return 400 when object_id is missing', async () => {
+    const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal`;
+    const response = await fetch(trainDealUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe('object_id is required as a query parameter');
+  }, 30000);
+
+  test('should return 400 when deal is not found in hubspot_object_status', async () => {
+    const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=invalid_id`;
+    const response = await fetch(trainDealUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain('not found in hubspot_object_status');
+  }, 30000);
+
+  test('should process a deal and update status correctly', async () => {
     const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=${testDealId}`;
     const response = await fetch(trainDealUrl, {
       method: 'POST',
@@ -91,5 +121,78 @@ describe('hubspot-train-deal function', () => {
     const data = await response.json();
     expect(data.success).toBe(true);
     expect(data.objectId).toBe(testDealId);
-  }, 30000); // 30 second timeout
+
+    // Verify status updates in hubspot_object_status
+    const { data: statusData, error: statusError } = await supabase
+      .from('hubspot_object_status')
+      .select('*')
+      .eq('object_id', testDealId)
+      .single();
+
+    expect(statusError).toBeNull();
+    expect(statusData).toBeTruthy();
+    expect(statusData.training_status).toBe('completed');
+    expect(statusData.training_date).toBeTruthy();
+    expect(statusData.training_error).toBeNull();
+
+    // Verify training event was recorded
+    const { data: eventData, error: eventError } = await supabase
+      .from('ai_events')
+      .select('*')
+      .eq('object_id', testDealId)
+      .eq('event_type', 'train')
+      .single();
+
+    expect(eventError).toBeNull();
+    expect(eventData).toBeTruthy();
+    expect(eventData.portal_id).toBe(testPortalId);
+    expect(eventData.object_type).toBe('deal');
+    expect(eventData.document_data).toBeTruthy();
+    expect(eventData.document_data.hubspot_deal).toBeTruthy();
+    expect(eventData.document_data.contacts).toBeTruthy();
+    expect(eventData.document_data.companies).toBeTruthy();
+  }, 30000);
+
+  test('should handle token refresh when access token is expired', async () => {
+    // First, get the current tokens
+    const { data: accountData, error: accountError } = await supabase
+      .from('hubspot_accounts')
+      .select('access_token, refresh_token')
+      .eq('portal_id', testPortalId)
+      .single();
+
+    expect(accountError).toBeNull();
+    expect(accountData).toBeTruthy();
+
+    // Update the access token to an expired one
+    const { error: updateError } = await supabase
+      .from('hubspot_accounts')
+      .update({ access_token: 'expired_token' })
+      .eq('portal_id', testPortalId);
+
+    expect(updateError).toBeNull();
+
+    // Try to process the deal - should trigger token refresh
+    const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=${testDealId}`;
+    const response = await fetch(trainDealUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    expect(response.ok).toBe(true);
+
+    // Restore the original tokens
+    const { error: restoreError } = await supabase
+      .from('hubspot_accounts')
+      .update({ 
+        access_token: accountData.access_token,
+        refresh_token: accountData.refresh_token
+      })
+      .eq('portal_id', testPortalId);
+
+    expect(restoreError).toBeNull();
+  }, 30000);
 }); 
