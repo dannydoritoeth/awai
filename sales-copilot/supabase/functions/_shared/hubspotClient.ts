@@ -236,16 +236,16 @@ export class HubspotClient implements HubspotClientInterface {
     return response.json();
   }
 
-  async getContact(id: string, properties?: string[]): Promise<HubspotRecord> {
-    return this.getRecord('contacts', id, properties || []);
+  async getContact(id: string, properties: string[] = []): Promise<HubspotRecord> {
+    return this.getRecord('contacts', id, properties) as Promise<HubspotRecord>;
   }
 
-  async getCompany(id: string, properties?: string[]): Promise<HubspotRecord> {
-    return this.getRecord('companies', id, properties || []);
+  async getCompany(id: string, properties: string[] = []): Promise<HubspotRecord> {
+    return this.getRecord('companies', id, properties) as Promise<HubspotRecord>;
   }
 
-  async getDeal(id: string, properties?: string[]): Promise<HubspotRecord> {
-    return this.getRecord('deals', id, properties || []);
+  async getDeal(id: string, properties: string[] = []): Promise<HubspotRecord> {
+    return this.getRecord('deals', id, properties) as Promise<HubspotRecord>;
   }
 
   async updateContact(id: string, properties: Record<string, any>): Promise<HubspotRecord> {
@@ -368,18 +368,6 @@ export class HubspotClient implements HubspotClientInterface {
       method: 'POST',
       body: JSON.stringify(cardDefinition)
     });
-  }
-
-  async getContactWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/contacts/${id}?properties=${properties.join(',')}`);
-  }
-
-  async getCompanyWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/companies/${id}?properties=${properties.join(',')}`);
-  }
-
-  async getDealWithProperties(id: string, properties: string[]): Promise<HubspotRecord> {
-    return this.makeRequest(`/objects/deals/${id}?properties=${properties.join(',')}`);
   }
 
   async createScoringProperties() {
@@ -585,10 +573,12 @@ export class HubspotClient implements HubspotClientInterface {
     return details;
   }
 
-  async getRecord(objectType: string, recordId: string, properties: string[]): Promise<any> {
+  async getRecord(objectType: string, recordId: string, properties: string[] = []): Promise<HubspotRecord> {
     try {
-      const endpoint = `${this.crmBaseUrl}/objects/${objectType}/${recordId}?properties=${properties.join(',')}`;
-      return await this.makeJsonRequest<any>(endpoint);
+      const propertiesParam = properties.length > 0 ? `?properties=${properties.join(',')}` : '';
+      const endpoint = `${this.crmBaseUrl}/objects/${objectType}/${recordId}${propertiesParam}`;
+      const response = await this.makeJsonRequest<HubspotRecord>(endpoint);
+      return response;
     } catch (error) {
       this.logger.error(`Error getting ${objectType} record ${recordId}:`, error);
       throw error;
@@ -601,7 +591,7 @@ export class HubspotClient implements HubspotClientInterface {
    * @param objectType The type of object (deal, contact, company)
    * @returns Object containing associations grouped by type
    */
-  async getAssociations(objectId: string, objectType: string): Promise<any> {
+  async getAssociations(objectId: string, objectType: string): Promise<{ results: Record<string, any[]> }> {
     this.logger.info(`Fetching associations for ${objectType} ${objectId}`);
     
     try {
@@ -622,7 +612,7 @@ export class HubspotClient implements HubspotClientInterface {
           const endpoint = `${this.crmBaseUrl}/associations/${objectType}/${toObjectType}/batch/read`;
           
           // Make the request with the input array of IDs
-          const response = await this.makeJsonRequest(endpoint, {
+          const response: { results?: Array<{ to?: Array<{ id: string, type?: string }> }> } = await this.makeJsonRequest(endpoint, {
             method: 'POST',
             body: JSON.stringify({
               inputs: [{ id: objectId }]
@@ -630,12 +620,12 @@ export class HubspotClient implements HubspotClientInterface {
           });
           
           // Process the response
-          if (response && Array.isArray(response.results) && response.results.length > 0) {
+          if (response?.results && Array.isArray(response.results) && response.results.length > 0) {
             const associationResult = response.results[0];
             
             // If we have associations, add them to the results
-            if (associationResult && Array.isArray(associationResult.to)) {
-              const associatedIds = associationResult.to.map((assoc: any) => ({
+            if (associationResult?.to && Array.isArray(associationResult.to)) {
+              const associatedIds = associationResult.to.map((assoc) => ({
                 id: assoc.id,
                 type: assoc.type || 'default'
               }));
@@ -664,5 +654,32 @@ export class HubspotClient implements HubspotClientInterface {
       this.logger.error(`Error fetching associations for ${objectType} ${objectId}:`, error);
       return { results: {} };
     }
+  }
+
+  /**
+   * Get associations for a specific deal
+   * @param dealId The ID of the deal
+   * @returns Object containing associations grouped by type
+   */
+  async getDealAssociations(dealId: string): Promise<{ results: Record<string, any[]> }> {
+    return this.getAssociations(dealId, 'deal');
+  }
+
+  /**
+   * Get associations for a specific contact
+   * @param contactId The ID of the contact
+   * @returns Object containing associations grouped by type
+   */
+  async getContactAssociations(contactId: string): Promise<{ results: Record<string, any[]> }> {
+    return this.getAssociations(contactId, 'contact');
+  }
+
+  /**
+   * Get associations for a specific company
+   * @param companyId The ID of the company
+   * @returns Object containing associations grouped by type
+   */
+  async getCompanyAssociations(companyId: string): Promise<{ results: Record<string, any[]> }> {
+    return this.getAssociations(companyId, 'company');
   }
 } 

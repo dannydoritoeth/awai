@@ -22,7 +22,7 @@ serve(async (req) => {
     const { data: portalIds, error: portalError } = await supabase
       .from('hubspot_object_status')
       .select('portal_id')
-      .eq('training_status', 'pending')
+      .eq('training_status', 'queued')
       .eq('object_type', 'deal')
       .limit(1);
 
@@ -47,9 +47,9 @@ serve(async (req) => {
     // Get up to 10 pending records for this portal
     const { data: pendingDeals, error: dealsError } = await supabase
       .from('hubspot_object_status')
-      .select('object_id')
+      .select('*')
+      .eq('training_status', 'queued')
       .eq('portal_id', portalId)
-      .eq('training_status', 'pending')
       .eq('object_type', 'deal')
       .limit(10);
 
@@ -68,23 +68,6 @@ serve(async (req) => {
       );
     }
 
-    // Update status to in_progress for all deals in this batch
-    const dealIds = pendingDeals.map(deal => deal.object_id);
-    const { error: updateError } = await supabase
-      .from('hubspot_object_status')
-      .update({ training_status: 'in_progress' })
-      .eq('portal_id', portalId)
-      .eq('object_type', 'deal')
-      .in('object_id', dealIds);
-
-    if (updateError) {
-      logger.error('Error updating deal status:', updateError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to update deal status', details: updateError.message }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
     // Get the base URL for the hubspot-train-deal function
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal`;
@@ -92,62 +75,30 @@ serve(async (req) => {
     logger.info(`Train deal URL: ${trainDealUrl}`);
 
     // Process each deal
-    logger.info(`Starting to process ${dealIds.length} deals`);
+    logger.info(`Starting to process ${pendingDeals.length} deals`);
     
-    const results = [];
-    
-    for (let i = 0; i < dealIds.length; i++) {
-      const dealId = dealIds[i];
+    // Fire off all training requests without waiting for responses
+    pendingDeals.forEach((deal, i) => {
+      logger.info(`Calling training for deal ${deal.object_id} (${i + 1}/${pendingDeals.length})`);
       
-      try {
-        logger.info(`Calling training for deal ${dealId} (${i + 1}/${dealIds.length})`);
-        
-        // Actually await the fetch to ensure it gets called and to capture any errors
-        const response = await fetch(`${trainDealUrl}?object_id=${dealId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        const responseStatus = response.status;
-        let responseText = '';
-        try {
-          responseText = await response.text();
-        } catch (e) {
-          responseText = 'Could not get response text';
+      // Fire and forget - don't await
+      fetch(`${trainDealUrl}?object_id=${deal.object_id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          'Content-Type': 'application/json'
         }
-        
-        logger.info(`Training initiated for deal ${dealId}: status ${responseStatus}`);
-        
-        results.push({
-          dealId,
-          status: responseStatus,
-          response: responseText.substring(0, 100) // Just log first 100 chars
-        });
-        
-        // Add a small delay between requests
-        if (i < dealIds.length - 1) {
-          await sleep(500); // 0.5 second delay
-        }
-      } catch (fetchError) {
-        logger.error(`Error initiating training for deal ${dealId}:`, fetchError);
-        results.push({
-          dealId,
-          status: 'error',
-          error: fetchError.message
-        });
-        // Continue with the next deal
-      }
-    }
+      }).catch(error => {
+        logger.error(`Error initiating training for deal ${deal.object_id}:`, error);
+      });
+    });
 
     // After processing the current batch, check if there are still pending records
     const { count: remainingCount, error: countError } = await supabase
       .from('hubspot_object_status')
       .select('*', { count: 'exact', head: true })
       .eq('portal_id', portalId)
-      .eq('training_status', 'pending')
+      .eq('training_status', 'queued')
       .eq('object_type', 'deal');
 
     let recursionInitiated = false;
@@ -166,13 +117,17 @@ serve(async (req) => {
       }
     }
 
-    // Create response object to return
+    // Create response object to return immediately
     const responseObj = {
       success: true, 
-      message: `Processing batch of ${dealIds.length} deals for portal ${portalId}`,
-      deals: dealIds,
-      results: results,
-      remaining_deals: remainingCount || 0
+      message: `Processing batch of ${pendingDeals.length} deals for portal ${portalId}`,
+      deals: pendingDeals.map(deal => deal.object_id),
+      results: pendingDeals.map(deal => ({
+        dealId: deal.object_id,
+        status: 'initiated',
+        response: 'Training initiated'
+      })),
+      remaining_deals: 0
     };
     
     // Prepare to return response
@@ -188,30 +143,20 @@ serve(async (req) => {
         logger.info('Initiating next batch processing');
         
         // Explicit absolute URL with full URL construction
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
         
         logger.info(`Making absolute request to: ${batchUrl}`);
         
-        // Make the request with explicit external fetch
-        const fetchPromise = fetch(batchUrl, {
+        // Fire and forget - don't await
+        fetch(batchUrl, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
             'Content-Type': 'application/json'
           }
+        }).catch(err => {
+          logger.error(`Failed to trigger next batch: ${err.message}`);
         });
-        
-        // Use Promise.race with a short timeout to ensure we don't wait too long
-        await Promise.race([
-          fetchPromise.then(res => {
-            logger.info(`Next batch triggered with status: ${res.status}`);
-          }).catch(err => {
-            logger.error(`Failed to trigger next batch: ${err.message}`);
-          }),
-          // Add a short timeout promise just to be safe
-          new Promise(resolve => setTimeout(resolve, 500))
-        ]);
         
         logger.info(`Triggered next batch processing via absolute URL`);
       } catch (error) {

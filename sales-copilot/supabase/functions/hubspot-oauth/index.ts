@@ -14,40 +14,6 @@ const APP_INSTALL_SUCCESS_URI = Deno.env.get('APP_INSTALL_SUCCESS_URI')!;
 const APP_INSTALL_FAILED_URI = Deno.env.get('APP_INSTALL_FAILED_URI')!;
 
 const trainingProperties = {
-  contacts: [
-    {
-      name: 'training_score',
-      label: 'Training Score',
-      type: 'number',
-      fieldType: 'number',
-      description: 'Score this record from 0-100 to indicate how ideal this contact is',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'training_notes',
-      label: 'Training Notes',
-      type: 'string',
-      fieldType: 'textarea',
-      groupName: 'ai_scoring'
-    }
-  ],
-  companies: [
-    {
-      name: 'training_score',
-      label: 'Training Score',
-      type: 'number',
-      fieldType: 'number',
-      description: 'Score this record from 0-100 to indicate how ideal this company is',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'training_notes',
-      label: 'Training Notes',
-      type: 'string',
-      fieldType: 'textarea',
-      groupName: 'ai_scoring'
-    }
-  ],
   deals: [
     {
       name: 'training_score',
@@ -68,58 +34,6 @@ const trainingProperties = {
 };
 
 const scoringProperties = {
-  contacts: [
-    {
-      name: 'ideal_client_score',
-      label: 'Ideal Client Score',
-      type: 'number',
-      fieldType: 'number',
-      description: 'AI-generated score indicating how well this contact matches your ideal client profile',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'ideal_client_summary',
-      label: 'Ideal Client Summary',
-      type: 'string',
-      fieldType: 'textarea',
-      description: 'AI-generated analysis of why this contact matches or differs from your ideal client profile',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'ideal_client_last_scored',
-      label: 'Last Scored',
-      type: 'datetime',
-      fieldType: 'date',
-      description: 'When this contact was last analyzed by AI',
-      groupName: 'ai_scoring'
-    }
-  ],
-  companies: [
-    {
-      name: 'ideal_client_score',
-      label: 'Ideal Client Score',
-      type: 'number',
-      fieldType: 'number',
-      description: 'AI-generated score indicating how well this company matches your ideal client profile',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'ideal_client_summary',
-      label: 'Ideal Client Summary',
-      type: 'string',
-      fieldType: 'textarea',
-      description: 'AI-generated analysis of why this company matches or differs from your ideal client profile',
-      groupName: 'ai_scoring'
-    },
-    {
-      name: 'ideal_client_last_scored',
-      label: 'Last Scored',
-      type: 'datetime',
-      fieldType: 'date',
-      description: 'When this company was last analyzed by AI',
-      groupName: 'ai_scoring'
-    }
-  ],
   deals: [
     {
       name: 'ideal_client_score',
@@ -150,37 +64,9 @@ const scoringProperties = {
 
 async function createHubSpotProperties(accessToken: string) {
   const hubspotClient = new HubspotClient(accessToken);
-  let contactGroupCreated = false;
-  let companyGroupCreated = false;
   let dealGroupCreated = false;
 
-  // Create property groups first
-  try {
-    await hubspotClient.createPropertyGroup({
-      name: 'ai_scoring',
-      label: 'AI Scoring',
-      displayOrder: 1,
-      target: 'contact'
-    });
-    console.log('Created contact property group: ai_scoring');
-    contactGroupCreated = true;
-  } catch (error) {
-    console.error('Error creating contact property group:', error);
-  }
-
-  try {
-    await hubspotClient.createPropertyGroup({
-      name: 'ai_scoring',
-      label: 'AI Scoring',
-      displayOrder: 1,
-      target: 'company'
-    });
-    console.log('Created company property group: ai_scoring');
-    companyGroupCreated = true;
-  } catch (error) {
-    console.error('Error creating company property group:', error);
-  }
-
+  // Create deal property group
   try {
     await hubspotClient.createPropertyGroup({
       name: 'ai_scoring',
@@ -194,56 +80,8 @@ async function createHubSpotProperties(accessToken: string) {
     console.error('Error creating deal property group:', error);
   }
 
-  // Add a small delay to ensure HubSpot has processed the groups
+  // Add a small delay to ensure HubSpot has processed the group
   await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Only create contact properties if the group was created
-  if (contactGroupCreated) {
-    // Create training properties
-    for (const property of trainingProperties.contacts) {
-      try {
-        await hubspotClient.createContactProperty(property);
-        console.log(`Created contact training property: ${property.name}`);
-      } catch (error) {
-        console.error(`Error creating contact training property ${property.name}:`, error);
-      }
-    }
-    // Create scoring properties
-    for (const property of scoringProperties.contacts) {
-      try {
-        await hubspotClient.createContactProperty(property);
-        console.log(`Created contact scoring property: ${property.name}`);
-      } catch (error) {
-        console.error(`Error creating contact scoring property ${property.name}:`, error);
-      }
-    }
-  } else {
-    console.log('Skipping contact properties as group creation failed');
-  }
-
-  // Only create company properties if the group was created
-  if (companyGroupCreated) {
-    // Create training properties
-    for (const property of trainingProperties.companies) {
-      try {
-        await hubspotClient.createCompanyProperty(property);
-        console.log(`Created company training property: ${property.name}`);
-      } catch (error) {
-        console.error(`Error creating company training property ${property.name}:`, error);
-      }
-    }
-    // Create scoring properties
-    for (const property of scoringProperties.companies) {
-      try {
-        await hubspotClient.createCompanyProperty(property);
-        console.log(`Created company scoring property: ${property.name}`);
-      } catch (error) {
-        console.error(`Error creating company scoring property ${property.name}:`, error);
-      }
-    }
-  } else {
-    console.log('Skipping company properties as group creation failed');
-  }
 
   // Only create deal properties if the group was created
   if (dealGroupCreated) {

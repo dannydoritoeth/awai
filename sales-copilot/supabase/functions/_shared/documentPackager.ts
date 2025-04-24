@@ -1,5 +1,6 @@
 import { Logger } from './logger.ts';
 import { HubspotClient } from './hubspotClient.ts';
+import { handleApiCall } from './apiHandler.ts';
 
 interface DocumentMetadata {
   id: string;
@@ -70,13 +71,32 @@ interface Document {
   structuredContent: StructuredContent;
 }
 
+export interface PropertyHistoryEntry {
+  propertyName: string;
+  value: any;
+  source: string;
+  sourceId: string;
+  timestamp: string;
+}
+
+export interface EngagementHistoryEntry {
+  id: string;
+  type: string;
+  timestamp: string;
+  details: string;
+}
+
 export class DocumentPackager {
   private logger: Logger;
   private hubspotClient: HubspotClient;
+  private refreshToken?: string;
+  private portalId?: string;
 
-  constructor(hubspotClient: HubspotClient) {
+  constructor(hubspotClient: HubspotClient, refreshToken?: string, portalId?: string) {
     this.logger = new Logger('DocumentPackager');
     this.hubspotClient = hubspotClient;
+    this.refreshToken = refreshToken;
+    this.portalId = portalId;
   }
 
   private formatPropertyValue(value: any): string {
@@ -228,12 +248,27 @@ export class DocumentPackager {
   private async getRelatedCompany(companyId: string): Promise<any | null> {
     if (!companyId) return null;
     try {
-      const company = await this.hubspotClient.getRecord('company', companyId, [
-        'industry',
-        'type',
-        'numberofemployees',
-        'training_score'
-      ]);
+      let company;
+      if (this.refreshToken && this.portalId) {
+        company = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getRecord('company', companyId, [
+            'industry',
+            'type',
+            'numberofemployees',
+            'training_score'
+          ])
+        );
+      } else {
+        company = await this.hubspotClient.getRecord('company', companyId, [
+          'industry',
+          'type',
+          'numberofemployees',
+          'training_score'
+        ]);
+      }
       return company;
     } catch (error) {
       this.logger.warn(`Failed to fetch related company ${companyId}:`, error);
@@ -241,57 +276,112 @@ export class DocumentPackager {
     }
   }
 
-  private async getRelatedDeals(objectId: string, objectType: 'contact' | 'company'): Promise<any[]> {
+  private async getRelatedContacts(companyId: string): Promise<any[]> {
     try {
-      const searchResults = await this.hubspotClient.searchRecords('deal', {
-        filterGroups: [{
-          filters: [{
-            propertyName: objectType === 'contact' ? 'associations.contact' : 'associations.company',
-            operator: 'EQ',
-            value: objectId
-          }]
-        }],
-        properties: [
-          'dealname',
-          'amount',
-          'dealstage',
-          'pipeline',
-          'closedate',
-          'training_classification',
-          'training_score'
-        ],
-        limit: 10
-      });
+      let searchResults;
+      if (this.refreshToken && this.portalId) {
+        searchResults = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.searchRecords('contact', {
+            filterGroups: [{
+              filters: [{
+                propertyName: 'associations.company',
+                operator: 'EQ',
+                value: companyId
+              }]
+            }],
+            properties: [
+              'firstname',
+              'lastname',
+              'email',
+              'jobtitle',
+              'training_classification',
+              'training_score'
+            ],
+            limit: 10
+          })
+        );
+      } else {
+        searchResults = await this.hubspotClient.searchRecords('contact', {
+          filterGroups: [{
+            filters: [{
+              propertyName: 'associations.company',
+              operator: 'EQ',
+              value: companyId
+            }]
+          }],
+          properties: [
+            'firstname',
+            'lastname',
+            'email',
+            'jobtitle',
+            'training_classification',
+            'training_score'
+          ],
+          limit: 10
+        });
+      }
       return searchResults.results || [];
     } catch (error) {
-      this.logger.warn(`Failed to fetch related deals for ${objectType} ${objectId}:`, error);
+      this.logger.warn(`Failed to fetch related contacts for company ${companyId}:`, error);
       return [];
     }
   }
 
-  private async getRelatedContacts(companyId: string): Promise<any[]> {
+  private async getRelatedDeals(companyId: string): Promise<any[]> {
     try {
-      const searchResults = await this.hubspotClient.searchRecords('contact', {
-        filterGroups: [{
-          filters: [{
-            propertyName: 'associations.company',
-            operator: 'EQ',
-            value: companyId
-          }]
-        }],
-        properties: [
-          'firstname',
-          'lastname',
-          'email',
-          'jobtitle',
-          'training_classification',
-          'training_score'
-        ],
-        limit: 10
-      });
+      let searchResults;
+      if (this.refreshToken && this.portalId) {
+        searchResults = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.searchRecords('deal', {
+            filterGroups: [{
+              filters: [{
+                propertyName: 'associations.company',
+                operator: 'EQ',
+                value: companyId
+              }]
+            }],
+            properties: [
+              'dealname',
+              'amount',
+              'pipeline',
+              'dealstage',
+              'closedate',
+              'training_classification',
+              'training_score'
+            ],
+            limit: 10
+          })
+        );
+      } else {
+        searchResults = await this.hubspotClient.searchRecords('deal', {
+          filterGroups: [{
+            filters: [{
+              propertyName: 'associations.company',
+              operator: 'EQ',
+              value: companyId
+            }]
+          }],
+          properties: [
+            'dealname',
+            'amount',
+            'pipeline',
+            'dealstage',
+            'closedate',
+            'training_classification',
+            'training_score'
+          ],
+          limit: 10
+        });
+      }
       return searchResults.results || [];
     } catch (error) {
-      this.logger.warn(`Failed to fetch related contacts for company ${companyId}:`, error);
+      this.logger.warn(`Failed to fetch related deals for company ${companyId}:`, error);
       return [];
     }
   }
@@ -322,7 +412,7 @@ export class DocumentPackager {
         }
 
         // Get related deals
-        const deals = await this.getRelatedDeals(record.id, 'contact');
+        const deals = await this.getRelatedDeals(record.id);
         if (deals.length > 0) {
           content.relationships.deals = deals.map(deal => ({
             type: 'deal',
@@ -359,7 +449,7 @@ export class DocumentPackager {
         }
 
         // Get related deals
-        const deals = await this.getRelatedDeals(record.id, 'company');
+        const deals = await this.getRelatedDeals(record.id);
         if (deals.length > 0) {
           content.relationships.deals = deals.map(deal => ({
             type: 'deal',
@@ -423,51 +513,76 @@ export class DocumentPackager {
     const events: StructuredContent['timeline']['events'] = [];
     
     try {
-      // Get property history from HubSpot
-      const propertyHistory = await this.hubspotClient.getPropertyHistory(record.id, recordType, [
+      // Get property history for important properties
+      const propertyNamesToTrack = [
+        'lifecyclestage', 
+        'hs_lead_status', 
         'dealstage',
-        'pipeline',
-        'lifecyclestage',
-        'hs_lead_status',
-        'jobtitle',
-        'industry'
-      ]);
-
-      // Convert property changes to timeline events
-      events.push(...propertyHistory.map(change => ({
-        timestamp: change.timestamp,
-        type: 'property_change',
-        description: `${change.propertyName} changed`,
-        oldValue: change.previousValue,
-        newValue: change.value,
-        source: change.source
-      })));
-
-      // Get engagement history
-      const engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+        'amount',
+        'closedate'
+      ];
       
-      // Add significant engagements to timeline
-      events.push(...engagements.map(engagement => ({
-        timestamp: engagement.timestamp,
-        type: 'engagement',
-        description: engagement.type,
-        details: engagement.details
-      })));
-
-      // Sort all events by timestamp
+      let propertyHistory;
+      if (this.refreshToken && this.portalId) {
+        propertyHistory = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getPropertyHistory(record.id, recordType, propertyNamesToTrack)
+        );
+      } else {
+        propertyHistory = await this.hubspotClient.getPropertyHistory(record.id, recordType, propertyNamesToTrack);
+      }
+      
+      // Format property history into timeline events
+      for (const entry of propertyHistory) {
+        if (!propertyNamesToTrack.includes(entry.propertyName)) continue;
+        
+        events.push({
+          timestamp: entry.timestamp,
+          type: `Property ${entry.propertyName} changed`,
+          description: `Changed from "${entry.oldValue || 'empty'}" to "${entry.newValue || 'empty'}"`,
+          oldValue: entry.oldValue,
+          newValue: entry.newValue,
+          source: entry.source
+        });
+      }
+      
+      // Get engagement history (calls, emails, meetings)
+      let engagements;
+      if (this.refreshToken && this.portalId) {
+        engagements = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getEngagementHistory(record.id, recordType)
+        );
+      } else {
+        engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+      }
+      
+      // Add engagements to timeline
+      for (const engagement of engagements) {
+        events.push({
+          timestamp: engagement.timestamp,
+          type: engagement.type,
+          description: engagement.details
+        });
+      }
+      
+      // Sort events by timestamp
       events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-      // Create timeline summary
+      
+      // Create summary with metrics
       const summary = {
+        totalInteractions: events.length,
         firstInteraction: events[0]?.timestamp,
         lastInteraction: events[events.length - 1]?.timestamp,
-        totalInteractions: events.length,
         significantChanges: events
-          .filter(e => e.type === 'property_change' && 
-            ['dealstage', 'lifecyclestage', 'hs_lead_status'].includes(e.propertyName))
-          .map(e => `${e.propertyName}: ${e.oldValue} → ${e.newValue}`)
+          .filter(e => e.type.includes('changed') && ['lifecyclestage', 'dealstage', 'amount'].some(p => e.type.includes(p)))
+          .map(e => `${e.type}: ${e.description}`)
       };
-
+      
       return { events, summary };
     } catch (error) {
       this.logger.warn(`Failed to build timeline for ${recordType} ${record.id}:`, error);
@@ -477,7 +592,17 @@ export class DocumentPackager {
 
   private async buildEngagementHistory(record: any, recordType: string): Promise<StructuredContent['engagement']> {
     try {
-      const engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+      let engagements;
+      if (this.refreshToken && this.portalId) {
+        engagements = await handleApiCall(
+          this.hubspotClient,
+          this.portalId,
+          this.refreshToken,
+          () => this.hubspotClient.getEngagementHistory(record.id, recordType)
+        );
+      } else {
+        engagements = await this.hubspotClient.getEngagementHistory(record.id, recordType);
+      }
       
       const history = engagements.map(e => ({
         type: e.type,

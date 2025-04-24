@@ -12,8 +12,9 @@ import {
 } from "@hubspot/ui-extensions";
 
 // Supabase function URLs
-const SUPABASE_SCORE_RECORD_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record';
-const SUPABASE_SCORE_SUMMARY_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-summary';
+const SUPABASE_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co';
+const SUPABASE_SCORE_RECORD_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-record`;
+const SUPABASE_SCORE_SUMMARY_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-summary`;
 
 const BaseScoring = ({ 
   context, 
@@ -30,182 +31,119 @@ const BaseScoring = ({
   const [usageStats, setUsageStats] = useState(null);
   const [planInfo, setPlanInfo] = useState(null);
   const [debugInfo, setDebugInfo] = useState({});
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
+  const [scoringStatus, setScoringStatus] = useState(null);
+  const [scoringProgress, setScoringProgress] = useState(0);
 
   // Load existing score when component initializes
   useEffect(() => {
     loadExistingScore();
   }, []);
 
+  const updateStateFromSummary = (result) => {
+    // Set plan information
+    if (result.plan) {
+      setPlanInfo(result.plan);
+    }
+    
+    // Set scoring usage stats
+    if (result.scoring) {
+      setUsageStats(result.scoring);
+    }
+    
+    // Set record score and summary
+    if (result.currentRecord) {
+      const currentRecord = result.currentRecord;
+      if (currentRecord.ideal_client_score) {
+        setScore(currentRecord.ideal_client_score);
+      }
+      if (currentRecord.ideal_client_summary) {
+        setSummary(currentRecord.ideal_client_summary);
+      }
+    }
+  };
+
   // Function to fetch existing score from Supabase
   const loadExistingScore = async () => {
     const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`;
-    
-    // Add request details to debug info
-    setDebugInfo(prevDebug => ({
-      ...prevDebug,
-      summaryRequest: {
-        url: summaryUrl,
-        fullUrl: summaryUrl,
-        params: {
-          portalId: context.portal.id,
-          objectType: recordType,
-          objectId: context.crm.objectId
-        }
-      }
-    }));
     
     try {
       setLoading(true);
       setError(null);
 
-      // Get data from the Supabase score summary endpoint
-      const summaryResponse = await hubspot.fetch(
-        summaryUrl,
-        {
-          method: 'GET'
-        }
-      );
-
-      // Add status code and headers to debug info
-      setDebugInfo(prevDebug => ({
-        ...prevDebug,
-        summaryResponseStatus: summaryResponse.status,
-        summaryResponseStatusText: summaryResponse.statusText,
-      }));
-
-      let summaryData;
-      try {
-        summaryData = await summaryResponse.json();
-        console.log('Score summary data:', summaryData);
-        
-        // Update debug info
-        setDebugInfo(prevDebug => ({
-          ...prevDebug,
-          summaryResponse: summaryData
-        }));
-      } catch (parseError) {
-        // Handle JSON parse errors specifically
-        const responseText = await summaryResponse.text().catch(() => "Could not read response text");
-        setDebugInfo(prevDebug => ({
-          ...prevDebug,
-          parseError: parseError.message,
-          responseText: responseText
-        }));
-        throw new Error(`Failed to parse response: ${parseError.message}`);
-      }
+      const summaryResponse = await hubspot.fetch(summaryUrl, { method: 'GET' });
+      const summaryData = await summaryResponse.json();
       
       if (summaryData.success && summaryData.result) {
-        // Set plan information
-        if (summaryData.result.plan) {
-          setPlanInfo(summaryData.result.plan);
-        }
-        
-        // Set scoring usage stats
-        if (summaryData.result.scoring) {
-          setUsageStats(summaryData.result.scoring);
-        }
-        
-        // Set record score and summary
-        if (summaryData.result.currentRecord) {
-          const currentRecord = summaryData.result.currentRecord;
-          if (currentRecord.ideal_client_score) {
-            setScore(currentRecord.ideal_client_score);
-          }
-          if (currentRecord.ideal_client_summary) {
-            setSummary(currentRecord.ideal_client_summary);
-          }
-        }
+        updateStateFromSummary(summaryData.result);
       } else if (summaryData.error) {
         setError(summaryData.error);
       }
     } catch (error) {
       console.error('Error in loadExistingScore:', error);
       setError('Unable to load score data. Please try again later.');
-      setDebugInfo(prevDebug => ({
-        ...prevDebug,
-        loadError: error.message,
-        loadErrorStack: error.stack,
-        requestUrl: summaryUrl
-      }));
     } finally {
       setLoading(false);
     }
   };
 
-  // Simple function to handle scoring
   const handleScore = async () => {
-    const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portalId=${context.portal.id}&recordType=${recordType}&recordId=${context.crm.objectId}`;
-    
-    // Update debug info with request details
-    setDebugInfo(prevDebug => ({
-      ...prevDebug,
-      scoreRequest: {
-        url: scoreUrl,
-        fullUrl: scoreUrl,
-        params: {
-          portalId: context.portal.id,
-          recordType,
-          recordId: context.crm.objectId
-        }
-      }
-    }));
-    
     try {
       setScoring(true);
       setError(null);
+      setScoringStatus('Starting scoring process...');
+      setScoringProgress(0);
 
-      const response = await hubspot.fetch(
-        scoreUrl,
-        {
-          method: 'POST'
-        }
-      );
+      // Submit the scoring request
+      const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portalId=${context.portal.id}&recordType=${recordType}&recordId=${context.crm.objectId}`;
+      const response = await hubspot.fetch(scoreUrl, { method: 'POST' });
+      const data = await response.json();
       
-      // Add status code and headers to debug info
-      setDebugInfo(prevDebug => ({
-        ...prevDebug,
-        scoreResponseStatus: response.status,
-        scoreResponseStatusText: response.statusText,
-      }));
-
-      let data;
-      try {
-        data = await response.json();
+      if (data.success) {
+        setScoringStatus('Analyzing record...');
+        setScoringProgress(20);
         
-        // Update debug info with response
-        setDebugInfo(prevDebug => ({
-          ...prevDebug,
-          scoreResponse: data
-        }));
-      } catch (parseError) {
-        // Handle JSON parse errors specifically
-        const responseText = await response.text().catch(() => "Could not read response text");
-        setDebugInfo(prevDebug => ({
-          ...prevDebug,
-          scoreParseError: parseError.message,
-          scoreResponseText: responseText
-        }));
-        throw new Error(`Failed to parse score response: ${parseError.message}`);
-      }
+        // Poll score-summary for updates
+        const pollInterval = setInterval(async () => {
+          try {
+            const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`;
+            const summaryResponse = await hubspot.fetch(summaryUrl, { method: 'GET' });
+            const summaryData = await summaryResponse.json();
+            
+            if (summaryData.success && summaryData.result) {
+              const currentRecord = summaryData.result.currentRecord;
+              if (currentRecord?.ideal_client_score && currentRecord.ideal_client_score !== score) {
+                clearInterval(pollInterval);
+                setScoring(false);
+                setScoringStatus(null);
+                setScoringProgress(0);
+                updateStateFromSummary(summaryData.result);
+              }
+            }
+          } catch (error) {
+            console.error('Error polling score:', error);
+          }
+        }, 2000); // Poll every 2 seconds
 
-      if (data.success && data.result) {
-        setScore(data.result.score);
-        setSummary(data.result.summary);
-        
-        // Also refresh usage stats after scoring
-        loadExistingScore();
+        // Cleanup interval after 2 minutes
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (scoring) {
+            setScoring(false);
+            setScoringStatus(null);
+            setScoringProgress(0);
+            setError('Scoring is taking longer than expected. Please check back later.');
+          }
+        }, 120000);
       } else {
-        setError(data.error || 'Unable to score record');
+        setError(data.error || 'Unable to start scoring process. Please try again.');
+        setScoringStatus(null);
+        setScoringProgress(0);
       }
     } catch (error) {
-      setError('Error scoring record: ' + error.message);
-      setDebugInfo(prevDebug => ({
-        ...prevDebug,
-        scoreError: error.message,
-        scoreErrorStack: error.stack,
-        scoreRequestUrl: scoreUrl
-      }));
+      setError('Error starting scoring process. Please try again later.');
+      setScoringStatus(null);
+      setScoringProgress(0);
     } finally {
       setScoring(false);
     }
@@ -215,6 +153,7 @@ const BaseScoring = ({
     return (
       <Box align="center" padding="md">
         <LoadingSpinner />
+        <Text format={{ fontWeight: "bold" }}>Loading score data...</Text>
       </Box>
     );
   }
@@ -234,10 +173,20 @@ const BaseScoring = ({
               <Text format={{ fontWeight: "bold" }} variant="h1">
                 {score}
               </Text>
-              <Text>{summary}</Text>
+              <Flex direction="column" gap="md">
+                {summary?.split('\n\n').map((section, sectionIndex) => (
+                  <Flex key={sectionIndex} direction="column">
+                    {section.split('\n').map((line, lineIndex) => (
+                      <Text key={`${sectionIndex}-${lineIndex}`} format={{ lineHeight: "1.1" }}>
+                        {line}
+                      </Text>
+                    ))}
+                  </Flex>
+                ))}
+              </Flex>
               
               {usageStats && (
-                <Box marginTop="md">
+                <Box marginTop="xl">
                   <Text format={{ fontWeight: "bold" }} variant="body">
                     Usage: {usageStats.used}/{usageStats.total} ({usageStats.remaining} remaining)
                   </Text>
@@ -253,17 +202,46 @@ const BaseScoring = ({
           variant="secondary"
           onClick={handleScore}
           loading={scoring}
+          disabled={scoring}
         >
-          {scoring ? 'Scoring...' : score ? `Rescore ${recordType}` : `Score ${recordType}`}
+          {scoring ? 'Scoring in progress...' : 'Score Now'}
         </Button>
+
+        {scoring && (
+          <>
+            <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
+            <Box>
+              <Text>Progress: {scoringProgress}%</Text>
+              <Box 
+                style={{ 
+                  width: '100%', 
+                  height: '4px', 
+                  backgroundColor: '#f0f0f0',
+                  borderRadius: '2px',
+                  marginTop: '4px'
+                }}
+              >
+                <Box 
+                  style={{ 
+                    width: `${scoringProgress}%`, 
+                    height: '100%', 
+                    backgroundColor: '#2d7ff9',
+                    borderRadius: '2px',
+                    transition: 'width 0.3s ease-in-out'
+                  }}
+                />
+              </Box>
+            </Box>
+          </>
+        )}
         
-        <Flex gap="md" alignItems="center">
+        {/* <Flex gap="md" alignItems="center">
           <Toggle 
             checked={showDebug}
             onChange={value => setShowDebug(value)}
           />
           <Text>Show Debug Info</Text>
-        </Flex>
+        </Flex> */}
         
         {showDebug && (
           <>

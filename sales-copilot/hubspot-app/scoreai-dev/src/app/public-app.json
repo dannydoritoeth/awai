@@ -11,14 +11,11 @@
     "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
     "requiredScopes": [
       "crm.objects.contacts.read",
-      "crm.objects.contacts.write",
       "crm.objects.companies.read",
-      "crm.objects.companies.write",
       "crm.objects.deals.read",
       "crm.objects.deals.write",
       "crm.schemas.deals.read",
-      "crm.schemas.contacts.read",
-      "crm.schemas.companies.read"
+      "crm.schemas.deals.write"
     ],
     "optionalScopes": [],
     "conditionallyRequiredScopes": []
@@ -33,27 +30,9 @@
     "crm": {
       "cards": [
         {
-          "file": "./extensions/company-scoring.json"
-        },
-        {
-          "file": "./extensions/company-training.json"
-        },
-        {
-          "file": "./extensions/contact-scoring.json"
-        },
-        {
-          "file": "./extensions/contact-training.json"
-        },
-        {
           "file": "./extensions/deal-scoring.json"
-        },
-        {
-          "file": "./extensions/deal-training.json"
         }
       ]
     }
-  },
-  "webhooks": {
-    "file": "./webhooks/training.json"
   }
 }

@@ -1,5 +1,12 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
+// Add Deno declaration for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 export interface Subscription {
   id: string;
   status: 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
@@ -269,19 +276,123 @@ export class SubscriptionService {
 
   /**
    * Record a new score event for a portal
+   * @param portalId The HubSpot portal ID
+   * @param scoringDetails Optional details about the scoring event for logging
    */
-  async recordScore(portalId: string): Promise<void> {
+  async recordScore(
+    portalId: string, 
+    scoringDetails?: {
+      recordId?: string;
+      recordType?: string;
+      inputs?: any;
+      outputs?: any;
+      aiProvider?: string;
+      aiModel?: string;
+      duration?: number;
+    }
+  ): Promise<void> {
+    // Check scoring limits
     const { canScore, remaining, periodEnd } = await this.canScoreLead(portalId);
     if (!canScore) {
       throw new Error(`Score limit reached. Next reset at ${periodEnd.toISOString()}`);
     }
 
+    // Check if logging is enabled via environment variable
+    const logPortalId = Deno.env.get('LOG_PORTAL_ID_SCORE');
+    const shouldLog = logPortalId && (logPortalId === '*' || logPortalId === portalId);
+    
+    // Create basic event record
+    const eventRecord: Record<string, any> = { 
+      portal_id: portalId,
+      event_type: 'score',
+      object_type: scoringDetails?.recordType,
+      object_id: scoringDetails?.recordId,
+      document_data: scoringDetails?.outputs ? {
+        score: scoringDetails.outputs.score,
+        summary: scoringDetails.outputs.summary,
+        lastScored: scoringDetails.outputs.lastScored,
+        // Include the full prompt and input data
+        fullPrompt: scoringDetails.outputs.fullPrompt,
+        inputs: {
+          record: scoringDetails.inputs?.contact || scoringDetails.inputs?.company || scoringDetails.inputs?.deal,
+          similarRecords: scoringDetails.inputs?.similarContacts || scoringDetails.inputs?.similarCompanies || scoringDetails.inputs?.similarDeals,
+          aiConfig: {
+            provider: scoringDetails.aiProvider,
+            model: scoringDetails.aiModel,
+            ...scoringDetails.inputs?.aiConfig
+          }
+        }
+      } : null
+    };
+    
+    // Add scoring details in the single log_data column if logging is enabled
+    if (shouldLog && scoringDetails) {
+      // Create a combined log object with all details
+      const logData = {
+        // Record information
+        recordId: scoringDetails.recordId,
+        recordType: scoringDetails.recordType,
+        
+        // AI configuration
+        aiProvider: scoringDetails.aiProvider,
+        aiModel: scoringDetails.aiModel,
+        
+        // Performance metrics
+        duration: scoringDetails.duration,
+        
+        // Full context data
+        inputs: scoringDetails.inputs,
+        outputs: scoringDetails.outputs,
+        
+        // Add timestamp for when this log was created
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store everything in a single JSON column
+      eventRecord.log_data = logData;
+    }
+    
+    // Insert the record into the database
     const { error } = await this.supabase
-      .from('scoring_events')
-      .insert({ portal_id: portalId });
+      .from('ai_events')
+      .insert(eventRecord);
 
     if (error) {
       throw new Error(`Failed to record score: ${error.message}`);
+    }
+  }
+
+  /**
+   * Record a new training event for a portal
+   * @param portalId The HubSpot portal ID
+   * @param objectType The type of object being trained (deal, contact, company)
+   * @param objectId The ID of the object being trained
+   * @param classification The classification of the object (ideal, less ideal)
+   * @param documentData The document data used for training
+   */
+  async recordTrainingEvent(
+    portalId: string,
+    objectType: string,
+    objectId: string,
+    classification: string,
+    documentData: any
+  ): Promise<void> {
+    const eventRecord = {
+      portal_id: portalId,
+      event_type: 'train',
+      object_type: objectType,
+      object_id: objectId,
+      classification,
+      document_data: documentData,
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await this.supabase
+      .from('ai_events')
+      .insert(eventRecord);
+
+    if (error) {
+      throw new Error(`Failed to record training event: ${error.message}`);
     }
   }
 } 

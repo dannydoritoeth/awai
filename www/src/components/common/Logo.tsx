@@ -4,9 +4,9 @@ export function Logo() {
   return (
     <div className="flex items-center">
       <img 
-        src="/assets/logos/awai-icon-white.svg" 
+        src="/assets/logos/awai-logo.svg" 
         alt="Accelerate with AI" 
-        className="h-12 w-auto"
+        className="h-12"
       />
     </div>
   );
