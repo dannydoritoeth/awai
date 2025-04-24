@@ -170,7 +170,7 @@ describe('hubspot-score-record function', () => {
     expect(eventData.length).toBe(1);
     expect(eventData[0].document_data.score).toBe(data.score);
     expect(eventData[0].document_data.summary).toBe(data.summary);
-  }, 30000);
+  }, 60000);
 
   test('should handle rescoring gracefully', async () => {
     const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;

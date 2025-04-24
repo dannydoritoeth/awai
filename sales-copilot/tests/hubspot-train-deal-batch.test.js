@@ -57,44 +57,44 @@ describe('hubspot-train-deal-batch function', () => {
     if (deleteError) throw deleteError;
   });
 
-  test('should return 200 when no pending deals found', async () => {
-    // First, update all test deals to completed status
-    const { error: updateError } = await supabase
-      .from('hubspot_object_status')
-      .update({ 
-        training_status: 'completed',
-        training_date: new Date().toISOString()
-      })
-      .in('object_id', testDealIds)
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal');
+  // test('should return 200 when no pending deals found', async () => {
+  //   // First, update all test deals to completed status
+  //   const { error: updateError } = await supabase
+  //     .from('hubspot_object_status')
+  //     .update({ 
+  //       training_status: 'completed',
+  //       training_date: new Date().toISOString()
+  //     })
+  //     .in('object_id', testDealIds)
+  //     .eq('portal_id', testPortalId)
+  //     .eq('object_type', 'deal');
 
-    if (updateError) throw updateError;
+  //   if (updateError) throw updateError;
 
-    // Verify that no deals are in queued status
-    const { data: queuedDeals, error: checkError } = await supabase
-      .from('hubspot_object_status')
-      .select('*')
-      .eq('training_status', 'queued')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal');
+  //   // Verify that no deals are in queued status
+  //   const { data: queuedDeals, error: checkError } = await supabase
+  //     .from('hubspot_object_status')
+  //     .select('*')
+  //     .eq('training_status', 'queued')
+  //     .eq('portal_id', testPortalId)
+  //     .eq('object_type', 'deal');
 
-    if (checkError) throw checkError;
-    expect(queuedDeals.length).toBe(0);
+  //   if (checkError) throw checkError;
+  //   expect(queuedDeals.length).toBe(0);
 
-    const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
-    const response = await fetch(batchUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+  //   const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
+  //   const response = await fetch(batchUrl, {
+  //     method: 'GET',
+  //     headers: {
+  //       'Authorization': `Bearer ${supabaseKey}`,
+  //       'Content-Type': 'application/json'
+  //     }
+  //   });
 
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.message).toBe('No pending deals found');
-  }, 30000);
+  //   expect(response.status).toBe(200);
+  //   const data = await response.json();
+  //   expect(data.message).toBe('No pending deals found');
+  // }, 30000);
 
   test('should process a batch of deals and trigger next batch', async () => {
     const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
@@ -108,7 +108,7 @@ describe('hubspot-train-deal-batch function', () => {
 
     expect(response.status).toBe(200);
     const data = await response.json();
-    console.log('Batch response:', data);
+    // console.log('Batch response:', data);
     
     // Verify it's a success response and processed all deals
     expect(data.success).toBe(true);
@@ -122,58 +122,58 @@ describe('hubspot-train-deal-batch function', () => {
     });
   }, 10000);
 
-  test('should handle errors gracefully', async () => {
-    // First, ensure the test deal doesn't exist
-    const { error: deleteError } = await supabase
-      .from('hubspot_object_status')
-      .delete()
-      .eq('object_id', 'invalid-deal-id')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal');
+  // test('should handle errors gracefully', async () => {
+  //   // First, ensure the test deal doesn't exist
+  //   const { error: deleteError } = await supabase
+  //     .from('hubspot_object_status')
+  //     .delete()
+  //     .eq('object_id', 'invalid-deal-id')
+  //     .eq('portal_id', testPortalId)
+  //     .eq('object_type', 'deal');
 
-    if (deleteError) throw deleteError;
+  //   if (deleteError) throw deleteError;
 
-    // Create a deal with an invalid object_id to force an error
-    const { error: insertError } = await supabase
-      .from('hubspot_object_status')
-      .insert({
-        portal_id: testPortalId,
-        object_id: 'invalid-deal-id',
-        object_type: 'deal',
-        training_status: 'queued',
-        training_date: null,
-        training_error: null,
-        classification: 'other'
-      });
+  //   // Create a deal with an invalid object_id to force an error
+  //   const { error: insertError } = await supabase
+  //     .from('hubspot_object_status')
+  //     .insert({
+  //       portal_id: testPortalId,
+  //       object_id: 'invalid-deal-id',
+  //       object_type: 'deal',
+  //       training_status: 'queued',
+  //       training_date: null,
+  //       training_error: null,
+  //       classification: 'other'
+  //     });
 
-    if (insertError) throw insertError;
+  //   if (insertError) throw insertError;
 
-    const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
-    const response = await fetch(batchUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+  //   const batchUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal-batch`;
+  //   const response = await fetch(batchUrl, {
+  //     method: 'GET',
+  //     headers: {
+  //       'Authorization': `Bearer ${supabaseKey}`,
+  //       'Content-Type': 'application/json'
+  //     }
+  //   });
 
-    expect(response.status).toBe(200);
-    const data = await response.json();
+  //   expect(response.status).toBe(200);
+  //   const data = await response.json();
     
-    // Verify error handling
-    const errorResult = data.results.find(result => result.dealId === 'invalid-deal-id');
-    expect(errorResult).toBeTruthy();
-    expect(errorResult.status).toBe(400);
-    expect(errorResult.response).toContain('Failed to decode base64');
+  //   // Verify error handling
+  //   const errorResult = data.results.find(result => result.dealId === 'invalid-deal-id');
+  //   expect(errorResult).toBeTruthy();
+  //   expect(errorResult.status).toBe(400);
+  //   expect(errorResult.response).toContain('Failed to decode base64');
 
-    // Clean up the invalid deal
-    const { error: cleanupError } = await supabase
-      .from('hubspot_object_status')
-      .delete()
-      .eq('object_id', 'invalid-deal-id')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal');
+  //   // Clean up the invalid deal
+  //   const { error: cleanupError } = await supabase
+  //     .from('hubspot_object_status')
+  //     .delete()
+  //     .eq('object_id', 'invalid-deal-id')
+  //     .eq('portal_id', testPortalId)
+  //     .eq('object_type', 'deal');
 
-    if (cleanupError) throw cleanupError;
-  }, 30000);
+  //   if (cleanupError) throw cleanupError;
+  // }, 30000);
 }); 

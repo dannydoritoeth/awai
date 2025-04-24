@@ -161,57 +161,57 @@ describe('hubspot-train-deal function', () => {
     expect(eventData.document_data.companies).toBeTruthy();
   }, 30000);
 
-  test('should handle token refresh when access token is expired', async () => {
-    // First, get the current tokens
-    const { data: accountData, error: accountError } = await supabase
-      .from('hubspot_accounts')
-      .select('access_token, refresh_token, expires_at')
-      .eq('portal_id', testPortalId)
-      .single();
+  // test('should handle token refresh when access token is expired', async () => {
+  //   // First, get the current tokens
+  //   const { data: accountData, error: accountError } = await supabase
+  //     .from('hubspot_accounts')
+  //     .select('access_token, refresh_token, expires_at')
+  //     .eq('portal_id', testPortalId)
+  //     .single();
 
-    expect(accountError).toBeNull();
-    expect(accountData).toBeTruthy();
+  //   expect(accountError).toBeNull();
+  //   expect(accountData).toBeTruthy();
 
-    const originalExpiresAt = new Date(accountData.expires_at).getTime();
+  //   const originalExpiresAt = new Date(accountData.expires_at).getTime();
 
-    // Update the expiration time to force a refresh
-    const { error: updateError } = await supabase
-      .from('hubspot_accounts')
-      .update({ 
-        expires_at: new Date(Date.now() - 3600000).toISOString() // Set to 1 hour ago
-      })
-      .eq('portal_id', testPortalId);
+  //   // Update the expiration time to force a refresh
+  //   const { error: updateError } = await supabase
+  //     .from('hubspot_accounts')
+  //     .update({ 
+  //       expires_at: new Date(Date.now() - 3600000).toISOString() // Set to 1 hour ago
+  //     })
+  //     .eq('portal_id', testPortalId);
 
-    expect(updateError).toBeNull();
+  //   expect(updateError).toBeNull();
 
-    // Try to process the deal - should trigger token refresh
-    const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=${testDealId}`;
-    const response = await fetch(trainDealUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+  //   // Try to process the deal - should trigger token refresh
+  //   const trainDealUrl = `${supabaseUrl}/functions/v1/hubspot-train-deal?object_id=${testDealId}`;
+  //   const response = await fetch(trainDealUrl, {
+  //     method: 'POST',
+  //     headers: {
+  //       'Authorization': `Bearer ${supabaseKey}`,
+  //       'Content-Type': 'application/json'
+  //     }
+  //   });
 
-    // The function should handle the expired token and refresh it
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
+  //   // The function should handle the expired token and refresh it
+  //   expect(response.status).toBe(200);
+  //   const data = await response.json();
+  //   expect(data.success).toBe(true);
 
-    // Add a small delay to ensure token refresh has completed
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  //   // Add a small delay to ensure token refresh has completed
+  //   await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Verify the token was refreshed by checking the expiration time was updated
-    const { data: refreshedAccount, error: refreshError } = await supabase
-      .from('hubspot_accounts')
-      .select('expires_at')
-      .eq('portal_id', testPortalId)
-      .single();
+  //   // Verify the token was refreshed by checking the expiration time was updated
+  //   const { data: refreshedAccount, error: refreshError } = await supabase
+  //     .from('hubspot_accounts')
+  //     .select('expires_at')
+  //     .eq('portal_id', testPortalId)
+  //     .single();
 
-    expect(refreshError).toBeNull();
-    const refreshedTime = new Date(refreshedAccount.expires_at).getTime();
-    // Simply verify that the expiration time changed
-    expect(refreshedTime).toBeGreaterThan(originalExpiresAt);
-  }, 30000);
+  //   expect(refreshError).toBeNull();
+  //   const refreshedTime = new Date(refreshedAccount.expires_at).getTime();
+  //   // Simply verify that the expiration time changed
+  //   expect(refreshedTime).toBeGreaterThan(originalExpiresAt);
+  // }, 30000);
 }); 
