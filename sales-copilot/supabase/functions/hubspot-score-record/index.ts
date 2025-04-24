@@ -108,7 +108,12 @@ serve(async (req) => {
           }
         );
 
-        // Update the status in hubspot_object_status and record the event in ai_events
+        logger.info(`Successfully scored ${object_type} ${object_id}:`, {
+          score: result.score,
+          lastScored: result.lastScored
+        });
+
+        // Update the status in hubspot_object_status
         const { error: updateError } = await supabaseClient
           .from('hubspot_object_status')
           .upsert({
@@ -127,6 +132,8 @@ serve(async (req) => {
           logger.error('Error updating object status:', updateError);
           throw updateError;
         }
+
+        logger.info(`Successfully updated status for ${object_type} ${object_id}`);
 
         return new Response(
           JSON.stringify({

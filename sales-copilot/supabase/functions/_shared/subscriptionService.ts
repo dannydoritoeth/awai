@@ -310,7 +310,18 @@ export class SubscriptionService {
       document_data: scoringDetails?.outputs ? {
         score: scoringDetails.outputs.score,
         summary: scoringDetails.outputs.summary,
-        lastScored: scoringDetails.outputs.lastScored
+        lastScored: scoringDetails.outputs.lastScored,
+        // Include the full prompt and input data
+        fullPrompt: scoringDetails.outputs.fullPrompt,
+        inputs: {
+          record: scoringDetails.inputs?.contact || scoringDetails.inputs?.company || scoringDetails.inputs?.deal,
+          similarRecords: scoringDetails.inputs?.similarContacts || scoringDetails.inputs?.similarCompanies || scoringDetails.inputs?.similarDeals,
+          aiConfig: {
+            provider: scoringDetails.aiProvider,
+            model: scoringDetails.aiModel,
+            ...scoringDetails.inputs?.aiConfig
+          }
+        }
       } : null
     };
     

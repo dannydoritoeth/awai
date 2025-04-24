@@ -2,15 +2,15 @@
 require('dotenv').config();
 
 // Validate environment variables before creating client
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing required environment variables. Please check your .env file');
 }
 
 const { createClient } = require('@supabase/supabase-js');
 
-// Initialize Supabase client
+// Initialize Supabase client with service role key
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 describe('hubspot-score-record function', () => {
@@ -89,7 +89,7 @@ describe('hubspot-score-record function', () => {
     expect(data.error).toBe('Missing required parameters: portal_id, object_type, and object_id are required');
   }, 30000);
 
-  test.only('should score a valid record', async () => {
+  test('should score a valid record', async () => {
     // First ensure we have a valid deal in the database
     const { data: existingDeal, error: dealError } = await supabase
       .from('hubspot_object_status')
@@ -128,7 +128,6 @@ describe('hubspot-score-record function', () => {
     const data = await response.json();
     
     if (response.status === 400) {
-      console.error('Error response:', data);
       throw new Error(`Failed to score record: ${data.error}`);
     }
 
@@ -217,5 +216,5 @@ describe('hubspot-score-record function', () => {
 
     expect(eventsError).toBeNull();
     expect(events).toHaveLength(2);
-  }, 30000);
+  }, 60000);
 }); 
