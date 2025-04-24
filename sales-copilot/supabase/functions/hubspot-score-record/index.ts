@@ -21,11 +21,15 @@ serve(async (req) => {
 
   try {
     // Create a Supabase client
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        persistSession: false
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      {
+        auth: {
+          persistSession: false
+        }
       }
-    })
+    );
 
     // Get the portal ID, record type, and record ID from the query parameters
     const url = new URL(req.url)
@@ -61,10 +65,38 @@ serve(async (req) => {
       );
     }
 
-    // Initialize HubSpot client and decrypt tokens
+    // Immediately update status to in_progress to prevent duplicate processing
+    const { error: updateError } = await supabaseClient
+      .from('hubspot_object_status')
+      .upsert({
+        portal_id,
+        object_type,
+        object_id,
+        scoring_status: 'in_progress',
+        scoring_error: null,
+        classification: 'other'
+      }, {
+        onConflict: 'portal_id,object_type,object_id'
+      });
+
+    if (updateError) {
+      logger.error('Error updating status to in_progress:', updateError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to update record status' }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     try {
+      // Decrypt tokens
       const accessToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
       const refreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+
+      if (!accessToken || !refreshToken) {
+        throw new Error('Failed to decrypt HubSpot tokens');
+      }
+
+      // Initialize HubSpot client
       const hubspotClient = new HubspotClient(accessToken);
 
       // Create AI configuration from account settings
@@ -113,27 +145,39 @@ serve(async (req) => {
           lastScored: result.lastScored
         });
 
-        // Update the status in hubspot_object_status
-        const { error: updateError } = await supabaseClient
-          .from('hubspot_object_status')
-          .upsert({
+        // Record scoring event
+        const { error: eventError } = await supabaseClient
+          .from('ai_events')
+          .insert({
             portal_id,
+            event_type: 'score',
             object_type,
             object_id,
-            training_status: 'completed',
-            training_date: new Date().toISOString(),
-            training_error: null,
-            classification: 'other'
-          }, {
-            onConflict: 'portal_id,object_type,object_id'
+            classification: 'other',
+            document_data: {
+              score: result.score,
+              summary: result.summary
+            },
+            created_at: new Date().toISOString()
           });
 
-        if (updateError) {
-          logger.error('Error updating object status:', updateError);
-          throw updateError;
+        if (eventError) {
+          throw new Error(`Failed to record scoring event: ${eventError.message}`);
         }
 
-        logger.info(`Successfully updated status for ${object_type} ${object_id}`);
+        // Update status to completed
+        const now = new Date().toISOString();
+        await supabaseClient
+          .from('hubspot_object_status')
+          .update({
+            scoring_status: 'completed',
+            scoring_date: now,
+            scoring_error: null,
+            last_processed: now
+          })
+          .eq('portal_id', portal_id)
+          .eq('object_type', object_type)
+          .eq('object_id', object_id);
 
         return new Response(
           JSON.stringify({
@@ -149,6 +193,18 @@ serve(async (req) => {
 
       } catch (scoringError) {
         if (scoringError.message?.includes('Invalid record type')) {
+          // Update status to failed
+          await supabaseClient
+            .from('hubspot_object_status')
+            .update({
+              scoring_status: 'failed',
+              scoring_error: scoringError.message,
+              last_processed: new Date().toISOString()
+            })
+            .eq('portal_id', portal_id)
+            .eq('object_type', object_type)
+            .eq('object_id', object_id);
+
           return new Response(
             JSON.stringify({ success: false, error: scoringError.message }),
             { 
@@ -161,17 +217,14 @@ serve(async (req) => {
         // Update status with error
         await supabaseClient
           .from('hubspot_object_status')
-          .upsert({
-            portal_id,
-            object_type,
-            object_id,
-            training_status: 'failed',
-            training_date: new Date().toISOString(),
-            training_error: scoringError.message,
-            classification: 'other'
-          }, {
-            onConflict: 'portal_id,object_type,object_id'
-          });
+          .update({
+            scoring_status: 'failed',
+            scoring_error: scoringError.message,
+            last_processed: new Date().toISOString()
+          })
+          .eq('portal_id', portal_id)
+          .eq('object_type', object_type)
+          .eq('object_id', object_id);
 
         logger.error(`Error scoring ${object_type}:`, {
           error: scoringError,
@@ -182,7 +235,19 @@ serve(async (req) => {
       }
 
     } catch (error) {
-      logger.error('Error decrypting tokens:', error);
+      // Update status to failed
+      await supabaseClient
+        .from('hubspot_object_status')
+        .update({
+          scoring_status: 'failed',
+          scoring_error: error.message,
+          last_processed: new Date().toISOString()
+        })
+        .eq('portal_id', portal_id)
+        .eq('object_type', object_type)
+        .eq('object_id', object_id);
+
+      logger.error('Error processing record:', error);
       return new Response(
         JSON.stringify({ error: error.message }),
         { status: 500, headers: corsHeaders }
