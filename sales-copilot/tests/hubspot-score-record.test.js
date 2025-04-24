@@ -73,7 +73,7 @@ describe('hubspot-score-record function', () => {
     }
   });
 
-  test('should return 500 when required parameters are missing', async () => {
+  test('should return 400 when required parameters are missing', async () => {
     const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record`;
     const response = await fetch(scoreUrl, {
       method: 'GET',
@@ -83,14 +83,13 @@ describe('hubspot-score-record function', () => {
       }
     });
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.success).toBe(false);
-    expect(data.error).toBe('Missing required parameters');
-    expect(data.details).toContain('Error: Missing required parameters');
+    expect(data.error).toBe('Missing required parameters: portal_id, object_type, and object_id are required');
   }, 30000);
 
-  test.only('should create a scoring job for a valid record', async () => {
+  test.only('should score a valid record', async () => {
     // First ensure we have a valid deal in the database
     const { data: existingDeal, error: dealError } = await supabase
       .from('hubspot_object_status')
@@ -117,7 +116,7 @@ describe('hubspot-score-record function', () => {
       if (insertError) throw insertError;
     }
 
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&record_type=deal&record_id=${testDealId}`;
+    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
     const response = await fetch(scoreUrl, {
       method: 'GET',
       headers: {
@@ -130,40 +129,54 @@ describe('hubspot-score-record function', () => {
     
     if (response.status === 400) {
       console.error('Error response:', data);
-      throw new Error(`Failed to create scoring job: ${data.error}`);
+      throw new Error(`Failed to score record: ${data.error}`);
     }
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.jobId).toBeTruthy();
+    expect(data.score).toBeDefined();
+    expect(data.summary).toBeDefined();
+    expect(data.lastScored).toBeDefined();
 
-    // Verify the job was created in the database
-    const { data: jobData, error: jobError } = await supabase
-      .from('scoring_jobs')
+    // Verify the status was updated in hubspot_object_status
+    const { data: statusData, error: statusError } = await supabase
+      .from('hubspot_object_status')
       .select('*')
-      .eq('id', data.jobId)
+      .eq('portal_id', testPortalId)
+      .eq('object_type', 'deal')
+      .eq('object_id', testDealId)
       .single();
 
-    expect(jobError).toBeNull();
-    expect(jobData).toBeTruthy();
-    expect(jobData.portal_id).toBe(testPortalId);
-    expect(jobData.record_type).toBe('deal');
-    expect(jobData.record_id).toBe(testDealId);
-    expect(jobData.status).toBe('processing');
-    expect(jobData.progress).toBe(0);
+    expect(statusError).toBeNull();
+    expect(statusData).toBeTruthy();
+    expect(statusData.training_status).toBe('completed');
+    expect(statusData.training_error).toBeNull();
 
-    // Clean up the test job
-    const { error: deleteError } = await supabase
-      .from('scoring_jobs')
-      .delete()
-      .eq('id', data.jobId);
+    // Add a small delay to allow for event creation
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    expect(deleteError).toBeNull();
+    // Verify the event was recorded in ai_events
+    const { data: eventData, error: eventError } = await supabase
+      .from('ai_events')
+      .select('*')
+      .eq('portal_id', testPortalId)
+      .eq('object_type', 'deal')
+      .eq('object_id', testDealId)
+      .eq('event_type', 'score')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    expect(eventError).toBeNull();
+    expect(eventData).toBeTruthy();
+    expect(eventData.length).toBe(1);
+    expect(eventData[0].document_data.score).toBe(data.score);
+    expect(eventData[0].document_data.summary).toBe(data.summary);
   }, 30000);
 
-  test('should handle duplicate job creation gracefully', async () => {
-    // First, create a job
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&record_type=deal&record_id=${testDealId}`;
+  test('should handle rescoring gracefully', async () => {
+    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
+    
+    // First scoring
     const firstResponse = await fetch(scoreUrl, {
       method: 'GET',
       headers: {
@@ -175,9 +188,9 @@ describe('hubspot-score-record function', () => {
     expect(firstResponse.status).toBe(200);
     const firstData = await firstResponse.json();
     expect(firstData.success).toBe(true);
-    expect(firstData.jobId).toBeTruthy();
+    expect(firstData.score).toBeDefined();
 
-    // Try to create another job for the same record
+    // Second scoring of the same record
     const secondResponse = await fetch(scoreUrl, {
       method: 'GET',
       headers: {
@@ -189,14 +202,20 @@ describe('hubspot-score-record function', () => {
     expect(secondResponse.status).toBe(200);
     const secondData = await secondResponse.json();
     expect(secondData.success).toBe(true);
-    expect(secondData.jobId).toBeTruthy();
+    expect(secondData.score).toBeDefined();
 
-    // Clean up the test jobs
-    const { error: deleteError } = await supabase
-      .from('scoring_jobs')
-      .delete()
-      .in('id', [firstData.jobId, secondData.jobId]);
+    // Verify we have two events in ai_events
+    const { data: events, error: eventsError } = await supabase
+      .from('ai_events')
+      .select('*')
+      .eq('portal_id', testPortalId)
+      .eq('object_type', 'deal')
+      .eq('object_id', testDealId)
+      .eq('event_type', 'score')
+      .order('created_at', { ascending: false })
+      .limit(2);
 
-    expect(deleteError).toBeNull();
+    expect(eventsError).toBeNull();
+    expect(events).toHaveLength(2);
   }, 30000);
 }); 
