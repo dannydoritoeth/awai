@@ -306,7 +306,12 @@ export class SubscriptionService {
       portal_id: portalId,
       event_type: 'score',
       object_type: scoringDetails?.recordType,
-      object_id: scoringDetails?.recordId
+      object_id: scoringDetails?.recordId,
+      document_data: scoringDetails?.outputs ? {
+        score: scoringDetails.outputs.score,
+        summary: scoringDetails.outputs.summary,
+        lastScored: scoringDetails.outputs.lastScored
+      } : null
     };
     
     // Add scoring details in the single log_data column if logging is enabled

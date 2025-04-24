@@ -128,26 +128,6 @@ serve(async (req) => {
           throw updateError;
         }
 
-        // Record the AI response in ai_events
-        const { error: eventError } = await supabaseClient
-          .from('ai_events')
-          .insert({
-            portal_id,
-            object_type,
-            object_id,
-            event_type: 'score',
-            document_data: {
-              score: result.score,
-              summary: result.summary,
-              lastScored: result.lastScored
-            }
-          });
-
-        if (eventError) {
-          logger.error('Error recording AI event:', eventError);
-          throw eventError;
-        }
-
         return new Response(
           JSON.stringify({
             success: true,
