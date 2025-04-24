@@ -165,17 +165,21 @@ describe('hubspot-train-deal function', () => {
     // First, get the current tokens
     const { data: accountData, error: accountError } = await supabase
       .from('hubspot_accounts')
-      .select('access_token, refresh_token')
+      .select('access_token, refresh_token, expires_at')
       .eq('portal_id', testPortalId)
       .single();
 
     expect(accountError).toBeNull();
     expect(accountData).toBeTruthy();
 
-    // Update the access token to an expired one
+    const originalExpiresAt = new Date(accountData.expires_at).getTime();
+
+    // Update the expiration time to force a refresh
     const { error: updateError } = await supabase
       .from('hubspot_accounts')
-      .update({ access_token: 'expired_token' })
+      .update({ 
+        expires_at: new Date(Date.now() - 3600000).toISOString() // Set to 1 hour ago
+      })
       .eq('portal_id', testPortalId);
 
     expect(updateError).toBeNull();
@@ -190,20 +194,24 @@ describe('hubspot-train-deal function', () => {
       }
     });
 
-    // The function should return 400 because the expired token is invalid
-    expect(response.status).toBe(400);
+    // The function should handle the expired token and refresh it
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.error).toContain('Failed to decode base64');
+    expect(data.success).toBe(true);
 
-    // Restore the original tokens
-    const { error: restoreError } = await supabase
+    // Add a small delay to ensure token refresh has completed
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Verify the token was refreshed by checking the expiration time was updated
+    const { data: refreshedAccount, error: refreshError } = await supabase
       .from('hubspot_accounts')
-      .update({ 
-        access_token: accountData.access_token,
-        refresh_token: accountData.refresh_token
-      })
-      .eq('portal_id', testPortalId);
+      .select('expires_at')
+      .eq('portal_id', testPortalId)
+      .single();
 
-    expect(restoreError).toBeNull();
+    expect(refreshError).toBeNull();
+    const refreshedTime = new Date(refreshedAccount.expires_at).getTime();
+    // Simply verify that the expiration time changed
+    expect(refreshedTime).toBeGreaterThan(originalExpiresAt);
   }, 30000);
 }); 
