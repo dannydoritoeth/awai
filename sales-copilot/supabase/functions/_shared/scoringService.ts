@@ -21,8 +21,6 @@ export interface ScoringResult {
 
 interface AIResponse {
   score: number;
-  positives: string[];
-  negatives: string[];
   summary: string;
 }
 
@@ -130,35 +128,26 @@ export class ScoringService {
     
     const defaultPrompt = `You are an expert at analyzing sales and CRM data to determine how well a deal aligns with an ideal client profile.
 
-Your task is to review the provided record (including metadata, related contact and company info, and past engagement), and output a structured evaluation in the following format:
+Your task is to review the provided record (including metadata, related contact and company info, and past engagement), and provide a comprehensive evaluation.
 
 Return a JSON object with the following fields:
 - score: number from 0 to 100 (whole number only)
-- positives: array of 1–3 short bullets identifying positive signals
-- negatives: array of 1–3 short bullets identifying risk factors or missing data
-- summary: 3–5 sentence executive summary explaining the score and reasoning behind it in plain language
+- summary: A detailed analysis that includes:
+  1. Key positive signals
+  2. Important risk factors or missing data
+  3. Overall assessment and reasoning for the score
 
 Example format:
 {
   "score": 88,
-  "positives": [
-    "Deal Amount is $98,698 — well-aligned with high-value ideal clients",
-    "Deal Stage is qualified to buy — strong buying intent",
-    "Similar Closed Deals scored 90/100 with values between $27,063 and $95,074"
-  ],
-  "negatives": [
-    "Missing Company Info — industry, size, and revenue not provided",
-    "Missing Contact Details — no title, seniority, or engagement data"
-  ],
-  "summary": "This deal scores 88/100 based on its similarity to high-value, high-conversion deals in your historical dataset. The financial fit is strong, and the deal stage indicates readiness to purchase. However, the absence of detailed company and contact metadata slightly lowers confidence in full alignment with your ideal client profile. Still, based on monetary potential and sales progression alone, this is a high-potential opportunity."
+  "summary": "✓ Top Positives\\n- Deal Amount is $98,698 — well-aligned with high-value ideal clients\\n- Deal Stage is qualified to buy — strong buying intent\\n- Similar Closed Deals scored 90/100 with values between $27,063 and $95,074\\n\\n⚠ Top Negatives\\n- Missing Company Info — industry, size, and revenue not provided\\n- Missing Contact Details — no title, seniority, or engagement data\\n\\n📋 Executive Summary\\nThis deal scores 88/100 based on its similarity to high-value, high-conversion deals in your historical dataset. The financial fit is strong, and the deal stage indicates readiness to purchase. However, the absence of detailed company and contact metadata slightly lowers confidence in full alignment with your ideal client profile. Still, based on monetary potential and sales progression alone, this is a high-potential opportunity."
 }
 
 Important:
-- Be concise and focused in each section.
-- Use dollar formatting for deal values.
-- Avoid repeating the same points in both positives and summary.
-- Tailor the analysis to the record's data and similarity results from the Pinecone index.
-
+- Format the summary with clear sections using emojis and newlines as shown in the example
+- Use dollar formatting for deal values
+- Be specific and data-driven in your analysis
+- Tailor the analysis to the record's data and similarity results from the Pinecone index
 `;
 
     // Construct the full prompt with similar records context
@@ -219,11 +208,20 @@ ${JSON.stringify(data, null, 2)}`;
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Unexpected response format from OpenAI API');
+    }
+
+    try {
+      return JSON.parse(data.choices[0].message.content);
+    } catch (error) {
+      throw new Error(`Failed to parse OpenAI response as JSON: ${error.message}`);
+    }
   }
 
   private async callAnthropic(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
@@ -243,11 +241,20 @@ ${JSON.stringify(data, null, 2)}`;
     });
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    return JSON.parse(data.content[0].text);
+    if (!data.content || !data.content[0] || !data.content[0].text) {
+      throw new Error('Unexpected response format from Anthropic API');
+    }
+
+    try {
+      return JSON.parse(data.content[0].text);
+    } catch (error) {
+      throw new Error(`Failed to parse Anthropic response as JSON: ${error.message}`);
+    }
   }
 
   private async callGoogle(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
@@ -275,12 +282,7 @@ ${JSON.stringify(data, null, 2)}`;
   }
 
   private formatSummaryFromResponse(response: AIResponse): string {
-    // Format exactly as shown in UI
-    const positivesList = response.positives.length > 0 ? '✓ Top Positives\n' + response.positives.map(p => `- ${p}`).join('\n') : '';
-    const negativesList = response.negatives.length > 0 ? '\n\n⚠ Top Negatives\n' + response.negatives.map(n => `- ${n}`).join('\n') : '';
-    const execSummary = '\n\n📋 Executive Summary\n' + response.summary;
-    
-    return `${positivesList}${negativesList}${execSummary}`;
+    return response.summary;
   }
 
   private async checkScoringLimit(): Promise<void> {
@@ -919,23 +921,29 @@ ${JSON.stringify(data, null, 2)}`;
       this.logger.info('First similar deal:', JSON.stringify(redactedSimilarDeal, null, 2).substring(0, 1000) + '...');
     }
     
-    const defaultPrompt = `You are an expert at analyzing business deals and determining how well they match an ideal client profile. 
-Your task is to analyze the given deal record and provide:
-1. A score from 0-100 indicating how well this deal matches an ideal client profile
-2. A brief summary explaining the score and key factors considered
+    const defaultPrompt = `You are an expert at analyzing sales and CRM data to determine how well a deal aligns with an ideal client profile.
 
-Please format your response as a JSON object with two fields:
-- score: number between 0-100
-- summary: string explaining the score
+Your task is to review the provided record (including metadata, related contact and company info, and past engagement), and provide a comprehensive evaluation.
 
-Take into consideration the following factors:
-- Deal information (amount, stage, pipeline, close date)
-- Company details (industry, size, revenue)
-- Contact information (role, seniority, engagement)
-- Similar deals that have been previously scored (learn from these examples)
-- The overall fit of this deal compared to previously successful deals
+Return a JSON object with the following fields:
+- score: number from 0 to 100 (whole number only)
+- summary: A detailed analysis that includes:
+  1. Key positive signals
+  2. Important risk factors or missing data
+  3. Overall assessment and reasoning for the score
 
-Base your analysis on the complete record data and the similar deals provided for context.`;
+Example format:
+{
+  "score": 88,
+  "summary": "✓ Top Positives\\n- Deal Amount is $98,698 — well-aligned with high-value ideal clients\\n- Deal Stage is qualified to buy — strong buying intent\\n- Similar Closed Deals scored 90/100 with values between $27,063 and $95,074\\n\\n⚠ Top Negatives\\n- Missing Company Info — industry, size, and revenue not provided\\n- Missing Contact Details — no title, seniority, or engagement data\\n\\n📋 Executive Summary\\nThis deal scores 88/100 based on its similarity to high-value, high-conversion deals in your historical dataset. The financial fit is strong, and the deal stage indicates readiness to purchase. However, the absence of detailed company and contact metadata slightly lowers confidence in full alignment with your ideal client profile. Still, based on monetary potential and sales progression alone, this is a high-potential opportunity."
+}
+
+Important:
+- Format the summary with clear sections using emojis and newlines as shown in the example
+- Use dollar formatting for deal values
+- Be specific and data-driven in your analysis
+- Tailor the analysis to the record's data and similarity results from the Pinecone index
+`;
 
     // Helper function to safely extract property with fallbacks
     const getProperty = (obj: any, propPath: string, defaultValue: string = 'Unknown'): string => {

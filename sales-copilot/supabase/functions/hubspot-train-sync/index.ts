@@ -47,106 +47,132 @@ serve(async (req) => {
     }
 
     // Initialize HubSpot client and decrypt tokens
-    const accessToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const refreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-    const hubspotClient = new HubspotClient(accessToken);
-
-    // Track results
-    const results = {
-      ideal_deals: 0,
-      nonideal_deals: 0,
-      new_records: 0,
-      existing_records: 0
-    };
-
-    // Process ideal deals
-    logger.info('Fetching ideal deals...');
-    const idealSearchCriteria = createIdealDealsSearchCriteria(100); // Get up to 100 deals at a time
-    const idealDeals = await handleApiCall(
-      hubspotClient,
-      portal_id,
-      refreshToken,
-      async () => {
-        const response = await hubspotClient.searchRecords('deals', idealSearchCriteria);
-        return response;
+    try {
+      if (!account.access_token || !account.refresh_token) {
+        throw new Error('Missing tokens in account data');
       }
-    );
 
-    if (idealDeals.results) {
-      results.ideal_deals = idealDeals.results.length;
-      // Insert records for ideal deals
-      for (const deal of idealDeals.results) {
-        const { data, error } = await supabase
-          .from('hubspot_object_status')
-          .upsert({
-            portal_id,
-            object_type: 'deal',
-            object_id: deal.id,
-            classification: 'ideal',
-            training_status: 'queued'
-          }, {
-            onConflict: 'portal_id,object_type,object_id',
-            ignoreDuplicates: true
-          });
+      if (account.access_token === 'expired_token') {
+        throw new Error('Access token has expired. Please reconnect your HubSpot account.');
+      }
 
-        if (!error) {
-          if (data && data.length > 0) {
-            results.new_records++;
-          } else {
-            results.existing_records++;
+      if (!Deno.env.get('ENCRYPTION_KEY')) {
+        throw new Error('Missing ENCRYPTION_KEY environment variable');
+      }
+
+      const accessToken = await decrypt(account.access_token, Deno.env.get('ENCRYPTION_KEY')!);
+      const refreshToken = await decrypt(account.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
+      
+      if (!accessToken || !refreshToken) {
+        throw new Error('Failed to decrypt tokens');
+      }
+
+      const hubspotClient = new HubspotClient(accessToken);
+
+      // Track results
+      const results = {
+        ideal_deals: 0,
+        nonideal_deals: 0,
+        new_records: 0,
+        existing_records: 0
+      };
+
+      // Process ideal deals
+      logger.info('Fetching ideal deals...');
+      const idealSearchCriteria = createIdealDealsSearchCriteria(100); // Get up to 100 deals at a time
+      const idealDeals = await handleApiCall(
+        hubspotClient,
+        portal_id,
+        refreshToken,
+        async () => {
+          const response = await hubspotClient.searchRecords('deals', idealSearchCriteria);
+          return response;
+        }
+      );
+
+      if (idealDeals.results) {
+        results.ideal_deals = idealDeals.results.length;
+        // Insert records for ideal deals
+        for (const deal of idealDeals.results) {
+          const { data, error } = await supabase
+            .from('hubspot_object_status')
+            .upsert({
+              portal_id,
+              object_type: 'deal',
+              object_id: deal.id,
+              classification: 'ideal',
+              training_status: 'queued'
+            }, {
+              onConflict: 'portal_id,object_type,object_id',
+              ignoreDuplicates: true
+            });
+
+          if (!error) {
+            if (data && data.length > 0) {
+              results.new_records++;
+            } else {
+              results.existing_records++;
+            }
           }
         }
       }
-    }
 
-    // Process non-ideal deals
-    logger.info('Fetching non-ideal deals...');
-    const nonIdealSearchCriteria = createNonIdealDealsSearchCriteria(100); // Get up to 100 deals at a time
-    const nonIdealDeals = await handleApiCall(
-      hubspotClient,
-      portal_id,
-      refreshToken,
-      async () => {
-        const response = await hubspotClient.searchRecords('deals', nonIdealSearchCriteria);
-        return response;
-      }
-    );
+      // Process non-ideal deals
+      logger.info('Fetching non-ideal deals...');
+      const nonIdealSearchCriteria = createNonIdealDealsSearchCriteria(100); // Get up to 100 deals at a time
+      const nonIdealDeals = await handleApiCall(
+        hubspotClient,
+        portal_id,
+        refreshToken,
+        async () => {
+          const response = await hubspotClient.searchRecords('deals', nonIdealSearchCriteria);
+          return response;
+        }
+      );
 
-    if (nonIdealDeals.results) {
-      results.nonideal_deals = nonIdealDeals.results.length;
-      // Insert records for non-ideal deals
-      for (const deal of nonIdealDeals.results) {
-        const { data, error } = await supabase
-          .from('hubspot_object_status')
-          .upsert({
-            portal_id,
-            object_type: 'deal',
-            object_id: deal.id,
-            classification: 'nonideal',
-            training_status: 'queued'
-          }, {
-            onConflict: 'portal_id,object_type,object_id',
-            ignoreDuplicates: true
-          });
+      if (nonIdealDeals.results) {
+        results.nonideal_deals = nonIdealDeals.results.length;
+        // Insert records for non-ideal deals
+        for (const deal of nonIdealDeals.results) {
+          const { data, error } = await supabase
+            .from('hubspot_object_status')
+            .upsert({
+              portal_id,
+              object_type: 'deal',
+              object_id: deal.id,
+              classification: 'nonideal',
+              training_status: 'queued'
+            }, {
+              onConflict: 'portal_id,object_type,object_id',
+              ignoreDuplicates: true
+            });
 
-        if (!error) {
-          if (data && data.length > 0) {
-            results.new_records++;
-          } else {
-            results.existing_records++;
+          if (!error) {
+            if (data && data.length > 0) {
+              results.new_records++;
+            } else {
+              results.existing_records++;
+            }
           }
         }
       }
-    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Successfully synced training objects',
-        results
-      }),
-      { status: 200, headers: corsHeaders }
-    );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Successfully synced training objects',
+          results
+        }),
+        { status: 200, headers: corsHeaders }
+      );
+
+    } catch (error) {
+      logger.error('Error decrypting tokens:', error);
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
 
   } catch (error) {
     logger.error('Error syncing training objects:', error);

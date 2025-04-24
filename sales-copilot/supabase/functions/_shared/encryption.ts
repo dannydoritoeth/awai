@@ -41,23 +41,38 @@ export async function encrypt(text: string, key: string): Promise<string> {
  * @returns The decrypted data
  */
 export async function decrypt(encryptedText: string, key: string): Promise<string> {
-  const combined = decodeBase64(encryptedText);
-  const iv = combined.slice(0, IV_LENGTH);
-  const encrypted = combined.slice(IV_LENGTH);
+  try {
+    if (!encryptedText || !key) {
+      throw new Error('Missing required parameters for decryption');
+    }
 
-  const keyBuffer = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(key),
-    { name: "AES-CBC", length: 256 },
-    false,
-    ["decrypt"]
-  );
+    const combined = decodeBase64(encryptedText);
+    if (!combined || combined.length < IV_LENGTH) {
+      throw new Error('Invalid encrypted data format');
+    }
 
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-CBC", iv },
-    keyBuffer,
-    encrypted
-  );
+    const iv = combined.slice(0, IV_LENGTH);
+    const encrypted = combined.slice(IV_LENGTH);
 
-  return new TextDecoder().decode(decrypted);
+    const keyBuffer = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(key),
+      { name: "AES-CBC", length: 256 },
+      false,
+      ["decrypt"]
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-CBC", iv },
+      keyBuffer,
+      encrypted
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Decryption failed: ${error.message}`);
+    }
+    throw new Error('Decryption failed with unknown error');
+  }
 } 
