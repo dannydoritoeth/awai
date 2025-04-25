@@ -61,7 +61,7 @@ else {
     Write-Status "Copying production configuration files:" -Type "info"
     $configFiles = @(
         @{Source="$devPath\src\app\public-app.live.json"; Dest="$prodPath\src\app\public-app.json"},
-        @{Source="$devPath\src\app\config.live.ts"; Dest="$prodPath\src\app\config.ts"},
+        @{Source="$devPath\src\app\extensions\config.live.ts"; Dest="$prodPath\src\app\extensions\config.ts"},
         @{Source="$devPath\hsproject.live.json"; Dest="$prodPath\hsproject.json"}
     )
     

@@ -117,83 +117,70 @@ serve(async (req) => {
         refreshToken
       );
 
-      // Score the record
-      logger.info(`Scoring ${object_type} ${object_id}`);
-      let result;
-      try {
-        // Use handleApiCall to automatically handle token expiration
-        result = await handleApiCall(
-          hubspotClient,
-          portal_id,
-          refreshToken,
-          async () => {
-            switch (object_type) {
-              case 'contact':
-                return await scoringService.scoreContact(object_id);
-              case 'company':
-                return await scoringService.scoreCompany(object_id);
-              case 'deal':
-                return await scoringService.scoreDeal(object_id);
-              default:
-                throw new Error('Invalid record type. Must be contact, company, or deal');
-            }
-          }
-        );
-
-        logger.info(`Successfully scored ${object_type} ${object_id}:`, {
-          score: result.score,
-          lastScored: result.lastScored
-        });
-
-        // Record scoring event
-        const { error: eventError } = await supabaseClient
-          .from('ai_events')
-          .insert({
+      // Start the scoring process asynchronously
+      (async () => {
+        try {
+          // Score the record
+          logger.info(`Scoring ${object_type} ${object_id}`);
+          const result = await handleApiCall(
+            hubspotClient,
             portal_id,
-            event_type: 'score',
-            object_type,
-            object_id,
-            classification: 'other',
-            document_data: {
-              score: result.score,
-              summary: result.summary
-            },
-            created_at: new Date().toISOString()
+            refreshToken,
+            async () => {
+              switch (object_type) {
+                case 'contact':
+                  return await scoringService.scoreContact(object_id);
+                case 'company':
+                  return await scoringService.scoreCompany(object_id);
+                case 'deal':
+                  return await scoringService.scoreDeal(object_id);
+                default:
+                  throw new Error('Invalid record type. Must be contact, company, or deal');
+              }
+            }
+          );
+
+          logger.info(`Successfully scored ${object_type} ${object_id}:`, {
+            score: result.score,
+            lastScored: result.lastScored
           });
 
-        if (eventError) {
-          throw new Error(`Failed to record scoring event: ${eventError.message}`);
-        }
+          // Record scoring event
+          const { error: eventError } = await supabaseClient
+            .from('ai_events')
+            .insert({
+              portal_id,
+              event_type: 'score',
+              object_type,
+              object_id,
+              classification: 'other',
+              document_data: {
+                score: result.score,
+                summary: result.summary
+              },
+              created_at: new Date().toISOString()
+            });
 
-        // Update status to completed
-        const now = new Date().toISOString();
-        await supabaseClient
-          .from('hubspot_object_status')
-          .update({
-            scoring_status: 'completed',
-            scoring_date: now,
-            scoring_error: null,
-            last_processed: now
-          })
-          .eq('portal_id', portal_id)
-          .eq('object_type', object_type)
-          .eq('object_id', object_id);
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            score: result.score,
-            summary: result.summary,
-            lastScored: result.lastScored
-          }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          if (eventError) {
+            throw new Error(`Failed to record scoring event: ${eventError.message}`);
           }
-        );
 
-      } catch (scoringError) {
-        if (scoringError.message?.includes('Invalid record type')) {
-          // Update status to failed
+          // Update status to completed
+          const now = new Date().toISOString();
+          await supabaseClient
+            .from('hubspot_object_status')
+            .update({
+              scoring_status: 'completed',
+              scoring_date: now,
+              scoring_error: null,
+              last_processed: now
+            })
+            .eq('portal_id', portal_id)
+            .eq('object_type', object_type)
+            .eq('object_id', object_id);
+
+        } catch (scoringError) {
+          // Update status with error
           await supabaseClient
             .from('hubspot_object_status')
             .update({
@@ -205,34 +192,24 @@ serve(async (req) => {
             .eq('object_type', object_type)
             .eq('object_id', object_id);
 
-          return new Response(
-            JSON.stringify({ success: false, error: scoringError.message }),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, "Content-Type": "application/json" } 
-            }
-          );
+          logger.error(`Error scoring ${object_type}:`, {
+            error: scoringError,
+            message: scoringError.message,
+            stack: scoringError.stack
+          });
         }
-        
-        // Update status with error
-        await supabaseClient
-          .from('hubspot_object_status')
-          .update({
-            scoring_status: 'failed',
-            scoring_error: scoringError.message,
-            last_processed: new Date().toISOString()
-          })
-          .eq('portal_id', portal_id)
-          .eq('object_type', object_type)
-          .eq('object_id', object_id);
+      })();
 
-        logger.error(`Error scoring ${object_type}:`, {
-          error: scoringError,
-          message: scoringError.message,
-          stack: scoringError.stack
-        });
-        throw scoringError;
-      }
+      // Return immediately with success
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Scoring process started'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
 
     } catch (error) {
       // Update status to failed
@@ -248,10 +225,7 @@ serve(async (req) => {
         .eq('object_id', object_id);
 
       logger.error('Error processing record:', error);
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 500, headers: corsHeaders }
-      );
+      throw error;
     }
 
   } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Button,
   Text,
@@ -9,11 +9,10 @@ import {
   hubspot,
   Divider,
   Toggle,
-  IFrame
 } from "@hubspot/ui-extensions";
+import { SUPABASE_URL } from "./config";
 
 // Supabase function URLs
-const SUPABASE_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co';
 const SUPABASE_SCORE_RECORD_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-record`;
 const SUPABASE_SCORE_SUMMARY_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-summary`;
 
@@ -34,7 +33,6 @@ const BaseScoring = ({
   const [debugInfo, setDebugInfo] = useState({});
   const [showDebug, setShowDebug] = useState(false);
   const [scoringStatus, setScoringStatus] = useState(null);
-  const iframeRef = useRef(null);
 
   // Load existing score when component initializes
   useEffect(() => {
@@ -94,13 +92,9 @@ const BaseScoring = ({
       setError(null);
       setScoringStatus('Starting scoring process...');
 
-      // Create scoring request URL
+      // Submit the scoring request without waiting for response
       const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
-      
-      // Use iframe to make the request
-      if (iframeRef.current) {
-        iframeRef.current.src = scoreUrl;
-      }
+      hubspot.fetch(scoreUrl, { method: 'POST' });
       
       setScoringStatus('Analyzing record...');
       
@@ -123,8 +117,9 @@ const BaseScoring = ({
         } catch (error) {
           console.error('Error polling score:', error);
         }
-      }, 2000);
+      }, 2000); // Poll every 2 seconds
 
+      // Cleanup interval after 60 seconds
       setTimeout(() => {
         clearInterval(pollInterval);
         if (scoring) {
@@ -132,7 +127,7 @@ const BaseScoring = ({
           setScoringStatus(null);
           setError('Scoring is taking longer than expected. Please check back later.');
         }
-      }, 60000);
+      }, 60000); // Changed from 120000 to 60000 (60 seconds) as requested
 
     } catch (error) {
       setError('Error starting scoring process. Please try again later.');
@@ -151,12 +146,6 @@ const BaseScoring = ({
 
   return (
     <Box padding="md">
-      <IFrame
-        ref={iframeRef}
-        style={{ display: 'none' }}
-        width="0"
-        height="0"
-      />
       <Flex direction="column" gap="md">
         {error && (
           <Alert title="Error" variant="error">
