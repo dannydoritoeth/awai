@@ -1,0 +1,38 @@
+{
+  "name": "ScoreAI DEV",
+  "uid": "scoreai-dev",
+  "description": "AI-powered lead scoring for HubSpot. Train it on your best and worst customers to prioritize leads with scores and AI-generated summaries. Works across all tiers—no complex rules or workflows. Just smarter, faster lead qualification.",
+  "allowedUrls": [
+    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-train-summary",
+    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-summary",
+    "https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-score-record"
+  ],
+  "auth": {
+    "redirectUrls": ["https://rtalhjaoxlcqmxppuhhz.supabase.co/functions/v1/hubspot-oauth"],
+    "requiredScopes": [
+      "crm.objects.contacts.read",
+      "crm.objects.companies.read",
+      "crm.objects.deals.read",
+      "crm.objects.deals.write",
+      "crm.schemas.deals.read",
+      "crm.schemas.deals.write"
+    ],
+    "optionalScopes": [],
+    "conditionallyRequiredScopes": []
+  },
+  "support": {
+    "supportEmail": "scott@acceleratewith.ai",
+    "documentationUrl": "https://acceleratewith.ai",
+    "supportUrl": "https://acceleratewith.ai",
+    "supportPhone": "+61488583691"
+  },
+  "extensions": {
+    "crm": {
+      "cards": [
+        {
+          "file": "./extensions/deal-scoring.json"
+        }
+      ]
+    }
+  }
+}

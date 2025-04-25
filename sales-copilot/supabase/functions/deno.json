@@ -4,13 +4,16 @@
   },
   "compilerOptions": {
     "allowJs": true,
-    "lib": ["deno.window"],
-    "strict": true
+    "lib": ["deno.window", "dom", "dom.iterable", "dom.asynciterable"],
+    "strict": true,
+    "types": ["deno"]
   },
   "importMap": {
     "imports": {
       "https://deno.land/std@0.168.0/http/server.ts": "https://deno.land/std@0.168.0/http/server.ts",
-      "https://esm.sh/@supabase/supabase-js@2.38.4": "https://esm.sh/@supabase/supabase-js@2.38.4"
+      "https://esm.sh/@supabase/supabase-js@2.38.4": "https://esm.sh/@supabase/supabase-js@2.38.4",
+      "https://esm.sh/@pinecone-database/pinecone@5.1.1": "https://esm.sh/@pinecone-database/pinecone@5.1.1",
+      "https://esm.sh/openai@4.86.1": "https://esm.sh/openai@4.86.1"
     }
   }
 } 

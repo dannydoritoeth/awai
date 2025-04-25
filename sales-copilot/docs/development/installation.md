@@ -170,7 +170,7 @@ supabase start
 
 3. Deploy the functions:
 ```bash
-supabase functions deploy hubspot-oauth
+supabase functions deploy hubspot-oauth --no-verify-jwt
 supabase functions deploy hubspot-process-training
 supabase functions deploy hubspot-score-record
 supabase functions deploy hubspot-score-batch

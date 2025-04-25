@@ -28,16 +28,14 @@ This system provides AI-powered scoring for HubSpot contacts, companies, and dea
 ### 1. Installation & Setup
 - Install the app through HubSpot marketplace
 - The app automatically creates required properties in your HubSpot portal:
-  - `training_classification` (Ideal/Less Ideal)
-  - `training_attributes` (Relevant characteristics)
-  - `training_score` (0-100 rating)
+  - `training_score` (0-100 rating, where ≥80 indicates ideal, ≤50 indicates less ideal)
   - `training_notes` (Additional context)
 
 ### 2. Training Data
 1. Classify your existing records:
-   - Mark records as "Ideal" or "Less Ideal"
-   - Assign a score (0-100)
-   - Select relevant attributes
+   - Assign a score (0-100) where:
+     - ≥80 indicates an ideal customer
+     - ≤50 indicates a less ideal customer
    - Add explanatory notes
 2. Run the "Process Ideal Clients" function to:
    - Create embeddings for classified records

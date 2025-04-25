@@ -33,9 +33,10 @@ logs
 /build
 **/dist
 **/build
+/hubspot-app/scoreai/*
 
 # Testing
-/coverage
+/coverages
 
 # Temporary files
 *.tmp

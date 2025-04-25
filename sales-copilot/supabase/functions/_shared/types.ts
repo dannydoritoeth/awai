@@ -52,4 +52,30 @@ export interface HubspotClientInterface {
   getEngagementHistory(recordId: string, recordType: string): Promise<EngagementHistoryEntry[]>;
   getRecord(objectType: string, recordId: string, properties: string[]): Promise<any>;
   searchRecords(objectType: string, query: any): Promise<any>;
+}
+
+export type SubscriptionTier = 'STARTER' | 'GROWTH' | 'PRO';
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
+
+export interface SubscriptionFeatures {
+  maxUsers: number;
+  maxRequests: number;
+  maxContacts: number;
+  [key: string]: number;
+}
+
+export interface SubscriptionTierConfig {
+  features: SubscriptionFeatures;
+  price: number;
+  currency: string;
+  interval: 'month' | 'year';
+}
+
+export interface SubscriptionConfig {
+  tiers: Record<SubscriptionTier, SubscriptionTierConfig>;
+  features: Record<string, {
+    name: string;
+    description: string;
+    tiers: SubscriptionTier[];
+  }>;
 } 

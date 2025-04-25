@@ -1,0 +1,2 @@
+[functions.hubspot-stripe-create-checkout-session]
+verify_jwt = false 

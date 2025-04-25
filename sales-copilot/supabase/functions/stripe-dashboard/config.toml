@@ -1,0 +1,2 @@
+[functions.partner-stripe-dashboard]
+verify_jwt = false 
