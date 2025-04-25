@@ -10,9 +10,9 @@ import {
   Divider,
   Toggle,
 } from "@hubspot/ui-extensions";
+import { SUPABASE_URL } from "./config";
 
 // Supabase function URLs
-const SUPABASE_URL = 'https://rtalhjaoxlcqmxppuhhz.supabase.co';
 const SUPABASE_SCORE_RECORD_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-record`;
 const SUPABASE_SCORE_SUMMARY_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-summary`;
 
