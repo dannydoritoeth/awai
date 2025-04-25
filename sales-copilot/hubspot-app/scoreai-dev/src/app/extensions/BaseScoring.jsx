@@ -65,7 +65,7 @@ const BaseScoring = ({
 
   // Function to fetch existing score from Supabase
   const loadExistingScore = async () => {
-    const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`;
+    const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
     
     try {
       setLoading(true);
@@ -95,7 +95,7 @@ const BaseScoring = ({
       setScoringProgress(0);
 
       // Submit the scoring request
-      const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portalId=${context.portal.id}&recordType=${recordType}&recordId=${context.crm.objectId}`;
+      const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
       const response = await hubspot.fetch(scoreUrl, { method: 'POST' });
       const data = await response.json();
       
@@ -106,7 +106,7 @@ const BaseScoring = ({
         // Poll score-summary for updates
         const pollInterval = setInterval(async () => {
           try {
-            const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`;
+            const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
             const summaryResponse = await hubspot.fetch(summaryUrl, { method: 'GET' });
             const summaryData = await summaryResponse.json();
             
@@ -257,7 +257,7 @@ const BaseScoring = ({
               
               <Text format={{ fontWeight: "bold" }}>Request URL:</Text>
               <Text format={{ fontFamily: "monospace" }}>
-                {`${SUPABASE_SCORE_SUMMARY_URL}?portalId=${context.portal.id}&objectType=${recordType}&objectId=${context.crm.objectId}`}
+                {`${SUPABASE_SCORE_SUMMARY_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`}
               </Text>
 
               <Divider />
