@@ -27,11 +27,7 @@ export default function AppSuccessPage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-500 mt-1">✓</span>
-              <span>Initial lead scores will be available within 24 hours</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">✓</span>
-              <span>You'll receive an email when your dashboard is ready</span>
+              <span>You can start scoring leads within 20 minutes</span>
             </li>
           </ul>
         </div>
