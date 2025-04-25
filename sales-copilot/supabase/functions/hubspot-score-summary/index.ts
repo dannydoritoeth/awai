@@ -89,16 +89,16 @@ serve(async (req) => {
   try {
     // Parse URL parameters
     const url = new URL(req.url);
-    const portalId = url.searchParams.get('portalId');
-    const objectType = url.searchParams.get('objectType'); // Optional
-    const objectId = url.searchParams.get('objectId');     // Optional
+    const portal_id = url.searchParams.get('portal_id');
+    const object_type = url.searchParams.get('object_type'); // Optional
+    const object_id = url.searchParams.get('object_id');     // Optional
 
     // Validate required parameters
-    if (!portalId) {
+    if (!portal_id) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Missing required parameter: portalId must be provided in URL'
+          error: 'Missing required parameter: portal_id must be provided in URL'
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -115,13 +115,13 @@ serve(async (req) => {
 
     // Get current period score count directly using the function from the migration
     const { data: scoreData, error: scoreError } = await supabaseClient
-      .rpc('get_current_period_score_count', { portal_id_param: portalId })
+      .rpc('get_current_period_score_count', { portal_id_param: portal_id })
       .single();
 
     if (scoreError) {
       logger.error('Error getting score count:', {
         error: scoreError,
-        portalId
+        portal_id
       });
     }
 
@@ -129,14 +129,14 @@ serve(async (req) => {
     const { data: subscription, error: subError } = await supabaseClient
       .from('subscriptions')
       .select('*')
-      .filter('metadata->>portal_id', 'eq', portalId.toString())
+      .filter('metadata->portal_id', 'eq', portal_id)
       .eq('status', 'active')
       .single();
 
     if (subError) {
       logger.error('Error getting subscription:', {
         error: subError,
-        portalId
+        portal_id
       });
     }
 
@@ -145,7 +145,7 @@ serve(async (req) => {
       plan: {
         tier: subscription?.plan_tier || 'FREE',
         isActive: !!subscription,
-        isCanceledButActive: subscription?.cancel_at_period_end || false,
+        isCanceledButActive: !!subscription?.cancel_at && !subscription?.canceled_at,
         expiresAt: subscription?.cancel_at || null,
         isExpiringSoon: false, // Can calculate this if needed
         amount: 0, // Price amount would need to be retrieved from prices table if needed
@@ -163,13 +163,13 @@ serve(async (req) => {
     };
 
     // If objectType and objectId are provided, get the HubSpot object details
-    if (objectType && objectId) {
+    if (object_type && object_id) {
       try {
         // Get HubSpot account details to initialize the client
         const { data: hubspotAccount, error: hsAccountError } = await supabaseClient
           .from('hubspot_accounts')
           .select('access_token, refresh_token, expires_at')
-          .eq('portal_id', portalId)
+          .eq('portal_id', portal_id)
           .single();
 
         if (hsAccountError) {
@@ -192,8 +192,8 @@ serve(async (req) => {
           const properties = ['ideal_client_score', 'ideal_client_summary'];
           let hubspotObjectType;
           
-          // Map our objectType to HubSpot API object type
-          switch (objectType.toLowerCase()) {
+          // Map our object_type to HubSpot API object type
+          switch (object_type.toLowerCase()) {
             case 'deal':
               hubspotObjectType = 'deals';
               break;
@@ -204,26 +204,26 @@ serve(async (req) => {
               hubspotObjectType = 'companies';
               break;
             default:
-              throw new Error(`Unsupported object type: ${objectType}`);
+              throw new Error(`Unsupported object type: ${object_type}`);
           }
           
           // Use the generic getRecord method for all object types
-          return await hubspotClient.getRecord(hubspotObjectType, objectId, properties);
+          return await hubspotClient.getRecord(hubspotObjectType, object_id, properties);
         };
 
         try {
           // Use handleApiCall utility to handle token refresh
           const objectDetails = await handleApiCall(
             hubspotClient, 
-            portalId, 
+            portal_id, 
             refreshToken, 
             getObjectDetails
           );
           
           // Add object details to the response
           summary.currentRecord = {
-            id: objectId,
-            type: objectType,
+            id: object_id,
+            type: object_type,
             ideal_client_score: objectDetails.properties?.ideal_client_score || null,
             ideal_client_summary: objectDetails.properties?.ideal_client_summary || null
           };
@@ -248,7 +248,7 @@ serve(async (req) => {
                 expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('portal_id', portalId);
+              .eq('portal_id', portal_id);
             
             // Update client with new token and retry
             hubspotClient.setToken?.(newTokens.access_token);
@@ -258,8 +258,8 @@ serve(async (req) => {
             
             // Add object details to the response
             summary.currentRecord = {
-              id: objectId,
-              type: objectType,
+              id: object_id,
+              type: object_type,
               ideal_client_score: objectDetails.properties?.ideal_client_score || null,
               ideal_client_summary: objectDetails.properties?.ideal_client_summary || null
             };
@@ -270,14 +270,14 @@ serve(async (req) => {
       } catch (hsError) {
         logger.error('Error getting HubSpot object details:', {
           error: hsError,
-          portalId,
-          objectType,
-          objectId
+          portal_id,
+          object_type,
+          object_id
         });
         // Don't fail the whole request if HubSpot fetching fails
         summary.currentRecord = {
-          id: objectId,
-          type: objectType,
+          id: object_id,
+          type: object_type,
           error: hsError.message
         };
       }

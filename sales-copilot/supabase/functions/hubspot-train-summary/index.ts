@@ -49,23 +49,23 @@ serve(async (req) => {
 
     // Get parameters from URL
     const url = new URL(req.url);
-    const portalId = url.searchParams.get('portalId');
-    const recordType = url.searchParams.get('recordType');
-    const recordId = url.searchParams.get('recordId');
+    const portal_id = url.searchParams.get('portal_id');
+    const object_type = url.searchParams.get('object_type');
+    const object_id = url.searchParams.get('object_id');
 
     // Log all search params
     console.log('All URL search params:', Object.fromEntries(url.searchParams.entries()));
     console.log('Full URL:', url.toString());
     console.log('Individual params:', {
-      portalId,
-      recordType,
-      recordId,
-      hasPortalId: !!portalId,
-      hasRecordType: !!recordType,
-      hasRecordId: !!recordId
+      portal_id,
+      object_type,
+      object_id,
+      hasPortalId: !!portal_id,
+      hasObjectType: !!object_type,
+      hasObjectId: !!object_id
     });
 
-    if (!portalId) {
+    if (!portal_id) {
       throw new Error('Portal ID is required')
     }
 
@@ -99,7 +99,7 @@ serve(async (req) => {
         refresh_token,
         expires_at
       `)
-      .eq('portal_id', portalId)
+      .eq('portal_id', portal_id)
       .single()
 
     if (accountError) {
@@ -113,7 +113,7 @@ serve(async (req) => {
     let ideal_deals_to_train = 0;
     let nonideal_deals_to_train = 0;
 
-    // Get current record's score from HubSpot if recordId and recordType provided
+    // Get current record's score from HubSpot if object_id and object_type provided
     if (accountData.access_token) {
       try {
         // Decrypt tokens
@@ -148,7 +148,7 @@ serve(async (req) => {
                 expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('portal_id', portalId);
+              .eq('portal_id', portal_id);
               
             if (updateError) {
               throw new Error('Failed to update HubSpot tokens');
@@ -163,13 +163,13 @@ serve(async (req) => {
           }
         }
 
-        // Get the current record's data if recordId and recordType are provided
-        if (recordId && recordType) {
+        // Get the current record's data if object_id and object_type are provided
+        if (object_id && object_type) {
           console.log('Fetching HubSpot record data...');
           const properties = ['ideal_client_score', 'ideal_client_summary'];
-          console.log(`Getting ${recordType} record ${recordId} with properties:`, properties);
+          console.log(`Getting ${object_type} record ${object_id} with properties:`, properties);
           
-          const hubspotData = await hubspotClient.getRecord(recordType, recordId, properties);
+          const hubspotData = await hubspotClient.getRecord(object_type, object_id, properties);
           console.log('HubSpot response:', hubspotData);
 
           if (hubspotData?.properties) {
@@ -214,8 +214,8 @@ serve(async (req) => {
       }
     } else {
       console.log('Skipping HubSpot API call, missing required data:', {
-        hasRecordId: !!recordId,
-        hasRecordType: !!recordType,
+        hasRecordId: !!object_id,
+        hasRecordType: !!object_type,
         hasAccessToken: !!accountData?.access_token
       });
     }
