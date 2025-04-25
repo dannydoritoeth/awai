@@ -33,7 +33,6 @@ const BaseScoring = ({
   const [debugInfo, setDebugInfo] = useState({});
   const [showDebug, setShowDebug] = useState(false);
   const [scoringStatus, setScoringStatus] = useState(null);
-  const [scoringProgress, setScoringProgress] = useState(0);
 
   // Load existing score when component initializes
   useEffect(() => {
@@ -92,7 +91,6 @@ const BaseScoring = ({
       setScoring(true);
       setError(null);
       setScoringStatus('Starting scoring process...');
-      setScoringProgress(0);
 
       // Submit the scoring request
       const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
@@ -101,7 +99,6 @@ const BaseScoring = ({
       
       if (data.success) {
         setScoringStatus('Analyzing record...');
-        setScoringProgress(20);
         
         // Poll score-summary for updates
         const pollInterval = setInterval(async () => {
@@ -116,7 +113,6 @@ const BaseScoring = ({
                 clearInterval(pollInterval);
                 setScoring(false);
                 setScoringStatus(null);
-                setScoringProgress(0);
                 updateStateFromSummary(summaryData.result);
               }
             }
@@ -131,19 +127,16 @@ const BaseScoring = ({
           if (scoring) {
             setScoring(false);
             setScoringStatus(null);
-            setScoringProgress(0);
             setError('Scoring is taking longer than expected. Please check back later.');
           }
         }, 120000);
       } else {
         setError(data.error || 'Unable to start scoring process. Please try again.');
         setScoringStatus(null);
-        setScoringProgress(0);
       }
     } catch (error) {
       setError('Error starting scoring process. Please try again later.');
       setScoringStatus(null);
-      setScoringProgress(0);
     } finally {
       setScoring(false);
     }
@@ -210,28 +203,6 @@ const BaseScoring = ({
         {scoring && (
           <>
             <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
-            <Box>
-              <Text>Progress: {scoringProgress}%</Text>
-              <Box 
-                style={{ 
-                  width: '100%', 
-                  height: '4px', 
-                  backgroundColor: '#f0f0f0',
-                  borderRadius: '2px',
-                  marginTop: '4px'
-                }}
-              >
-                <Box 
-                  style={{ 
-                    width: `${scoringProgress}%`, 
-                    height: '100%', 
-                    backgroundColor: '#2d7ff9',
-                    borderRadius: '2px',
-                    transition: 'width 0.3s ease-in-out'
-                  }}
-                />
-              </Box>
-            </Box>
           </>
         )}
         
