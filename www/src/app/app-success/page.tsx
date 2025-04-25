@@ -27,7 +27,7 @@ export default function AppSuccessPage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-500 mt-1">✓</span>
-              <span>You can start scoring leads within 20 minutes</span>
+              <span>You can start scoring leads within 10 minutes</span>
             </li>
           </ul>
         </div>
