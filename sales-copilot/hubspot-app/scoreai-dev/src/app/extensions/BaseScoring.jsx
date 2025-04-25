@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Button,
   Text,
@@ -9,6 +9,7 @@ import {
   hubspot,
   Divider,
   Toggle,
+  IFrame
 } from "@hubspot/ui-extensions";
 
 // Supabase function URLs
@@ -33,6 +34,7 @@ const BaseScoring = ({
   const [debugInfo, setDebugInfo] = useState({});
   const [showDebug, setShowDebug] = useState(false);
   const [scoringStatus, setScoringStatus] = useState(null);
+  const iframeRef = useRef(null);
 
   // Load existing score when component initializes
   useEffect(() => {
@@ -92,53 +94,49 @@ const BaseScoring = ({
       setError(null);
       setScoringStatus('Starting scoring process...');
 
-      // Submit the scoring request
+      // Create scoring request URL
       const scoreUrl = `${SUPABASE_SCORE_RECORD_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
-      const response = await hubspot.fetch(scoreUrl, { method: 'POST' });
-      const data = await response.json();
       
-      if (data.success) {
-        setScoringStatus('Analyzing record...');
-        
-        // Poll score-summary for updates
-        const pollInterval = setInterval(async () => {
-          try {
-            const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
-            const summaryResponse = await hubspot.fetch(summaryUrl, { method: 'GET' });
-            const summaryData = await summaryResponse.json();
-            
-            if (summaryData.success && summaryData.result) {
-              const currentRecord = summaryData.result.currentRecord;
-              if (currentRecord?.ideal_client_score && currentRecord.ideal_client_score !== score) {
-                clearInterval(pollInterval);
-                setScoring(false);
-                setScoringStatus(null);
-                updateStateFromSummary(summaryData.result);
-              }
-            }
-          } catch (error) {
-            console.error('Error polling score:', error);
-          }
-        }, 2000); // Poll every 2 seconds
-
-        // Cleanup interval after 2 minutes
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          if (scoring) {
-            setScoring(false);
-            setScoringStatus(null);
-            setError('Scoring is taking longer than expected. Please check back later.');
-          }
-        }, 120000);
-      } else {
-        setError(data.error || 'Unable to start scoring process. Please try again.');
-        setScoringStatus(null);
+      // Use iframe to make the request
+      if (iframeRef.current) {
+        iframeRef.current.src = scoreUrl;
       }
+      
+      setScoringStatus('Analyzing record...');
+      
+      // Start polling immediately
+      const pollInterval = setInterval(async () => {
+        try {
+          const summaryUrl = `${SUPABASE_SCORE_SUMMARY_URL}?portal_id=${context.portal.id}&object_type=${recordType}&object_id=${context.crm.objectId}`;
+          const summaryResponse = await hubspot.fetch(summaryUrl, { method: 'GET' });
+          const summaryData = await summaryResponse.json();
+          
+          if (summaryData.success && summaryData.result) {
+            const currentRecord = summaryData.result.currentRecord;
+            if (currentRecord?.ideal_client_score && currentRecord.ideal_client_score !== score) {
+              clearInterval(pollInterval);
+              setScoring(false);
+              setScoringStatus(null);
+              updateStateFromSummary(summaryData.result);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling score:', error);
+        }
+      }, 2000);
+
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (scoring) {
+          setScoring(false);
+          setScoringStatus(null);
+          setError('Scoring is taking longer than expected. Please check back later.');
+        }
+      }, 60000);
+
     } catch (error) {
       setError('Error starting scoring process. Please try again later.');
       setScoringStatus(null);
-    } finally {
-      setScoring(false);
     }
   };
 
@@ -153,6 +151,12 @@ const BaseScoring = ({
 
   return (
     <Box padding="md">
+      <IFrame
+        ref={iframeRef}
+        style={{ display: 'none' }}
+        width="0"
+        height="0"
+      />
       <Flex direction="column" gap="md">
         {error && (
           <Alert title="Error" variant="error">
