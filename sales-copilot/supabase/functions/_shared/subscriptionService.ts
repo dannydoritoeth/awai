@@ -222,23 +222,20 @@ export class SubscriptionService {
       }
 
       // Count scores used in current period
-      const { data: scoreCount, error: countError } = await this.supabase
+      const { count: scoresUsed, error: countError } = await this.supabase
         .from('ai_events')
-        .select('id', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true })
         .eq('portal_id', portalId)
         .eq('event_type', 'score')
         .gte('created_at', periodStart.toISOString())
-        .lt('created_at', periodEnd.toISOString())
-        .eq('document_data->status', 'completed');
+        .lt('created_at', periodEnd.toISOString());
 
       if (countError) {
         throw countError;
       }
-
-      const scoresUsed = scoreCount?.count || 0;
       
       return {
-        scoresUsed: Number(scoresUsed),
+        scoresUsed: Number(scoresUsed || 0),
         maxScores,
         periodStart,
         periodEnd

@@ -14,65 +14,6 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 describe('hubspot-score-record function', () => {
-  let testPortalId;
-  let testDealId;
-
-  beforeAll(async () => {
-    // Get test portal ID
-    const { data: portalData, error: portalError } = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: { type: 'get_test_portal_id' }
-      }
-    });
-
-    if (portalError) throw portalError;
-    testPortalId = portalData.portal_id;
-
-    // Get a test deal ID from hubspot_object_status
-    const { data: statusData, error: statusError } = await supabase
-      .from('hubspot_object_status')
-      .select('object_id')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .limit(1);
-
-    if (statusError) throw statusError;
-
-    if (!statusData || statusData.length === 0) {
-      // If no deals exist, create a test deal
-      const { data: newDeal, error: insertError } = await supabase
-        .from('hubspot_object_status')
-        .insert({
-          portal_id: testPortalId,
-          object_id: 'test-deal-1',
-          object_type: 'deal',
-          training_status: 'completed',
-          training_date: new Date().toISOString(),
-          training_error: null,
-          classification: 'other'
-        })
-        .select('object_id')
-        .single();
-
-      if (insertError) throw insertError;
-      testDealId = newDeal.object_id;
-    } else {
-      testDealId = statusData[0].object_id;
-    }
-  });
-
-  afterAll(async () => {
-    // Clean up test data if we created it
-    if (testDealId === 'test-deal-1') {
-      const { error: deleteError } = await supabase
-        .from('hubspot_object_status')
-        .delete()
-        .eq('object_id', testDealId);
-
-      if (deleteError) throw deleteError;
-    }
-  });
-
   test('should return 400 when required parameters are missing', async () => {
     const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record`;
     const response = await fetch(scoreUrl, {
@@ -121,11 +62,6 @@ describe('hubspot-score-record function', () => {
     });
 
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(`Failed to initiate scoring: ${data.error || 'Unknown error'}`);
-    }
-
     return { status: response.status, data };
   };
 
@@ -217,50 +153,167 @@ describe('hubspot-score-record function', () => {
     expect(finalStatus.scoring_date).not.toBeNull();
   }, 70000); // 70 second timeout
 
-  // test('should handle rescoring gracefully', async () => {
-  //   const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
-    
-  //   // First scoring
-  //   const firstResponse = await fetch(scoreUrl, {
-  //     method: 'GET',
-  //     headers: {
-  //       'Authorization': `Bearer ${supabaseKey}`,
-  //       'Content-Type': 'application/json'
-  //     }
-  //   });
+  describe('scoring quota tests', () => {
+    test('free plan: can score up to but not beyond limit', async () => {
+      const testRecord = {
+        portalId: '242593348',
+        objectId: '69338423994',
+        objectType: 'deal'
+      };
+      const FREE_TIER_LIMIT = 50;
 
-  //   expect(firstResponse.status).toBe(200);
-  //   const firstData = await firstResponse.json();
-  //   expect(firstData.success).toBe(true);
-  //   expect(firstData.score).toBeDefined();
+      // First clean up any existing events for this portal
+      const { error: deleteError } = await supabase
+        .from('ai_events')
+        .delete()
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score');
 
-  //   // Second scoring of the same record
-  //   const secondResponse = await fetch(scoreUrl, {
-  //     method: 'GET',
-  //     headers: {
-  //       'Authorization': `Bearer ${supabaseKey}`,
-  //       'Content-Type': 'application/json'
-  //     }
-  //   });
+      if (deleteError) {
+        throw new Error(`Failed to clean up existing events: ${deleteError.message}`);
+      }
 
-  //   expect(secondResponse.status).toBe(200);
-  //   const secondData = await secondResponse.json();
-  //   expect(secondData.success).toBe(true);
-  //   expect(secondData.score).toBeDefined();
+      // Verify cleanup was successful
+      const { count: initialCount, error: initialCountError } = await supabase
+        .from('ai_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score');
 
-  //   // Verify we have two events in ai_events
-  //   const { data: events, error: eventsError } = await supabase
-  //     .from('ai_events')
-  //     .select('*')
-  //     .eq('portal_id', testPortalId)
-  //     .eq('object_type', 'deal')
-  //     .eq('object_id', testDealId)
-  //     .eq('event_type', 'score')
-  //     .order('created_at', { ascending: false })
-  //     .limit(2);
+      if (initialCountError) {
+        throw new Error(`Failed to verify cleanup: ${initialCountError.message}`);
+      }
 
-  //   expect(eventsError).toBeNull();
-  //   expect(events).toHaveLength(2);
-  // }, 60000);
+      expect(initialCount).toBe(0);
+      console.log('Initial cleanup successful, verified 0 events exist');
+
+      // Create events up to one less than the limit
+      const events = Array.from({ length: FREE_TIER_LIMIT - 1 }, (_, i) => ({
+        portal_id: testRecord.portalId,
+        event_type: 'score',
+        object_type: testRecord.objectType,
+        object_id: `test-object-${i}`,
+        document_data: {
+          status: 'completed',
+          score: 0.8,
+          summary: 'Test summary'
+        },
+        created_at: new Date(Date.now() - (FREE_TIER_LIMIT - i) * 60000).toISOString() // Spread over last hour
+      }));
+
+      const { error: insertError } = await supabase
+        .from('ai_events')
+        .insert(events);
+
+      if (insertError) {
+        throw new Error(`Failed to insert test events: ${insertError.message}`);
+      }
+
+      // Verify we have exactly FREE_TIER_LIMIT - 1 events
+      const { count: eventCount, error: countError } = await supabase
+        .from('ai_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score');
+
+      if (countError) {
+        throw new Error(`Failed to count events: ${countError.message}`);
+      }
+
+      expect(eventCount).toBe(FREE_TIER_LIMIT - 1);
+      console.log(`Successfully created ${eventCount} events (one less than limit)`);
+
+      // Reset scoring status
+      await resetScoringStatus(testRecord.portalId, testRecord.objectId, testRecord.objectType);
+      
+      // First attempt - should succeed because we're one under the limit
+      console.log('\nAttempting first score (should succeed)...');
+      try {
+        // Get current subscription details for debugging
+        const { data: subscription, error: subError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('metadata->portal_id', testRecord.portalId)
+          .eq('status', 'active')
+          .single();
+        
+        console.log('Active subscription:', subscription || 'None (free tier)');
+
+        // Get current period scores for debugging
+        const { data: scores, error: scoresError } = await supabase
+          .from('ai_events')
+          .select('created_at')
+          .eq('portal_id', testRecord.portalId)
+          .eq('event_type', 'score')
+          .order('created_at', { ascending: false });
+
+        console.log('Current scores:', {
+          total: scores?.length || 0,
+          oldest: scores?.[scores.length - 1]?.created_at,
+          newest: scores?.[0]?.created_at
+        });
+
+        const firstAttempt = await initiateScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType
+        );
+
+        console.log('First attempt response:', {
+          status: firstAttempt.status,
+          data: firstAttempt.data
+        });
+
+        expect(firstAttempt.status).toBe(200);
+        expect(firstAttempt.data).toMatchObject({
+          success: true,
+          message: 'Scoring process started'
+        });
+
+        // Wait for first scoring to complete
+        await waitForScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType,
+          {
+            onPolling: (status, attempt, max) => {
+              console.log(`First scoring status: ${status.scoring_status} (attempt ${attempt + 1}/${max})`);
+            }
+          }
+        );
+
+        // Second attempt - should fail because we're now at the limit
+        console.log('\nAttempting second score (should fail)...');
+        const secondAttempt = await initiateScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType
+        );
+
+        console.log('Second attempt response:', {
+          status: secondAttempt.status,
+          data: secondAttempt.data
+        });
+
+        expect(secondAttempt.status).toBe(400);
+        expect(secondAttempt.data).toMatchObject({
+          success: false,
+          error: expect.stringContaining('Scoring limit reached')
+        });
+
+      } catch (error) {
+        console.error('Error during test:', error);
+        throw error;
+      } finally {
+        // Clean up test events
+        console.log('\nCleaning up test events...');
+        await supabase
+          .from('ai_events')
+          .delete()
+          .eq('portal_id', testRecord.portalId)
+          .eq('event_type', 'score');
+      }
+    }, 70000); // 70 second timeout
+  });
 
 }); 
