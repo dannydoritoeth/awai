@@ -134,7 +134,7 @@ export default function PartnerPage() {
 
             <div className="text-center">
               <a
-                href="/apply"
+                href="mailto:scott@acceleratewith.ai"
                 className="inline-block bg-[#0066FF] text-white px-8 py-4 rounded-lg font-semibold hover:bg-[#0052CC] transition-colors"
               >
                 Apply to Join the Partner Program
