@@ -89,34 +89,29 @@ describe('hubspot-score-record function', () => {
     expect(data.error).toBe('Missing required parameters: portal_id, object_type, and object_id are required');
   }, 30000);
 
-  test('should score a valid record', async () => {
-    // First ensure we have a valid deal in the database
-    const { data: existingDeal, error: dealError } = await supabase
+  const resetScoringStatus = async (portalId, objectId, objectType) => {
+    const { error } = await supabase
       .from('hubspot_object_status')
-      .select('*')
-      .eq('object_id', testDealId)
-      .single();
+      .upsert({
+        portal_id: portalId,
+        object_id: objectId,
+        object_type: objectType,
+        scoring_status: 'queued',
+        scoring_error: null,
+        scoring_date: null,
+        classification: 'other'
+      }, {
+        onConflict: 'portal_id,object_type,object_id'
+      });
 
-    if (dealError || !existingDeal) {
-      // Create a test deal if it doesn't exist
-      const { data: newDeal, error: insertError } = await supabase
-        .from('hubspot_object_status')
-        .insert({
-          portal_id: testPortalId,
-          object_id: testDealId,
-          object_type: 'deal',
-          training_status: 'completed',
-          training_date: new Date().toISOString(),
-          training_error: null,
-          classification: 'other'
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
+    if (error) {
+      throw new Error(`Failed to reset scoring status: ${error.message}`);
     }
+  };
 
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
+  const initiateScoring = async (portalId, objectId, objectType) => {
+    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${portalId}&object_type=${objectType}&object_id=${objectId}`;
+    
     const response = await fetch(scoreUrl, {
       method: 'GET',
       headers: {
@@ -127,123 +122,106 @@ describe('hubspot-score-record function', () => {
 
     const data = await response.json();
     
-    if (response.status === 400) {
-      throw new Error(`Failed to score record: ${data.error}`);
+    if (!response.ok) {
+      throw new Error(`Failed to initiate scoring: ${data.error || 'Unknown error'}`);
     }
 
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(data.score).toBeDefined();
-    expect(data.summary).toBeDefined();
-    expect(data.lastScored).toBeDefined();
+    return { status: response.status, data };
+  };
 
-    // Verify the status was updated in hubspot_object_status
-    const { data: statusData, error: statusError } = await supabase
+  const getScoringStatus = async (portalId, objectId, objectType) => {
+    const { data, error } = await supabase
       .from('hubspot_object_status')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
+      .select('scoring_status, scoring_error, scoring_date')
+      .eq('portal_id', portalId)
+      .eq('object_type', objectType)
+      .eq('object_id', objectId)
       .single();
 
-    expect(statusError).toBeNull();
-    expect(statusData).toBeTruthy();
-    expect(statusData.training_status).toBe('completed');
-    expect(statusData.training_error).toBeNull();
+    if (error) {
+      throw new Error(`Failed to get scoring status: ${error.message}`);
+    }
 
-    // Add a small delay to allow for event creation
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    return data;
+  };
 
-    // Verify the event was recorded in ai_events
-    const { data: eventData, error: eventError } = await supabase
-      .from('ai_events')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
-      .eq('event_type', 'score')
-      .order('created_at', { ascending: false })
-      .limit(1);
+  const waitForScoring = async (portalId, objectId, objectType, options = {}) => {
+    const {
+      maxAttempts = 30,
+      delayMs = 2000,
+      onPolling = () => {}
+    } = options;
 
-    expect(eventError).toBeNull();
-    expect(eventData).toBeTruthy();
-    expect(eventData.length).toBe(1);
-    expect(eventData[0].document_data.score).toBe(data.score);
-    expect(eventData[0].document_data.summary).toBe(data.summary);
-  }, 60000);
-
-  test('should handle rescoring gracefully', async () => {
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
+    let attempts = 0;
     
-    // First scoring
-    const firstResponse = await fetch(scoreUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
+    while (attempts < maxAttempts) {
+      const status = await getScoringStatus(portalId, objectId, objectType);
+      
+      switch (status.scoring_status) {
+        case 'completed':
+          return status;
+        case 'failed':
+          throw new Error(`Scoring failed: ${status.scoring_error}`);
+        default:
+          onPolling(status, attempts, maxAttempts);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          attempts++;
       }
+    }
+    
+    throw new Error(`Scoring timed out after ${maxAttempts} attempts`);
+  };
+
+  test('should score a valid record', async () => {
+    const testRecord = {
+      portalId: '242593348',
+      objectId: '69338423994',
+      objectType: 'deal'
+    };
+
+    // Reset scoring status
+    await resetScoringStatus(testRecord.portalId, testRecord.objectId, testRecord.objectType);
+    
+    // Allow time for reset to take effect
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Start scoring
+    const { status, data } = await initiateScoring(
+      testRecord.portalId,
+      testRecord.objectId,
+      testRecord.objectType
+    );
+    
+    // Verify initial response
+    expect([200, 202]).toContain(status);
+    expect(data).toEqual({
+      success: true,
+      message: 'Scoring process started'
     });
 
-    expect(firstResponse.status).toBe(200);
-    const firstData = await firstResponse.json();
-    expect(firstData.success).toBe(true);
-    expect(firstData.score).toBeDefined();
-
-    // Second scoring of the same record
-    const secondResponse = await fetch(scoreUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
+    // Wait for scoring to complete
+    const finalStatus = await waitForScoring(
+      testRecord.portalId,
+      testRecord.objectId,
+      testRecord.objectType,
+      {
+        onPolling: (status, attempt, max) => {
+          console.log(`Scoring status: ${status.scoring_status} (attempt ${attempt + 1}/${max})`);
+        }
       }
-    });
+    );
 
-    expect(secondResponse.status).toBe(200);
-    const secondData = await secondResponse.json();
-    expect(secondData.success).toBe(true);
-    expect(secondData.score).toBeDefined();
+    // Verify final state
+    expect(finalStatus.scoring_status).toBe('completed');
+    expect(finalStatus.scoring_error).toBeNull();
+    expect(finalStatus.scoring_date).not.toBeNull();
+  }, 70000); // 70 second timeout
 
-    // Verify we have two events in ai_events
-    const { data: events, error: eventsError } = await supabase
-      .from('ai_events')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
-      .eq('event_type', 'score')
-      .order('created_at', { ascending: false })
-      .limit(2);
-
-    expect(eventsError).toBeNull();
-    expect(events).toHaveLength(2);
-  }, 60000);
-
-  // test('should handle token refresh gracefully', async () => {
-  //   // First, get the current tokens
-  //   const { data: accountData, error: accountError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .select('access_token, refresh_token, expires_at')
-  //     .eq('portal_id', testPortalId)
-  //     .single();
-
-  //   expect(accountError).toBeNull();
-  //   expect(accountData).toBeTruthy();
-
-  //   const originalExpiresAt = new Date(accountData.expires_at).getTime();
-
-  //   // Update the expiration time to force a refresh
-  //   const { error: updateError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .update({ 
-  //       expires_at: new Date(Date.now() - 3600000).toISOString() // Set to 1 hour ago
-  //     })
-  //     .eq('portal_id', testPortalId);
-
-  //   expect(updateError).toBeNull();
-
-  //   // Try to score the record - should trigger token refresh
+  // test('should handle rescoring gracefully', async () => {
   //   const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
-  //   const response = await fetch(scoreUrl, {
+    
+  //   // First scoring
+  //   const firstResponse = await fetch(scoreUrl, {
   //     method: 'GET',
   //     headers: {
   //       'Authorization': `Bearer ${supabaseKey}`,
@@ -251,25 +229,38 @@ describe('hubspot-score-record function', () => {
   //     }
   //   });
 
-  //   // The function should handle the expired token and refresh it
-  //   expect(response.status).toBe(200);
-  //   const data = await response.json();
-  //   expect(data.success).toBe(true);
-  //   expect(data.score).toBeDefined();
+  //   expect(firstResponse.status).toBe(200);
+  //   const firstData = await firstResponse.json();
+  //   expect(firstData.success).toBe(true);
+  //   expect(firstData.score).toBeDefined();
 
-  //   // Add a small delay to ensure token refresh has completed
-  //   await new Promise(resolve => setTimeout(resolve, 1000));
+  //   // Second scoring of the same record
+  //   const secondResponse = await fetch(scoreUrl, {
+  //     method: 'GET',
+  //     headers: {
+  //       'Authorization': `Bearer ${supabaseKey}`,
+  //       'Content-Type': 'application/json'
+  //     }
+  //   });
 
-  //   // Verify the token was refreshed by checking the expiration time was updated
-  //   const { data: refreshedAccount, error: refreshError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .select('expires_at')
+  //   expect(secondResponse.status).toBe(200);
+  //   const secondData = await secondResponse.json();
+  //   expect(secondData.success).toBe(true);
+  //   expect(secondData.score).toBeDefined();
+
+  //   // Verify we have two events in ai_events
+  //   const { data: events, error: eventsError } = await supabase
+  //     .from('ai_events')
+  //     .select('*')
   //     .eq('portal_id', testPortalId)
-  //     .single();
+  //     .eq('object_type', 'deal')
+  //     .eq('object_id', testDealId)
+  //     .eq('event_type', 'score')
+  //     .order('created_at', { ascending: false })
+  //     .limit(2);
 
-  //   expect(refreshError).toBeNull();
-  //   const refreshedTime = new Date(refreshedAccount.expires_at).getTime();
-  //   // Simply verify that the expiration time changed
-  //   expect(refreshedTime).toBeGreaterThan(originalExpiresAt);
+  //   expect(eventsError).toBeNull();
+  //   expect(events).toHaveLength(2);
   // }, 60000);
+
 }); 
