@@ -10,7 +10,7 @@ declare const Deno: {
 export interface Subscription {
   id: string;
   status: 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
-  plan_tier: 'STARTER' | 'GROWTH' | 'PRO';
+  plan_tier: 'starter' | 'growth' | 'pro';
   current_period_start: string;
   current_period_end: string;
   cancel_at_period_end: boolean;
@@ -31,7 +31,7 @@ export interface SubscriptionStatus {
   isCanceledButActive: boolean;
   expiresAt: Date;
   isExpiringSoon: boolean;
-  tier: Subscription['plan_tier'] | 'FREE';
+  tier: Subscription['plan_tier'] | 'free';
   amount: number | null;
   currency: string | null;
   billingInterval: string | null;
@@ -69,7 +69,7 @@ export class SubscriptionService {
           isCanceledButActive: false,
           expiresAt: new Date(),
           isExpiringSoon: false,
-          tier: 'FREE',
+          tier: 'free',
           amount: null,
           currency: null,
           billingInterval: null
@@ -107,12 +107,12 @@ export class SubscriptionService {
     if (!status?.isActive) return false;
 
     const tierFeatures: Record<Subscription['plan_tier'], string[]> = {
-      STARTER: ['basic_feature', 'another_basic_feature'],
-      GROWTH: ['basic_feature', 'another_basic_feature', 'advanced_feature'],
-      PRO: ['basic_feature', 'another_basic_feature', 'advanced_feature', 'pro_feature']
+      starter: ['basic_feature', 'another_basic_feature'],
+      growth: ['basic_feature', 'another_basic_feature', 'advanced_feature'],
+      pro: ['basic_feature', 'another_basic_feature', 'advanced_feature', 'pro_feature']
     };
 
-    return status.tier !== 'FREE' && tierFeatures[status.tier]?.includes(feature);
+    return status.tier !== 'free' && tierFeatures[status.tier]?.includes(feature);
   }
 
   /**
@@ -125,18 +125,18 @@ export class SubscriptionService {
     if (!status?.tier) return this.getFreeSubscriptionLimits();
 
     const limits: Record<Subscription['plan_tier'], Record<string, number>> = {
-      STARTER: {
+      starter: {
         maxScores: 750
       },
-      GROWTH: {
+      growth: {
         maxScores: 7500
       },
-      PRO: {
+      pro: {
         maxScores: 3000
       }
     };
 
-    return status.tier === 'FREE' ? this.getFreeSubscriptionLimits() : limits[status.tier];
+    return status.tier === 'free' ? this.getFreeSubscriptionLimits() : limits[status.tier];
   }
 
   private getFreeSubscriptionLimits(): Record<string, number> {
@@ -179,43 +179,66 @@ export class SubscriptionService {
     periodEnd: Date;
   }> {
     try {
-      const { data, error } = await this.supabase
-        .rpc('get_current_period_score_count', { portal_id_param: portalId });
-      
-      if (error) throw error;
-      
-      // Validate all numeric fields to prevent NaN
-      const scoresUsed = data?.scores_used !== null && !isNaN(data?.scores_used) ? 
-                        Number(data.scores_used) : 0;
-      
-      const maxScores = data?.max_scores !== null && !isNaN(data?.max_scores) ? 
-                       Number(data.max_scores) : 50; // Default to 50 if not specified
-      
-      // Use current date as fallback if dates are invalid
-      const now = new Date();
-      const oneMonthLater = new Date(now);
-      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
-      
-      // Validate dates
-      let periodStart, periodEnd;
-      try {
-        periodStart = data?.period_start ? new Date(data.period_start) : now;
-        // Check if date is valid
-        if (isNaN(periodStart.getTime())) periodStart = now;
-      } catch (e) {
-        periodStart = now;
+      // Get current subscription period
+      const { data: subscription, error: subError } = await this.supabase
+        .from('subscriptions')
+        .select('current_period_start, current_period_end, plan_tier, status')
+        .eq('metadata->portal_id', portalId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (subError && subError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw subError;
       }
-      
-      try {
-        periodEnd = data?.period_end ? new Date(data.period_end) : oneMonthLater;
-        // Check if date is valid
-        if (isNaN(periodEnd.getTime())) periodEnd = oneMonthLater;
-      } catch (e) {
-        periodEnd = oneMonthLater;
+
+      // Set period and max scores based on subscription
+      let periodStart: Date;
+      let periodEnd: Date;
+      let maxScores: number;
+
+      if (!subscription) {
+        // Free tier defaults
+        periodStart = new Date();
+        periodStart.setHours(0, 0, 0, 0); // Start of today
+        periodEnd = new Date(periodStart);
+        periodEnd.setMonth(periodEnd.getMonth() + 1); // One month from start
+        maxScores = 50; // Free tier limit
+      } else {
+        periodStart = new Date(subscription.current_period_start);
+        periodEnd = new Date(subscription.current_period_end);
+        
+        // Set max scores based on plan tier
+        maxScores = (() => {
+          const tier = subscription.plan_tier.toLowerCase();
+          switch (tier) {
+            case 'pro': return 3000;
+            case 'growth': return 7500;
+            case 'starter': return 750;
+            default: return 50; // Free tier or unknown
+          }
+        })();
       }
+
+      // Count scores used in current period
+      const { data: scoreCount, error: countError } = await this.supabase
+        .from('ai_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('portal_id', portalId)
+        .eq('event_type', 'score')
+        .gte('created_at', periodStart.toISOString())
+        .lt('created_at', periodEnd.toISOString())
+        .eq('document_data->status', 'completed');
+
+      if (countError) {
+        throw countError;
+      }
+
+      const scoresUsed = scoreCount?.count || 0;
       
       return {
-        scoresUsed,
+        scoresUsed: Number(scoresUsed),
         maxScores,
         periodStart,
         periodEnd

@@ -7,6 +7,7 @@ import { decrypt } from '../_shared/encryption.ts';
 import { handleApiCall } from '../_shared/apiHandler.ts';
 import { ScoringService } from '../_shared/scoringService.ts';
 import { AIConfig } from '../_shared/types.ts';
+import { SubscriptionService } from '../_shared/subscriptionService.ts';
 
 const logger = new Logger("score-record");
 
@@ -42,6 +43,26 @@ serve(async (req) => {
         JSON.stringify({
           success: false,
           error: 'Missing required parameters: portal_id, object_type, and object_id are required'
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Check if portal can score more leads
+    const subscriptionService = new SubscriptionService(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+    const { canScore, remaining, periodEnd } = await subscriptionService.canScoreLead(portal_id);
+    
+    if (!canScore) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Scoring limit reached. You have ${remaining} scores remaining. Next reset at ${periodEnd.toISOString()}`
         }),
         {
           status: 400,
@@ -145,25 +166,8 @@ serve(async (req) => {
             lastScored: result.lastScored
           });
 
-          // Record scoring event
-          const { error: eventError } = await supabaseClient
-            .from('ai_events')
-            .insert({
-              portal_id,
-              event_type: 'score',
-              object_type,
-              object_id,
-              classification: 'other',
-              document_data: {
-                score: result.score,
-                summary: result.summary
-              },
-              created_at: new Date().toISOString()
-            });
-
-          if (eventError) {
-            throw new Error(`Failed to record scoring event: ${eventError.message}`);
-          }
+          // Record scoring event is now handled by subscriptionService.recordScore()
+          // No need to duplicate the event here
 
           // Update status to completed
           const now = new Date().toISOString();
@@ -230,6 +234,25 @@ serve(async (req) => {
 
   } catch (error) {
     logger.error('Unexpected error:', error);
+    
+    // Also update status to failed for unexpected errors
+    if (portal_id && object_type && object_id) {
+      try {
+        await supabaseClient
+          .from('hubspot_object_status')
+          .update({
+            scoring_status: 'failed',
+            scoring_error: error.message || 'An unexpected error occurred',
+            last_processed: new Date().toISOString()
+          })
+          .eq('portal_id', portal_id)
+          .eq('object_type', object_type)
+          .eq('object_id', object_id);
+      } catch (statusError) {
+        logger.error('Error updating object status:', statusError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: false,
