@@ -9,12 +9,45 @@ import {
   hubspot,
   Divider,
   Toggle,
+  Link,
 } from "@hubspot/ui-extensions";
 import { SUPABASE_URL } from "./config";
 
 // Supabase function URLs
 const SUPABASE_SCORE_RECORD_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-record`;
 const SUPABASE_SCORE_SUMMARY_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-summary`;
+
+const UsageStats = ({ usageStats, planInfo, portalId }) => {
+  if (!usageStats) return null;
+
+  const upgradeUrl = `https://acceleratewith.ai/pricing?portal_id=${portalId}`;
+  const isFree = planInfo?.tier === 'free';
+  const isLowOnScores = usageStats.remaining <= 50;
+  
+  let upgradeMessage = 'Need more scores?';
+  if (isFree) {
+    upgradeMessage = 'Upgrade to score more';
+  } else if (isLowOnScores) {
+    upgradeMessage = 'Running low? Get more scores';
+  } else {
+    upgradeMessage = 'Increase your scoring limit';
+  }
+  
+  return (
+    <Box>
+      <Flex direction="column" gap="xs">
+        <Text format={{ fontSize: "sm", color: "gray" }}>
+          {usageStats.used} of {usageStats.total} scores used this period
+        </Text>
+        <Text format={{ fontSize: "sm", color: "gray" }}>
+          <Link href={upgradeUrl} target="_blank">
+            {upgradeMessage}
+          </Link>
+        </Text>
+      </Flex>
+    </Box>
+  );
+};
 
 const BaseScoring = ({ 
   context, 
@@ -170,19 +203,15 @@ const BaseScoring = ({
                   </Flex>
                 ))}
               </Flex>
-              
-              {usageStats && (
-                <Box marginTop="xl">
-                  <Text format={{ fontWeight: "bold" }} variant="body">
-                    Usage: {usageStats.used}/{usageStats.total} ({usageStats.remaining} remaining)
-                  </Text>
-                </Box>
-              )}
             </>
           ) : (
             <Text>No score available</Text>
           )}
         </Box>
+
+        {scoring && (
+          <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
+        )}
 
         <Button
           variant="secondary"
@@ -193,12 +222,12 @@ const BaseScoring = ({
           {scoring ? 'Scoring in progress...' : 'Score Now'}
         </Button>
 
-        {scoring && (
-          <>
-            <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
-          </>
-        )}
-        
+        <UsageStats 
+          usageStats={usageStats} 
+          planInfo={planInfo}
+          portalId={context.portal.id}
+        />
+
         {/* <Flex gap="md" alignItems="center">
           <Toggle 
             checked={showDebug}
