@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { DatabaseService } from './databaseService.ts';
 
 // Add Deno declaration for TypeScript
 declare const Deno: {
@@ -10,7 +10,7 @@ declare const Deno: {
 export interface Subscription {
   id: string;
   status: 'active' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'unpaid';
-  plan_tier: 'STARTER' | 'GROWTH' | 'PRO';
+  plan_tier: 'starter' | 'growth' | 'pro';
   current_period_start: string;
   current_period_end: string;
   cancel_at_period_end: boolean;
@@ -31,17 +31,17 @@ export interface SubscriptionStatus {
   isCanceledButActive: boolean;
   expiresAt: Date;
   isExpiringSoon: boolean;
-  tier: Subscription['plan_tier'] | 'FREE';
+  tier: Subscription['plan_tier'] | 'free';
   amount: number | null;
   currency: string | null;
   billingInterval: string | null;
 }
 
 export class SubscriptionService {
-  private supabase: SupabaseClient;
+  private dbService: DatabaseService;
 
   constructor(supabaseUrl: string, supabaseKey: string) {
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    this.dbService = new DatabaseService(supabaseUrl, supabaseKey);
   }
 
   /**
@@ -51,17 +51,7 @@ export class SubscriptionService {
    */
   async getSubscriptionStatus(portalId: string): Promise<SubscriptionStatus | null> {
     try {
-      const { data: subscription, error } = await this.supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('metadata->portal_id', portalId)
-        .eq('status', 'active')
-        .single();
-
-      if (error) {
-        console.error('Error fetching subscription:', error);
-        return null;
-      }
+      const subscription = await this.dbService.getActiveSubscription(portalId);
 
       if (!subscription) {
         return {
@@ -69,7 +59,7 @@ export class SubscriptionService {
           isCanceledButActive: false,
           expiresAt: new Date(),
           isExpiringSoon: false,
-          tier: 'FREE',
+          tier: 'free',
           amount: null,
           currency: null,
           billingInterval: null
@@ -80,16 +70,22 @@ export class SubscriptionService {
       const expiresAt = new Date(subscription.current_period_end);
       const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-      return {
+      // Ensure plan_tier is lowercase for consistent comparison
+      const tier = (subscription.plan_tier || 'free').toLowerCase() as Subscription['plan_tier'] | 'free';
+
+      const status = {
         isActive: subscription.status === 'active' && expiresAt > now,
         isCanceledButActive: subscription.status === 'active' && subscription.cancel_at_period_end === true,
         expiresAt,
         isExpiringSoon: expiresAt <= sevenDaysFromNow && expiresAt > now,
-        tier: subscription.plan_tier,
-        amount: subscription.amount,
-        currency: subscription.currency,
-        billingInterval: subscription.billing_interval
+        tier,
+        amount: subscription.amount || 0,
+        currency: subscription.currency || 'USD',
+        billingInterval: subscription.billing_interval || 'month'
       };
+
+      console.log('Returning subscription status:', status);
+      return status;
     } catch (error) {
       console.error('Error in getSubscriptionStatus:', error);
       return null;
@@ -107,12 +103,12 @@ export class SubscriptionService {
     if (!status?.isActive) return false;
 
     const tierFeatures: Record<Subscription['plan_tier'], string[]> = {
-      STARTER: ['basic_feature', 'another_basic_feature'],
-      GROWTH: ['basic_feature', 'another_basic_feature', 'advanced_feature'],
-      PRO: ['basic_feature', 'another_basic_feature', 'advanced_feature', 'pro_feature']
+      starter: ['basic_feature', 'another_basic_feature'],
+      growth: ['basic_feature', 'another_basic_feature', 'advanced_feature'],
+      pro: ['basic_feature', 'another_basic_feature', 'advanced_feature', 'pro_feature']
     };
 
-    return status.tier !== 'FREE' && tierFeatures[status.tier]?.includes(feature);
+    return status.tier !== 'free' && tierFeatures[status.tier]?.includes(feature);
   }
 
   /**
@@ -125,18 +121,18 @@ export class SubscriptionService {
     if (!status?.tier) return this.getFreeSubscriptionLimits();
 
     const limits: Record<Subscription['plan_tier'], Record<string, number>> = {
-      STARTER: {
+      starter: {
         maxScores: 750
       },
-      GROWTH: {
+      growth: {
         maxScores: 7500
       },
-      PRO: {
+      pro: {
         maxScores: 3000
       }
     };
 
-    return status.tier === 'FREE' ? this.getFreeSubscriptionLimits() : limits[status.tier];
+    return status.tier === 'free' ? this.getFreeSubscriptionLimits() : limits[status.tier];
   }
 
   private getFreeSubscriptionLimits(): Record<string, number> {
@@ -179,40 +175,38 @@ export class SubscriptionService {
     periodEnd: Date;
   }> {
     try {
-      const { data, error } = await this.supabase
-        .rpc('get_current_period_score_count', { portal_id_param: portalId });
-      
-      if (error) throw error;
-      
-      // Validate all numeric fields to prevent NaN
-      const scoresUsed = data?.scores_used !== null && !isNaN(data?.scores_used) ? 
-                        Number(data.scores_used) : 0;
-      
-      const maxScores = data?.max_scores !== null && !isNaN(data?.max_scores) ? 
-                       Number(data.max_scores) : 50; // Default to 50 if not specified
-      
-      // Use current date as fallback if dates are invalid
-      const now = new Date();
-      const oneMonthLater = new Date(now);
-      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
-      
-      // Validate dates
-      let periodStart, periodEnd;
-      try {
-        periodStart = data?.period_start ? new Date(data.period_start) : now;
-        // Check if date is valid
-        if (isNaN(periodStart.getTime())) periodStart = now;
-      } catch (e) {
-        periodStart = now;
+      const subscription = await this.dbService.getActiveSubscription(portalId);
+
+      // Set period and max scores based on subscription
+      let periodStart: Date;
+      let periodEnd: Date;
+      let maxScores: number;
+
+      if (!subscription) {
+        // Free tier defaults
+        periodStart = new Date();
+        periodStart.setHours(0, 0, 0, 0); // Start of today
+        periodEnd = new Date(periodStart);
+        periodEnd.setMonth(periodEnd.getMonth() + 1); // One month from start
+        maxScores = 50; // Free tier limit
+      } else {
+        periodStart = new Date(subscription.current_period_start);
+        periodEnd = new Date(subscription.current_period_end);
+        
+        // Set max scores based on plan tier
+        maxScores = (() => {
+          const tier = subscription.plan_tier.toLowerCase();
+          switch (tier) {
+            case 'pro': return 3000;
+            case 'growth': return 7500;
+            case 'starter': return 750;
+            default: return 50; // Free tier or unknown
+          }
+        })();
       }
-      
-      try {
-        periodEnd = data?.period_end ? new Date(data.period_end) : oneMonthLater;
-        // Check if date is valid
-        if (isNaN(periodEnd.getTime())) periodEnd = oneMonthLater;
-      } catch (e) {
-        periodEnd = oneMonthLater;
-      }
+
+      // Count scores used in current period
+      const scoresUsed = await this.dbService.getScoreCount(portalId, periodStart, periodEnd);
       
       return {
         scoresUsed,
@@ -229,7 +223,7 @@ export class SubscriptionService {
       
       return {
         scoresUsed: 0,
-        maxScores: 50, // Default free tier limit
+        maxScores: 50, // Free tier limit on error
         periodStart: now,
         periodEnd: oneMonthLater
       };
@@ -352,14 +346,7 @@ export class SubscriptionService {
       eventRecord.log_data = logData;
     }
     
-    // Insert the record into the database
-    const { error } = await this.supabase
-      .from('ai_events')
-      .insert(eventRecord);
-
-    if (error) {
-      throw new Error(`Failed to record score: ${error.message}`);
-    }
+    await this.dbService.recordScoreEvent(eventRecord);
   }
 
   /**
@@ -387,12 +374,6 @@ export class SubscriptionService {
       created_at: new Date().toISOString()
     };
 
-    const { error } = await this.supabase
-      .from('ai_events')
-      .insert(eventRecord);
-
-    if (error) {
-      throw new Error(`Failed to record training event: ${error.message}`);
-    }
+    await this.dbService.recordTrainingEvent(eventRecord);
   }
 } 

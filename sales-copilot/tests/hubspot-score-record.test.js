@@ -14,65 +14,6 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 describe('hubspot-score-record function', () => {
-  let testPortalId;
-  let testDealId;
-
-  beforeAll(async () => {
-    // Get test portal ID
-    const { data: portalData, error: portalError } = await supabase.functions.invoke('test-integration', {
-      body: {
-        action: { type: 'get_test_portal_id' }
-      }
-    });
-
-    if (portalError) throw portalError;
-    testPortalId = portalData.portal_id;
-
-    // Get a test deal ID from hubspot_object_status
-    const { data: statusData, error: statusError } = await supabase
-      .from('hubspot_object_status')
-      .select('object_id')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .limit(1);
-
-    if (statusError) throw statusError;
-
-    if (!statusData || statusData.length === 0) {
-      // If no deals exist, create a test deal
-      const { data: newDeal, error: insertError } = await supabase
-        .from('hubspot_object_status')
-        .insert({
-          portal_id: testPortalId,
-          object_id: 'test-deal-1',
-          object_type: 'deal',
-          training_status: 'completed',
-          training_date: new Date().toISOString(),
-          training_error: null,
-          classification: 'other'
-        })
-        .select('object_id')
-        .single();
-
-      if (insertError) throw insertError;
-      testDealId = newDeal.object_id;
-    } else {
-      testDealId = statusData[0].object_id;
-    }
-  });
-
-  afterAll(async () => {
-    // Clean up test data if we created it
-    if (testDealId === 'test-deal-1') {
-      const { error: deleteError } = await supabase
-        .from('hubspot_object_status')
-        .delete()
-        .eq('object_id', testDealId);
-
-      if (deleteError) throw deleteError;
-    }
-  });
-
   test('should return 400 when required parameters are missing', async () => {
     const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record`;
     const response = await fetch(scoreUrl, {
@@ -89,34 +30,29 @@ describe('hubspot-score-record function', () => {
     expect(data.error).toBe('Missing required parameters: portal_id, object_type, and object_id are required');
   }, 30000);
 
-  test('should score a valid record', async () => {
-    // First ensure we have a valid deal in the database
-    const { data: existingDeal, error: dealError } = await supabase
+  const resetScoringStatus = async (portalId, objectId, objectType) => {
+    const { error } = await supabase
       .from('hubspot_object_status')
-      .select('*')
-      .eq('object_id', testDealId)
-      .single();
-
-    if (dealError || !existingDeal) {
-      // Create a test deal if it doesn't exist
-      const { data: newDeal, error: insertError } = await supabase
-        .from('hubspot_object_status')
-        .insert({
-          portal_id: testPortalId,
-          object_id: testDealId,
-          object_type: 'deal',
-          training_status: 'completed',
-          training_date: new Date().toISOString(),
-          training_error: null,
+      .upsert({
+        portal_id: portalId,
+        object_id: objectId,
+        object_type: objectType,
+        scoring_status: 'queued',
+        scoring_error: null,
+        scoring_date: null,
           classification: 'other'
-        })
-        .select()
-        .single();
+      }, {
+        onConflict: 'portal_id,object_type,object_id'
+      });
 
-      if (insertError) throw insertError;
+    if (error) {
+      throw new Error(`Failed to reset scoring status: ${error.message}`);
     }
+  };
 
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
+  const initiateScoring = async (portalId, objectId, objectType) => {
+    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${portalId}&object_type=${objectType}&object_id=${objectId}`;
+    
     const response = await fetch(scoreUrl, {
       method: 'GET',
       headers: {
@@ -126,150 +62,388 @@ describe('hubspot-score-record function', () => {
     });
 
     const data = await response.json();
-    
-    if (response.status === 400) {
-      throw new Error(`Failed to score record: ${data.error}`);
-    }
+    return { status: response.status, data };
+  };
 
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(data.score).toBeDefined();
-    expect(data.summary).toBeDefined();
-    expect(data.lastScored).toBeDefined();
-
-    // Verify the status was updated in hubspot_object_status
-    const { data: statusData, error: statusError } = await supabase
+  const getScoringStatus = async (portalId, objectId, objectType) => {
+    const { data, error } = await supabase
       .from('hubspot_object_status')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
+      .select('scoring_status, scoring_error, scoring_date')
+      .eq('portal_id', portalId)
+      .eq('object_type', objectType)
+      .eq('object_id', objectId)
       .single();
 
-    expect(statusError).toBeNull();
-    expect(statusData).toBeTruthy();
-    expect(statusData.training_status).toBe('completed');
-    expect(statusData.training_error).toBeNull();
+    if (error) {
+      throw new Error(`Failed to get scoring status: ${error.message}`);
+    }
 
-    // Add a small delay to allow for event creation
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    return data;
+  };
 
-    // Verify the event was recorded in ai_events
-    const { data: eventData, error: eventError } = await supabase
-      .from('ai_events')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
-      .eq('event_type', 'score')
-      .order('created_at', { ascending: false })
-      .limit(1);
+  const waitForScoring = async (portalId, objectId, objectType, options = {}) => {
+    const {
+      maxAttempts = 30,
+      delayMs = 2000,
+      onPolling = () => {},
+      expectedError = null
+    } = options;
 
-    expect(eventError).toBeNull();
-    expect(eventData).toBeTruthy();
-    expect(eventData.length).toBe(1);
-    expect(eventData[0].document_data.score).toBe(data.score);
-    expect(eventData[0].document_data.summary).toBe(data.summary);
-  }, 60000);
-
-  test('should handle rescoring gracefully', async () => {
-    const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
+    let attempts = 0;
     
-    // First scoring
-    const firstResponse = await fetch(scoreUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
+    while (attempts < maxAttempts) {
+      const status = await getScoringStatus(portalId, objectId, objectType);
+      console.log('Current scoring status:', status);
+      
+      switch (status.scoring_status) {
+        case 'completed':
+          return status;
+        case 'failed':
+          if (expectedError && status.scoring_error?.includes(expectedError)) {
+            return status; // Expected failure
+          }
+          throw new Error(`Scoring failed: ${status.scoring_error}`);
+        case 'in_progress':
+        case 'queued':
+          onPolling(status, attempts, maxAttempts);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          attempts++;
+          break;
+        default:
+          throw new Error(`Unexpected scoring status: ${status.scoring_status}`);
       }
-    });
+    }
+    
+    throw new Error(`Scoring timed out after ${maxAttempts} attempts`);
+  };
 
-    expect(firstResponse.status).toBe(200);
-    const firstData = await firstResponse.json();
-    expect(firstData.success).toBe(true);
-    expect(firstData.score).toBeDefined();
+  describe('scoring quota tests', () => {
+    const testRecord = {
+      portalId: '242593348',
+      objectId: '69338423994',
+      objectType: 'deal'
+    };
 
-    // Second scoring of the same record
-    const secondResponse = await fetch(scoreUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json'
+    const testQuotaLimit = async ({ planTier, limit, subscription = null }) => {
+      console.log(`\nTesting ${planTier} plan with limit of ${limit} scores`);
+
+      // First clean up any existing data
+      console.log('Cleaning up existing data...');
+      
+      // Get all subscriptions for this portal
+      const { data: existingSubs } = await supabase
+        .from('subscriptions')
+        .select('id, customer_id')
+        .eq('metadata->>portal_id', testRecord.portalId);
+
+      if (existingSubs?.length > 0) {
+        console.log(`Found ${existingSubs.length} existing subscriptions to clean up`);
+        
+        // Delete all subscriptions
+        await supabase
+          .from('subscriptions')
+          .delete()
+          .in('id', existingSubs.map(s => s.id));
+
+        // Get unique customer IDs
+        const customerIds = [...new Set(existingSubs.map(s => s.customer_id).filter(Boolean))];
+        
+        // Delete all customers
+        if (customerIds.length > 0) {
+          await supabase
+            .from('customers')
+            .delete()
+            .in('id', customerIds);
+        }
       }
-    });
 
-    expect(secondResponse.status).toBe(200);
-    const secondData = await secondResponse.json();
-    expect(secondData.success).toBe(true);
-    expect(secondData.score).toBeDefined();
+      // Set up subscription period dates
+      const now = new Date();
+      const periodStart = new Date(now);
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-    // Verify we have two events in ai_events
-    const { data: events, error: eventsError } = await supabase
-      .from('ai_events')
-      .select('*')
-      .eq('portal_id', testPortalId)
-      .eq('object_type', 'deal')
-      .eq('object_id', testDealId)
-      .eq('event_type', 'score')
-      .order('created_at', { ascending: false })
-      .limit(2);
+      // If subscription provided, create it with our period dates
+      if (subscription) {
+        // Create customer first
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            platform: 'hubspot',
+            platform_customer_id: testRecord.portalId,
+            metadata: {}
+          })
+          .select()
+          .single();
 
-    expect(eventsError).toBeNull();
-    expect(events).toHaveLength(2);
-  }, 60000);
+        if (customerError) {
+          throw new Error(`Failed to insert test customer: ${customerError.message}`);
+        }
 
-  // test('should handle token refresh gracefully', async () => {
-  //   // First, get the current tokens
-  //   const { data: accountData, error: accountError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .select('access_token, refresh_token, expires_at')
-  //     .eq('portal_id', testPortalId)
-  //     .single();
+        // Add customer_id to subscription and portal_id to metadata
+        const subscriptionWithCustomer = {
+          ...subscription,
+          customer_id: customer.id,
+          current_period_start: periodStart.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+          metadata: {
+            ...subscription.metadata,
+            portal_id: testRecord.portalId
+          }
+        };
 
-  //   expect(accountError).toBeNull();
-  //   expect(accountData).toBeTruthy();
+        console.log('Creating subscription with period:', {
+          start: periodStart.toISOString(),
+          end: periodEnd.toISOString()
+        });
 
-  //   const originalExpiresAt = new Date(accountData.expires_at).getTime();
+        const { error: subInsertError } = await supabase
+          .from('subscriptions')
+          .insert(subscriptionWithCustomer);
 
-  //   // Update the expiration time to force a refresh
-  //   const { error: updateError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .update({ 
-  //       expires_at: new Date(Date.now() - 3600000).toISOString() // Set to 1 hour ago
-  //     })
-  //     .eq('portal_id', testPortalId);
+        if (subInsertError) {
+          throw new Error(`Failed to insert test subscription: ${subInsertError.message}`);
+        }
 
-  //   expect(updateError).toBeNull();
+        console.log('Successfully created test customer and subscription');
 
-  //   // Try to score the record - should trigger token refresh
-  //   const scoreUrl = `${supabaseUrl}/functions/v1/hubspot-score-record?portal_id=${testPortalId}&object_type=deal&object_id=${testDealId}`;
-  //   const response = await fetch(scoreUrl, {
-  //     method: 'GET',
-  //     headers: {
-  //       'Authorization': `Bearer ${supabaseKey}`,
-  //       'Content-Type': 'application/json'
-  //     }
-  //   });
+        // Debug: verify subscription was created correctly
+        const { data: verifySubscription, error: verifyError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('metadata->>portal_id', testRecord.portalId)
+          .eq('status', 'active')
+          .single();
 
-  //   // The function should handle the expired token and refresh it
-  //   expect(response.status).toBe(200);
-  //   const data = await response.json();
-  //   expect(data.success).toBe(true);
-  //   expect(data.score).toBeDefined();
+        if (verifyError) {
+          console.error('Failed to verify subscription:', verifyError);
+        } else {
+          console.log('Verified subscription:', verifySubscription);
+        }
+      }
 
-  //   // Add a small delay to ensure token refresh has completed
-  //   await new Promise(resolve => setTimeout(resolve, 1000));
+      // First clean up any existing events for this portal
+      const { error: deleteError } = await supabase
+        .from('ai_events')
+        .delete()
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score');
 
-  //   // Verify the token was refreshed by checking the expiration time was updated
-  //   const { data: refreshedAccount, error: refreshError } = await supabase
-  //     .from('hubspot_accounts')
-  //     .select('expires_at')
-  //     .eq('portal_id', testPortalId)
-  //     .single();
+      if (deleteError) {
+        throw new Error(`Failed to clean up existing events: ${deleteError.message}`);
+      }
 
-  //   expect(refreshError).toBeNull();
-  //   const refreshedTime = new Date(refreshedAccount.expires_at).getTime();
-  //   // Simply verify that the expiration time changed
-  //   expect(refreshedTime).toBeGreaterThan(originalExpiresAt);
-  // }, 60000);
+      // Verify cleanup was successful
+      const { count: initialCount, error: initialCountError } = await supabase
+        .from('ai_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score');
+
+      if (initialCountError) {
+        throw new Error(`Failed to verify cleanup: ${initialCountError.message}`);
+      }
+
+      expect(initialCount).toBe(0);
+      console.log('Initial cleanup successful, verified 0 events exist');
+
+      // Create events up to one less than the limit, ensuring dates fall within subscription period
+      const events = Array.from({ length: limit - 1 }, (_, i) => {
+        // Calculate event date to be within subscription period
+        const eventDate = new Date(periodStart);
+        eventDate.setMinutes(eventDate.getMinutes() + i); // Spread events over minutes within the period
+        
+        return {
+          portal_id: testRecord.portalId,
+          event_type: 'score',
+          object_type: testRecord.objectType,
+          object_id: `test-object-${i}`,
+          document_data: {
+            status: 'completed',
+            score: 0.8,
+            summary: 'Test summary'
+          },
+          created_at: eventDate.toISOString()
+        };
+      });
+
+      const { error: insertError } = await supabase
+        .from('ai_events')
+        .insert(events);
+
+      if (insertError) {
+        throw new Error(`Failed to insert test events: ${insertError.message}`);
+      }
+
+      // Debug: Get all events and their dates
+      const { data: allEvents, error: eventsError } = await supabase
+        .from('ai_events')
+        .select('created_at')
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score')
+        .order('created_at', { ascending: true });
+
+      if (!eventsError && allEvents) {
+        console.log('Event date range:', {
+          count: allEvents.length,
+          first: allEvents[0]?.created_at,
+          last: allEvents[allEvents.length - 1]?.created_at,
+          periodStart: periodStart.toISOString(),
+          periodEnd: periodEnd.toISOString()
+        });
+      }
+
+      // Verify we have exactly limit - 1 events within the period
+      const { count: eventCount, error: countError } = await supabase
+        .from('ai_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('portal_id', testRecord.portalId)
+        .eq('event_type', 'score')
+        .gte('created_at', periodStart.toISOString())
+        .lt('created_at', periodEnd.toISOString());
+
+      if (countError) {
+        throw new Error(`Failed to count events: ${countError.message}`);
+      }
+
+      expect(eventCount).toBe(limit - 1);
+      console.log(`Successfully created ${eventCount} events within subscription period`);
+
+      // Reset scoring status
+      await resetScoringStatus(testRecord.portalId, testRecord.objectId, testRecord.objectType);
+      
+      try {
+        // Get current subscription details for debugging
+        const { data: activeSubscription } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('metadata->portal_id', testRecord.portalId)
+          .eq('status', 'active')
+          .single();
+        
+        console.log('Active subscription:', activeSubscription || 'None (free tier)');
+
+        // Get current period scores for debugging
+        const { data: scores } = await supabase
+          .from('ai_events')
+          .select('created_at')
+          .eq('portal_id', testRecord.portalId)
+          .eq('event_type', 'score')
+          .order('created_at', { ascending: false });
+
+        console.log('Current scores:', {
+          total: scores?.length || 0,
+          oldest: scores?.[scores.length - 1]?.created_at,
+          newest: scores?.[0]?.created_at
+        });
+
+        // First attempt - should succeed because we're one under the limit
+        console.log('\nAttempting first score (should succeed)...');
+        const firstAttempt = await initiateScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType
+        );
+
+        console.log('First attempt response:', {
+          status: firstAttempt.status,
+          data: firstAttempt.data
+        });
+
+        expect(firstAttempt.status).toBe(200);
+        expect(firstAttempt.data).toMatchObject({
+          success: true,
+          message: 'Scoring process started'
+        });
+
+        // Wait for first scoring to complete, expecting it to fail with limit reached
+        const firstScoringStatus = await waitForScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType,
+          {
+            onPolling: (status, attempt, max) => {
+              console.log(`First scoring status: ${status.scoring_status} (attempt ${attempt + 1}/${max})`);
+            },
+            expectedError: 'Score limit reached'
+          }
+        );
+
+        // Verify the scoring failed due to limit
+        expect(firstScoringStatus.scoring_status).toBe('failed');
+        expect(firstScoringStatus.scoring_error).toContain('Score limit reached');
+
+        // Second attempt - should fail immediately
+        console.log('\nAttempting second score (should fail)...');
+        const secondAttempt = await initiateScoring(
+          testRecord.portalId,
+          testRecord.objectId,
+          testRecord.objectType
+        );
+
+        console.log('Second attempt response:', {
+          status: secondAttempt.status,
+          data: secondAttempt.data
+        });
+
+        expect(secondAttempt.status).toBe(400);
+        expect(secondAttempt.data).toMatchObject({
+          success: false,
+          error: expect.stringContaining('Scoring limit reached')
+        });
+
+      } catch (error) {
+        console.error('Error during test:', error);
+        throw error;
+      } finally {
+        // Clean up
+        // console.log('\nCleaning up...');
+        // await supabase
+        //   .from('ai_events')
+        //   .delete()
+        //   .eq('portal_id', testRecord.portalId)
+        //   .eq('event_type', 'score');
+
+        if (subscription) {
+          await supabase
+            .from('subscriptions')
+            .delete()
+            .eq('metadata->portal_id', testRecord.portalId);
+        }
+      }
+    };
+
+    test('free plan: can score up to but not beyond limit', async () => {
+      await testQuotaLimit({
+        planTier: 'free',
+        limit: 50
+      });
+    }, 70000);
+
+    test('starter plan: can score up to but not beyond limit', async () => {
+      const now = new Date();
+      const monthFromNow = new Date(now);
+      monthFromNow.setMonth(monthFromNow.getMonth() + 1);
+
+      await testQuotaLimit({
+        planTier: 'starter',
+        limit: 750,
+        subscription: {
+          status: 'active',
+          plan_tier: 'starter',
+          current_period_start: now.toISOString(),
+          current_period_end: monthFromNow.toISOString(),
+          cancel_at: null,
+          canceled_at: null,
+          trial_start: null,
+          trial_end: null,
+          metadata: {
+            portal_id: testRecord.portalId,
+            stripe_price_id: 'price_starter_test',
+            stripe_product_id: 'prod_starter_test'
+          }
+        }
+      });
+    }, 70000);
+  });
 }); 

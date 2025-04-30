@@ -6,6 +6,7 @@ import { Logger } from "../_shared/logger.ts";
 import { HubspotClient } from "../_shared/hubspotClient.ts";
 import { decrypt, encrypt } from "../_shared/encryption.ts";
 import { handleApiCall } from "../_shared/apiHandler.ts";
+import { SubscriptionService } from "../_shared/subscriptionService.ts";
 
 // Add Deno types
 declare const Deno: {
@@ -113,52 +114,37 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
-    // Get current period score count directly using the function from the migration
-    const { data: scoreData, error: scoreError } = await supabaseClient
-      .rpc('get_current_period_score_count', { portal_id_param: portal_id })
-      .single();
+    // Initialize services
+    const subscriptionService = new SubscriptionService(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+    );
 
-    if (scoreError) {
-      logger.error('Error getting score count:', {
-        error: scoreError,
-        portal_id
-      });
-    }
+    // Get subscription status and current period scores
+    const [status, scores] = await Promise.all([
+      subscriptionService.getSubscriptionStatus(portal_id),
+      subscriptionService.getCurrentPeriodScores(portal_id)
+    ]);
 
-    // Get subscription status directly for plan details
-    const { data: subscription, error: subError } = await supabaseClient
-      .from('subscriptions')
-      .select('*')
-      .filter('metadata->portal_id', 'eq', portal_id)
-      .eq('status', 'active')
-      .single();
-
-    if (subError) {
-      logger.error('Error getting subscription:', {
-        error: subError,
-        portal_id
-      });
-    }
-
-    // Format the response with available data
-    const summary: SummaryObject = {
+    // Format the response
+    const summary = {
       plan: {
-        tier: subscription?.plan_tier || 'FREE',
-        isActive: !!subscription,
-        isCanceledButActive: !!subscription?.cancel_at && !subscription?.canceled_at,
-        expiresAt: subscription?.cancel_at || null,
-        isExpiringSoon: false, // Can calculate this if needed
-        amount: 0, // Price amount would need to be retrieved from prices table if needed
-        currency: 'USD',
-        billingInterval: 'month' // Default to monthly
+        tier: status?.tier || 'free',
+        isActive: status?.isActive || false,
+        isCanceledButActive: status?.isCanceledButActive || false,
+        expiresAt: status?.expiresAt?.toISOString() || null,
+        isExpiringSoon: status?.isExpiringSoon || false,
+        amount: status?.amount || 0,
+        currency: status?.currency || 'USD',
+        billingInterval: status?.billingInterval || 'month'
       },
       scoring: {
-        used: scoreData?.scores_used || 0,
-        total: scoreData?.max_scores || 50, // Default to 50 for free tier
-        remaining: (scoreData?.max_scores || 50) - (scoreData?.scores_used || 0),
-        periodStart: scoreData?.period_start || new Date().toISOString(),
-        periodEnd: scoreData?.period_end || new Date().toISOString(),
-        percentageUsed: Math.round(((scoreData?.scores_used || 0) / (scoreData?.max_scores || 50)) * 100)
+        used: scores.scoresUsed,
+        total: scores.maxScores,
+        remaining: scores.maxScores - scores.scoresUsed,
+        periodStart: scores.periodStart.toISOString(),
+        periodEnd: scores.periodEnd.toISOString(),
+        percentageUsed: Math.round((scores.scoresUsed / scores.maxScores) * 100)
       }
     };
 
@@ -228,44 +214,18 @@ serve(async (req) => {
             ideal_client_summary: objectDetails.properties?.ideal_client_summary || null
           };
         } catch (apiError) {
-          // Implement manual token refresh if the handleApiCall approach fails
-          if (apiError.message?.includes('expired') || apiError.status === 401 || apiError.response?.status === 401) {
-            logger.info('Token expired, refreshing...');
-            
-            // Refresh the token
-            const newTokens = await refreshHubSpotToken(refreshToken);
-            
-            // Encrypt new tokens
-            const newEncryptedToken = await encrypt(newTokens.access_token, Deno.env.get('ENCRYPTION_KEY')!);
-            const newEncryptedRefreshToken = await encrypt(newTokens.refresh_token, Deno.env.get('ENCRYPTION_KEY')!);
-            
-            // Update tokens in database
-            await supabaseClient
-              .from('hubspot_accounts')
-              .update({
-                access_token: newEncryptedToken,
-                refresh_token: newEncryptedRefreshToken,
-                expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('portal_id', portal_id);
-            
-            // Update client with new token and retry
-            hubspotClient.setToken?.(newTokens.access_token);
-            
-            // Retry with new token
-            const objectDetails = await getObjectDetails();
-            
-            // Add object details to the response
-            summary.currentRecord = {
-              id: object_id,
-              type: object_type,
-              ideal_client_score: objectDetails.properties?.ideal_client_score || null,
-              ideal_client_summary: objectDetails.properties?.ideal_client_summary || null
-            };
-          } else {
-            throw apiError;
-          }
+          logger.error('Error getting HubSpot object details:', {
+            error: apiError,
+            portal_id,
+            object_type,
+            object_id
+          });
+          // Don't fail the whole request if HubSpot fetching fails
+          summary.currentRecord = {
+            id: object_id,
+            type: object_type,
+            error: apiError.message
+          };
         }
       } catch (hsError) {
         logger.error('Error getting HubSpot object details:', {
