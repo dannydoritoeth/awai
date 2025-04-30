@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { DatabaseService } from './databaseService.ts';
 
 // Add Deno declaration for TypeScript
 declare const Deno: {
@@ -38,10 +38,10 @@ export interface SubscriptionStatus {
 }
 
 export class SubscriptionService {
-  private supabase: SupabaseClient;
+  private dbService: DatabaseService;
 
   constructor(supabaseUrl: string, supabaseKey: string) {
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    this.dbService = new DatabaseService(supabaseUrl, supabaseKey);
   }
 
   /**
@@ -51,17 +51,7 @@ export class SubscriptionService {
    */
   async getSubscriptionStatus(portalId: string): Promise<SubscriptionStatus | null> {
     try {
-      const { data: subscription, error } = await this.supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('metadata->portal_id', portalId)
-        .eq('status', 'active')
-        .single();
-
-      if (error) {
-        console.error('Error fetching subscription:', error);
-        return null;
-      }
+      const subscription = await this.dbService.getActiveSubscription(portalId);
 
       if (!subscription) {
         return {
@@ -80,16 +70,22 @@ export class SubscriptionService {
       const expiresAt = new Date(subscription.current_period_end);
       const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-      return {
+      // Ensure plan_tier is lowercase for consistent comparison
+      const tier = (subscription.plan_tier || 'free').toLowerCase() as Subscription['plan_tier'] | 'free';
+
+      const status = {
         isActive: subscription.status === 'active' && expiresAt > now,
         isCanceledButActive: subscription.status === 'active' && subscription.cancel_at_period_end === true,
         expiresAt,
         isExpiringSoon: expiresAt <= sevenDaysFromNow && expiresAt > now,
-        tier: subscription.plan_tier,
-        amount: subscription.amount,
-        currency: subscription.currency,
-        billingInterval: subscription.billing_interval
+        tier,
+        amount: subscription.amount || 0,
+        currency: subscription.currency || 'USD',
+        billingInterval: subscription.billing_interval || 'month'
       };
+
+      console.log('Returning subscription status:', status);
+      return status;
     } catch (error) {
       console.error('Error in getSubscriptionStatus:', error);
       return null;
@@ -179,19 +175,7 @@ export class SubscriptionService {
     periodEnd: Date;
   }> {
     try {
-      // Get current subscription period
-      const { data: subscription, error: subError } = await this.supabase
-        .from('subscriptions')
-        .select('current_period_start, current_period_end, plan_tier, status')
-        .eq('metadata->portal_id', portalId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (subError && subError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-        throw subError;
-      }
+      const subscription = await this.dbService.getActiveSubscription(portalId);
 
       // Set period and max scores based on subscription
       let periodStart: Date;
@@ -222,20 +206,10 @@ export class SubscriptionService {
       }
 
       // Count scores used in current period
-      const { count: scoresUsed, error: countError } = await this.supabase
-        .from('ai_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('portal_id', portalId)
-        .eq('event_type', 'score')
-        .gte('created_at', periodStart.toISOString())
-        .lt('created_at', periodEnd.toISOString());
-
-      if (countError) {
-        throw countError;
-      }
+      const scoresUsed = await this.dbService.getScoreCount(portalId, periodStart, periodEnd);
       
       return {
-        scoresUsed: Number(scoresUsed || 0),
+        scoresUsed,
         maxScores,
         periodStart,
         periodEnd
@@ -249,7 +223,7 @@ export class SubscriptionService {
       
       return {
         scoresUsed: 0,
-        maxScores: 50, // Default free tier limit
+        maxScores: 50, // Free tier limit on error
         periodStart: now,
         periodEnd: oneMonthLater
       };
@@ -372,14 +346,7 @@ export class SubscriptionService {
       eventRecord.log_data = logData;
     }
     
-    // Insert the record into the database
-    const { error } = await this.supabase
-      .from('ai_events')
-      .insert(eventRecord);
-
-    if (error) {
-      throw new Error(`Failed to record score: ${error.message}`);
-    }
+    await this.dbService.recordScoreEvent(eventRecord);
   }
 
   /**
@@ -407,12 +374,6 @@ export class SubscriptionService {
       created_at: new Date().toISOString()
     };
 
-    const { error } = await this.supabase
-      .from('ai_events')
-      .insert(eventRecord);
-
-    if (error) {
-      throw new Error(`Failed to record training event: ${error.message}`);
-    }
+    await this.dbService.recordTrainingEvent(eventRecord);
   }
 } 
