@@ -144,6 +144,7 @@ const BaseScoring = ({
               clearInterval(pollInterval);
               setScoring(false);
               setScoringStatus(null);
+              // Update all the state with the latest data
               updateStateFromSummary(summaryData.result);
             }
           }
@@ -159,8 +160,10 @@ const BaseScoring = ({
           setScoring(false);
           setScoringStatus(null);
           setError('Scoring is taking longer than expected. Please check back later.');
+          // Refresh the summary one final time to ensure we have latest data
+          loadExistingScore();
         }
-      }, 60000); // Changed from 120000 to 60000 (60 seconds) as requested
+      }, 60000);
 
     } catch (error) {
       setError('Error starting scoring process. Please try again later.');

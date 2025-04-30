@@ -398,18 +398,10 @@ ${JSON.stringify(data, null, 2)}`;
       });
       }
 
-      // Prepare outputs for logging
-      const outputs = {
-        score: result.score,
-        summary: result.summary,
-        lastScored,
-        // Include the full prompt that was sent to the AI
-        fullPrompt: result.fullPrompt
-      };
-
-      await this.recordScoreUsage(contactId, 'contact', inputs, outputs);
+      // Don't record usage here anymore since it's done at the start
+      // await this.recordScoreUsage(contactId, 'contact', inputs, outputs);
       
-      // Don't include fullPrompt in the return value to the client
+      // Return the result (without the full prompt)
       return { score: result.score, summary: result.summary, lastScored };
     } catch (error) {
       this.logger.error('Error scoring contact:', error);
