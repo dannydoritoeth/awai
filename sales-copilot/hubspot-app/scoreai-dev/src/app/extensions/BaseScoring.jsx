@@ -9,12 +9,48 @@ import {
   hubspot,
   Divider,
   Toggle,
+  Link,
 } from "@hubspot/ui-extensions";
 import { SUPABASE_URL } from "./config";
 
 // Supabase function URLs
 const SUPABASE_SCORE_RECORD_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-record`;
 const SUPABASE_SCORE_SUMMARY_URL = `${SUPABASE_URL}/functions/v1/hubspot-score-summary`;
+
+const UsageStats = ({ usageStats, planInfo, portalId }) => {
+  if (!usageStats) return null;
+
+  const upgradeUrl = `https://acceleratewith.ai/pricing?portal_id=${portalId}`;
+  const isFree = planInfo?.tier === 'free';
+  const isLowOnScores = usageStats.remaining <= 50;
+  const noScoresLeft = usageStats.remaining <= 0;
+  
+  let upgradeMessage = 'Need more scores?';
+  if (isFree) {
+    upgradeMessage = 'Upgrade to score more';
+  } else if (noScoresLeft) {
+    upgradeMessage = 'No scores remaining - Upgrade now';
+  } else if (isLowOnScores) {
+    upgradeMessage = 'Running low? Get more scores';
+  } else {
+    upgradeMessage = 'Increase your scoring limit';
+  }
+  
+  return (
+    <Box>
+      <Flex direction="column" gap="xs">
+        <Text format={{ fontSize: "sm", color: noScoresLeft ? "error" : "gray" }}>
+          {usageStats.used} of {usageStats.total} scores used this period
+        </Text>
+        <Text format={{ fontSize: "sm", color: "gray" }}>
+          <Link href={upgradeUrl} target="_blank">
+            {upgradeMessage}
+          </Link>
+        </Text>
+      </Flex>
+    </Box>
+  );
+};
 
 const BaseScoring = ({ 
   context, 
@@ -87,6 +123,12 @@ const BaseScoring = ({
   };
 
   const handleScore = async () => {
+    // Check if we have scores available
+    if (usageStats && usageStats.remaining <= 0) {
+      setError('No scores remaining. Please upgrade your plan to continue scoring.');
+      return;
+    }
+
     try {
       setScoring(true);
       setError(null);
@@ -111,6 +153,7 @@ const BaseScoring = ({
               clearInterval(pollInterval);
               setScoring(false);
               setScoringStatus(null);
+              // Update all the state with the latest data
               updateStateFromSummary(summaryData.result);
             }
           }
@@ -126,8 +169,10 @@ const BaseScoring = ({
           setScoring(false);
           setScoringStatus(null);
           setError('Scoring is taking longer than expected. Please check back later.');
+          // Refresh the summary one final time to ensure we have latest data
+          loadExistingScore();
         }
-      }, 60000); // Changed from 120000 to 60000 (60 seconds) as requested
+      }, 60000);
 
     } catch (error) {
       setError('Error starting scoring process. Please try again later.');
@@ -144,12 +189,20 @@ const BaseScoring = ({
     );
   }
 
+  const noScoresRemaining = usageStats && usageStats.remaining <= 0;
+
   return (
     <Box padding="md">
       <Flex direction="column" gap="md">
         {error && (
           <Alert title="Error" variant="error">
             {error}
+          </Alert>
+        )}
+
+        {noScoresRemaining && (
+          <Alert title="No Scores Available" variant="warning">
+            You have used all available scores for this period. Please upgrade your plan to continue scoring.
           </Alert>
         )}
 
@@ -170,43 +223,31 @@ const BaseScoring = ({
                   </Flex>
                 ))}
               </Flex>
-              
-              {usageStats && (
-                <Box marginTop="xl">
-                  <Text format={{ fontWeight: "bold" }} variant="body">
-                    Usage: {usageStats.used}/{usageStats.total} ({usageStats.remaining} remaining)
-                  </Text>
-                </Box>
-              )}
             </>
           ) : (
             <Text>No score available</Text>
           )}
         </Box>
 
+        {scoring && (
+          <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
+        )}
+
         <Button
           variant="secondary"
           onClick={handleScore}
           loading={scoring}
-          disabled={scoring}
+          disabled={scoring || noScoresRemaining}
         >
-          {scoring ? 'Scoring in progress...' : 'Score Now'}
+          {scoring ? 'Scoring in progress...' : noScoresRemaining ? 'No scores remaining' : 'Score Now'}
         </Button>
 
-        {scoring && (
-          <>
-            <Text format={{ fontWeight: "bold" }}>{scoringStatus}</Text>
-          </>
-        )}
-        
-        {/* <Flex gap="md" alignItems="center">
-          <Toggle 
-            checked={showDebug}
-            onChange={value => setShowDebug(value)}
-          />
-          <Text>Show Debug Info</Text>
-        </Flex> */}
-        
+        <UsageStats 
+          usageStats={usageStats} 
+          planInfo={planInfo}
+          portalId={context.portal.id}
+        />
+
         {showDebug && (
           <>
             <Divider />

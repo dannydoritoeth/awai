@@ -119,6 +119,12 @@ serve(async (req) => {
     // Start the scoring process asynchronously
     (async () => {
       try {
+        // Record the scoring event first to ensure it's counted
+        await subscriptionService.recordScore(portal_id, {
+          recordId: object_id,
+          recordType: object_type
+        });
+
         // Score the record
         logger.info(`Scoring ${object_type} ${object_id}`);
         const result = await handleApiCall(
@@ -142,13 +148,6 @@ serve(async (req) => {
         logger.info(`Successfully scored ${object_type} ${object_id}:`, {
           score: result.score,
           lastScored: result.lastScored
-        });
-
-        // Record the scoring event
-        await subscriptionService.recordScore(portal_id, {
-          recordId: object_id,
-          recordType: object_type,
-          outputs: result
         });
 
         // Update status to completed
