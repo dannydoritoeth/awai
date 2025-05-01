@@ -133,7 +133,7 @@ serve(async (req: Request) => {
       throw new Error('HubSpot account is not active');
     }
 
-    // Check if customer already exists
+    // First try to get the existing customer
     const { data: existingCustomer } = await supabase
       .from('customers')
       .select('id, stripe_customer_id')
@@ -154,23 +154,38 @@ serve(async (req: Request) => {
         }
       });
 
-      // Create customer record
+      // Use upsert to handle race conditions
       const { error: customerError } = await supabase
         .from('customers')
-        .insert({
+        .upsert({
           platform: 'hubspot',
           platform_customer_id: portalId,
           stripe_customer_id: stripeCustomer.id,
           metadata: {
             portal_id: portalId
           }
+        }, {
+          onConflict: 'platform,platform_customer_id',
+          ignoreDuplicates: false
         });
 
       if (customerError) {
-        throw new Error(`Failed to create customer record: ${customerError.message}`);
-      }
+        // If upsert failed, try to get the customer one more time
+        const { data: retryCustomer } = await supabase
+          .from('customers')
+          .select('stripe_customer_id')
+          .eq('platform', 'hubspot')
+          .eq('platform_customer_id', portalId)
+          .single();
 
-      stripeCustomerId = stripeCustomer.id;
+        if (retryCustomer?.stripe_customer_id) {
+          stripeCustomerId = retryCustomer.stripe_customer_id;
+        } else {
+          throw new Error(`Failed to create or retrieve customer record: ${customerError.message}`);
+        }
+      } else {
+        stripeCustomerId = stripeCustomer.id;
+      }
     }
 
     // Get plan details from the plans table
