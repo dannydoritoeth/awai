@@ -23,10 +23,13 @@ const UsageStats = ({ usageStats, planInfo, portalId }) => {
   const upgradeUrl = `https://acceleratewith.ai/pricing?portal_id=${portalId}`;
   const isFree = planInfo?.tier === 'free';
   const isLowOnScores = usageStats.remaining <= 50;
+  const noScoresLeft = usageStats.remaining <= 0;
   
   let upgradeMessage = 'Need more scores?';
   if (isFree) {
     upgradeMessage = 'Upgrade to score more';
+  } else if (noScoresLeft) {
+    upgradeMessage = 'No scores remaining - Upgrade now';
   } else if (isLowOnScores) {
     upgradeMessage = 'Running low? Get more scores';
   } else {
@@ -36,7 +39,7 @@ const UsageStats = ({ usageStats, planInfo, portalId }) => {
   return (
     <Box>
       <Flex direction="column" gap="xs">
-        <Text format={{ fontSize: "sm", color: "gray" }}>
+        <Text format={{ fontSize: "sm", color: noScoresLeft ? "error" : "gray" }}>
           {usageStats.used} of {usageStats.total} scores used this period
         </Text>
         <Text format={{ fontSize: "sm", color: "gray" }}>
@@ -120,6 +123,12 @@ const BaseScoring = ({
   };
 
   const handleScore = async () => {
+    // Check if we have scores available
+    if (usageStats && usageStats.remaining <= 0) {
+      setError('No scores remaining. Please upgrade your plan to continue scoring.');
+      return;
+    }
+
     try {
       setScoring(true);
       setError(null);
@@ -180,12 +189,20 @@ const BaseScoring = ({
     );
   }
 
+  const noScoresRemaining = usageStats && usageStats.remaining <= 0;
+
   return (
     <Box padding="md">
       <Flex direction="column" gap="md">
         {error && (
           <Alert title="Error" variant="error">
             {error}
+          </Alert>
+        )}
+
+        {noScoresRemaining && (
+          <Alert title="No Scores Available" variant="warning">
+            You have used all available scores for this period. Please upgrade your plan to continue scoring.
           </Alert>
         )}
 
@@ -220,9 +237,9 @@ const BaseScoring = ({
           variant="secondary"
           onClick={handleScore}
           loading={scoring}
-          disabled={scoring}
+          disabled={scoring || noScoresRemaining}
         >
-          {scoring ? 'Scoring in progress...' : 'Score Now'}
+          {scoring ? 'Scoring in progress...' : noScoresRemaining ? 'No scores remaining' : 'Score Now'}
         </Button>
 
         <UsageStats 
@@ -231,14 +248,6 @@ const BaseScoring = ({
           portalId={context.portal.id}
         />
 
-        {/* <Flex gap="md" alignItems="center">
-          <Toggle 
-            checked={showDebug}
-            onChange={value => setShowDebug(value)}
-          />
-          <Text>Show Debug Info</Text>
-        </Flex> */}
-        
         {showDebug && (
           <>
             <Divider />

@@ -12,6 +12,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_URL = Deno.env.get('APP_URL')!;
 
+// Valid plan tiers and intervals
+const VALID_PLAN_TIERS = ['starter', 'pro', 'growth'] as const;
+const VALID_INTERVALS = ['month', 'year'] as const;
+type PlanTier = typeof VALID_PLAN_TIERS[number];
+type Interval = typeof VALID_INTERVALS[number];
+
 serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -27,11 +33,86 @@ serve(async (req: Request) => {
     // Parse URL parameters
     const url = new URL(req.url);
     const portalId = url.searchParams.get('portal_id');
-    const planTier = url.searchParams.get('plan_tier') || 'starter';
+    const planTier = url.searchParams.get('plan_tier');
+    const interval = url.searchParams.get('interval');
     const partnerId = url.searchParams.get('partner_id');
 
+    // Validate required parameters
     if (!portalId) {
-      throw new Error('portal_id is required');
+      return new Response(
+        JSON.stringify({
+          error: 'portal_id is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    if (!planTier) {
+      return new Response(
+        JSON.stringify({
+          error: 'plan_tier is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    if (!interval) {
+      return new Response(
+        JSON.stringify({
+          error: 'interval is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    // Validate plan tier
+    if (!VALID_PLAN_TIERS.includes(planTier as PlanTier)) {
+      return new Response(
+        JSON.stringify({
+          error: `Invalid plan_tier. Must be one of: ${VALID_PLAN_TIERS.join(', ')}`
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    // Validate interval
+    if (!VALID_INTERVALS.includes(interval as Interval)) {
+      return new Response(
+        JSON.stringify({
+          error: `Invalid interval. Must be one of: ${VALID_INTERVALS.join(', ')}`
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
     }
 
     // Initialize Supabase client
@@ -92,8 +173,18 @@ serve(async (req: Request) => {
       stripeCustomerId = stripeCustomer.id;
     }
 
-    // Get price ID for the plan
-    const priceId = await getPriceIdForPlan(planTier);
+    // Get plan details from the plans table
+    const { data: plan, error: planError } = await supabase
+      .from('plans')
+      .select('*')
+      .eq('tier', planTier)
+      .eq('interval', interval)
+      .eq('is_active', true)
+      .single();
+
+    if (planError || !plan) {
+      throw new Error(`Plan not found for tier ${planTier} and interval ${interval}`);
+    }
 
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
@@ -102,13 +193,14 @@ serve(async (req: Request) => {
       success_url: `${APP_URL}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/settings/billing/cancel`,
       line_items: [{
-        price: priceId,
+        price: plan.stripe_price_id,
         quantity: 1
       }],
       metadata: {
         portal_id: portalId,
         plan_tier: planTier,
-        partner_id: partnerId || ''
+        partner_id: partnerId || '',
+        interval: interval
       },
       subscription_data: partnerId ? {
         metadata: {
@@ -152,20 +244,4 @@ serve(async (req: Request) => {
       }
     );
   }
-});
-
-// Helper function to get price ID based on plan tier
-async function getPriceIdForPlan(planTier: string): Promise<string> {
-  const priceIds: { [key: string]: string } = {
-    starter: Deno.env.get('STRIPE_STARTER_PRICE_ID')!,
-    pro: Deno.env.get('STRIPE_PRO_PRICE_ID')!,
-    growth: Deno.env.get('STRIPE_GROWTH_PRICE_ID')!
-  };
-
-  const priceId = priceIds[planTier];
-  if (!priceId) {
-    throw new Error(`Invalid plan tier: ${planTier}`);
-  }
-
-  return priceId;
-} 
+}); 
