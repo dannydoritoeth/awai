@@ -205,8 +205,8 @@ serve(async (req: Request) => {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
-      success_url: `${APP_URL}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/settings/billing/cancel`,
+      success_url: `${APP_URL}/billing-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/billing-canceled`,
       line_items: [{
         price: plan.stripe_price_id,
         quantity: 1
