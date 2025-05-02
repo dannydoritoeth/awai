@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { corsHeaders } from '../_shared/cors.ts';
+import { PARTNER_COMMISSION_RATE } from '../_shared/config.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -278,7 +279,7 @@ serve(async (req: Request) => {
             .single();
 
           if (subscription?.partner?.id) {
-            const commissionAmount = Math.floor(invoice.amount_paid * 0.20); // 20% commission
+            const commissionAmount = Math.floor(invoice.amount_paid * PARTNER_COMMISSION_RATE);
             await supabase
               .from('partner_payouts')
               .insert({
@@ -291,6 +292,74 @@ serve(async (req: Request) => {
                 }
               });
           }
+        }
+        break;
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object;
+        const invoice = charge.invoice;
+        
+        if (invoice) {
+          // Get the subscription and partner info for this charge
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('*, partner:partners(id)')
+            .eq('stripe_subscription_id', charge.subscription)
+            .single();
+
+          if (subscription?.partner?.id) {
+            // Calculate the refund amount based on commission rate
+            const refundAmount = Math.floor(charge.amount_refunded * PARTNER_COMMISSION_RATE);
+            
+            // Create a negative payout entry to offset the original payout
+            await supabase
+              .from('partner_payouts')
+              .insert({
+                partner_id: subscription.partner.id,
+                amount: -refundAmount, // Negative amount to offset the original payout
+                status: 'refunded',
+                metadata: {
+                  stripe_charge_id: charge.id,
+                  stripe_invoice_id: invoice,
+                  stripe_subscription_id: charge.subscription,
+                  refund_ids: charge.refunds.data.map((refund: any) => refund.id)
+                }
+              });
+          }
+        }
+        break;
+      }
+
+      case 'charge.dispute.created': {
+        const dispute = event.data.object;
+        const charge = dispute.charge;
+        
+        // Get the subscription and partner info for this disputed charge
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('*, partner:partners(id)')
+          .eq('stripe_subscription_id', dispute.subscription)
+          .single();
+
+        if (subscription?.partner?.id) {
+          // Calculate the disputed amount based on commission rate
+          const disputeAmount = Math.floor(dispute.amount * PARTNER_COMMISSION_RATE);
+          
+          // Create a negative payout entry to offset the original payout
+          await supabase
+            .from('partner_payouts')
+            .insert({
+              partner_id: subscription.partner.id,
+              amount: -disputeAmount, // Negative amount to offset the original payout
+              status: 'disputed',
+              metadata: {
+                stripe_charge_id: charge,
+                stripe_dispute_id: dispute.id,
+                dispute_reason: dispute.reason,
+                dispute_status: dispute.status
+              }
+            });
         }
         break;
       }

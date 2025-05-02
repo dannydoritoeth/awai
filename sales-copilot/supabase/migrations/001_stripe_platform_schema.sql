@@ -21,7 +21,7 @@ create table if not exists partners (
     name text not null,
     email text,
     stripe_account_id text unique,
-    commission_rate numeric default 0.20,
+    commission_rate numeric default 0.40,
     status text default 'pending' check (status in ('pending', 'active', 'inactive')),
     onboarding_completed boolean default false,
     payout_schedule text default 'monthly' check (payout_schedule in ('weekly', 'monthly')),
