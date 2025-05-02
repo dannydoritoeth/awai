@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header';
 import { useSearchParams } from 'next/navigation';
 import { useState, useCallback, Suspense } from 'react';
 
-const STRIPE_CHECKOUT_URL = 'https://gjhagcbedjcibzzzvbqp.supabase.co/functions/v1/hubspot-stripe-create-checkout-session';
+const STRIPE_CHECKOUT_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/hubspot-stripe-create-checkout-session`;
 
 type Plan = {
   name: string;
