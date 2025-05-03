@@ -7,7 +7,7 @@ export default function Home() {
       <div className="max-w-4xl mx-auto text-center mb-16">
         <div className="bg-white/50 backdrop-blur-sm py-8 px-4 rounded-3xl shadow-sm">
           <h1 className="text-5xl font-bold text-blue-600 mb-4 tracking-tight">
-          SkillsAI
+          TalentAI
           </h1>
           <p className="text-2xl text-blue-950 font-medium">
             Intelligent HR matching for roles and candidates
