@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 interface HistoryItem {
   id: string;
@@ -144,7 +145,6 @@ export default function Sidebar({
   const [selectedType, setSelectedType] = useState<ItemType>(null);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const pathname = usePathname();
-  const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
@@ -166,11 +166,6 @@ export default function Sidebar({
   
   const groupedItems = groupItemsByDate(filteredItems);
 
-  const handleItemClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
-    e.preventDefault();
-    router.push(path);
-  };
-
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Menu Toggle Button - Moved outside sidebar */}
@@ -191,14 +186,14 @@ export default function Sidebar({
         <div className="flex flex-col h-full w-64">
           {/* Top Bar with Add Button */}
           <div className="flex justify-end items-center pt-4">
-            <button
-              onClick={() => router.push('/')}
+            <Link
+              href="/"
               className={`p-4 hover:bg-gray-100 transition-colors ${isMenuOpen ? 'block' : 'hidden'}`}
             >
               <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-            </button>
+            </Link>
           </div>
 
           {/* Type Filter Pills - Only visible when menu is open */}
@@ -233,16 +228,15 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Today</h3>
                 <div className="space-y-1">
                   {groupedItems.today.map((item) => (
-                    <a
+                    <Link
                       key={item.id}
                       href={item.path}
-                      onClick={(e) => handleItemClick(e, item.path)}
-                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
                         pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                       }`}
                     >
                       <div className="text-sm">{item.title}</div>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -254,16 +248,15 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Yesterday</h3>
                 <div className="space-y-1">
                   {groupedItems.yesterday.map((item) => (
-                    <a
+                    <Link
                       key={item.id}
                       href={item.path}
-                      onClick={(e) => handleItemClick(e, item.path)}
-                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
                         pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                       }`}
                     >
                       <div className="text-sm">{item.title}</div>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -275,16 +268,15 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 7 Days</h3>
                 <div className="space-y-1">
                   {groupedItems.week.map((item) => (
-                    <a
+                    <Link
                       key={item.id}
                       href={item.path}
-                      onClick={(e) => handleItemClick(e, item.path)}
-                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
                         pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                       }`}
                     >
                       <div className="text-sm">{item.title}</div>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -296,16 +288,15 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 30 Days</h3>
                 <div className="space-y-1">
                   {groupedItems.month.map((item) => (
-                    <a
+                    <Link
                       key={item.id}
                       href={item.path}
-                      onClick={(e) => handleItemClick(e, item.path)}
-                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
                         pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                       }`}
                     >
                       <div className="text-sm">{item.title}</div>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>

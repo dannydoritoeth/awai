@@ -1,4 +1,12 @@
 import { useState } from 'react';
+import ChatInterface from './ChatInterface';
+
+interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+}
 
 interface EmployeeData {
   name: string;
@@ -38,6 +46,33 @@ export default function UnifiedResultsView({
     if (startContext === 'role') return 'role';
     return 'candidates';
   });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSendMessage = async (message: string) => {
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: message,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+
+    // TODO: Send message to AI and get response
+    // For now, simulate AI response after a delay
+    setTimeout(() => {
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm analyzing your request. This is a placeholder response that will be replaced with actual AI responses once the backend is integrated.",
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      setIsLoading(false);
+    }, 1000);
+  };
 
   const renderEmployeeProfile = () => (
     <div className="p-6 space-y-6">
@@ -147,11 +182,12 @@ export default function UnifiedResultsView({
     <div className="flex gap-6">
       {/* Left Panel - Chat Interface */}
       <div className="w-1/2 bg-white rounded-2xl shadow-sm">
-        {/* Chat interface will go here */}
-        <div className="h-[600px] p-6">
-          <div className="text-sm text-gray-600">
-            Chat interface will be implemented here...
-          </div>
+        <div className="h-[600px]">
+          <ChatInterface
+            onSendMessage={handleSendMessage}
+            messages={messages}
+            isLoading={isLoading}
+          />
         </div>
       </div>
 
