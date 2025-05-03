@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 interface HistoryItem {
@@ -26,70 +25,70 @@ const SAMPLE_HISTORY: HistoryItem[] = [
     id: '1',
     title: 'Senior Software Engineer Role',
     timestamp: new Date().toISOString(), // Today
-    path: '/role-finder/1',
+    path: '/c/1',
     type: 'role'
   },
   {
     id: '2',
     title: 'John Smith - Full Stack Developer',
     timestamp: new Date().toISOString(), // Today
-    path: '/candidate-finder/1',
+    path: '/c/2',
     type: 'candidate'
   },
   {
     id: '3',
     title: 'Product Manager Position',
     timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
-    path: '/role-finder/2',
+    path: '/c/3',
     type: 'role'
   },
   {
     id: '4',
     title: 'AI Skills Analysis Query',
     timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
-    path: '/general/1',
+    path: '/c/4',
     type: 'general'
   },
   {
     id: '5',
     title: 'Sarah Johnson - Data Scientist',
     timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-    path: '/candidate-finder/2',
+    path: '/c/5',
     type: 'candidate'
   },
   {
     id: '6',
     title: 'Marketing Lead Search',
     timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    path: '/role-finder/3',
+    path: '/c/6',
     type: 'role'
   },
   {
     id: '7',
     title: 'Team Structure Analysis',
     timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), // 6 days ago
-    path: '/general/2',
+    path: '/c/7',
     type: 'general'
   },
   {
     id: '8',
     title: 'DevOps Engineer Role',
     timestamp: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days ago
-    path: '/role-finder/4',
+    path: '/c/8',
     type: 'role'
   },
   {
     id: '9',
     title: 'Michael Brown - UX Designer',
     timestamp: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), // 20 days ago
-    path: '/candidate-finder/3',
+    path: '/c/9',
     type: 'candidate'
   },
   {
     id: '10',
     title: 'Department Skills Gap Analysis',
     timestamp: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(), // 25 days ago
-    path: '/general/3',
+    path: '/c/10',
     type: 'general'
   }
 ];
@@ -167,6 +166,11 @@ export default function Sidebar({
   
   const groupedItems = groupItemsByDate(filteredItems);
 
+  const handleItemClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    e.preventDefault();
+    router.push(path);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Menu Toggle Button - Moved outside sidebar */}
@@ -229,13 +233,16 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Today</h3>
                 <div className="space-y-1">
                   {groupedItems.today.map((item) => (
-                    <Link
+                    <a
                       key={item.id}
                       href={item.path}
-                      className="block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                      onClick={(e) => handleItemClick(e, item.path)}
+                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                      }`}
                     >
-                      <div className="text-sm text-gray-900">{item.title}</div>
-                    </Link>
+                      <div className="text-sm">{item.title}</div>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -247,13 +254,16 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Yesterday</h3>
                 <div className="space-y-1">
                   {groupedItems.yesterday.map((item) => (
-                    <Link
+                    <a
                       key={item.id}
                       href={item.path}
-                      className="block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                      onClick={(e) => handleItemClick(e, item.path)}
+                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                      }`}
                     >
-                      <div className="text-sm text-gray-900">{item.title}</div>
-                    </Link>
+                      <div className="text-sm">{item.title}</div>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -265,13 +275,16 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 7 Days</h3>
                 <div className="space-y-1">
                   {groupedItems.week.map((item) => (
-                    <Link
+                    <a
                       key={item.id}
                       href={item.path}
-                      className="block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                      onClick={(e) => handleItemClick(e, item.path)}
+                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                      }`}
                     >
-                      <div className="text-sm text-gray-900">{item.title}</div>
-                    </Link>
+                      <div className="text-sm">{item.title}</div>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -283,13 +296,16 @@ export default function Sidebar({
                 <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 30 Days</h3>
                 <div className="space-y-1">
                   {groupedItems.month.map((item) => (
-                    <Link
+                    <a
                       key={item.id}
                       href={item.path}
-                      className="block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                      onClick={(e) => handleItemClick(e, item.path)}
+                      className={`block px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                      }`}
                     >
-                      <div className="text-sm text-gray-900">{item.title}</div>
-                    </Link>
+                      <div className="text-sm">{item.title}</div>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -306,7 +322,7 @@ export default function Sidebar({
         <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
           <div className={`flex items-center ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
-              {pathname.includes('role-finder') ? 'Role Finder' : 'Candidate Finder'}
+              {pathname.includes('/c/') ? 'AI Assistant' : pathname.includes('role-finder') ? 'Role Finder' : 'Candidate Finder'}
             </div>
           </div>
         </div>
