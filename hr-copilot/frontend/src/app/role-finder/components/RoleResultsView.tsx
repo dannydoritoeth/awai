@@ -256,24 +256,32 @@ export default function RoleResultsView({ employeeData }: RoleResultsViewProps) 
       {/* Right Panel with Tabs */}
       <div className="w-1/2 bg-white rounded-2xl shadow-sm flex flex-col">
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 justify-between items-center pr-4">
+          <div className="flex">
+            <button
+              className={`px-6 py-4 text-sm font-medium transition-colors relative
+                ${activeTab === 'profile'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setActiveTab('profile')}
+            >
+              Employee Profile
+            </button>
+            <button
+              className={`px-6 py-4 text-sm font-medium transition-colors relative
+                ${activeTab === 'matches'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setActiveTab('matches')}
+            >
+              Matching Roles
+            </button>
+          </div>
           <button
-            className={`px-6 py-4 text-sm font-medium transition-colors relative
-              ${activeTab === 'profile'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setActiveTab('profile')}
+            onClick={() => window.location.reload()} // Temporary solution - should use proper state management
+            className="text-sm font-medium text-blue-600 hover:text-blue-700"
           >
-            Employee Profile
-          </button>
-          <button
-            className={`px-6 py-4 text-sm font-medium transition-colors relative
-              ${activeTab === 'matches'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setActiveTab('matches')}
-          >
-            Matching Roles
+            Change Employee →
           </button>
         </div>
 
