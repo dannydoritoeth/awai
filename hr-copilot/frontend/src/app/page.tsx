@@ -1,12 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [query, setQuery] = useState('');
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    // Set new height based on scrollHeight, with a max of 150px
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
+  }, [query]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,12 +90,21 @@ export default function Home() {
               Start a Conversation
             </h2>
             <div className="relative">
-              <input
-                type="text"
+              <textarea
+                ref={textareaRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ask me anything about roles or candidates..."
-                className="w-full px-4 py-3 rounded-xl border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500"
+                className="w-full resize-none rounded-xl border-none focus:border-none focus:outline-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4 min-h-[48px] max-h-[150px]"
+                rows={1}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (query.trim()) {
+                      router.push(`/c?context=open&query=${encodeURIComponent(query.trim())}`);
+                    }
+                  }
+                }}
               />
               <button
                 type="submit"
