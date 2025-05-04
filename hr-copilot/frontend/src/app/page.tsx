@@ -33,7 +33,7 @@ export default function Home() {
       <div className="max-w-4xl mx-auto text-center mb-16">
         <div className="bg-white/50 backdrop-blur-sm py-8 px-4 rounded-3xl shadow-sm">
           <h1 className="text-5xl font-bold text-blue-600 mb-4 tracking-tight">
-            SkillsAI
+            TalentPathAI
           </h1>
           <p className="text-2xl text-blue-950 font-medium">
             Intelligent HR matching for roles and candidates
@@ -55,10 +55,10 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Start with an Employee
+                Start with Your Profile
               </h2>
               <p className="text-gray-600">
-                Find opportunities for a specific employee
+                Find opportunities matching your experience
               </p>
             </div>
           </Link>
