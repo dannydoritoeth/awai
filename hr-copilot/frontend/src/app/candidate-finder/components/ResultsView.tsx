@@ -205,8 +205,8 @@ export default function ResultsView({ roleData }: ResultsViewProps) {
       {/* Chat Assistant Panel */}
       <div className="w-1/2 bg-white rounded-2xl shadow-sm p-8 flex flex-col">
         <div className="mb-6">
-          <h2 className="text-2xl font-semibold text-blue-950 mb-1">AI Assistant</h2>
-          <p className="text-base text-gray-600">I'm here to help you find the perfect candidate</p>
+          <h2 className="text-2xl font-semibold text-blue-950 mb-1">TalentPathAI</h2>
+          <p className="text-base text-gray-600">Let me help you find the perfect candidate</p>
         </div>
 
         {/* Chat Messages */}

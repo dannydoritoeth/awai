@@ -313,7 +313,7 @@ export default function Sidebar({
         <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
           <div className={`flex items-center ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
-              {pathname.includes('/c/') ? 'AI Assistant' : pathname.includes('role-finder') ? 'Role Finder' : 'TalentPathAI'}
+              {pathname.includes('/c/') ? 'TalentPathAI' : pathname.includes('role-finder') ? 'Role Finder' : 'TalentPathAI'}
             </div>
           </div>
         </div>
