@@ -17,6 +17,7 @@ interface EmployeeData {
   preferences?: {
     desiredRoles: string[];
   };
+  additionalContext?: string;
 }
 
 interface RoleData {
@@ -48,6 +49,8 @@ export default function UnifiedResultsView({
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [additionalContext, setAdditionalContext] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   const handleSendMessage = async (message: string) => {
     // Add user message
@@ -83,7 +86,7 @@ export default function UnifiedResultsView({
           </span>
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-blue-950">
+          <h2 className="text-xl font-semibold text-gray-900">
             {employeeData?.name}
           </h2>
           <p className="text-base text-gray-600 mt-1">
@@ -126,6 +129,40 @@ export default function UnifiedResultsView({
           </div>
         </div>
       )}
+
+      {/* Additional Context Section */}
+      <div className="space-y-3 border-t border-gray-200 pt-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-900">Additional Context</h3>
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-sm text-blue-600 hover:text-blue-700"
+          >
+            {isEditing ? 'Done' : 'Edit'}
+          </button>
+        </div>
+        
+        {isEditing ? (
+          <textarea
+            value={additionalContext}
+            onChange={(e) => setAdditionalContext(e.target.value)}
+            placeholder="Add any additional context about the employee that might be helpful for the AI (e.g., career goals, specific experiences, preferences)..."
+            className="w-full h-32 rounded-lg border-none focus:ring-0 bg-gray-50 p-4 text-gray-900 placeholder:text-gray-500 text-sm resize-none"
+          />
+        ) : (
+          <div className="bg-gray-50 rounded-lg p-4">
+            {additionalContext || employeeData?.additionalContext ? (
+              <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                {additionalContext || employeeData?.additionalContext}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 italic">
+                No additional context provided. Click &apos;Edit&apos; to add information about career goals, specific experiences, or preferences.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 
