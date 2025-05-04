@@ -167,7 +167,7 @@ export default function Sidebar({
   const groupedItems = groupItemsByDate(filteredItems);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50">
       {/* Menu Toggle Button - Moved outside sidebar */}
       <button
         onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -307,7 +307,7 @@ export default function Sidebar({
 
       {/* Main Content */}
       <div 
-        className={`flex-1 transition-all duration-300 ${isMenuOpen ? 'ml-64' : 'ml-0'}`}
+        className={`flex-1 min-h-screen transition-all duration-300 bg-gray-50 ${isMenuOpen ? 'ml-64' : 'ml-0'}`}
       >
         {/* Top Bar */}
         <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
