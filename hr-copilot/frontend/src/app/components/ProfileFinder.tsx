@@ -90,7 +90,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, role, or department..."
-                className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 py-3 pl-10 pr-4 text-gray-900 placeholder:text-gray-500"
+                className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-10"
               />
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
@@ -116,7 +116,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
               value={pageUpId}
               onChange={(e) => setPageUpId(e.target.value)}
               placeholder="Enter PageUp ID..."
-              className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 py-3 px-4 text-gray-900 placeholder:text-gray-500"
+              className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4"
             />
           </div>
           <button

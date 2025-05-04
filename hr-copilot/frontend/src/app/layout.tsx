@@ -6,7 +6,7 @@ import Sidebar from './components/Sidebar';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TalentAI",
+  title: "TalentPathAI",
   description: "AI-powered HR matching platform",
 };
 

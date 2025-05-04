@@ -243,7 +243,7 @@ export default function RoleResultsView({ employeeData }: RoleResultsViewProps) 
           <input
             type="text"
             placeholder="Ask me about potential roles..."
-            className="w-full rounded-lg border-gray-300 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700 placeholder:text-gray-400 text-base py-3"
+            className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4"
           />
           <button className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600 hover:text-blue-700">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -68,7 +68,7 @@ export default function EditableEmployeeProfile({
             value={additionalContext}
             onChange={(e) => handleContextChange(e.target.value)}
             placeholder="Add any additional context about the employee that might be helpful for the AI (e.g., career goals, specific experiences, preferences)..."
-            className="w-full h-32 rounded-lg border-none focus:ring-0 bg-gray-50 p-4 text-gray-900 placeholder:text-gray-500 text-sm resize-none"
+            className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4 resize-none min-h-[128px] max-h-[256px]"
           />
         ) : (
           <div className="bg-gray-50 rounded-lg p-4">

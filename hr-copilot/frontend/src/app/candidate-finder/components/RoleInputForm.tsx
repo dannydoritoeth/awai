@@ -30,7 +30,7 @@ export default function RoleInputForm({ onSubmit }: RoleInputFormProps) {
     onSubmit(formData);
   };
 
-  const inputClasses = "w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-700 placeholder:text-gray-400 text-base";
+  const inputClasses = "w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4";
   const labelClasses = "block text-base font-semibold text-gray-900 mb-2";
 
   return (
