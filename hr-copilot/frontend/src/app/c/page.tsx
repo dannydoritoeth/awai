@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import UnifiedResultsView from '../components/UnifiedResultsView';
-import EmployeeFinder from '../components/EmployeeFinder';
+import ProfileFinder from '../components/ProfileFinder';
 
-interface Employee {
+interface Profile {
   id: string;
   name: string;
   currentRole: string;
@@ -16,11 +16,11 @@ interface Employee {
 export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const context = searchParams.get('context') as 'employee' | 'role' | 'open';
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const context = searchParams.get('context') as 'profile' | 'role' | 'open';
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
-  const handleEmployeeSelect = (employee: Employee) => {
-    setSelectedEmployee(employee);
+  const handleProfileSelect = (profile: Profile) => {
+    setSelectedProfile(profile);
   };
 
   // If no context is provided, redirect to home
@@ -29,37 +29,37 @@ export default function ChatPage() {
     return null;
   }
 
-  // Show employee finder when context is employee and no employee is selected
-  if (context === 'employee' && !selectedEmployee) {
+  // Show profile finder when context is profile and no profile is selected
+  if (context === 'profile' && !selectedProfile) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="mb-8">
-            <h1 className="text-2xl font-semibold text-gray-900">Find Employee</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Find Your Profile</h1>
             <p className="text-base text-gray-600">
-              Search for an employee to start the conversation
+              Search for your profile to start the conversation
             </p>
           </div>
-          <EmployeeFinder onEmployeeSelect={handleEmployeeSelect} />
+          <ProfileFinder onProfileSelect={handleProfileSelect} />
         </div>
       </div>
     );
   }
 
-  // Show chat interface with employee data when employee is selected
-  if (selectedEmployee) {
+  // Show chat interface with profile data when profile is selected
+  if (selectedProfile) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <UnifiedResultsView
-            employeeData={{
-              name: selectedEmployee.name,
-              currentRole: selectedEmployee.currentRole,
-              department: selectedEmployee.department,
+            profileData={{
+              name: selectedProfile.name,
+              currentRole: selectedProfile.currentRole,
+              department: selectedProfile.department,
               tenure: "N/A",
               skills: []
             }}
-            startContext="employee"
+            startContext="profile"
           />
         </div>
       </div>

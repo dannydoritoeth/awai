@@ -8,7 +8,7 @@ interface Message {
   timestamp: Date;
 }
 
-interface EmployeeData {
+interface ProfileData {
   name: string;
   currentRole: string;
   department: string;
@@ -31,19 +31,19 @@ interface RoleData {
 }
 
 interface UnifiedResultsViewProps {
-  employeeData?: EmployeeData | null;
+  profileData?: ProfileData | null;
   roleData?: RoleData | null;
-  startContext?: 'employee' | 'role' | 'open';
+  startContext?: 'profile' | 'role' | 'open';
 }
 
 export default function UnifiedResultsView({ 
-  employeeData, 
+  profileData, 
   roleData, 
   startContext = 'open' 
 }: UnifiedResultsViewProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'candidates' | 'roles'>(() => {
     // Set initial tab based on context
-    if (startContext === 'employee') return 'profile';
+    if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
     return 'candidates';
   });
@@ -77,32 +77,32 @@ export default function UnifiedResultsView({
     }, 1000);
   };
 
-  const renderEmployeeProfile = () => (
+  const renderProfile = () => (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
           <span className="text-blue-600 font-semibold text-xl">
-            {employeeData?.name.split(' ').map(n => n[0]).join('')}
+            {profileData?.name.split(' ').map(n => n[0]).join('')}
           </span>
         </div>
         <div>
           <h2 className="text-xl font-semibold text-gray-900">
-            {employeeData?.name}
+            {profileData?.name}
           </h2>
           <p className="text-base text-gray-600 mt-1">
-            {employeeData?.currentRole} • {employeeData?.department}
+            {profileData?.currentRole} • {profileData?.department}
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            {employeeData?.tenure} tenure
+            {profileData?.tenure} tenure
           </p>
         </div>
       </div>
 
-      {employeeData?.skills && (
+      {profileData?.skills && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-2">Key Skills</h3>
           <div className="flex flex-wrap gap-2">
-            {employeeData.skills.map((skill, index) => (
+            {profileData.skills.map((skill, index) => (
               <span
                 key={index}
                 className="px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full font-medium"
@@ -114,11 +114,11 @@ export default function UnifiedResultsView({
         </div>
       )}
 
-      {employeeData?.preferences?.desiredRoles && (
+      {profileData?.preferences?.desiredRoles && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-2">Career Interests</h3>
           <div className="flex flex-wrap gap-2">
-            {employeeData.preferences.desiredRoles.map((role, index) => (
+            {profileData.preferences.desiredRoles.map((role, index) => (
               <span
                 key={index}
                 className="px-3 py-1 bg-green-50 text-green-700 text-sm rounded-full font-medium"
@@ -146,14 +146,14 @@ export default function UnifiedResultsView({
           <textarea
             value={additionalContext}
             onChange={(e) => setAdditionalContext(e.target.value)}
-            placeholder="Add any additional context about the employee that might be helpful for the AI (e.g., career goals, specific experiences, preferences)..."
+            placeholder="Add any additional context about your profile that might be helpful for the AI (e.g., career goals, specific experiences, preferences)..."
             className="w-full h-32 rounded-lg border-none focus:ring-0 bg-gray-50 p-4 text-gray-900 placeholder:text-gray-500 text-sm resize-none"
           />
         ) : (
           <div className="bg-gray-50 rounded-lg p-4">
-            {additionalContext || employeeData?.additionalContext ? (
+            {additionalContext || profileData?.additionalContext ? (
               <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                {additionalContext || employeeData?.additionalContext}
+                {additionalContext || profileData?.additionalContext}
               </p>
             ) : (
               <p className="text-sm text-gray-500 italic">
@@ -233,8 +233,8 @@ export default function UnifiedResultsView({
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
           <div className="flex">
-            {/* Show Profile tab only if we have employee data */}
-            {employeeData && (
+            {/* Show Profile tab only if we have profile data */}
+            {profileData && (
               <button
                 className={`px-6 py-4 text-sm font-medium transition-colors relative
                   ${activeTab === 'profile'
@@ -242,7 +242,7 @@ export default function UnifiedResultsView({
                     : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setActiveTab('profile')}
               >
-                Employee Profile
+                Your Profile
               </button>
             )}
             
@@ -285,7 +285,7 @@ export default function UnifiedResultsView({
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'profile' && employeeData && renderEmployeeProfile()}
+          {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
           {activeTab === 'candidates' && <LoadingState />}
           {activeTab === 'roles' && <LoadingState />}

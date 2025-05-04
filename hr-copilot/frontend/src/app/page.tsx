@@ -45,7 +45,7 @@ export default function Home() {
       <div className="max-w-3xl mx-auto">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 mb-8">
           <Link 
-            href="/c?context=employee"
+            href="/c?context=profile"
             className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-transparent hover:border-blue-500"
           >
             <div className="text-center">

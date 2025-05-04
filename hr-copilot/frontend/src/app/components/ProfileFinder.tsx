@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-interface Employee {
+interface Profile {
   id: string;
   name: string;
   currentRole: string;
@@ -10,16 +10,16 @@ interface Employee {
   pageUpId?: string;
 }
 
-interface EmployeeFinderProps {
-  onEmployeeSelect: (employee: Employee) => void;
+interface ProfileFinderProps {
+  onProfileSelect: (profile: Profile) => void;
 }
 
-export default function EmployeeFinder({ onEmployeeSelect }: EmployeeFinderProps) {
+export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMethod, setSearchMethod] = useState<'search' | 'pageup'>('search');
   const [pageUpId, setPageUpId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<Employee[]>([]);
+  const [searchResults, setSearchResults] = useState<Profile[]>([]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +31,7 @@ export default function EmployeeFinder({ onEmployeeSelect }: EmployeeFinderProps
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Mock results
-      const mockResults: Employee[] = [
+      const mockResults: Profile[] = [
         {
           id: '1',
           name: 'John Smith',
@@ -50,7 +50,7 @@ export default function EmployeeFinder({ onEmployeeSelect }: EmployeeFinderProps
       
       setSearchResults(mockResults);
     } catch (error) {
-      console.error('Error searching employees:', error);
+      console.error('Error searching profiles:', error);
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +123,7 @@ export default function EmployeeFinder({ onEmployeeSelect }: EmployeeFinderProps
             type="submit"
             className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Find Employee
+            Find Profile
           </button>
         </form>
       )}
@@ -135,20 +135,20 @@ export default function EmployeeFinder({ onEmployeeSelect }: EmployeeFinderProps
         </div>
       ) : (
         <div className="space-y-2">
-          {searchResults.map((employee) => (
+          {searchResults.map((profile) => (
             <button
-              key={employee.id}
-              onClick={() => onEmployeeSelect(employee)}
+              key={profile.id}
+              onClick={() => onProfileSelect(profile)}
               className="w-full p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-left"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">{employee.name}</h3>
-                  <p className="text-sm text-gray-600">{employee.currentRole}</p>
-                  <p className="text-xs text-gray-500">{employee.department}</p>
+                  <h3 className="text-sm font-medium text-gray-900">{profile.name}</h3>
+                  <p className="text-sm text-gray-600">{profile.currentRole}</p>
+                  <p className="text-xs text-gray-500">{profile.department}</p>
                 </div>
-                {employee.pageUpId && (
-                  <span className="text-xs text-gray-500">ID: {employee.pageUpId}</span>
+                {profile.pageUpId && (
+                  <span className="text-xs text-gray-500">ID: {profile.pageUpId}</span>
                 )}
               </div>
             </button>
