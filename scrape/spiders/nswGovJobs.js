@@ -84,6 +84,8 @@ export class NSWJobSpider {
     
     // Re-scrape if the cache is older than 24 hours
     if (now - lastScraped > 24 * 60 * 60 * 1000) {
+      // Remove from cache if expired
+      this.#cachedJobs.delete(jobId);
       return null;
     }
 
@@ -96,7 +98,8 @@ export class NSWJobSpider {
    * @returns {string} The complete URL with pagination parameters
    */
   #getPageUrl(pageNumber) {
-    return `${this.#allowedDomains[0]}&page=${pageNumber}&pagesize=${this.pageSize}`;
+    const baseUrl = this.#allowedDomains[0];
+    return `${baseUrl}&page=${pageNumber}&pagesize=${this.pageSize}`;
   }
 
   /**
@@ -165,7 +168,6 @@ export class NSWJobSpider {
         // Initialize empty array to store all jobs
         let allJobs = [];
         let currentPage = 1;
-        let hasMoreJobs = true;
 
         // First, get the total number of jobs from the first page
         await this.page.goto(this.#getPageUrl(1));
@@ -184,12 +186,20 @@ export class NSWJobSpider {
           console.log(chalk.cyan(`\nProcessing page ${currentPage} of ${totalPages}...`));
           
           if (currentPage > 1) {
+            // Add a delay between pages to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 2000));
             await this.page.goto(this.#getPageUrl(currentPage));
             await this.page.waitForSelector('.job-card');
+            // Wait for dynamic content to load
+            await this.page.waitForTimeout(2000);
           }
           
           const jobs = await this.#scrapeJobs();
-          allJobs = [...allJobs, ...jobs];
+          if (jobs && jobs.length > 0) {
+            allJobs = [...allJobs, ...jobs];
+          } else {
+            console.log(chalk.yellow(`Warning: No jobs found on page ${currentPage}`));
+          }
           
           currentPage++;
         }
