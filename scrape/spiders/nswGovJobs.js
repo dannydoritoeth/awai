@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import chalk from "chalk";
 import process from "process";
 import fetch from "node-fetch";
+import { DocumentHandler } from "../utils/documentHandler.js";
 
 /**
  * @description Scrapes jobs from NSW Government jobs website
@@ -17,12 +18,14 @@ export class NSWJobSpider {
     "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/department-of-climate-change,-energy,-the-environment-and-water-/all-categories/all-locations/all-worktypes?agenciesid=9116&sortby=RelevanceDesc"
   ];
   #cachedJobs = new Map();
+  #documentHandler;
 
   constructor() {
     this.browser = null;
     this.page = null;
     this.pageSize = 25; // Default page size
     this.loadCache();
+    this.#documentHandler = new DocumentHandler();
     
     // Ensure the files directory exists
     const filesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs", "files");
@@ -564,12 +567,12 @@ export class NSWJobSpider {
         };
       });
 
-      // Extract and download documents
-      const documents = this.#extractDocumentUrls(jobDetails.description);
+      // Extract and download documents using the document handler
+      const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'nswgov');
       const downloadedDocs = [];
       
       for (const doc of documents) {
-        const filename = await this.#downloadDocument(doc.url, jobId, doc.type);
+        const filename = await this.#documentHandler.downloadDocument(doc.url, jobId, doc.type);
         if (filename) {
           downloadedDocs.push({
             filename,

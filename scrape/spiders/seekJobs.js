@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import chalk from "chalk";
 import process from "process";
 import readline from 'readline';
+import { DocumentHandler } from "../utils/documentHandler.js";
 
 /**
  * @description Scrapes jobs from Seek website for DCCEEW
@@ -17,12 +18,14 @@ export class SeekJobSpider {
     "https://www.seek.com.au/Department-of-Climate-Change,-Energy,-the-Environment-and-Water-jobs/in-All-Sydney-NSW/full-time"
   ];
   #cachedJobs = new Map();
+  #documentHandler;
 
   constructor() {
     this.browser = null;
     this.page = null;
     this.pageSize = 22; // Default page size on Seek
     this.loadCache();
+    this.#documentHandler = new DocumentHandler();
   }
 
   /**
@@ -521,6 +524,25 @@ export class SeekJobSpider {
           }
         };
       });
+
+      // Extract and download documents using the document handler
+      const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'seek');
+      const downloadedDocs = [];
+      
+      for (const doc of documents) {
+        const filename = await this.#documentHandler.downloadDocument(doc.url, jobId, doc.type);
+        if (filename) {
+          downloadedDocs.push({
+            filename,
+            type: doc.type,
+            title: doc.title,
+            url: doc.url
+          });
+        }
+      }
+      
+      // Add downloaded documents to job details
+      jobDetails.documents = downloadedDocs;
 
       // Close the detail page
       await detailPage.close();

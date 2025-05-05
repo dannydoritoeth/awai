@@ -1,0 +1,1 @@
+Process the role documents with mammoth or pdf-parse. Create a new db file for their content with todays date. These json records are going to be uploaded to an MCP db so we need to have some way to maintain the references between the Jobs db records & role db records
