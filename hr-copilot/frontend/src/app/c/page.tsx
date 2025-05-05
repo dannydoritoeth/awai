@@ -35,7 +35,7 @@ export default function ChatPage() {
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="mb-8">
-            <h1 className="text-2xl font-semibold text-gray-900">Find Your Profile</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Import Professional Profile</h1>
             <p className="text-base text-gray-600">
               Search for your profile to start the conversation
             </p>

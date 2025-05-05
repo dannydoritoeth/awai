@@ -55,10 +55,10 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Start with Your Profile
+                Import Professional Profile
               </h2>
               <p className="text-gray-600">
-                Find opportunities matching your experience
+                Connect your work experience or upload your resume
               </p>
             </div>
           </Link>
