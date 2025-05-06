@@ -16,6 +16,7 @@ export class DocumentProcessor {
     this.documentsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs", "files");
     this.contentDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "documents");
     this.failedDocuments = [];
+    this.processedDocuments = new Set();
     
     // Initialize OpenAI client
     const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -43,30 +44,16 @@ export class DocumentProcessor {
   }
 
   /**
-   * @description Format today's date for the filename
-   * @returns {string} Formatted date string
+   * @description Get the date from a jobs database filename
+   * @param {string} jobsDbPath - Path to the jobs database file
+   * @returns {string} Date in YYYY-MM-DD format
    */
-  #getTodayDate() {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    // First try to find files with today's date
-    const todayStr = `${year}-${month}-${day}`;
-    const dbDir = path.join(this.contentDir, '..', 'jobs');
-    
-    // Look for any job files that exist
-    const files = fs.readdirSync(dbDir).filter(f => f.endsWith('.json'));
-    if (files.length > 0) {
-      // Extract the date from the first file
-      const match = files[0].match(/\d{4}-\d{2}-\d{2}/);
-      if (match) {
-        return match[0];
-      }
+  #getDateFromJobsFile(jobsDbPath) {
+    const match = path.basename(jobsDbPath).match(/\d{4}-\d{2}-\d{2}/);
+    if (!match) {
+      throw new Error(`Could not extract date from jobs file: ${jobsDbPath}`);
     }
-    
-    return todayStr;
+    return match[0];
   }
 
   /**
@@ -235,6 +222,34 @@ Return only the JSON object with the extracted data. If a field cannot be determ
   }
 
   /**
+   * @description Load all previously processed documents across all dates
+   * @param {string} source - The source of documents (nswgov or seek)
+   * @returns {Set<string>} Set of previously processed document IDs
+   */
+  #loadProcessedDocuments(source) {
+    const processedDocs = new Set();
+    const files = fs.readdirSync(this.contentDir)
+      .filter(f => f.startsWith(`${source}-docs-`) && f.endsWith('.json'));
+    
+    for (const file of files) {
+      try {
+        const documentsDb = JSON.parse(
+          fs.readFileSync(path.join(this.contentDir, file), 'utf8')
+        );
+        
+        for (const doc of documentsDb.documents) {
+          processedDocs.add(doc.id);
+        }
+      } catch (error) {
+        console.log(chalk.yellow(`Warning: Could not load documents from ${file}: ${error.message}`));
+      }
+    }
+    
+    console.log(chalk.cyan(`Loaded ${processedDocs.size} previously processed documents for ${source}`));
+    return processedDocs;
+  }
+
+  /**
    * @description Process all documents from a jobs database file
    * @param {string} jobsDbPath - Path to the jobs database file
    * @returns {Promise<Array>} Array of processed document records
@@ -248,10 +263,15 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       
       let totalDocuments = 0;
       let currentDocument = 0;
+      let skippedDocuments = 0;
       
-      // Get the source from the filename (nswgov or seek)
+      // Get the source and date from the filename
       const sourceMatch = path.basename(jobsDbPath).match(/(nswgov|seek)/);
       const source = sourceMatch ? sourceMatch[1] : 'unknown';
+      const date = this.#getDateFromJobsFile(jobsDbPath);
+      
+      // Load previously processed documents from all dates
+      this.processedDocuments = this.#loadProcessedDocuments(source);
       
       // Count total documents first
       for (const job of jobsData.jobs) {
@@ -267,6 +287,15 @@ Return only the JSON object with the extracted data. If a field cannot be determ
 
         for (const doc of job.details.documents) {
           currentDocument++;
+          const documentId = this.#generateDocumentId(job.jobId, doc.filename);
+          
+          // Skip if document was already processed
+          if (this.processedDocuments.has(documentId)) {
+            console.log(chalk.yellow(`\nSkipping previously processed document [${currentDocument}/${totalDocuments}]: ${doc.filename}`));
+            skippedDocuments++;
+            continue;
+          }
+          
           if (processedFiles.has(doc.filename)) {
             console.log(chalk.yellow(`\nSkipping duplicate document [${currentDocument}/${totalDocuments}]: ${doc.filename}`));
             continue;
@@ -281,7 +310,6 @@ Return only the JSON object with the extracted data. If a field cannot be determ
             continue;
           }
 
-          const documentId = this.#generateDocumentId(job.jobId, doc.filename);
           let content = null;
 
           if (doc.filename.toLowerCase().endsWith('.pdf')) {
@@ -329,22 +357,33 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       // Save the updated jobs database with document IDs
       fs.writeFileSync(jobsDbPath, JSON.stringify(jobsData, null, 2));
 
-      // Save the documents database with source-specific filename
+      // Save the documents database with source-specific filename and the date from the jobs file
       const documentsDbPath = path.join(
         this.contentDir, 
-        `${source}-docs-${this.#getTodayDate()}.json`
+        `${source}-docs-${date}.json`
       );
+      
+      // If the file exists, merge with existing documents
+      let existingDocuments = [];
+      if (fs.existsSync(documentsDbPath)) {
+        try {
+          const existing = JSON.parse(fs.readFileSync(documentsDbPath, 'utf8'));
+          existingDocuments = existing.documents || [];
+        } catch (error) {
+          console.log(chalk.yellow(`Warning: Could not load existing documents from ${documentsDbPath}: ${error.message}`));
+        }
+      }
       
       fs.writeFileSync(
         documentsDbPath,
         JSON.stringify({
           metadata: {
-            totalDocuments: documents.length,
+            totalDocuments: existingDocuments.length + documents.length,
             dateProcessed: new Date().toISOString(),
             sourceJobsFile: path.basename(jobsDbPath),
             source: source
           },
-          documents: documents
+          documents: [...existingDocuments, ...documents]
         }, null, 2)
       );
 
@@ -352,7 +391,7 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       if (this.failedDocuments.length > 0) {
         const failedDocsPath = path.join(
           this.contentDir, 
-          `${source}-failed-docs-${this.#getTodayDate()}.json`
+          `${source}-failed-docs-${date}.json`
         );
         
         fs.writeFileSync(
@@ -374,7 +413,8 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       }
 
       console.log(chalk.green(`\nDocument processing complete:`));
-      console.log(chalk.cyan(`- Processed ${documents.length} documents`));
+      console.log(chalk.cyan(`- Processed ${documents.length} new documents`));
+      console.log(chalk.cyan(`- Skipped ${skippedDocuments} previously processed documents`));
       console.log(chalk.cyan(`- Documents database saved to: ${documentsDbPath}`));
       console.log(chalk.cyan(`- Updated jobs database with document IDs`));
 
