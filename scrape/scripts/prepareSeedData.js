@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import { getEmbeddings, generateEmbeddingText } from '../utils/embeddings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -580,32 +581,20 @@ async function processSeedData() {
     }
 
     // Process NSW Gov jobs
-    nswgovJobs.jobs.forEach(job => {
+    console.log('\nProcessing NSW Gov jobs and generating embeddings...');
+    for (const job of nswgovJobs.jobs) {
       const jobId = uuidv4();
       const divisionId = job.department ? divisions.get(job.department)?.id : null;
       
       // Find matching documents in nswgovDocs
       const jobDocs = nswgovDocs.documents.filter(doc => doc.jobId === job.jobId);
-      console.log(`\nProcessing job ${job.jobId}:`, {
-        title: job.title,
-        documents_found: jobDocs.length,
-        document_details: jobDocs.map(doc => ({
-          id: doc.id,
-          type: doc.type,
-          has_structured_data: !!doc.structuredData,
-          capability_counts: {
-            focus: doc.structuredData?.focusCapabilities?.length || 0,
-            complementary: doc.structuredData?.complementaryCapabilities?.length || 0
-          }
-        }))
-      });
       
       // Get or create role
       const roleKey = generateRoleKey(job);
       let role;
       
       if (!roles.has(roleKey)) {
-        // Create new role if it doesn't exist
+        // Create new role
         role = {
           id: uuidv4(),
           title: job.title,
@@ -628,6 +617,17 @@ async function processSeedData() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
+
+        // Generate and add embedding for role
+        try {
+          const roleText = generateEmbeddingText(role, 'role');
+          role.embedding = await getEmbeddings(roleText);
+          console.log(`Generated embedding for role: ${role.title}`);
+        } catch (error) {
+          console.error(`Failed to generate embedding for role ${role.title}:`, error);
+          role.embedding = null;
+        }
+
         roles.set(roleKey, role);
       } else {
         role = roles.get(roleKey);
@@ -640,8 +640,8 @@ async function processSeedData() {
         });
       }
       
-      // Create job
-      jobs.push({
+      // Create job with embedding
+      const jobData = {
         id: jobId,
         role_id: role.id,
         title: job.title,
@@ -658,7 +658,19 @@ async function processSeedData() {
         raw_json: job,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      });
+      };
+
+      // Generate and add embedding for job
+      try {
+        const jobText = generateEmbeddingText(jobData, 'job');
+        jobData.embedding = await getEmbeddings(jobText);
+        console.log(`Generated embedding for job: ${jobData.title}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for job ${jobData.title}:`, error);
+        jobData.embedding = null;
+      }
+
+      jobs.push(jobData);
       
       // Process documents
       if (jobDocs.length > 0) {
@@ -681,7 +693,7 @@ async function processSeedData() {
           });
         });
       }
-    });
+    }
     
     // Process Seek jobs
     seekJobs.jobs.forEach(job => {
@@ -798,14 +810,40 @@ async function processSeedData() {
     const roleCapabilities = createRoleCapabilities(rolesArray, capabilities);
     const roleSkills = createRoleSkills(rolesArray, skills);
     
+    // Extract capabilities and generate embeddings
+    const capabilitiesWithEmbeddings = extractCapabilities(Array.from(roles.values()));
+    for (const capability of capabilitiesWithEmbeddings) {
+      try {
+        const capabilityText = `${capability.name} ${capability.description || ''} ${capability.group_name || ''}`;
+        capability.embedding = await getEmbeddings(capabilityText);
+        console.log(`Generated embedding for capability: ${capability.name}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for capability ${capability.name}:`, error);
+        capability.embedding = null;
+      }
+    }
+
+    // Extract skills and generate embeddings
+    const skillsWithEmbeddings = extractSkills(Array.from(roles.values()));
+    for (const skill of skillsWithEmbeddings) {
+      try {
+        const skillText = generateEmbeddingText(skill, 'skill');
+        skill.embedding = await getEmbeddings(skillText);
+        console.log(`Generated embedding for skill: ${skill.name}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for skill ${skill.name}:`, error);
+        skill.embedding = null;
+      }
+    }
+    
     // Write all seed files
     await writeSeedFile(TABLES.companies, companies);
     await writeSeedFile(TABLES.divisions, Array.from(divisions.values()));
     await writeSeedFile(TABLES.roles, rolesArray);
     await writeSeedFile(TABLES.jobs, jobs);
-    await writeSeedFile(TABLES.capabilities, capabilities);
+    await writeSeedFile(TABLES.capabilities, capabilitiesWithEmbeddings);
     await writeSeedFile(TABLES.capabilityLevels, capabilityLevels);
-    await writeSeedFile(TABLES.skills, skills);
+    await writeSeedFile(TABLES.skills, skillsWithEmbeddings);
     await writeSeedFile(TABLES.roleCapabilities, roleCapabilities);
     await writeSeedFile(TABLES.roleSkills, roleSkills);
     await writeSeedFile(TABLES.jobDocuments, jobDocuments);
@@ -815,7 +853,7 @@ async function processSeedData() {
     
   } catch (error) {
     console.error('Error processing seed data:', error);
-    process.exit(1);
+    throw error;
   }
 }
 
