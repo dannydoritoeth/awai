@@ -249,6 +249,10 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       let totalDocuments = 0;
       let currentDocument = 0;
       
+      // Get the source from the filename (nswgov or seek)
+      const sourceMatch = path.basename(jobsDbPath).match(/(nswgov|seek)/);
+      const source = sourceMatch ? sourceMatch[1] : 'unknown';
+      
       // Count total documents first
       for (const job of jobsData.jobs) {
         if (job.details?.documents) {
@@ -325,15 +329,20 @@ Return only the JSON object with the extracted data. If a field cannot be determ
       // Save the updated jobs database with document IDs
       fs.writeFileSync(jobsDbPath, JSON.stringify(jobsData, null, 2));
 
-      // Save the documents database
-      const documentsDbPath = path.join(this.contentDir, `documents-${this.#getTodayDate()}.json`);
+      // Save the documents database with source-specific filename
+      const documentsDbPath = path.join(
+        this.contentDir, 
+        `${source}-docs-${this.#getTodayDate()}.json`
+      );
+      
       fs.writeFileSync(
         documentsDbPath,
         JSON.stringify({
           metadata: {
             totalDocuments: documents.length,
             dateProcessed: new Date().toISOString(),
-            sourceJobsFile: path.basename(jobsDbPath)
+            sourceJobsFile: path.basename(jobsDbPath),
+            source: source
           },
           documents: documents
         }, null, 2)
@@ -341,14 +350,19 @@ Return only the JSON object with the extracted data. If a field cannot be determ
 
       // Generate failed documents report if needed
       if (this.failedDocuments.length > 0) {
-        const failedDocsPath = path.join(this.contentDir, `failed-documents-${this.#getTodayDate()}.json`);
+        const failedDocsPath = path.join(
+          this.contentDir, 
+          `${source}-failed-docs-${this.#getTodayDate()}.json`
+        );
+        
         fs.writeFileSync(
           failedDocsPath,
           JSON.stringify({
             metadata: {
               totalFailed: this.failedDocuments.length,
               dateProcessed: new Date().toISOString(),
-              sourceJobsFile: path.basename(jobsDbPath)
+              sourceJobsFile: path.basename(jobsDbPath),
+              source: source
             },
             failedDocuments: this.failedDocuments
           }, null, 2)
