@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   name text,
   email text,
-  current_role text,
+  role_title text,
   division text,
   last_active timestamptz,
   created_at timestamptz DEFAULT now(),

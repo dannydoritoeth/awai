@@ -1,1 +1,2 @@
 sales-copilot/hubspot-app/hubspot.config.yml
+scrape/.env.local
