@@ -43,11 +43,12 @@ CREATE TABLE IF NOT EXISTS public.roles (
 
 CREATE TABLE IF NOT EXISTS public.jobs (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  role_id uuid REFERENCES public.roles(id),
+  role_id uuid REFERENCES public.roles(id) ON DELETE SET NULL,
   title text NOT NULL,
   open_date date,
   close_date date,
   department text,
+  department_id text,
   job_type text,
   external_id text,
   source_url text,

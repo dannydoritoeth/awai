@@ -399,7 +399,7 @@ function extractSkills(roles) {
 // Process role capabilities
 function createRoleCapabilities(roles, capabilities) {
   console.log('\nCreating role-capability relationships...');
-  const roleCapabilities = [];
+  const roleCapabilitiesMap = new Map(); // Map to store unique role-capability combinations
   const capabilityMap = new Map(capabilities.map(c => [c.name, c.id]));
   let totalRelationships = 0;
 
@@ -431,17 +431,18 @@ function createRoleCapabilities(roles, capabilities) {
             if (capabilityName) {
               const capabilityId = capabilityMap.get(capabilityName);
               if (capabilityId) {
-                roleCapabilities.push({
-                  id: uuidv4(),
-                  role_id: role.id,
-                  capability_id: capabilityId,
-                  capability_type: 'focus',
-                  level: level,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-                totalRelationships++;
-                console.log(`Added focus capability relationship: ${role.title} - ${capabilityName} (${level})`);
+                // Create a unique key for this role-capability combination
+                const key = `${role.id}|${capabilityId}|focus`;
+                if (!roleCapabilitiesMap.has(key)) {
+                  roleCapabilitiesMap.set(key, {
+                    role_id: role.id,
+                    capability_id: capabilityId,
+                    capability_type: 'focus',
+                    level: level
+                  });
+                  totalRelationships++;
+                  console.log(`Added focus capability relationship: ${role.title} - ${capabilityName} (${level})`);
+                }
               }
             }
           });
@@ -472,17 +473,18 @@ function createRoleCapabilities(roles, capabilities) {
             if (capabilityName) {
               const capabilityId = capabilityMap.get(capabilityName);
               if (capabilityId) {
-                roleCapabilities.push({
-                  id: uuidv4(),
-                  role_id: role.id,
-                  capability_id: capabilityId,
-                  capability_type: 'complementary',
-                  level: level,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-                totalRelationships++;
-                console.log(`Added complementary capability relationship: ${role.title} - ${capabilityName} (${level})`);
+                // Create a unique key for this role-capability combination
+                const key = `${role.id}|${capabilityId}|complementary`;
+                if (!roleCapabilitiesMap.has(key)) {
+                  roleCapabilitiesMap.set(key, {
+                    role_id: role.id,
+                    capability_id: capabilityId,
+                    capability_type: 'complementary',
+                    level: level
+                  });
+                  totalRelationships++;
+                  console.log(`Added complementary capability relationship: ${role.title} - ${capabilityName} (${level})`);
+                }
               }
             }
           });
@@ -491,14 +493,14 @@ function createRoleCapabilities(roles, capabilities) {
     }
   });
 
-  console.log(`Total role-capability relationships created: ${totalRelationships}`);
-  return roleCapabilities;
+  console.log(`Total unique role-capability relationships created: ${totalRelationships}`);
+  return Array.from(roleCapabilitiesMap.values());
 }
 
 // Process role skills
 function createRoleSkills(roles, skills) {
   console.log('\nCreating role-skill relationships...');
-  const roleSkills = [];
+  const roleSkillsMap = new Map(); // Map to store unique role-skill combinations
   const skillMap = new Map(skills.map(s => [s.name, s.id]));
   let totalRelationships = 0;
   
@@ -518,15 +520,16 @@ function createRoleSkills(roles, skills) {
 
             const skillId = skillMap.get(skillName);
             if (skillId) {
-              roleSkills.push({
-                id: uuidv4(),
-                role_id: role.id,
-                skill_id: skillId,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
-              totalRelationships++;
-              console.log(`Added role-skill relationship: ${role.title} - ${skillName}`);
+              // Create a unique key for this role-skill combination
+              const key = `${role.id}|${skillId}`;
+              if (!roleSkillsMap.has(key)) {
+                roleSkillsMap.set(key, {
+                  role_id: role.id,
+                  skill_id: skillId
+                });
+                totalRelationships++;
+                console.log(`Added role-skill relationship: ${role.title} - ${skillName}`);
+              }
             }
           });
         }
@@ -534,8 +537,8 @@ function createRoleSkills(roles, skills) {
     }
   });
   
-  console.log(`\nTotal role-skill relationships created: ${totalRelationships}`);
-  return roleSkills;
+  console.log(`\nTotal unique role-skill relationships created: ${totalRelationships}`);
+  return Array.from(roleSkillsMap.values());
 }
 
 // Main processing function
@@ -558,14 +561,26 @@ async function processSeedData() {
     const divisions = extractDivisions(nswgovJobs, seekJobs, companies[0].id);
     
     // Process roles and related data
-    const roles = [];
+    const roles = new Map(); // Map to store unique roles by key
     const jobs = [];
     const jobDocuments = [];
     const roleDocuments = [];
     
+    // Helper to generate a unique role key
+    function generateRoleKey(job) {
+      // Combine relevant fields to create a unique key
+      const keyParts = [
+        job.title,
+        job.department || job.company || '',
+        job.gradeBand || '',
+        job.anzscoCode || '',
+        job.pcatCode || ''
+      ];
+      return keyParts.join('|').toLowerCase();
+    }
+
     // Process NSW Gov jobs
     nswgovJobs.jobs.forEach(job => {
-      const roleId = uuidv4();
       const jobId = uuidv4();
       const divisionId = job.department ? divisions.get(job.department)?.id : null;
       
@@ -585,40 +600,55 @@ async function processSeedData() {
         }))
       });
       
-      // Create role
-      const role = {
-        id: roleId,
-        title: job.title,
-        division_id: divisionId,
-        grade_band: job.gradeBand,
-        location: Array.isArray(job.locations) ? job.locations[0] : job.locations,
-        anzsco_code: job.anzscoCode,
-        pcat_code: job.pcatCode,
-        date_approved: job.dateApproved,
-        primary_purpose: job.primaryPurpose,
-        reporting_line: job.reportingLine,
-        direct_reports: job.directReports,
-        budget_responsibility: job.budgetResponsibility,
-        source_document_url: job.sourceDocumentUrl,
-        raw_json: {
-          details: {
-            documents: jobDocs
-          }
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Get or create role
+      const roleKey = generateRoleKey(job);
+      let role;
       
-      roles.push(role);
+      if (!roles.has(roleKey)) {
+        // Create new role if it doesn't exist
+        role = {
+          id: uuidv4(),
+          title: job.title,
+          division_id: divisionId,
+          grade_band: job.gradeBand,
+          location: Array.isArray(job.locations) ? job.locations[0] : job.locations,
+          anzsco_code: job.anzscoCode,
+          pcat_code: job.pcatCode,
+          date_approved: job.dateApproved,
+          primary_purpose: job.primaryPurpose,
+          reporting_line: job.reportingLine,
+          direct_reports: job.directReports,
+          budget_responsibility: job.budgetResponsibility,
+          source_document_url: job.sourceDocumentUrl,
+          raw_json: {
+            details: {
+              documents: jobDocs
+            }
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        roles.set(roleKey, role);
+      } else {
+        role = roles.get(roleKey);
+        // Merge documents if they don't exist
+        const existingDocIds = new Set(role.raw_json.details.documents.map(d => d.id));
+        jobDocs.forEach(doc => {
+          if (!existingDocIds.has(doc.id)) {
+            role.raw_json.details.documents.push(doc);
+          }
+        });
+      }
       
       // Create job
       jobs.push({
         id: jobId,
-        role_id: roleId,
+        role_id: role.id,
         title: job.title,
         open_date: job.postingDate,
         close_date: job.closingDate,
         department: job.department,
+        department_id: divisionId,
         job_type: job.jobType,
         external_id: job.jobId,
         source_url: job.jobUrl,
@@ -643,7 +673,7 @@ async function processSeedData() {
           });
           
           roleDocuments.push({
-            role_id: roleId,
+            role_id: role.id,
             document_id: documentId,
             document_url: doc.sourceDocumentUrl,
             document_type: doc.type,
@@ -655,7 +685,6 @@ async function processSeedData() {
     
     // Process Seek jobs
     seekJobs.jobs.forEach(job => {
-      const roleId = uuidv4();
       const jobId = uuidv4();
       const divisionId = job.company ? divisions.get(job.company)?.id : null;
       
@@ -676,21 +705,103 @@ async function processSeedData() {
         documents_found: jobDocs.length
       });
       
-      // Create role and job entries similar to NSW Gov processing
-      // ... implementation ...
+      // Get or create role
+      const roleKey = generateRoleKey(job);
+      let role;
+      
+      if (!roles.has(roleKey)) {
+        // Create new role if it doesn't exist
+        role = {
+          id: uuidv4(),
+          title: job.title,
+          division_id: divisionId,
+          grade_band: job.gradeBand,
+          location: Array.isArray(job.locations) ? job.locations[0] : job.locations,
+          anzsco_code: job.anzscoCode,
+          pcat_code: job.pcatCode,
+          date_approved: job.dateApproved,
+          primary_purpose: job.primaryPurpose,
+          reporting_line: job.reportingLine,
+          direct_reports: job.directReports,
+          budget_responsibility: job.budgetResponsibility,
+          source_document_url: job.sourceDocumentUrl,
+          raw_json: {
+            details: {
+              documents: jobDocs
+            }
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        roles.set(roleKey, role);
+      } else {
+        role = roles.get(roleKey);
+        // Merge documents if they don't exist
+        const existingDocIds = new Set(role.raw_json.details.documents.map(d => d.id));
+        jobDocs.forEach(doc => {
+          if (!existingDocIds.has(doc.id)) {
+            role.raw_json.details.documents.push(doc);
+          }
+        });
+      }
+      
+      // Create job
+      jobs.push({
+        id: jobId,
+        role_id: role.id,
+        title: job.title,
+        open_date: job.postingDate,
+        close_date: job.closingDate,
+        department: job.company,
+        department_id: divisionId,
+        job_type: job.jobType,
+        external_id: job.jobId,
+        source_url: job.jobUrl,
+        remuneration: job.remuneration,
+        recruiter: job.contactInfo ? { contact: job.contactInfo } : null,
+        locations: Array.isArray(job.locations) ? job.locations : [job.locations],
+        raw_json: job,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+      // Process documents
+      if (jobDocs.length > 0) {
+        jobDocs.forEach(doc => {
+          const documentId = uuidv4();
+          jobDocuments.push({
+            job_id: jobId,
+            document_id: documentId,
+            document_url: doc.sourceDocumentUrl,
+            document_type: doc.type,
+            title: doc.title
+          });
+          
+          roleDocuments.push({
+            role_id: role.id,
+            document_id: documentId,
+            document_url: doc.sourceDocumentUrl,
+            document_type: doc.type,
+            title: doc.title
+          });
+        });
+      }
     });
     
+    // Convert roles Map to array for further processing
+    const rolesArray = Array.from(roles.values());
+
     // Extract capabilities, levels, skills and relationships
-    const capabilities = extractCapabilities(roles);
-    const capabilityLevels = extractCapabilityLevels(roles, capabilities);
-    const skills = extractSkills(roles);
-    const roleCapabilities = createRoleCapabilities(roles, capabilities);
-    const roleSkills = createRoleSkills(roles, skills);
+    const capabilities = extractCapabilities(rolesArray);
+    const capabilityLevels = extractCapabilityLevels(rolesArray, capabilities);
+    const skills = extractSkills(rolesArray);
+    const roleCapabilities = createRoleCapabilities(rolesArray, capabilities);
+    const roleSkills = createRoleSkills(rolesArray, skills);
     
     // Write all seed files
     await writeSeedFile(TABLES.companies, companies);
     await writeSeedFile(TABLES.divisions, Array.from(divisions.values()));
-    await writeSeedFile(TABLES.roles, roles);
+    await writeSeedFile(TABLES.roles, rolesArray);
     await writeSeedFile(TABLES.jobs, jobs);
     await writeSeedFile(TABLES.capabilities, capabilities);
     await writeSeedFile(TABLES.capabilityLevels, capabilityLevels);
