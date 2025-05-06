@@ -1,0 +1,38 @@
+// 🛠 Cursor Work Request: getSkillGaps(profileId, targetRoleId)
+
+// Objective:
+// Implement the getSkillGaps(profileId, targetRoleId) function to return a list of technical or task-specific skills required by a Role and compare them to the Profile's known skills. This function supports readiness scoring and upskilling recommendations.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getSkillGaps(profileId: string, targetRoleId: string): Promise<SkillGap[]> {}
+
+// Expected Output Structure:
+type SkillGap = {
+  skillId: string;
+  name: string;
+  requiredLevel?: string; // From Role definition
+  profileLevel?: string;  // From Profile context
+  gapType: 'missing' | 'insufficient' | 'met';
+};
+
+// 🧱 Source Tables
+// - profile_skills (join table)
+// - skills
+// - role_skills (join table)
+// - roles
+
+// 🧠 Notes
+// - Match skills by ID, compare levels (if present)
+// - Include those required by role but not held by profile (gapType = 'missing')
+// - Include held skills at a lower level than required (gapType = 'insufficient')
+// - Optionally include 'met' skills if needed for completeness
+// - Useful for pinpointing specific technical gaps even when capabilities are met
+// - Leverage shared logic if similar gap functions (e.g., for capabilities) exist

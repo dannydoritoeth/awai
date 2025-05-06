@@ -1,0 +1,41 @@
+// 🛠 Cursor Work Request: uploadResume(profileId)
+
+// Objective:
+// Implement the uploadResume(profileId) function to accept a resume file (PDF, DOCX, or text), parse it, and extract inferred Skills, Capabilities, and a possible current Role. This enables cold-start onboarding of users into the MCP.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally call out to a hosted parser or embedding service).
+// - Be pure (no side effects beyond storing parsed data).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function uploadResume(profileId: string, file: File): Promise<ResumeParseResult> {}
+
+// Expected Output Structure:
+type ResumeParseResult = {
+  inferredRole?: string;
+  skills: {
+    name: string;
+    source: 'resume';
+  }[];
+  capabilities: {
+    name: string;
+    source: 'resume';
+  }[];
+  rawText?: string;
+};
+
+// 🧱 Source Tables (for insertion after parsing)
+// - profile_skills
+// - profile_capabilities
+// - profiles (to optionally update currentRoleId or inferredRole)
+
+// 🧠 Notes
+// - Parsing can use OpenAI, Claude, or third-party API for entity extraction
+// - Resume should be stored optionally, but parsed results are primary
+// - Include fallback if file is too long or unparseable
+// - Consider using embeddings to infer role similarity if direct titles aren't clear
+// - Return value should be reviewed/confirmed before updating profile state

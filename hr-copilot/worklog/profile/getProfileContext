@@ -1,0 +1,57 @@
+// 🛠 Cursor Work Request: getProfileContext(profileId)
+
+// Objective:
+// Implement the getProfileContext(profileId) function to return a consolidated object containing a user’s full profile context, including:
+// - Basic profile details
+// - Associated skills (with levels or metadata)
+// - Associated capabilities (with evidence if available)
+// - Declared or inferred interests (if supported)
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - this will be used in the MCP to get the context of a profile
+// - it shouldn't be an edge function, but a shared library function
+// - implement shared library for requirements that are used for many actions
+
+// ✅ Requirements
+
+// Function Signature:
+async function getProfileContext(profileId: string): Promise<ProfileContext> {}
+
+// Expected Output Structure:
+type ProfileContext = {
+  profile: {
+    id: string;
+    name: string;
+    currentRoleId?: string;
+    // other basic fields
+  };
+  skills: {
+    skillId: string;
+    name: string;
+    level?: string;
+    source?: string; // 'resume', 'self-assessed', etc.
+  }[];
+  capabilities: {
+    capabilityId: string;
+    name: string;
+    level?: string;
+    evidence?: string;
+  }[];
+  interests?: string[]; // optional
+};
+
+// 🧱 Source Tables
+// Assume Supabase (Postgres) structure:
+// - profiles
+// - profile_skills (join table)
+// - skills
+// - profile_capabilities (join table)
+// - capabilities
+// - profile_interests (optional or stubbed)
+
+// 🧠 Notes
+// - Use joins to pull names from skills and capabilities tables.
+// - Sort skills and capabilities by importance or level if possible.
+// - Include defensive checks for missing or incomplete entries.
+// - If profile_interests table isn’t populated yet, return empty array or stub data for now.

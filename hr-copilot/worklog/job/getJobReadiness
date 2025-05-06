@@ -1,0 +1,36 @@
+// 🛠 Cursor Work Request: getJobReadiness(profileId, jobId)
+
+// Objective:
+// Implement the getJobReadiness(profileId, jobId) function to assess how prepared a Profile is for a specific Job. This function should produce a structured readiness score based on capability and skill alignment with the role linked to the Job.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getJobReadiness(profileId: string, jobId: string): Promise<JobReadiness> {}
+
+// Expected Output Structure:
+type JobReadiness = {
+  jobId: string;
+  roleId: string;
+  score: number; // e.g., 0–100
+  summary: string; // "Strong match on 4 of 5 required capabilities"
+  missingCapabilities?: string[];
+  missingSkills?: string[];
+};
+
+// 🧱 Source Tables
+// - jobs (get linked roleId)
+// - role_capabilities and role_skills
+// - profile_capabilities and profile_skills
+
+// 🧠 Notes
+// - Use jobId to fetch associated roleId
+// - Reuse shared logic for scoring capability/skill alignment
+// - Match structure and scoring approach with scoreProfileFit and rateJobFit
+// - Optionally support caching or memoization if used repeatedly in UI

@@ -1,0 +1,33 @@
+// 🛠 Cursor Work Request: logAgentAction(entityType, entityId, payload)
+
+// Objective:
+// Implement the logAgentAction(entityType, entityId, payload) function to store structured agent-generated actions or recommendations. This creates a timestamped audit trail of MCP decisions and interactions.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one insert operation).
+// - Be pure (no side effects beyond logging).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function logAgentAction(
+  entityType: 'profile' | 'role' | 'job',
+  entityId: string,
+  payload: Record<string, any>
+): Promise<void> {}
+
+// Suggested Table:
+// - agent_actions
+//   - id (uuid)
+//   - entityType
+//   - entityId
+//   - payload (JSON)
+//   - createdAt (timestamp)
+
+// 🧠 Notes
+// - Used by automated agents to record what action was taken or recommended
+// - Ensure consistent schema and naming in payloads
+// - Supports analysis, audit, and nudge tracking
+// - Future: may include agentId, confidence score, or source function name

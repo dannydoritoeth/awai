@@ -1,0 +1,43 @@
+// 🛠 Cursor Work Request: runMcpLoop(profileId?, roleId?, mode)
+
+// Objective:
+// Implement an Edge Function `/mcp-loop` that serves as the orchestration point for the MCP system. It should invoke shared functions to run the appropriate loop depending on whether a candidate is exploring roles or a role owner is exploring candidates.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (controller only; core logic in shared library).
+// - Be pure (no side effects beyond logging, scoring, and nudging).
+// - This will be used to coordinate shared functions during MCP execution.
+// - It should be implemented as an Edge Function on Supabase.
+// - Use the shared library for core logic to avoid duplication.
+
+// Function Signature:
+// POST /mcp-loop
+{
+  profileId?: string;
+  roleId?: string;
+  mode: 'candidate' | 'hiring';
+}
+
+// Shared Controller Files:
+// - mcp/candidate.ts → runCandidateLoop(profileId)
+// - mcp/hiring.ts → runHiringLoop(roleId)
+
+// Candidate Loop (example steps):
+// - getProfileContext
+// - getSuggestedCareerPaths
+// - getRoleDetail → getCapabilityGaps + getSkillGaps
+// - getOpenJobs → getJobReadiness
+// - logAgentAction, nudge
+
+// Hiring Loop (example steps):
+// - getRoleDetail
+// - getMatchingProfiles
+// - scoreProfileFit
+// - getProfileContext → getCapabilityGaps + getSkillGaps
+// - logAgentAction, nudge
+
+// 🧠 Notes
+// - Must validate inputs: ensure `profileId` or `roleId` is provided depending on mode.
+// - Should log errors or status to `agent_actions` for visibility.
+// - Return a success message and summary (e.g. how many jobs/profiles processed).

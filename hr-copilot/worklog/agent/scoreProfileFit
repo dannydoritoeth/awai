@@ -1,0 +1,37 @@
+// 🛠 Cursor Work Request: scoreProfileFit(profileId, roleId)
+
+// Objective:
+// Implement the scoreProfileFit(profileId, roleId) function to calculate a numerical and semantic fit score between a Profile and a Role based on capability and skill alignment. This score will be used for ranking and readiness evaluation within the MCP.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function scoreProfileFit(profileId: string, roleId: string): Promise<ProfileFitScore> {}
+
+// Expected Output Structure:
+type ProfileFitScore = {
+  profileId: string;
+  roleId: string;
+  score: number; // 0–100
+  summary: string; // e.g., "Good match: 4 of 5 capabilities aligned"
+  matchedCapabilities?: string[];
+  missingCapabilities?: string[];
+  matchedSkills?: string[];
+  missingSkills?: string[];
+};
+
+// 🧱 Source Tables
+// - profile_capabilities and profile_skills
+// - role_capabilities and role_skills
+
+// 🧠 Notes
+// - Base the score on % of required capabilities and skills matched
+// - Weights may be used if capabilities have different importance levels
+// - Should be consistent with other scoring logic (e.g., rateJobFit, getMatchingProfiles)
+// - Consider reusing utility methods for gap comparison

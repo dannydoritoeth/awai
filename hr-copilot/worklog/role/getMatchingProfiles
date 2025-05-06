@@ -1,0 +1,36 @@
+// 🛠 Cursor Work Request: getMatchingProfiles(roleId)
+
+// Objective:
+// Implement the getMatchingProfiles(roleId) function to return a ranked list of Profiles that are a good fit for a given Role based on capability and skill overlap. This function is used for talent identification and readiness assessments.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getMatchingProfiles(roleId: string): Promise<MatchingProfile[]> {}
+
+// Expected Output Structure:
+type MatchingProfile = {
+  profileId: string;
+  name: string;
+  matchScore: number; // e.g., 0–100
+  missingCapabilities?: string[];
+  missingSkills?: string[];
+};
+
+// 🧱 Source Tables
+// - roles
+// - role_capabilities and role_skills
+// - profile_capabilities and profile_skills
+// - profiles
+
+// 🧠 Notes
+// - Reuse the same logic used for scoring fit (as in rateJobFit or scoreProfileFit)
+// - Focus on capability alignment first; skill alignment can be a secondary factor
+// - Optional: limit to top 10–20 matches, with pagination if needed
+// - Ensure score calculation is consistent and explainable

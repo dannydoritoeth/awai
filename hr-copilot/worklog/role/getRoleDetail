@@ -1,0 +1,42 @@
+// 🛠 Cursor Work Request: getRoleDetail(roleId)
+
+// Objective:
+// Implement the getRoleDetail(roleId) function to retrieve comprehensive information about a Role, including its title, description, required capabilities, key accountabilities, and any structural metadata.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getRoleDetail(roleId: string): Promise<RoleDetail> {}
+
+// Expected Output Structure:
+type RoleDetail = {
+  roleId: string;
+  title: string;
+  description?: string;
+  gradeBand?: string;
+  divisionId?: string;
+  capabilities: {
+    capabilityId: string;
+    name: string;
+    level?: string;
+    isCritical?: boolean;
+  }[];
+  accountabilities?: string[];
+};
+
+// 🧱 Source Tables
+// - roles
+// - role_capabilities (join table)
+// - capabilities
+// - role_accountabilities (if separated)
+
+// 🧠 Notes
+// - Ensure capability details include names and levels (if defined)
+// - Consider returning empty arrays instead of nulls for frontend simplicity
+// - Shared logic for capability expansion should be reused from elsewhere if available

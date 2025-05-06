@@ -1,0 +1,37 @@
+// 🛠 Cursor Work Request: rateJobFit(profileId, jobId)
+
+// Objective:
+// Implement the rateJobFit(profileId, jobId) function to return a score and explanation of how well a Profile aligns with a specific Job. This supports user-facing readiness indicators and internal prioritization.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function rateJobFit(profileId: string, jobId: string): Promise<JobFitScore> {}
+
+// Expected Output Structure:
+type JobFitScore = {
+  score: number; // e.g. 0–100 readiness score
+  summary: string; // short sentence e.g. "Strong match based on 3 of 5 required capabilities"
+  matchedCapabilities?: string[];
+  missingCapabilities?: string[];
+  matchedSkills?: string[];
+  missingSkills?: string[];
+};
+
+// 🧱 Source Tables
+// - jobs (to get linked roleId)
+// - role_capabilities and role_skills
+// - profile_capabilities and profile_skills
+
+// 🧠 Notes
+// - Use jobId → roleId to access required capability/skill expectations
+// - Compare with profile’s known skills/capabilities
+// - Normalize score calculation for consistency across jobs
+// - Can reuse logic from getCapabilityGaps / getSkillGaps
+// - Consider using weightings if some capabilities/skills are marked as critical

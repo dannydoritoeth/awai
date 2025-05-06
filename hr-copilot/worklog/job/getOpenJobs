@@ -1,0 +1,37 @@
+// 🛠 Cursor Work Request: getOpenJobs(roleId?)
+
+// Objective:
+// Implement the getOpenJobs(roleId?) function to return a list of currently available job postings. If a roleId is provided, filter results to only jobs linked to that role. This supports user exploration and job-to-role mapping.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with optional filter).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getOpenJobs(roleId?: string): Promise<JobPosting[]> {}
+
+// Expected Output Structure:
+type JobPosting = {
+  jobId: string;
+  title: string;
+  summary?: string;
+  roleId?: string;
+  roleTitle?: string;
+  location?: string;
+  postedAt?: string;
+  metadata?: Record<string, any>;
+};
+
+// 🧱 Source Tables
+// - jobs
+// - roles (for optional roleTitle enrichment)
+
+// 🧠 Notes
+// - Only return jobs marked as active/open (e.g., status = 'open')
+// - Include role information for each job if roleId is linked
+// - Sort by most recent or relevance
+// - Future-ready to add pagination or filtering by division/location

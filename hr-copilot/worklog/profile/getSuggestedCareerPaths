@@ -1,0 +1,37 @@
+// 🛠 Cursor Work Request: getSuggestedCareerPaths(profileId)
+
+// Objective:
+// Implement the getSuggestedCareerPaths(profileId) function to return a ranked list of CareerPaths relevant to the user's current or inferred role and their capabilities or interests.
+
+// ✅ Requirements
+
+// - Be lightweight and fast (ideally one SQL call with joins).
+// - Be pure (no side effects).
+// - This will be used in the MCP to get the context of a profile.
+// - It shouldn't be an edge function, but a shared library function.
+// - Refactor code as necessary to avoid DRY violations.
+
+// Function Signature:
+async function getSuggestedCareerPaths(profileId: string): Promise<SuggestedPath[]> {}
+
+// Expected Output Structure:
+type SuggestedPath = {
+  fromRoleId: string;
+  toRoleId: string;
+  toRoleTitle: string;
+  matchScore?: number; // Optional ranking based on capability overlap or intent signals
+  reason?: string; // Optional explanation e.g. "Strong capability match" or "Recent interest expressed"
+};
+
+// 🧱 Source Tables
+// - profiles (to get currentRoleId)
+// - career_paths (fromRoleId → toRoleId mappings)
+// - roles (to get toRoleTitle)
+// - profile_capabilities or profile_interests (to enhance scoring)
+
+// 🧠 Notes
+// - If no currentRoleId is set, use inferred role (from resume or highest capability match).
+// - Sort suggestions by strength of match (e.g. capability overlap or expressed interest).
+// - Return top N paths (e.g., limit to 5–10).
+// - Optional: Flag transitions where profile is highly ready (based on capability fit).
+// - Must reuse shared utility logic if available to fetch role or capability context.
