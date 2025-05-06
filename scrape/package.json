@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "scrape": "node crawl.js"
+    "scrape": "node crawl.js",
+    "prepare-seed": "node scripts/prepareSeedData.js"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
     "nodemailer": "^6.9.3",
     "openai": "^4.97.0",
     "pdf2json": "^3.1.5",
-    "puppeteer": "^20.7.4"
+    "puppeteer": "^20.7.4",
+    "uuid": "^9.0.1"
   }
 }
