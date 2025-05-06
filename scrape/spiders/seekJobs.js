@@ -364,6 +364,12 @@ export class SeekJobSpider {
       let failedScrapes = 0;
       let skippedJobs = 0;
       
+      // Define valid employer names
+      const validEmployers = [
+        'Department of Climate Change, Energy, the Environment & Water',
+        'Department of Climate Change, Energy, the Environment and Water'
+      ].map(e => e.toLowerCase());
+      
       // Wait for job elements to load with a more specific selector
       await this.page.waitForSelector('article[data-automation="premiumJob"], article[data-automation="normalJob"]', {
         timeout: 30000
@@ -423,10 +429,17 @@ export class SeekJobSpider {
       });
 
       totalJobs = jobListings.length;
-      console.log(chalk.cyan(`Found ${totalJobs} job listings to process...`));
+      console.log(chalk.cyan(`Found ${totalJobs} total job listings...`));
+      
+      // Filter for only DCCEEW jobs
+      const dcceewJobs = jobListings.filter(job => 
+        validEmployers.includes(job.company.toLowerCase())
+      );
+      
+      console.log(chalk.cyan(`Found ${dcceewJobs.length} DCCEEW job listings to process...`));
       
       // Process each job listing
-      for (const jobInfo of jobListings) {
+      for (const jobInfo of dcceewJobs) {
         try {
           // Check cache before fetching details
           const cachedDetails = this.#checkCache(jobInfo.jobId);
@@ -435,7 +448,7 @@ export class SeekJobSpider {
             skippedJobs++;
             successfulScrapes++;
             jobs.push(jobInfo);
-            process.stdout.write(`\rProcessed: ${successfulScrapes}/${totalJobs} jobs (${skippedJobs} from cache)`);
+            process.stdout.write(`\rProcessed: ${successfulScrapes}/${dcceewJobs.length} jobs (${skippedJobs} from cache)`);
             continue;
           }
 
@@ -452,7 +465,7 @@ export class SeekJobSpider {
           
           jobs.push(completeJob);
           successfulScrapes++;
-          process.stdout.write(`\rProcessed: ${successfulScrapes}/${totalJobs} jobs (${skippedJobs} from cache)`);
+          process.stdout.write(`\rProcessed: ${successfulScrapes}/${dcceewJobs.length} jobs (${skippedJobs} from cache)`);
         } catch (error) {
           failedScrapes++;
           console.log(chalk.yellow(`\nError scraping job: ${error.message}`));
@@ -461,7 +474,7 @@ export class SeekJobSpider {
       
       console.log('\n');
       console.log(chalk.cyan('Job Processing Summary:'));
-      console.log(chalk.green(`Successfully scraped: ${successfulScrapes} jobs`));
+      console.log(chalk.green(`Successfully scraped: ${successfulScrapes} DCCEEW jobs`));
       console.log(chalk.blue(`Jobs loaded from cache: ${skippedJobs}`));
       console.log(chalk.yellow(`Failed to scrape: ${failedScrapes} jobs`));
       

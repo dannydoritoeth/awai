@@ -199,7 +199,7 @@ export class NSWJobSpider {
           
           const jobs = await this.#scrapeJobs();
           if (jobs && jobs.length > 0) {
-            allJobs = [...allJobs, ...jobs];
+          allJobs = [...allJobs, ...jobs];
           } else {
             console.log(chalk.yellow(`Warning: No jobs found on page ${currentPage}`));
           }

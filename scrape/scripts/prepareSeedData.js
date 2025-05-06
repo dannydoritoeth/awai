@@ -295,7 +295,7 @@ const companies = [
 function extractDivisions(nswgovJobs, seekJobs, companyId) {
   const divisions = new Map();
   
-  // Extract from NSW Gov jobs departments
+  // Extract from NSW Gov jobs departments - keep all of these
   nswgovJobs.jobs.forEach(job => {
     if (job.department && !divisions.has(job.department)) {
       divisions.set(job.department, {
@@ -310,18 +310,29 @@ function extractDivisions(nswgovJobs, seekJobs, companyId) {
     }
   });
   
+  // Extract from Seek jobs - only include DCCEEW
+  const validEmployers = [
+    'department of climate change, energy, the environment & water',
+    'department of climate change, energy, the environment and water'
+  ];
+  
   // Extract from Seek jobs companies
   seekJobs.jobs.forEach(job => {
     if (job.company && !divisions.has(job.company)) {
-      divisions.set(job.company, {
-        id: uuidv4(),
-        company_id: companyId,
-        name: job.company,
-        cluster: null,
-        agency: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      const companyLower = job.company.toLowerCase();
+      
+      // Only include if the company is DCCEEW
+      if (validEmployers.includes(companyLower)) {
+        divisions.set(job.company, {
+          id: uuidv4(),
+          company_id: companyId,
+          name: job.company,
+          cluster: null,
+          agency: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
     }
   });
   
@@ -647,6 +658,23 @@ async function processSeedData() {
       const roleId = uuidv4();
       const jobId = uuidv4();
       const divisionId = job.company ? divisions.get(job.company)?.id : null;
+      
+      // Skip non-DCCEEW jobs
+      const validEmployers = [
+        'department of climate change, energy, the environment & water',
+        'department of climate change, energy, the environment and water'
+      ];
+      if (!job.company || !validEmployers.includes(job.company.toLowerCase())) {
+        return;
+      }
+      
+      // Find matching documents in seekDocs
+      const jobDocs = seekDocs.documents.filter(doc => doc.jobId === job.jobId);
+      console.log(`\nProcessing Seek job ${job.jobId}:`, {
+        title: job.title,
+        company: job.company,
+        documents_found: jobDocs.length
+      });
       
       // Create role and job entries similar to NSW Gov processing
       // ... implementation ...
