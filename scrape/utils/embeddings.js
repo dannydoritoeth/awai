@@ -1,20 +1,16 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { VertexAI } from '@google-cloud/vertexai';
 
 // Load environment variables
-dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env') });
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env.local') });
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'textembedding-gecko-multilingual-002';
+const API_ENDPOINT = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/text-embedding-005:predict`;
+const BEARER_TOKEN = process.env.GOOGLE_BEARER_TOKEN;
 
-// Initialize Vertex AI
-const vertexAI = new VertexAI({
-  project: PROJECT_ID,
-  location: LOCATION
-});
+console.log('Vertex AI Config:', { PROJECT_ID, LOCATION });
 
 /**
  * Get embeddings for a text using Google's Vertex AI
@@ -26,78 +22,48 @@ export async function getEmbeddings(text) {
     throw new Error('GOOGLE_CLOUD_PROJECT environment variable is required');
   }
 
+  if (!BEARER_TOKEN) {
+    throw new Error('GOOGLE_BEARER_TOKEN environment variable is required');
+  }
+
   try {
-    const model = vertexAI.preview.getModel(EMBEDDING_MODEL);
-    const result = await model.predict({
-      instances: [{ content: text }]
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${BEARER_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        instances: [
+          {
+            task_type: 'SEMANTIC_SIMILARITY',
+            content: text
+          }
+        ]
+      })
     });
 
-    return result.predictions[0].embeddings.values;
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText}\n${errorData}`);
+    }
+
+    const data = await response.json();
+    return data.predictions[0].embeddings.values;
   } catch (error) {
-    console.error('Error getting embeddings:', error);
+    console.error('Error generating embeddings:', error);
     throw error;
   }
 }
 
 /**
- * Generate a text representation for embedding generation
- * @param {Object} entity - The entity object (Role, Job, etc.)
- * @param {string} type - The type of entity ('role', 'job', etc.)
- * @returns {string} Concatenated text for embedding
+ * Generate text for embedding from an object's properties
+ * @param {Object} obj - The object to generate text from
+ * @returns {string} Concatenated text suitable for embedding
  */
-export function generateEmbeddingText(entity, type) {
-  const texts = [];
-
-  switch (type.toLowerCase()) {
-    case 'role':
-      texts.push(
-        entity.title,
-        entity.primary_purpose,
-        entity.reporting_line,
-        entity.direct_reports,
-        entity.budget_responsibility
-      );
-      
-      // Add capabilities and skills if available in raw_json
-      if (entity.raw_json?.details?.documents) {
-        entity.raw_json.details.documents.forEach(doc => {
-          if (doc.structuredData) {
-            if (doc.structuredData.focusCapabilities) {
-              texts.push(...doc.structuredData.focusCapabilities);
-            }
-            if (doc.structuredData.complementaryCapabilities) {
-              texts.push(...doc.structuredData.complementaryCapabilities);
-            }
-            if (doc.structuredData.skills) {
-              texts.push(...doc.structuredData.skills);
-            }
-          }
-        });
-      }
-      break;
-
-    case 'job':
-      texts.push(
-        entity.title,
-        entity.department,
-        entity.job_type,
-        ...entity.locations,
-        entity.remuneration
-      );
-      break;
-
-    case 'skill':
-      texts.push(
-        entity.name,
-        entity.description,
-        entity.category
-      );
-      break;
-
-    default:
-      throw new Error(`Unsupported entity type: ${type}`);
-  }
-
-  // Filter out nulls and empty strings, then join with spaces
-  return texts.filter(text => text).join(' ');
+export function generateEmbeddingText(obj) {
+  return Object.entries(obj)
+    .filter(([_, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(' ');
 } 
