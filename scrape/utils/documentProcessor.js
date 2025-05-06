@@ -186,6 +186,7 @@ Format the response as a JSON object with the following fields from the MCP sche
 - directReports (string): Who this role manages
 - budgetResponsibility (string, optional): Budget oversight
 - sourceDocumentUrl (string): Original document URL
+- skills (array): List of specific skills required for this role, extracted from the entire document content. Include both technical and soft skills. Each skill should be a string representing a distinct, well-defined skill (e.g. "Python Programming", "Stakeholder Management", "Data Analysis", "Project Management", etc.)
 
 Document content:
 ${content}
@@ -194,7 +195,7 @@ Additional metadata:
 Job ID: ${metadata.jobId}
 Document URL: ${metadata.sourceUrl}
 
-Return only the JSON object with the extracted data. If a field cannot be determined from the content, omit it from the JSON rather than including null or empty values.`;
+Return only the JSON object with the extracted data. If a field cannot be determined from the content, omit it from the JSON rather than including null or empty values. For the skills array, be comprehensive and extract all relevant skills mentioned throughout the document, including those implied by the responsibilities and requirements.`;
 
       const completion = await this.openai.chat.completions.create({
         model: "gpt-4-turbo-preview",

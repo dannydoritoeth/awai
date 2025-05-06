@@ -328,77 +328,60 @@ function extractDivisions(nswgovJobs, seekJobs, companyId) {
   return divisions;
 }
 
-// Extract skills using NLP from role text
-function extractSkillsFromText(text) {
-  if (!text) return [];
-  
-  // Basic NLP rules for skill extraction
-  const skills = new Set();
-  
-  // Remove common non-skill phrases
-  const cleanText = text.replace(/must have|should have|will have|you will|you should|demonstrated|experience in/gi, '');
-  
-  // Split into sentences
-  const sentences = cleanText.split(/[.;]/);
-  
-  sentences.forEach(sentence => {
-    // Look for technical terms, tools, methodologies
-    const words = sentence.trim().split(/\s+/);
-    let phrase = '';
-    
-    words.forEach(word => {
-      // Skip common words and keep potential skill terms
-      if (word.length > 2 && 
-          !word.match(/^(the|and|or|in|on|at|to|for|of|with|by|from|up|about|into|over|after)$/i)) {
-        
-        if (phrase) phrase += ' ';
-        phrase += word;
-        
-        // Check if we have a valid skill phrase
-        if (phrase.length > 3 && phrase.length < 50) {
-          skills.add(phrase.trim());
-        }
-      } else {
-        phrase = '';
-      }
-    });
-  });
-  
-  return Array.from(skills);
-}
-
-// Extract skills from role data using NLP
+// Extract skills from role data using AI-extracted skills
 function extractSkills(roles) {
   const skills = new Map();
+  let totalSkills = 0;
   
   roles.forEach(role => {
-    // Combine all relevant text fields
-    const textFields = [
-      role.primaryPurpose,
-      ...(role.keyAccountabilities || []),
-      ...(role.keyChallenges || []),
-      ...(role.essentialRequirements || [])
-    ].filter(Boolean);
+    console.log(`\nExtracting skills from role: ${role.title}`);
     
-    const combinedText = textFields.join('. ');
-    const extractedSkills = extractSkillsFromText(combinedText);
-    
-    extractedSkills.forEach(skillName => {
-      if (!skills.has(skillName)) {
-        skills.set(skillName, {
-          id: uuidv4(),
-          name: skillName,
-          category: 'Extracted',
-          description: `Skill extracted from role: ${role.title}`,
-          source: 'nlp_extraction',
-          is_occupation_specific: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      }
-    });
+    // Get skills from structured data
+    if (role.raw_json?.details?.documents) {
+      role.raw_json.details.documents.forEach(doc => {
+        if (doc.structuredData?.skills && Array.isArray(doc.structuredData.skills)) {
+          console.log(`Processing ${doc.structuredData.skills.length} AI-extracted skills from document`);
+          
+          doc.structuredData.skills.forEach(skillName => {
+            // Clean and normalize the skill name
+            skillName = skillName.trim()
+              // Remove common non-skill words at the start
+              .replace(/^(the|a|an|and|or|to|for|in|on|at|by|of)\s+/, '')
+              // Capitalize first letter of each word
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+
+            // Skip if skill name is too short or too long
+            if (skillName.length <= 2 || skillName.length >= 50) return;
+            // Skip if skill is just numbers or single letters
+            if (/^\d+$/.test(skillName) || /^[A-Za-z]$/.test(skillName)) return;
+
+            if (!skills.has(skillName)) {
+              skills.set(skillName, {
+                id: uuidv4(),
+                name: skillName,
+                category: 'AI Extracted',
+                description: `Skill extracted by AI from role: ${role.title}`,
+                source: 'ai_extraction',
+                is_occupation_specific: 
+                  skillName.toLowerCase().includes('legal') || 
+                  skillName.toLowerCase().includes('regulatory') ||
+                  skillName.toLowerCase().includes('compliance') ||
+                  skillName.toLowerCase().includes('policy'),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+              totalSkills++;
+              console.log(`Added skill: ${skillName}`);
+            }
+          });
+        }
+      });
+    }
   });
   
+  console.log(`\nTotal unique skills extracted: ${totalSkills}`);
   return Array.from(skills.values());
 }
 
@@ -503,32 +486,44 @@ function createRoleCapabilities(roles, capabilities) {
 
 // Process role skills
 function createRoleSkills(roles, skills) {
+  console.log('\nCreating role-skill relationships...');
   const roleSkills = [];
   const skillMap = new Map(skills.map(s => [s.name, s.id]));
+  let totalRelationships = 0;
   
   roles.forEach(role => {
-    // Combine all relevant text fields
-    const textFields = [
-      role.primaryPurpose,
-      ...(role.keyAccountabilities || []),
-      ...(role.keyChallenges || []),
-      ...(role.essentialRequirements || [])
-    ].filter(Boolean);
+    console.log(`\nProcessing skills for role: ${role.title}`);
     
-    const combinedText = textFields.join('. ');
-    const extractedSkills = extractSkillsFromText(combinedText);
-    
-    extractedSkills.forEach(skillName => {
-      const skillId = skillMap.get(skillName);
-      if (skillId) {
-        roleSkills.push({
-          role_id: role.id,
-          skill_id: skillId
-        });
-      }
-    });
+    if (role.raw_json?.details?.documents) {
+      role.raw_json.details.documents.forEach(doc => {
+        if (doc.structuredData?.skills && Array.isArray(doc.structuredData.skills)) {
+          doc.structuredData.skills.forEach(skillName => {
+            // Clean and normalize the skill name (same as in extractSkills)
+            skillName = skillName.trim()
+              .replace(/^(the|a|an|and|or|to|for|in|on|at|by|of)\s+/, '')
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' ');
+
+            const skillId = skillMap.get(skillName);
+            if (skillId) {
+              roleSkills.push({
+                id: uuidv4(),
+                role_id: role.id,
+                skill_id: skillId,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+              totalRelationships++;
+              console.log(`Added role-skill relationship: ${role.title} - ${skillName}`);
+            }
+          });
+        }
+      });
+    }
   });
   
+  console.log(`\nTotal role-skill relationships created: ${totalRelationships}`);
   return roleSkills;
 }
 
