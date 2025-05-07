@@ -1,7 +1,7 @@
 // 🛠 Cursor Work Request: runMcpLoop(profileId?, roleId?, mode)
 
 // Objective:
-// Implement an Edge Function `/mcp-loop` that serves as the orchestration point for the MCP system. It should invoke shared functions to run the appropriate loop depending on whether a candidate is exploring roles or a role owner is exploring candidates.
+// Implement an Edge Function `/mcp-loop` that serves as the orchestration point for the MCP system. It should invoke shared functions to run the appropriate loop depending on whether a candidate is exploring roles or a role owner is exploring candidates, with support for both traditional and semantic matching.
 
 // ✅ Requirements
 
@@ -11,6 +11,7 @@
 // - It should be implemented as an Edge Function on Supabase.
 // - Use the shared library for core logic to avoid duplication.
 // - Leverage embeddings for semantic matching and recommendations.
+// - Support chat-based interactions through the MCP system.
 
 // Function Signature:
 // POST /mcp-loop
@@ -18,12 +19,22 @@
   profileId?: string;
   roleId?: string;
   mode: 'candidate' | 'hiring';
+  sessionId?: string; // Optional chat session ID for context
+  context?: {
+    lastMessage?: string;
+    chatHistory?: ChatMessage[];
+    semanticContext?: {
+      currentFocus?: 'role' | 'skill' | 'capability' | 'company';
+      previousMatches?: SemanticMatch[];
+    };
+  };
 }
 
 // Shared Controller Files:
-// - mcp/candidate.ts → runCandidateLoop(profileId)
-// - mcp/hiring.ts → runHiringLoop(roleId)
+// - mcp/candidate.ts → runCandidateLoop(profileId, context?)
+// - mcp/hiring.ts → runHiringLoop(roleId, context?)
 // - mcp/embedding.ts → getSemanticMatches(embedding, table, limit)
+// - mcp/chat.ts → handleChatInteraction(sessionId, message, context)
 
 // Candidate Loop (example steps):
 // - getProfileContext (includes profile embedding)
@@ -31,6 +42,7 @@
 // - getRoleDetail → getCapabilityGaps + getSkillGaps (enhanced with embedding similarity)
 // - getOpenJobs → getJobReadiness (using semantic job matching)
 // - getSemanticSkillRecommendations (based on profile and target role embeddings)
+// - handleChatInteraction (process user input and generate responses)
 // - logAgentAction, nudge
 
 // Hiring Loop (example steps):
@@ -39,7 +51,15 @@
 // - scoreProfileFit (enhanced with embedding similarity scores)
 // - getProfileContext → getCapabilityGaps + getSkillGaps (using semantic capability matching)
 // - getSemanticCompanyFit (match profile against company/division culture embeddings)
+// - handleChatInteraction (process hiring manager input)
 // - logAgentAction, nudge
+
+// Chat Integration:
+// - Each MCP action can be triggered via chat
+// - Chat context is maintained across interactions
+// - Semantic matching is used to understand user intent
+// - Responses are generated based on MCP state and context
+// - Tool calls and responses are logged for transparency
 
 // 🧠 Notes
 // - Must validate inputs: ensure `profileId` or `roleId` is provided depending on mode.
@@ -48,3 +68,8 @@
 // - Embedding operations should use vector similarity search for efficient matching.
 // - Consider caching embeddings for frequently accessed entities.
 // - Use cosine similarity for semantic matching (supported by ivfflat index).
+// - Chat interactions should maintain context across messages.
+// - Semantic matching should be used to understand user intent in chat.
+// - All actions should be logged for audit and improvement.
+// - Consider rate limiting for embedding operations.
+// - Implement proper error handling for chat interactions.
