@@ -20,3 +20,26 @@ DROP TABLE IF EXISTS
   roles,
   skills
 CASCADE;
+
+TRUNCATE TABLE 
+  agent_actions,
+  capabilities,
+  capability_levels,
+  career_paths,
+  companies,
+  divisions,
+  jobs,
+  job_documents,
+  job_skills,
+  profile_agent_actions,
+  profile_capabilities,
+  profile_career_paths,
+  profile_job_interactions,
+  profile_skills,
+  profiles,
+  role_capabilities,
+  role_documents,
+  role_skills,
+  roles,
+  skills
+RESTART IDENTITY CASCADE;
