@@ -1,7 +1,16 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse, ProfileFitScore } from '../types.ts';
+import { DatabaseResponse } from '../types.ts';
 import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
 import { getSkillGaps } from '../profile/getSkillGaps.ts';
+
+export interface ProfileFitScore {
+  score: number;
+  roleId: string;
+  profileId: string;
+  missingCapabilities?: string[];
+  missingSkills?: string[];
+  matchSummary?: string;
+}
 
 export async function scoreProfileFit(
   supabase: SupabaseClient,
@@ -9,108 +18,120 @@ export async function scoreProfileFit(
   roleId: string
 ): Promise<DatabaseResponse<ProfileFitScore>> {
   try {
+    console.log('Starting scoreProfileFit calculation:', { profileId, roleId });
+
+    if (!profileId || !roleId) {
+      console.log('Invalid input - missing profileId or roleId');
+      return {
+        data: null,
+        error: {
+          type: 'INVALID_INPUT',
+          message: 'Both profileId and roleId are required'
+        }
+      };
+    }
+
     // Get capability gaps
+    console.log('Fetching capability gaps...');
     const capabilityGapsResult = await getCapabilityGaps(supabase, profileId, roleId);
     if (capabilityGapsResult.error) {
+      console.log('Error getting capability gaps:', capabilityGapsResult.error);
       return {
         data: null,
         error: capabilityGapsResult.error
       };
     }
+    console.log('Capability gaps found:', capabilityGapsResult.data?.length || 0);
 
     // Get skill gaps
+    console.log('Fetching skill gaps...');
     const skillGapsResult = await getSkillGaps(supabase, profileId, roleId);
     if (skillGapsResult.error) {
+      console.log('Error getting skill gaps:', skillGapsResult.error);
       return {
         data: null,
         error: skillGapsResult.error
       };
     }
+    console.log('Skill gaps found:', skillGapsResult.data?.length || 0);
 
-    // Get role requirements for weighting
-    const { data: role, error: roleError } = await supabase
+    // Calculate scores
+    const capabilityGaps = capabilityGapsResult.data || [];
+    const skillGaps = skillGapsResult.data || [];
+
+    // Get total counts for capabilities and skills
+    console.log('Fetching role requirements counts...');
+    const { data: totalCounts, error: countsError } = await supabase
       .from('roles')
       .select(`
         id,
-        role_capabilities (
-          capability_id
-        ),
-        role_skills (
-          skill_id
-        )
+        role_capabilities!role_capabilities_role_id_fkey (count),
+        role_skills!role_skills_role_id_fkey (count)
       `)
       .eq('id', roleId)
       .single();
 
-    if (roleError || !role) {
+    if (countsError) {
+      console.log('Error getting role requirements counts:', countsError);
       return {
         data: null,
         error: {
-          type: 'NOT_FOUND',
-          message: 'Role not found',
-          details: roleError
+          type: 'DATABASE_ERROR',
+          message: 'Failed to get role requirements counts',
+          details: countsError
         }
       };
     }
+    console.log('Role requirements counts:', totalCounts);
 
-    // Calculate capability score (60% weight)
-    const capabilityGaps = capabilityGapsResult.data || [];
-    const totalCapabilities = role.role_capabilities.length;
+    const totalCapabilities = totalCounts?.role_capabilities?.length || 0;
+    const totalSkills = totalCounts?.role_skills?.length || 0;
+
+    console.log('Calculating scores with totals:', { totalCapabilities, totalSkills });
+
+    // Calculate fit scores
+    const capabilityScore = totalCapabilities > 0 
+      ? (totalCapabilities - capabilityGaps.length) / totalCapabilities 
+      : 1;
     
-    const matchedCapabilities = capabilityGaps
-      .filter(gap => gap.gapType === 'met')
-      .map(gap => gap.capabilityId);
-    
-    const missingCapabilities = capabilityGaps
-      .filter(gap => gap.gapType === 'missing' || gap.gapType === 'insufficient')
-      .map(gap => gap.capabilityId);
-
-    const capabilityScore = totalCapabilities > 0
-      ? (matchedCapabilities.length / totalCapabilities) * 60
-      : 60;
-
-    // Calculate skill score (40% weight)
-    const skillGaps = skillGapsResult.data || [];
-    const totalSkills = role.role_skills.length;
-
-    const matchedSkills = skillGaps
-      .filter(gap => gap.gapType === 'met')
-      .map(gap => gap.skillId);
-
-    const missingSkills = skillGaps
-      .filter(gap => gap.gapType === 'missing' || gap.gapType === 'insufficient')
-      .map(gap => gap.skillId);
-
     const skillScore = totalSkills > 0
-      ? (matchedSkills.length / totalSkills) * 40
-      : 40;
+      ? (totalSkills - skillGaps.length) / totalSkills
+      : 1;
 
-    // Calculate total score
-    const totalScore = Math.round(capabilityScore + skillScore);
+    console.log('Individual scores:', { capabilityScore, skillScore });
 
-    // Generate summary
-    const summary = generateSummary(
-      matchedCapabilities.length,
-      totalCapabilities,
-      matchedSkills.length,
-      totalSkills,
-      totalScore
-    );
+    // Weighted average (capabilities count more than skills)
+    const totalScore = (capabilityScore * 0.7 + skillScore * 0.3) * 100;
+    console.log('Total weighted score:', totalScore);
 
-    return {
+    // Generate match summary
+    let matchSummary = '';
+    if (totalScore >= 80) {
+      matchSummary = 'Excellent fit with strong capability and skill alignment';
+    } else if (totalScore >= 60) {
+      matchSummary = 'Good fit with some gaps in capabilities or skills';
+    } else if (totalScore >= 40) {
+      matchSummary = 'Moderate fit with significant development needs';
+    } else {
+      matchSummary = 'Limited fit with major capability and skill gaps';
+    }
+
+    const result = {
       data: {
-        profileId,
+        score: Math.round(totalScore),
         roleId,
-        score: totalScore,
-        summary,
-        matchedCapabilities,
-        missingCapabilities,
-        matchedSkills,
-        missingSkills
+        profileId,
+        missingCapabilities: capabilityGaps.map(gap => gap.name),
+        missingSkills: skillGaps.map(gap => gap.name),
+        matchSummary
       },
       error: null
     };
+    console.log('Final result:', result);
+    return result;
+
   } catch (error) {
+    console.log('Unexpected error in scoreProfileFit:', error);
     return {
       data: null,
       error: {
@@ -120,21 +141,4 @@ export async function scoreProfileFit(
       }
     };
   }
-}
-
-function generateSummary(
-  matchedCapabilities: number,
-  totalCapabilities: number,
-  matchedSkills: number,
-  totalSkills: number,
-  totalScore: number
-): string {
-  let readinessLevel = '';
-  if (totalScore >= 90) readinessLevel = 'Fully ready';
-  else if (totalScore >= 75) readinessLevel = 'Well prepared';
-  else if (totalScore >= 60) readinessLevel = 'Mostly prepared';
-  else if (totalScore >= 40) readinessLevel = 'Partially prepared';
-  else readinessLevel = 'Additional preparation needed';
-
-  return `${readinessLevel}: ${matchedCapabilities} of ${totalCapabilities} capabilities and ${matchedSkills} of ${totalSkills} skills aligned`;
 } 

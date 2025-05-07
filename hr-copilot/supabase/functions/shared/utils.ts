@@ -3,7 +3,9 @@
  * @param level The level string to normalize
  * @returns A numeric value from 0-5 representing the level
  */
-export function getLevelValue(level: string): number {
+export function getLevelValue(level: string | null | undefined): number {
+  if (!level) return 0;
+  
   const levelMap: { [key: string]: number } = {
     'basic': 1,
     'foundation': 1,

@@ -37,7 +37,7 @@
 // - mcp/chat.ts → handleChatInteraction(sessionId, message, context)
 
 // Candidate Loop (example steps):
-// - getProfileContext (includes profile embedding)
+// - getProfileContext (inopenJobscludes profile embedding)
 // - getSuggestedCareerPaths (using semantic role matching)
 // - getRoleDetail → getCapabilityGaps + getSkillGaps (enhanced with embedding similarity)
 // - getOpenJobs → getJobReadiness (using semantic job matching)

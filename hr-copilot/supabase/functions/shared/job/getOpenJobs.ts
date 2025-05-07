@@ -4,12 +4,15 @@ import { DatabaseResponse } from '../types.ts';
 export interface JobPosting {
   jobId: string;
   title: string;
-  summary?: string;
   roleId?: string;
   roleTitle?: string;
-  location?: string;
-  postedAt?: string;
-  metadata?: Record<string, any>;
+  department?: string;
+  jobType?: string;
+  locations?: string[];
+  openDate?: string;
+  closeDate?: string;
+  remuneration?: string;
+  recruiter?: any;
 }
 
 export async function getOpenJobs(
@@ -17,56 +20,77 @@ export async function getOpenJobs(
   roleId?: string
 ): Promise<DatabaseResponse<JobPosting[]>> {
   try {
-    // Start building the query
+    // Build query for open jobs
     let query = supabase
       .from('jobs')
       .select(`
-        id as jobId,
+        id,
         title,
-        summary,
-        role_id as roleId,
-        location,
-        posted_at as postedAt,
-        metadata,
+        role_id,
         roles (
-          title as roleTitle
-        )
-      `)
-      .eq('status', 'open')
-      .order('posted_at', { ascending: false });
+          title
+        ),
+        department,
+        job_type,
+        locations,
+        open_date,
+        close_date,
+        remuneration,
+        recruiter,
+        source_url
+      `);
 
-    // Add role filter if provided
+    // Add filters
     if (roleId) {
       query = query.eq('role_id', roleId);
     }
 
-    const { data: jobs, error } = await query;
+    // Get all jobs and filter in code for more flexibility
+    const { data: jobs, error: jobsError } = await query;
 
-    if (error) {
+    if (jobsError) {
       return {
         data: null,
         error: {
           type: 'DATABASE_ERROR',
           message: 'Failed to fetch open jobs',
-          details: error
+          details: jobsError
         }
       };
     }
 
-    // Transform the response to match the JobPosting interface
-    const formattedJobs: JobPosting[] = jobs.map(job => ({
-      jobId: job.jobId,
-      title: job.title,
-      summary: job.summary,
-      roleId: job.roleId,
-      roleTitle: job.roles?.roleTitle,
-      location: job.location,
-      postedAt: job.postedAt,
-      metadata: job.metadata
-    }));
+    // Transform the data into the expected format
+    // Consider a job open if:
+    // 1. It has no close_date, OR
+    // 2. close_date is in the future, OR
+    // 3. It has no open_date (assuming it's available now), OR
+    // 4. open_date is in the past or today
+    const now = new Date();
+    const openJobs: JobPosting[] = jobs
+      .filter(job => {
+        const closeDate = job.close_date ? new Date(job.close_date) : null;
+        const openDate = job.open_date ? new Date(job.open_date) : null;
+        
+        return (!closeDate || closeDate > now) && 
+               (!openDate || openDate <= now);
+      })
+      .map(job => ({
+        jobId: job.id,
+        title: job.title,
+        roleId: job.role_id,
+        roleTitle: job.roles?.title,
+        department: job.department,
+        jobType: job.job_type,
+        locations: job.locations,
+        openDate: job.open_date,
+        closeDate: job.close_date,
+        remuneration: job.remuneration,
+        recruiter: job.recruiter,
+        sourceUrl: job.source_url
+      }));
 
     return {
-      data: formattedJobs,
+      data: openJobs,
       error: null
     };
 
@@ -75,7 +99,7 @@ export async function getOpenJobs(
       data: null,
       error: {
         type: 'DATABASE_ERROR',
-        message: 'Failed to get open jobs',
+        message: 'Failed to fetch open jobs',
         details: error
       }
     };
