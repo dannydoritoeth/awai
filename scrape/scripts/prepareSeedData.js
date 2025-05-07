@@ -910,6 +910,26 @@ async function processSeedData() {
       }
     }
     
+    // Add company_id to roles
+    rolesArray.forEach(role => {
+      role.company_id = companies[0].id;
+    });
+
+    // Add company_id to jobs
+    jobs.forEach(job => {
+      job.company_id = companies[0].id;
+    });
+
+    // Add company_id to capabilities
+    capabilities.forEach(cap => {
+      cap.company_id = companies[0].id;
+    });
+
+    // Add company_id to skills
+    skills.forEach(skill => {
+      skill.company_id = companies[0].id;
+    });
+
     // Write all seed files
     await writeSeedFile(TABLES.companies, companies);
     await writeSeedFile(TABLES.divisions, Array.from(divisions.values()));

@@ -1,40 +1,113 @@
-**Title:** Government Vacancy Scraper
+# Government Job Vacancy Scraper
 
-**Description:**
+A Node.js-based web scraper and data processing pipeline for collecting, processing, and intelligently extracting structured data from government job vacancy postings. Supports multi-tenant seed data generation with Supabase integration.
 
-This is a web scraper that collects job vacancies from government websites. The scraper is built with JavaScript in Node using Puppeteer, a fast and powerful web crawling framework that makes it easy to automate the extraction of data from websites.
+## Features
 
-The scraper is designed to scrape job vacancies from government websites and extract information such as job advert links, department detailsand other relevant details. The scraper is flexible and can be easily customized to scrape job vacancies from any government website.
+- Scrapes vacancies from NSW Government and Seek.
+- Downloads and extracts content from PDF/Word documents using `pdf2json` and `mammoth`.
+- Uses OpenAI to extract structured data according to the MCP schema.
+- Generates multi-tenant seed JSON files for core tables (`companies`, `divisions`, `roles`, `jobs`, `capabilities`, `skills`, etc.) with `company_id`.
+- Inserts seed data into Supabase with duplicate-handling upserts.
+- Detailed progress and debug logging throughout the pipeline.
 
-The collected data can be used to build a variety of applications or tools such as a job search engine or a job aggregator. The scraped data is saved in a CSV file format, making it easy to import into spreadsheets or databases.
+## Prerequisites
 
-This project is open source and contributions are welcome. If you encounter any issues or have suggestions for improvement, please feel free to open a GitHub issue or submit a pull request.
+- Node.js v18+ and npm
+- A Supabase project (URL and service role key)
+- OpenAI API key
 
-**Features:**
+## Setup
 
-- Scrape job vacancies from government websites
-- Extract job advert links, department details
-- Flexible and customizable scraper
-- Save scraped data in JSON file format
-- Open source project with contributions welcome
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Kebalepile/government_vacancy_scrapper.git
+   cd government_vacancy_scrapper
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy and update environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` and set:
+   ```ini
+   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   OPENAI_API_KEY=your-openai-api-key
+   ```
+4. Ensure `.env.local` is listed in `.gitignore`.
 
-**Technologies:**
+## Usage
 
-- Python
-- Scrapy
-- Git/GitHub
+### 1. Scrape job postings
 
-**Usage:**
+```bash
+npm run scrape
+# or
+node scripts/scrape-all.js
+```
 
-1. Clone the repository to your local machine.
-2. cd into project directory and `npm install`.
-3. Customize the scraper by modifying the `settings.js` file.
-4. Run the scraper using the command `npm run scrape`.
+Scrapes NSW Government and Seek job postings and writes JSON files to `database/jobs/` (e.g. `nswgov-YYYY-MM-DD.json`, `seek-YYYY-MM-DD.json`).
 
-**Contributing:**
+### 2. Download and process documents
 
-Contributions are welcome!
+```bash
+npm run process-documents
+# or
+node scripts/process-documents.js
+```
 
-**License:**
+Downloads linked documents to `database/jobs/files/`, extracts text content, and uses AI to generate structured JSON in `database/documents/`.
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+### 3. Prepare seed data
+
+```bash
+npm run prepare-seed
+# or
+node scripts/prepareSeedData.js
+```
+
+Generates seed JSON files in `database/seed/`, adding `company_id` to core tables for multi-tenancy.
+
+### 4. Insert seed data into Supabase
+
+```bash
+node scripts/insertSeedData.js
+```
+
+Reads seed files from `database/seed/` and upserts them into Supabase, handling duplicates appropriately.
+
+## Directory Structure
+
+```
+.[0m
+├── database
+│   ├── jobs/           # Raw scraped job JSON
+│   ├── documents/      # Extracted document JSON
+│   └── seed/           # Generated seed JSON for insertion
+├── scripts
+│   ├── scrape-all.js         # Runs all spiders
+│   ├── process-documents.js  # Document download & extraction
+│   ├── prepareSeedData.js    # Generates seed files
+│   └── insertSeedData.js     # Inserts seed data into Supabase
+├── spiders
+│   ├── nswGovJobs.js # NSW Gov scraper
+│   └── seekJobs.js   # Seek scraper
+├── utils
+│   └── documentProcessor.js  # Handles document extraction & AI processing
+├── .env.example
+├── package.json
+└── README.md
+```
+
+## Multi-Tenancy
+
+Seed data now includes a `company_id` on all core tables (`roles`, `jobs`, `capabilities`, `skills`, etc.), enabling support for multiple clients in the same database schema.
+
+## Contributing & License
+
+Contributions welcome via GitHub PRs and issues.  
+Licensed under the MIT License.
