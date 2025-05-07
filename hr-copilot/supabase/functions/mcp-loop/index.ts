@@ -1,10 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { corsHeaders } from '../_shared/cors.ts';
-import { MCPRequest, MCPResponse, MCPMode } from '../_shared/mcpTypes.ts';
-import { runCandidateLoop } from '../_shared/mcp/candidate.ts';
-import { runHiringLoop } from '../_shared/mcp/hiring.ts';
-import { handleChatInteraction } from '../_shared/mcp/chat.ts';
+import { corsHeaders } from '../shared/cors.ts';
+import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
+import { runCandidateLoop } from '../shared/mcp/candidate.ts';
+import { runHiringLoop } from '../shared/mcp/hiring.ts';
+import { handleChatInteraction } from '../shared/mcp/chat.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(

@@ -1,4 +1,4 @@
-import { Database } from '../database.types';
+import { Database } from '../database.types.ts';
 
 export type ChatSender = 'user' | 'assistant';
 
@@ -21,7 +21,7 @@ export interface ConversationSession {
 }
 
 export interface ChatHistory {
-  session: ConversationSession;
+  session: ConversationSession | null;
   messages: ChatMessage[];
 }
 

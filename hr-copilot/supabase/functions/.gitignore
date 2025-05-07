@@ -1,0 +1,21 @@
+# Deno
+.deno/
+*.lock.json
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Build output
+dist/
+build/
+
+# Dependencies
+node_modules/ 

@@ -1,13 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders } from '../shared/cors.ts';
 import {
   startChatSession,
   postUserMessage,
   logAgentResponse,
   getChatHistory
-} from '../_shared/chatUtils.ts';
-import { ChatError } from '../_shared/chatTypes.ts';
+} from '../shared/chatUtils.ts';
+import { ChatError } from '../shared/chatTypes.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(

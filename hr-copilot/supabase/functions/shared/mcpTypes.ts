@@ -35,6 +35,7 @@ export interface MCPResponse {
     matches?: SemanticMatch[];
     recommendations?: any[];
     nextActions?: string[];
+    chatResponse?: any;
   };
   error?: {
     type: 'VALIDATION_ERROR' | 'DATABASE_ERROR' | 'AUTH_ERROR' | 'PLANNER_ERROR';
