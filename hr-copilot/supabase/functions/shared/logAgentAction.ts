@@ -1,114 +1,61 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { DatabaseResponse } from './types';
+import { Database } from '../database.types';
+import { SemanticMetrics } from './embeddings';
 
-export type EntityType = 'profile' | 'role' | 'job';
+export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division';
 
 export interface AgentAction {
-  id: string;
   entityType: EntityType;
   entityId: string;
   payload: Record<string, any>;
-  createdAt: string;
+  semanticMetrics?: SemanticMetrics;
 }
 
+/**
+ * Log an agent action with optional semantic metrics
+ */
 export async function logAgentAction(
-  supabase: SupabaseClient,
-  entityType: EntityType,
-  entityId: string,
-  payload: Record<string, any>,
-  options: {
-    agentId?: string;
-    confidence?: number;
-    source?: string;
-  } = {}
-): Promise<DatabaseResponse<AgentAction>> {
-  try {
-    // Validate inputs
-    if (!entityId?.trim()) {
-      return {
-        data: null,
-        error: {
-          type: 'INVALID_INPUT',
-          message: 'Entity ID is required'
-        }
-      };
-    }
+  supabase: SupabaseClient<Database>,
+  action: AgentAction
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('agent_actions')
+    .insert({
+      entity_type: action.entityType,
+      entity_id: action.entityId,
+      payload: action.payload,
+      semantic_metrics: action.semanticMetrics || null
+    });
 
-    if (!payload || Object.keys(payload).length === 0) {
-      return {
-        data: null,
-        error: {
-          type: 'INVALID_INPUT',
-          message: 'Payload cannot be empty'
-        }
-      };
-    }
-
-    // Prepare the action record with optional fields
-    const actionRecord = {
-      entity_type: entityType,
-      entity_id: entityId,
-      payload: {
-        ...payload,
-        ...(options.agentId && { agentId: options.agentId }),
-        ...(options.confidence && { confidence: options.confidence }),
-        ...(options.source && { source: options.source }),
-        timestamp: new Date().toISOString()
-      }
-    };
-
-    // Insert the action
-    const { data, error } = await supabase
-      .from('agent_actions')
-      .insert(actionRecord)
-      .select()
-      .single();
-
-    if (error) {
-      return {
-        data: null,
-        error: {
-          type: 'DATABASE_ERROR',
-          message: 'Failed to log agent action',
-          details: error
-        }
-      };
-    }
-
-    // Transform the response to match the AgentAction interface
-    const agentAction: AgentAction = {
-      id: data.id,
-      entityType: data.entity_type,
-      entityId: data.entity_id,
-      payload: data.payload,
-      createdAt: data.created_at
-    };
-
-    return {
-      data: agentAction,
-      error: null
-    };
-
-  } catch (error) {
-    return {
-      data: null,
-      error: {
-        type: 'DATABASE_ERROR',
-        message: 'Failed to log agent action',
-        details: error
-      }
-    };
+  if (error) {
+    console.error('Failed to log agent action:', error);
+    throw error;
   }
 }
 
-// Helper function to ensure consistent payload schema across different action types
-export function createActionPayload(
-  actionType: string,
-  details: Record<string, any>
-): Record<string, any> {
+/**
+ * Helper to create semantic metrics object with validation
+ */
+export function createSemanticMetrics(
+  similarityScores: SemanticMetrics['similarityScores'],
+  matchingStrategy: SemanticMetrics['matchingStrategy'],
+  confidenceScore: number
+): SemanticMetrics {
+  // Validate confidence score range
+  if (confidenceScore < 0 || confidenceScore > 1) {
+    throw new Error('Confidence score must be between 0 and 1');
+  }
+
+  // Validate similarity scores are between 0 and 1
+  Object.entries(similarityScores).forEach(([key, value]) => {
+    if (value !== undefined && (value < 0 || value > 1)) {
+      throw new Error(`Similarity score for ${key} must be between 0 and 1`);
+    }
+  });
+
   return {
-    type: actionType,
-    details,
-    version: '1.0' // For future schema versioning
+    similarityScores,
+    matchingStrategy,
+    confidenceScore
   };
 } 

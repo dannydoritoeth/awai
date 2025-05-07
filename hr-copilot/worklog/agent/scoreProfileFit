@@ -1,7 +1,7 @@
 // 🛠 Cursor Work Request: scoreProfileFit(profileId, roleId)
 
 // Objective:
-// Implement the scoreProfileFit(profileId, roleId) function to calculate a numerical and semantic fit score between a Profile and a Role based on capability and skill alignment. This score will be used for ranking and readiness evaluation within the MCP.
+// Implement the scoreProfileFit(profileId, roleId) function to calculate a numerical and semantic fit score between a Profile and a Role based on capability and skill alignment, as well as semantic similarity using embeddings. This score will be used for ranking and readiness evaluation within the MCP.
 
 // ✅ Requirements
 
@@ -10,6 +10,7 @@
 // - This will be used in the MCP to get the context of a profile.
 // - It shouldn't be an edge function, but a shared library function.
 // - Refactor code as necessary to avoid DRY violations.
+// - Leverage embeddings for semantic similarity scoring.
 
 // Function Signature:
 async function scoreProfileFit(profileId: string, roleId: string): Promise<ProfileFitScore> {}
@@ -19,19 +20,39 @@ type ProfileFitScore = {
   profileId: string;
   roleId: string;
   score: number; // 0–100
-  summary: string; // e.g., "Good match: 4 of 5 capabilities aligned"
+  semanticScore: number; // 0-100, based on embedding similarity
+  combinedScore: number; // 0-100, weighted average of score and semanticScore
+  summary: string; // e.g., "Strong semantic match (85%) with 4 of 5 capabilities aligned"
   matchedCapabilities?: string[];
   missingCapabilities?: string[];
   matchedSkills?: string[];
   missingSkills?: string[];
+  semanticInsights?: {
+    roleAlignment: number; // Cosine similarity between profile and role embeddings
+    companyAlignment?: number; // Optional: similarity with company culture
+    divisionAlignment?: number; // Optional: similarity with division focus
+  };
 };
 
 // 🧱 Source Tables
+// - profiles (with embedding)
+// - roles (with embedding)
+// - companies (with embedding)
+// - divisions (with embedding)
 // - profile_capabilities and profile_skills
 // - role_capabilities and role_skills
+// - capabilities (with embedding)
+// - skills (with embedding)
 
 // 🧠 Notes
-// - Base the score on % of required capabilities and skills matched
-// - Weights may be used if capabilities have different importance levels
+// - Base the traditional score on % of required capabilities and skills matched (40% weight)
+// - Calculate semantic score using embedding similarities (60% weight):
+//   * Direct profile-to-role embedding similarity
+//   * Aggregated capability embedding similarities
+//   * Aggregated skill embedding similarities
+//   * Company/division culture fit (if available)
+// - Use vector_cosine_ops for similarity calculations
+// - Consider caching frequently accessed embeddings
+// - Weights may be adjusted based on role requirements
 // - Should be consistent with other scoring logic (e.g., rateJobFit, getMatchingProfiles)
-// - Consider reusing utility methods for gap comparison
+// - Consider reusing utility methods for gap comparison and semantic matching

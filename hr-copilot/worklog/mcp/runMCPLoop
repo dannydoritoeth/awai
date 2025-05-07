@@ -10,6 +10,7 @@
 // - This will be used to coordinate shared functions during MCP execution.
 // - It should be implemented as an Edge Function on Supabase.
 // - Use the shared library for core logic to avoid duplication.
+// - Leverage embeddings for semantic matching and recommendations.
 
 // Function Signature:
 // POST /mcp-loop
@@ -22,22 +23,28 @@
 // Shared Controller Files:
 // - mcp/candidate.ts → runCandidateLoop(profileId)
 // - mcp/hiring.ts → runHiringLoop(roleId)
+// - mcp/embedding.ts → getSemanticMatches(embedding, table, limit)
 
 // Candidate Loop (example steps):
-// - getProfileContext
-// - getSuggestedCareerPaths
-// - getRoleDetail → getCapabilityGaps + getSkillGaps
-// - getOpenJobs → getJobReadiness
+// - getProfileContext (includes profile embedding)
+// - getSuggestedCareerPaths (using semantic role matching)
+// - getRoleDetail → getCapabilityGaps + getSkillGaps (enhanced with embedding similarity)
+// - getOpenJobs → getJobReadiness (using semantic job matching)
+// - getSemanticSkillRecommendations (based on profile and target role embeddings)
 // - logAgentAction, nudge
 
 // Hiring Loop (example steps):
-// - getRoleDetail
-// - getMatchingProfiles
-// - scoreProfileFit
-// - getProfileContext → getCapabilityGaps + getSkillGaps
+// - getRoleDetail (includes role embedding)
+// - getMatchingProfiles (using semantic profile matching)
+// - scoreProfileFit (enhanced with embedding similarity scores)
+// - getProfileContext → getCapabilityGaps + getSkillGaps (using semantic capability matching)
+// - getSemanticCompanyFit (match profile against company/division culture embeddings)
 // - logAgentAction, nudge
 
 // 🧠 Notes
 // - Must validate inputs: ensure `profileId` or `roleId` is provided depending on mode.
 // - Should log errors or status to `agent_actions` for visibility.
 // - Return a success message and summary (e.g. how many jobs/profiles processed).
+// - Embedding operations should use vector similarity search for efficient matching.
+// - Consider caching embeddings for frequently accessed entities.
+// - Use cosine similarity for semantic matching (supported by ivfflat index).

@@ -1,7 +1,7 @@
 // 🛠 Cursor Work Request: logAgentAction(entityType, entityId, payload)
 
 // Objective:
-// Implement the logAgentAction(entityType, entityId, payload) function to store structured agent-generated actions or recommendations. This creates a timestamped audit trail of MCP decisions and interactions.
+// Implement the logAgentAction(entityType, entityId, payload) function to store structured agent-generated actions or recommendations, including semantic matching metrics. This creates a timestamped audit trail of MCP decisions and interactions.
 
 // ✅ Requirements
 
@@ -13,7 +13,7 @@
 
 // Function Signature:
 async function logAgentAction(
-  entityType: 'profile' | 'role' | 'job',
+  entityType: 'profile' | 'role' | 'job' | 'company' | 'division',
   entityId: string,
   payload: Record<string, any>
 ): Promise<void> {}
@@ -24,10 +24,28 @@ async function logAgentAction(
 //   - entityType
 //   - entityId
 //   - payload (JSON)
+//   - semanticMetrics (JSON) // New field for embedding-based metrics
 //   - createdAt (timestamp)
+
+// Example Semantic Metrics:
+type SemanticMetrics = {
+  similarityScores: {
+    roleMatch?: number;
+    companyFit?: number;
+    divisionFit?: number;
+    skillAlignment?: number;
+    capabilityAlignment?: number;
+  };
+  matchingStrategy: 'exact' | 'semantic' | 'hybrid';
+  confidenceScore: number;
+};
 
 // 🧠 Notes
 // - Used by automated agents to record what action was taken or recommended
 // - Ensure consistent schema and naming in payloads
+// - Include semantic matching metrics when available
+// - Log embedding-based similarity scores for analysis
+// - Track which matching strategy was used (exact, semantic, or hybrid)
 // - Supports analysis, audit, and nudge tracking
 // - Future: may include agentId, confidence score, or source function name
+// - Consider adding indexes for common query patterns on semanticMetrics
