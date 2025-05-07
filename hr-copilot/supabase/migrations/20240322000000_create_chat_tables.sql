@@ -26,39 +26,39 @@ CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
 CREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp);
 
 -- Add RLS policies
-ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- Policy for conversation sessions
-CREATE POLICY "Users can view their own conversation sessions"
-  ON conversation_sessions
-  FOR SELECT
-  USING (auth.uid() = profile_id);
+-- CREATE POLICY "Users can view their own conversation sessions"
+--   ON conversation_sessions
+--   FOR SELECT
+--   USING (auth.uid() = profile_id);
 
-CREATE POLICY "Users can create their own conversation sessions"
-  ON conversation_sessions
-  FOR INSERT
-  WITH CHECK (auth.uid() = profile_id);
+-- CREATE POLICY "Users can create their own conversation sessions"
+--   ON conversation_sessions
+--   FOR INSERT
+--   WITH CHECK (auth.uid() = profile_id);
 
 -- Policy for chat messages
-CREATE POLICY "Users can view messages in their sessions"
-  ON chat_messages
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM conversation_sessions
-      WHERE conversation_sessions.id = chat_messages.session_id
-      AND conversation_sessions.profile_id = auth.uid()
-    )
-  );
+-- CREATE POLICY "Users can view messages in their sessions"
+--   ON chat_messages
+--   FOR SELECT
+--   USING (
+--     EXISTS (
+--       SELECT 1 FROM conversation_sessions
+--       WHERE conversation_sessions.id = chat_messages.session_id
+--       AND conversation_sessions.profile_id = auth.uid()
+--     )
+--   );
 
-CREATE POLICY "Users can insert messages in their sessions"
-  ON chat_messages
-  FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM conversation_sessions
-      WHERE conversation_sessions.id = chat_messages.session_id
-      AND conversation_sessions.profile_id = auth.uid()
-    )
-  ); 
+-- CREATE POLICY "Users can insert messages in their sessions"
+--   ON chat_messages
+--   FOR INSERT
+--   WITH CHECK (
+--     EXISTS (
+--       SELECT 1 FROM conversation_sessions
+--       WHERE conversation_sessions.id = chat_messages.session_id
+--       AND conversation_sessions.profile_id = auth.uid()
+--     )
+--   ); 

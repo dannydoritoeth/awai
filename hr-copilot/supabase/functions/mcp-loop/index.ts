@@ -40,31 +40,12 @@ serve(async (req) => {
     if (request.mode === 'candidate') {
       response = await runCandidateLoop(supabaseClient, request);
     } else {
-      // response = await runHiringLoop(supabaseClient, request);
+      throw new Error('Hiring mode not yet implemented');
     }
 
-    // // If there's a chat session, handle the interaction
-    // if (request.sessionId && request.context?.lastMessage) {
-    //   const chatResponse = await handleChatInteraction(
-    //     supabaseClient,
-    //     request.sessionId,
-    //     request.context.lastMessage,
-    //     request.context
-    //   );
-
-    //   // Merge chat response with MCP response
-    //   response = {
-    //     ...response,
-    //     data: {
-    //       ...response.data,
-    //       chatResponse: chatResponse
-    //     }
-    //   };
-    // }
-
-    // return new Response(JSON.stringify(response), {
-    //   headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    // });
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     const response: MCPResponse = {

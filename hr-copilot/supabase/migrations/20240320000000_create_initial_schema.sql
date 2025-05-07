@@ -210,26 +210,26 @@ CREATE TABLE IF NOT EXISTS public.job_documents (
 
 
 -- Enable Row Level Security (RLS)
-ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.divisions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.capabilities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.capability_levels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.career_paths ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.agent_actions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profile_skills ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.role_skills ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.job_skills ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profile_capabilities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.role_capabilities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profile_career_paths ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profile_job_interactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profile_agent_actions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.role_documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.job_documents ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.divisions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.capabilities ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.capability_levels ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.skills ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.career_paths ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.agent_actions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profile_skills ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.role_skills ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.job_skills ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profile_capabilities ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.role_capabilities ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profile_career_paths ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profile_job_interactions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.profile_agent_actions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.role_documents ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE public.job_documents ENABLE ROW LEVEL SECURITY;
 
 -- Create updated_at triggers
 CREATE OR REPLACE FUNCTION public.handle_updated_at()

@@ -21,10 +21,11 @@ export async function logAgentAction(
   const { data, error } = await supabase
     .from('agent_actions')
     .insert({
-      entity_type: action.entityType,
-      entity_id: action.entityId,
+      target_type: action.entityType,
+      target_id: action.entityId,
       payload: action.payload,
-      semantic_metrics: action.semanticMetrics || null
+      confidence_score: action.semanticMetrics?.confidenceScore || null,
+      outcome: JSON.stringify(action.semanticMetrics || {})
     });
 
   if (error) {

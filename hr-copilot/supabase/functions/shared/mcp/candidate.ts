@@ -93,25 +93,27 @@ export async function runCandidateLoop(
         if (readiness.error) continue;
 
         // Get semantic matches for the job
-        const jobMatches = await getSemanticMatches(
-          supabase,
-          profileContext.data!.embedding,
-          'jobs',
-          1,
-          0.7
-        );
+        if (profileContext.data?.profile.embedding) {
+          const jobMatches = await getSemanticMatches(
+            supabase,
+            profileContext.data.profile.embedding,
+            'jobs',
+            1,
+            0.7
+          );
 
-        if (jobMatches.length > 0) {
-          recommendations.push({
-            type: 'job_opportunity',
-            score: readiness.data!.score,
-            semanticScore: jobMatches[0].similarity,
-            summary: readiness.data!.summary,
-            details: {
-              jobId: job.jobId,
-              semanticMatch: jobMatches[0]
-            }
-          });
+          if (jobMatches.length > 0) {
+            recommendations.push({
+              type: 'job_opportunity',
+              score: readiness.data!.score,
+              semanticScore: jobMatches[0].similarity,
+              summary: readiness.data!.summary,
+              details: {
+                jobId: job.jobId,
+                semanticMatch: jobMatches[0]
+              }
+            });
+          }
         }
       }
     }

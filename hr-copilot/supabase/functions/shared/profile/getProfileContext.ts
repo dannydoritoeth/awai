@@ -2,7 +2,9 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { DatabaseResponse, Profile } from '../types.ts';
 
 export interface ProfileContext {
-  profile: Profile;
+  profile: Profile & {
+    embedding?: number[];
+  };
   skills: Array<{
     id: string;
     name: string;
@@ -39,15 +41,15 @@ export interface ProfileContext {
 
 export async function getProfileContext(
   supabase: SupabaseClient,
-  profile_id: string
+  profileId: string
 ): Promise<DatabaseResponse<ProfileContext>> {
   try {
-    if (!profile_id) {
+    if (!profileId) {
       return {
         data: null,
         error: {
           type: 'INVALID_INPUT',
-          message: 'profile_id is required'
+          message: 'profileId is required'
         }
       }
     }
@@ -56,7 +58,7 @@ export async function getProfileContext(
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', profile_id)
+      .eq('id', profileId)
       .single()
 
     if (profileError || !profile) {
@@ -64,7 +66,7 @@ export async function getProfileContext(
         data: null,
         error: {
           type: 'NOT_FOUND',
-          message: 'Profile not found',
+          message: 'Profile not found:' + profileId,
           details: profileError
         }
       }
@@ -82,7 +84,7 @@ export async function getProfileContext(
           category
         )
       `)
-      .eq('profile_id', profile_id)
+      .eq('profile_id', profileId)
 
     if (skillsError) {
       return {
@@ -106,7 +108,7 @@ export async function getProfileContext(
           group_name
         )
       `)
-      .eq('profile_id', profile_id)
+      .eq('profile_id', profileId)
 
     if (capabilitiesError) {
       return {
@@ -137,7 +139,7 @@ export async function getProfileContext(
           )
         )
       `)
-      .eq('profile_id', profile_id)
+      .eq('profile_id', profileId)
 
     if (careerPathsError) {
       return {
@@ -161,7 +163,7 @@ export async function getProfileContext(
           title
         )
       `)
-      .eq('profile_id', profile_id)
+      .eq('profile_id', profileId)
       .order('timestamp', { ascending: false })
       .limit(5)
 
