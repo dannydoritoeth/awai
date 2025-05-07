@@ -1,6 +1,6 @@
-import { SupabaseClient } from '@supabase/supabase-js'
-import { DatabaseResponse, CapabilityGap } from './types'
-import { getLevelValue } from './utils'
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { DatabaseResponse, CapabilityGap } from './types.ts'
+import { getLevelValue } from './utils.ts'
 
 export async function getCapabilityGaps(
   supabase: SupabaseClient,

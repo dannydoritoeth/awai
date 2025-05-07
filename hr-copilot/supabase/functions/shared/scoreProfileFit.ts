@@ -1,7 +1,7 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { DatabaseResponse } from './types';
-import { getCapabilityGaps } from './getCapabilityGaps';
-import { getSkillGaps } from './getSkillGaps';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { DatabaseResponse } from './types.ts';
+import { getCapabilityGaps } from './getCapabilityGaps.ts';
+import { getSkillGaps } from './getSkillGaps.ts';
 
 export interface ProfileFitScore {
   profileId: string;

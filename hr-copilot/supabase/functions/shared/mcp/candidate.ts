@@ -1,15 +1,15 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../../database.types';
-import { MCPRequest, MCPResponse, SemanticMatch } from '../mcpTypes';
-import { getProfileContext } from '../getProfileContext';
-import { getSuggestedCareerPaths } from '../getSuggestedCareerPaths';
-import { getRoleDetail } from '../getRoleDetail';
-import { getCapabilityGaps } from '../getCapabilityGaps';
-import { getSkillGaps } from '../getSkillGaps';
-import { getOpenJobs } from '../getOpenJobs';
-import { getJobReadiness } from '../getJobReadiness';
-import { logAgentAction } from '../logAgentAction';
-import { getSemanticMatches } from '../embeddings';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Database } from '../../database.types.ts';
+import { MCPRequest, MCPResponse, SemanticMatch } from '../mcpTypes.ts';
+import { getProfileContext } from '../getProfileContext.ts';
+import { getSuggestedCareerPaths } from '../getSuggestedCareerPaths.ts';
+// import { getRoleDetail } from '../getRoleDetail.ts';
+import { getCapabilityGaps } from '../getCapabilityGaps.ts';
+import { getSkillGaps } from '../getSkillGaps.ts';
+import { getOpenJobs } from '../getOpenJobs.ts';
+import { getJobReadiness } from '../getJobReadiness.ts';
+import { logAgentAction } from '../logAgentAction.ts';
+import { getSemanticMatches } from '../embeddings.ts';
 
 export async function runCandidateLoop(
   supabase: SupabaseClient<Database>,

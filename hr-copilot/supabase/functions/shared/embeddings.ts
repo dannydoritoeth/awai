@@ -1,5 +1,5 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { Database } from '../database.types';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';;
+import { Database } from '../database.types.ts';
 
 type Tables = 'profiles' | 'roles' | 'jobs' | 'companies' | 'divisions' | 'capabilities' | 'skills';
 

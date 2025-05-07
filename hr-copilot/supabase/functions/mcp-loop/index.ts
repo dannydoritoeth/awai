@@ -3,8 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
 import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
-import { runHiringLoop } from '../shared/mcp/hiring.ts';
-import { handleChatInteraction } from '../shared/mcp/chat.ts';
+// import { runHiringLoop } from '../shared/mcp/hiring.ts';
+// import { handleChatInteraction } from '../shared/mcp/chat.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -40,31 +40,31 @@ serve(async (req) => {
     if (request.mode === 'candidate') {
       response = await runCandidateLoop(supabaseClient, request);
     } else {
-      response = await runHiringLoop(supabaseClient, request);
+      // response = await runHiringLoop(supabaseClient, request);
     }
 
-    // If there's a chat session, handle the interaction
-    if (request.sessionId && request.context?.lastMessage) {
-      const chatResponse = await handleChatInteraction(
-        supabaseClient,
-        request.sessionId,
-        request.context.lastMessage,
-        request.context
-      );
+    // // If there's a chat session, handle the interaction
+    // if (request.sessionId && request.context?.lastMessage) {
+    //   const chatResponse = await handleChatInteraction(
+    //     supabaseClient,
+    //     request.sessionId,
+    //     request.context.lastMessage,
+    //     request.context
+    //   );
 
-      // Merge chat response with MCP response
-      response = {
-        ...response,
-        data: {
-          ...response.data,
-          chatResponse: chatResponse
-        }
-      };
-    }
+    //   // Merge chat response with MCP response
+    //   response = {
+    //     ...response,
+    //     data: {
+    //       ...response.data,
+    //       chatResponse: chatResponse
+    //     }
+    //   };
+    // }
 
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    // return new Response(JSON.stringify(response), {
+    //   headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    // });
 
   } catch (error) {
     const response: MCPResponse = {

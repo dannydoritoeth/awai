@@ -1,4 +1,4 @@
-import { ChatMessage } from './chatTypes';
+import { ChatMessage } from './chatTypes.ts';
 
 export type MCPMode = 'candidate' | 'hiring';
 

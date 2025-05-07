@@ -1,5 +1,5 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { DatabaseResponse } from './types';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { DatabaseResponse } from './types.ts';
 
 export interface JobPosting {
   jobId: string;

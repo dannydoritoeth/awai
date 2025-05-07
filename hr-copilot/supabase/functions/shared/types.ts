@@ -1,9 +1,9 @@
-import { SupabaseClient } from '@supabase/supabase-js'
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 export interface DatabaseError {
   type: 'NOT_FOUND' | 'INVALID_INPUT' | 'DATABASE_ERROR';
   message: string;
-  details?: any;
+  details?: any;  
 }
 
 export interface DatabaseResponse<T> {
