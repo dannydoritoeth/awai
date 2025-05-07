@@ -2,9 +2,9 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { MCPRequest, MCPResponse, SemanticMatch, PlannerRecommendation } from '../mcpTypes.ts';
 import { getSemanticMatches } from '../embeddings.ts';
-import { getCapabilityGaps } from '../role/getCapabilityGaps.ts';
-import { getSkillGaps } from '../role/getSkillGaps.ts';
-import { scoreProfileFit } from '../role/scoreProfileFit.ts';
+import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
+import { getSkillGaps } from '../profile/getSkillGaps.ts';
+import { scoreProfileFit } from '../agent/scoreProfileFit.ts';
 
 export async function runHiringLoop(
   supabase: SupabaseClient<Database>,
