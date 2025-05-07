@@ -23,7 +23,6 @@ export async function getSkillGaps(
       .from('role_skills')
       .select(`
         skill_id,
-        level as required_level,
         skills (
           id,
           name,
@@ -48,7 +47,7 @@ export async function getSkillGaps(
       .from('profile_skills')
       .select(`
         skill_id,
-        rating as profile_level,
+        rating,
         skills (
           id,
           name,
@@ -71,7 +70,7 @@ export async function getSkillGaps(
     // Create a map of profile skills for easy lookup
     const profileSkillMap = new Map(
       profileSkills?.map(ps => [ps.skill_id, {
-        level: ps.profile_level,
+        level: ps.rating,
         name: ps.skills.name,
         category: ps.skills.category
       }]) || []
@@ -80,7 +79,7 @@ export async function getSkillGaps(
     // Analyze gaps
     const gaps: SkillGap[] = roleSkills?.map(rs => {
       const profileSkill = profileSkillMap.get(rs.skill_id)
-      const requiredLevel = rs.required_level
+      const requiredLevel = rs.level
       const profileLevel = profileSkill?.level
 
       // Calculate gap type and severity

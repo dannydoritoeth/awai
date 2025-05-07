@@ -1,18 +1,7 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse } from '../types.ts';
+import { DatabaseResponse, ProfileFitScore } from '../types.ts';
 import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
 import { getSkillGaps } from '../profile/getSkillGaps.ts';
-
-export interface ProfileFitScore {
-  profileId: string;
-  roleId: string;
-  score: number;
-  summary: string;
-  matchedCapabilities?: string[];
-  missingCapabilities?: string[];
-  matchedSkills?: string[];
-  missingSkills?: string[];
-}
 
 export async function scoreProfileFit(
   supabase: SupabaseClient,
@@ -44,12 +33,10 @@ export async function scoreProfileFit(
       .select(`
         id,
         role_capabilities (
-          capability_id,
-          is_critical
+          capability_id
         ),
         role_skills (
-          skill_id,
-          is_critical
+          skill_id
         )
       `)
       .eq('id', roleId)
@@ -68,7 +55,6 @@ export async function scoreProfileFit(
 
     // Calculate capability score (60% weight)
     const capabilityGaps = capabilityGapsResult.data || [];
-    const criticalCapabilities = role.role_capabilities.filter(c => c.is_critical).length;
     const totalCapabilities = role.role_capabilities.length;
     
     const matchedCapabilities = capabilityGaps
@@ -79,18 +65,12 @@ export async function scoreProfileFit(
       .filter(gap => gap.gapType === 'missing' || gap.gapType === 'insufficient')
       .map(gap => gap.capabilityId);
 
-    const matchedCriticalCapabilities = role.role_capabilities
-      .filter(c => c.is_critical && matchedCapabilities.includes(c.capability_id))
-      .length;
-
     const capabilityScore = totalCapabilities > 0
-      ? ((matchedCapabilities.length / totalCapabilities) * 40) + 
-        ((matchedCriticalCapabilities / (criticalCapabilities || 1)) * 20)
+      ? (matchedCapabilities.length / totalCapabilities) * 60
       : 60;
 
     // Calculate skill score (40% weight)
     const skillGaps = skillGapsResult.data || [];
-    const criticalSkills = role.role_skills.filter(s => s.is_critical).length;
     const totalSkills = role.role_skills.length;
 
     const matchedSkills = skillGaps
@@ -101,13 +81,8 @@ export async function scoreProfileFit(
       .filter(gap => gap.gapType === 'missing' || gap.gapType === 'insufficient')
       .map(gap => gap.skillId);
 
-    const matchedCriticalSkills = role.role_skills
-      .filter(s => s.is_critical && matchedSkills.includes(s.skill_id))
-      .length;
-
     const skillScore = totalSkills > 0
-      ? ((matchedSkills.length / totalSkills) * 25) +
-        ((matchedCriticalSkills / (criticalSkills || 1)) * 15)
+      ? (matchedSkills.length / totalSkills) * 40
       : 40;
 
     // Calculate total score
@@ -154,12 +129,12 @@ function generateSummary(
   totalSkills: number,
   totalScore: number
 ): string {
-  let fitLevel = '';
-  if (totalScore >= 90) fitLevel = 'Excellent';
-  else if (totalScore >= 75) fitLevel = 'Strong';
-  else if (totalScore >= 60) fitLevel = 'Good';
-  else if (totalScore >= 40) fitLevel = 'Fair';
-  else fitLevel = 'Limited';
+  let readinessLevel = '';
+  if (totalScore >= 90) readinessLevel = 'Fully ready';
+  else if (totalScore >= 75) readinessLevel = 'Well prepared';
+  else if (totalScore >= 60) readinessLevel = 'Mostly prepared';
+  else if (totalScore >= 40) readinessLevel = 'Partially prepared';
+  else readinessLevel = 'Additional preparation needed';
 
-  return `${fitLevel} match: ${matchedCapabilities} of ${totalCapabilities} capabilities and ${matchedSkills} of ${totalSkills} skills aligned`;
+  return `${readinessLevel}: ${matchedCapabilities} of ${totalCapabilities} capabilities and ${matchedSkills} of ${totalSkills} skills aligned`;
 } 

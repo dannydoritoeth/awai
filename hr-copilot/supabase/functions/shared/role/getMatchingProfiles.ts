@@ -30,7 +30,7 @@ export async function getMatchingProfiles(
         ),
         profile_skills (
           skill_id,
-          level
+          rating
         )
       `)
       .not('profile_capabilities', 'is', null)
@@ -55,13 +55,10 @@ export async function getMatchingProfiles(
         title,
         role_capabilities (
           capability_id,
-          level,
-          is_critical
+          level
         ),
         role_skills (
-          skill_id,
-          level,
-          is_critical
+          skill_id
         )
       `)
       .eq('id', roleId)

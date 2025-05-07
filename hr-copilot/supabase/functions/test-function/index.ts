@@ -2,6 +2,15 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
 import { getJobReadiness } from '../shared/job/getJobReadiness.ts'
+import { getCapabilityGaps } from '../shared/profile/getCapabilityGaps.ts'
+import { getSkillGaps } from '../shared/profile/getSkillGaps.ts'
+import { getProfileContext } from '../shared/profile/getProfileContext.ts'
+import { getSuggestedCareerPaths } from '../shared/profile/getSuggestedCareerPaths.ts'
+import { getRoleDetail } from '../shared/role/getRoleDetail.ts'
+import { getOpenJobs } from '../shared/job/getOpenJobs.ts'
+import { getMatchingProfiles } from '../shared/role/getMatchingProfiles.ts'
+import { scoreProfileFit } from '../shared/agent/scoreProfileFit.ts'
+import { getSemanticMatches } from '../shared/embeddings.ts'
 
 interface TestFunctionRequest {
   function: string;
@@ -15,8 +24,61 @@ const functionSchemas = {
     validate: (params: any) => {
       return params.profileId && params.jobId;
     }
+  },
+  capabilityGaps: {
+    required: ['profileId', 'targetRoleId'],
+    validate: (params: any) => {
+      return params.profileId && params.targetRoleId;
+    }
+  },
+  skillGaps: {
+    required: ['profileId', 'targetRoleId'],
+    validate: (params: any) => {
+      return params.profileId && params.targetRoleId;
+    }
+  },
+  profileContext: {
+    required: ['profileId'],
+    validate: (params: any) => {
+      return params.profileId;
+    }
+  },
+  suggestedCareerPaths: {
+    required: ['profileId'],
+    validate: (params: any) => {
+      return params.profileId;
+    }
+  },
+  roleDetail: {
+    required: ['roleId'],
+    validate: (params: any) => {
+      return params.roleId;
+    }
+  },
+  openJobs: {
+    required: [],
+    validate: () => true
+  },
+  matchingProfiles: {
+    required: ['roleId'],
+    validate: (params: any) => {
+      return params.roleId;
+    }
+  },
+  scoreProfileFit: {
+    required: ['profileId', 'roleId'],
+    validate: (params: any) => {
+      return params.profileId && params.roleId;
+    }
+  },
+  semanticMatches: {
+    required: ['embedding', 'targetTable', 'limit', 'minScore'],
+    validate: (params: any) => {
+      return params.embedding && params.targetTable && 
+             typeof params.limit === 'number' && 
+             typeof params.minScore === 'number';
+    }
   }
-  // Add more function schemas here as needed
 };
 
 serve(async (req) => {
@@ -79,6 +141,39 @@ serve(async (req) => {
     switch (functionName) {
       case 'jobReadiness':
         result = await getJobReadiness(supabaseClient, params.profileId, params.jobId)
+        break
+      case 'capabilityGaps':
+        result = await getCapabilityGaps(supabaseClient, params.profileId, params.targetRoleId)
+        break
+      case 'skillGaps':
+        result = await getSkillGaps(supabaseClient, params.profileId, params.targetRoleId)
+        break
+      case 'profileContext':
+        result = await getProfileContext(supabaseClient, params.profileId)
+        break
+      case 'suggestedCareerPaths':
+        result = await getSuggestedCareerPaths(supabaseClient, params.profileId)
+        break
+      case 'roleDetail':
+        result = await getRoleDetail(supabaseClient, params.roleId)
+        break
+      case 'openJobs':
+        result = await getOpenJobs(supabaseClient, params.roleId) // roleId is optional
+        break
+      case 'matchingProfiles':
+        result = await getMatchingProfiles(supabaseClient, params.roleId)
+        break
+      case 'scoreProfileFit':
+        result = await scoreProfileFit(supabaseClient, params.profileId, params.roleId)
+        break
+      case 'semanticMatches':
+        result = await getSemanticMatches(
+          supabaseClient, 
+          params.embedding, 
+          params.targetTable, 
+          params.limit, 
+          params.minScore
+        )
         break
       default:
         throw new Error(`Function ${functionName} not implemented`)
