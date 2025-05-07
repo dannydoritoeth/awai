@@ -1,5 +1,5 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse, JobFitScore } from './types.ts'
+import { DatabaseResponse, JobFitScore } from '../types.ts'
 import { getCapabilityGaps } from './getCapabilityGaps.ts'
 import { getSkillGaps } from './getSkillGaps.ts'
 

@@ -1,12 +1,12 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse, SkillGap } from './types.ts'
-import { getLevelValue } from './utils.ts'
+import { DatabaseResponse, CapabilityGap } from '../types.ts'
+import { getLevelValue } from '../utils.ts'
 
-export async function getSkillGaps(
+export async function getCapabilityGaps(
   supabase: SupabaseClient,
   profileId: string,
   targetRoleId: string
-): Promise<DatabaseResponse<SkillGap[]>> {
+): Promise<DatabaseResponse<CapabilityGap[]>> {
   try {
     if (!profileId || !targetRoleId) {
       return {
@@ -18,16 +18,16 @@ export async function getSkillGaps(
       }
     }
 
-    // Get role skills with a single query joining necessary tables
-    const { data: roleSkills, error: roleError } = await supabase
-      .from('role_skills')
+    // Get role capabilities with a single query joining necessary tables
+    const { data: roleCapabilities, error: roleError } = await supabase
+      .from('role_capabilities')
       .select(`
-        skill_id,
+        capability_id,
         level as required_level,
-        skills (
+        capabilities (
           id,
           name,
-          category
+          group_name
         )
       `)
       .eq('role_id', targetRoleId)
@@ -37,22 +37,22 @@ export async function getSkillGaps(
         data: null,
         error: {
           type: 'DATABASE_ERROR',
-          message: 'Error fetching role skills',
+          message: 'Error fetching role capabilities',
           details: roleError
         }
       }
     }
 
-    // Get profile skills
-    const { data: profileSkills, error: profileError } = await supabase
-      .from('profile_skills')
+    // Get profile capabilities
+    const { data: profileCapabilities, error: profileError } = await supabase
+      .from('profile_capabilities')
       .select(`
-        skill_id,
-        rating as profile_level,
-        skills (
+        capability_id,
+        level as profile_level,
+        capabilities (
           id,
           name,
-          category
+          group_name
         )
       `)
       .eq('profile_id', profileId)
@@ -62,30 +62,30 @@ export async function getSkillGaps(
         data: null,
         error: {
           type: 'DATABASE_ERROR',
-          message: 'Error fetching profile skills',
+          message: 'Error fetching profile capabilities',
           details: profileError
         }
       }
     }
 
-    // Create a map of profile skills for easy lookup
-    const profileSkillMap = new Map(
-      profileSkills?.map(ps => [ps.skill_id, {
-        level: ps.profile_level,
-        name: ps.skills.name,
-        category: ps.skills.category
+    // Create a map of profile capabilities for easy lookup
+    const profileCapMap = new Map(
+      profileCapabilities?.map(pc => [pc.capability_id, {
+        level: pc.profile_level,
+        name: pc.capabilities.name,
+        groupName: pc.capabilities.group_name
       }]) || []
     )
 
     // Analyze gaps
-    const gaps: SkillGap[] = roleSkills?.map(rs => {
-      const profileSkill = profileSkillMap.get(rs.skill_id)
-      const requiredLevel = rs.required_level
-      const profileLevel = profileSkill?.level
+    const gaps: CapabilityGap[] = roleCapabilities?.map(rc => {
+      const profileCap = profileCapMap.get(rc.capability_id)
+      const requiredLevel = rc.required_level
+      const profileLevel = profileCap?.level
 
       // Calculate gap type and severity
       let gapType: 'missing' | 'insufficient' | 'met' = 'missing'
-      let severity = 100 // Default to max severity for missing skills
+      let severity = 100 // Default to max severity for missing capabilities
 
       if (profileLevel) {
         const requiredValue = getLevelValue(requiredLevel)
@@ -102,22 +102,22 @@ export async function getSkillGaps(
       }
 
       return {
-        skillId: rs.skill_id,
-        name: rs.skills.name,
-        category: rs.skills.category,
+        capabilityId: rc.capability_id,
+        name: rc.capabilities.name,
+        groupName: rc.capabilities.group_name,
         requiredLevel,
-        profileLevel: profileSkill?.level,
+        profileLevel: profileCap?.level,
         gapType,
         severity
       }
     }) || []
 
-    // Sort gaps by severity (highest first) and then by category
+    // Sort gaps by severity (highest first) and then by group name
     gaps.sort((a, b) => {
       if (a.severity !== b.severity) {
         return (b.severity || 0) - (a.severity || 0)
       }
-      return (a.category || '').localeCompare(b.category || '')
+      return (a.groupName || '').localeCompare(b.groupName || '')
     })
 
     return {

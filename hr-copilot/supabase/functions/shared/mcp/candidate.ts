@@ -1,14 +1,14 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { MCPRequest, MCPResponse, SemanticMatch } from '../mcpTypes.ts';
-import { getProfileContext } from '../getProfileContext.ts';
-import { getSuggestedCareerPaths } from '../getSuggestedCareerPaths.ts';
-// import { getRoleDetail } from '../getRoleDetail.ts';
-import { getCapabilityGaps } from '../getCapabilityGaps.ts';
-import { getSkillGaps } from '../getSkillGaps.ts';
-import { getOpenJobs } from '../getOpenJobs.ts';
-import { getJobReadiness } from '../getJobReadiness.ts';
-import { logAgentAction } from '../logAgentAction.ts';
+import { getProfileContext } from '../profile/getProfileContext.ts';
+import { getSuggestedCareerPaths } from '../profile/getSuggestedCareerPaths.ts';
+// import { getRoleDetail } from '../role/getRoleDetail.ts';
+import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
+import { getSkillGaps } from '../profile/getSkillGaps.ts';
+import { getOpenJobs } from '../job/getOpenJobs.ts';
+import { getJobReadiness } from '../job/getJobReadiness.ts';
+import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getSemanticMatches } from '../embeddings.ts';
 
 export async function runCandidateLoop(
@@ -27,63 +27,63 @@ export async function runCandidateLoop(
     }
 
     // Get career path suggestions using semantic matching
-    const careerPaths = await getSuggestedCareerPaths(supabase, profileId!);
-    if (!careerPaths.error && careerPaths.data) {
-      for (const path of careerPaths.data) {
-        const roleDetail = await getRoleDetail(supabase, path.target_role.id);
-        if (roleDetail.error) continue;
+    // const careerPaths = await getSuggestedCareerPaths(supabase, profileId!);
+    // if (!careerPaths.error && careerPaths.data) {
+    //   for (const path of careerPaths.data) {
+    //     const roleDetail = await getRoleDetail(supabase, path.target_role.id);
+    //     if (roleDetail.error) continue;
 
-        // Get semantic matches for capabilities and skills
-        const capabilityMatches = await getSemanticMatches(
-          supabase,
-          profileContext.data!.embedding,
-          'capabilities',
-          5
-        );
+    //     // Get semantic matches for capabilities and skills
+    //     const capabilityMatches = await getSemanticMatches(
+    //       supabase,
+    //       profileContext.data!.embedding,
+    //       'capabilities',
+    //       5
+    //     );
 
-        const skillMatches = await getSemanticMatches(
-          supabase,
-          profileContext.data!.embedding,
-          'skills',
-          5
-        );
+    //     const skillMatches = await getSemanticMatches(
+    //       supabase,
+    //       profileContext.data!.embedding,
+    //       'skills',
+    //       5
+    //     );
 
-        // Get traditional gap analysis
-        const gaps = await getCapabilityGaps(supabase, profileId!, path.target_role.id);
-        const skillGaps = await getSkillGaps(supabase, profileId!, path.target_role.id);
+    //     // Get traditional gap analysis
+    //     const gaps = await getCapabilityGaps(supabase, profileId!, path.target_role.id);
+    //     const skillGaps = await getSkillGaps(supabase, profileId!, path.target_role.id);
 
-        // Combine semantic and traditional matches
-        matches.push(
-          ...capabilityMatches.map(match => ({
-            id: match.entityId,
-            similarity: match.similarity,
-            type: 'capability' as const,
-            metadata: { roleId: path.target_role.id }
-          })),
-          ...skillMatches.map(match => ({
-            id: match.entityId,
-            similarity: match.similarity,
-            type: 'skill' as const,
-            metadata: { roleId: path.target_role.id }
-          }))
-        );
+    //     // Combine semantic and traditional matches
+    //     matches.push(
+    //       ...capabilityMatches.map(match => ({
+    //         id: match.entityId,
+    //         similarity: match.similarity,
+    //         type: 'capability' as const,
+    //         metadata: { roleId: path.target_role.id }
+    //       })),
+    //       ...skillMatches.map(match => ({
+    //         id: match.entityId,
+    //         similarity: match.similarity,
+    //         type: 'skill' as const,
+    //         metadata: { roleId: path.target_role.id }
+    //       }))
+    //     );
 
-        recommendations.push({
-          type: 'career_path',
-          score: path.popularity_score || 0,
-          semanticScore: (capabilityMatches[0]?.similarity || 0 + skillMatches[0]?.similarity || 0) / 2,
-          summary: `Career path to ${path.target_role.title}`,
-          details: {
-            capabilityGaps: gaps.data?.length || 0,
-            skillGaps: skillGaps.data?.length || 0,
-            semanticMatches: {
-              capabilities: capabilityMatches.length,
-              skills: skillMatches.length
-            }
-          }
-        });
-      }
-    }
+    //     recommendations.push({
+    //       type: 'career_path',
+    //       score: path.popularity_score || 0,
+    //       semanticScore: (capabilityMatches[0]?.similarity || 0 + skillMatches[0]?.similarity || 0) / 2,
+    //       summary: `Career path to ${path.target_role.title}`,
+    //       details: {
+    //         capabilityGaps: gaps.data?.length || 0,
+    //         skillGaps: skillGaps.data?.length || 0,
+    //         semanticMatches: {
+    //           capabilities: capabilityMatches.length,
+    //           skills: skillMatches.length
+    //         }
+    //       }
+    //     });
+    //   }
+    // }
 
     // Get open jobs with semantic matching
     const openJobs = await getOpenJobs(supabase);

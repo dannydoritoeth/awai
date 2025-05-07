@@ -1,7 +1,7 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
 import { ChatMessage, ChatSender, ConversationSession, ChatError } from './chatTypes.ts';
-import { logAgentAction } from './logAgentAction.ts';
+import { logAgentAction } from './agent/logAgentAction.ts';
 
 /**
  * Start a new chat session for a profile

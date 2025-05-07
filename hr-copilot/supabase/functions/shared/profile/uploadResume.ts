@@ -1,6 +1,6 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-import { DatabaseResponse } from './types';
-import { logAgentAction } from './logAgentAction';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { DatabaseResponse } from '../types';
+import { logAgentAction } from '../agent/logAgentAction';
 
 export interface ResumeParseResult {
   inferredRole?: string;

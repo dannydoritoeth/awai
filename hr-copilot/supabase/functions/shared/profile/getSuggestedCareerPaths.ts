@@ -1,5 +1,5 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse, SuggestedPath } from './types.ts'
+import { DatabaseResponse, SuggestedPath } from '../types.ts'
 
 export async function getSuggestedCareerPaths(
   supabase: SupabaseClient,

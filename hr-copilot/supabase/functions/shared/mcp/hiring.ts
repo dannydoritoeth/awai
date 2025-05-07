@@ -1,10 +1,10 @@
 // import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-// import { Database } from '../../database.types';
+// import { Database } from '../../database.types.ts';
 // import { MCPRequest, MCPResponse, SemanticMatch } from '../mcpTypes.ts';
-// import { getJobContext } from '../getJobContext.ts';
-// import { getRoleContext } from '../getRoleContext.ts';
-// import { getCompanyContext } from '../getCompanyContext.ts';
-// import { getDivisionContext } from '../getDivisionContext.ts';
+// import { getJobContext } from '../job/getJobContext.ts';
+// import { getRoleContext } from '../role/getRoleContext.ts';
+// import { getCompanyContext } from '../company/getCompanyContext.ts';
+// import { getDivisionContext } from '../division/getDivisionContext.ts';
 // import { getCandidateMatches } from '../getCandidateMatches.ts';
 // import { getCandidateReadiness } from '../getCandidateReadiness.ts';
 // import { logAgentAction } from '../logAgentAction';
