@@ -10,6 +10,9 @@ export interface ProfileFitScore {
   missingCapabilities?: string[];
   missingSkills?: string[];
   matchSummary?: string;
+  semanticScore?: number;
+  capabilityScore?: number;
+  skillScore?: number;
 }
 
 export async function scoreProfileFit(
@@ -55,18 +58,18 @@ export async function scoreProfileFit(
     }
     console.log('Skill gaps found:', skillGapsResult.data?.length || 0);
 
-    // Calculate scores
-    const capabilityGaps = capabilityGapsResult.data || [];
-    const skillGaps = skillGapsResult.data || [];
-
     // Get total counts for capabilities and skills
     console.log('Fetching role requirements counts...');
     const { data: totalCounts, error: countsError } = await supabase
       .from('roles')
       .select(`
         id,
-        role_capabilities!role_capabilities_role_id_fkey (count),
-        role_skills!role_skills_role_id_fkey (count)
+        role_capabilities (
+          capability_id
+        ),
+        role_skills (
+          skill_id
+        )
       `)
       .eq('id', roleId)
       .single();
@@ -82,27 +85,44 @@ export async function scoreProfileFit(
         }
       };
     }
-    console.log('Role requirements counts:', totalCounts);
 
+    // Calculate capability score
     const totalCapabilities = totalCounts?.role_capabilities?.length || 0;
-    const totalSkills = totalCounts?.role_skills?.length || 0;
-
-    console.log('Calculating scores with totals:', { totalCapabilities, totalSkills });
-
-    // Calculate fit scores
+    const missingCapabilities = capabilityGapsResult.data?.filter(gap => gap.gapType === 'missing') || [];
+    const insufficientCapabilities = capabilityGapsResult.data?.filter(gap => gap.gapType === 'insufficient') || [];
     const capabilityScore = totalCapabilities > 0 
-      ? (totalCapabilities - capabilityGaps.length) / totalCapabilities 
-      : 1;
-    
+      ? Math.max(0, 100 * (1 - (missingCapabilities.length * 1.0 + insufficientCapabilities.length * 0.5) / totalCapabilities))
+      : 100;
+
+    // Calculate skill score
+    const totalSkills = totalCounts?.role_skills?.length || 0;
+    const missingSkills = skillGapsResult.data?.filter(gap => gap.gapType === 'missing') || [];
+    const insufficientSkills = skillGapsResult.data?.filter(gap => gap.gapType === 'insufficient') || [];
     const skillScore = totalSkills > 0
-      ? (totalSkills - skillGaps.length) / totalSkills
-      : 1;
+      ? Math.max(0, 100 * (1 - (missingSkills.length * 1.0 + insufficientSkills.length * 0.5) / totalSkills))
+      : 100;
 
-    console.log('Individual scores:', { capabilityScore, skillScore });
+    // Calculate semantic score using embeddings
+    let semanticScore = 0;
+    try {
+      const { data: semanticMatch } = await supabase.rpc('match_embeddings_by_id', {
+        p_query_id: profileId,
+        p_table_name: 'profiles',
+        p_match_threshold: 0,
+        p_match_count: 1
+      });
+      semanticScore = semanticMatch?.[0]?.similarity ? semanticMatch[0].similarity * 100 : 0;
+    } catch (error) {
+      console.log('Error calculating semantic score:', error);
+      // Continue with traditional scoring if semantic fails
+    }
 
-    // Weighted average (capabilities count more than skills)
-    const totalScore = (capabilityScore * 0.7 + skillScore * 0.3) * 100;
-    console.log('Total weighted score:', totalScore);
+    // Calculate total score (weighted average)
+    const totalScore = Math.round(
+      capabilityScore * 0.4 +  // 40% weight on capabilities
+      skillScore * 0.3 +       // 30% weight on skills
+      semanticScore * 0.3      // 30% weight on semantic similarity
+    );
 
     // Generate match summary
     let matchSummary = '';
@@ -118,12 +138,15 @@ export async function scoreProfileFit(
 
     const result = {
       data: {
-        score: Math.round(totalScore),
+        score: totalScore,
         roleId,
         profileId,
-        missingCapabilities: capabilityGaps.map(gap => gap.name),
-        missingSkills: skillGaps.map(gap => gap.name),
-        matchSummary
+        missingCapabilities: missingCapabilities.map(gap => gap.name),
+        missingSkills: missingSkills.map(gap => gap.name),
+        matchSummary,
+        semanticScore,
+        capabilityScore,
+        skillScore
       },
       error: null
     };

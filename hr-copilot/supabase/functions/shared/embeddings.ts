@@ -109,32 +109,43 @@ export async function getSemanticMatches(
   threshold: number = 0.6
 ): Promise<SemanticMatch[]> {
   try {
-    const params = typeof sourceEmbedding === 'string' 
-      ? {
-          query_id: sourceEmbedding,
-          source_table: table,
-          target_table: table,
-          match_threshold: threshold,
-          match_count: limit
-        }
-      : {
-          query_embedding: sourceEmbedding,
-          match_threshold: threshold,
-          match_count: limit,
-          table_name: table
-        };
+    let rpcName: string;
+    let params: Record<string, any>;
 
-    const { data, error } = await supabase.rpc(
-      typeof sourceEmbedding === 'string' ? 'match_embeddings' : 'match_embeddings_vector',
-      params
-    );
+    if (typeof sourceEmbedding === 'string') {
+      rpcName = 'match_embeddings_by_id';
+      params = {
+        p_query_id: sourceEmbedding,
+        p_table_name: table,
+        p_match_threshold: threshold,
+        p_match_count: limit
+      };
+    } else {
+      rpcName = 'match_embeddings_by_vector';
+      params = {
+        p_query_embedding: sourceEmbedding,
+        p_table_name: table,
+        p_match_threshold: threshold,
+        p_match_count: limit
+      };
+    }
 
-    if (error) throw error;
+    const { data, error } = await supabase.rpc(rpcName, params);
+
+    if (error) {
+      console.error(`Error in ${rpcName}:`, error);
+      return [];
+    }
+
+    if (!data || !Array.isArray(data)) {
+      console.error('Invalid response format:', data);
+      return [];
+    }
 
     return data.map((match: any) => ({
       id: match.id,
       similarity: match.similarity,
-      type: table.slice(0, -1) as EntityType, // Remove 's' to get EntityType
+      type: table.slice(0, -1) as EntityType,
       name: match.name || match.title,
       metadata: match
     }));

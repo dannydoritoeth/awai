@@ -15,6 +15,28 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 );
 
+// Constants for retry and error handling
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+// Track retries per session to prevent endless loops
+const retryTracker = new Map<string, number>();
+
+// Helper to get retry count
+function getRetryCount(sessionId: string): number {
+  return retryTracker.get(sessionId) || 0;
+}
+
+// Helper to increment retry count
+function incrementRetryCount(sessionId: string): void {
+  retryTracker.set(sessionId, getRetryCount(sessionId) + 1);
+}
+
+// Helper to clear retry count
+function clearRetryCount(sessionId: string): void {
+  retryTracker.delete(sessionId);
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -23,6 +45,13 @@ serve(async (req) => {
 
   try {
     const request: MCPRequest = await req.json();
+    const sessionId = request.sessionId || 'default';
+
+    // Check retry count
+    if (getRetryCount(sessionId) >= MAX_RETRIES) {
+      clearRetryCount(sessionId); // Reset for next attempt
+      throw new Error('Max retries exceeded. Please try again later.');
+    }
 
     // Validate required fields
     if (!request.mode) {
@@ -125,15 +154,44 @@ serve(async (req) => {
 
     // Run the appropriate loop based on mode
     let response: MCPResponse;
-    if (request.mode === 'candidate') {
-      response = await runCandidateLoop(supabaseClient, {
-        ...request,
-        plannerRecommendations
-      });
-    } else {
-      response = await runHiringLoop(supabaseClient, {
-        ...request,
-        plannerRecommendations
+    try {
+      if (request.mode === 'candidate') {
+        response = await runCandidateLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+      } else {
+        response = await runHiringLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+      }
+
+      // Clear retry count on success
+      clearRetryCount(sessionId);
+
+    } catch (error) {
+      console.error(`${request.mode} loop error:`, error);
+      incrementRetryCount(sessionId);
+      
+      // If we haven't exceeded retries, throw to trigger retry
+      if (getRetryCount(sessionId) < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        throw error;
+      }
+      
+      // If we've exceeded retries, return a failure response
+      return new Response(JSON.stringify({
+        success: false,
+        message: `Failed to complete ${request.mode} loop after ${MAX_RETRIES} attempts`,
+        error: {
+          type: 'LOOP_ERROR',
+          message: error.message,
+          details: error
+        }
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
@@ -157,17 +215,22 @@ serve(async (req) => {
 
     // Handle chat interaction if there's a message
     if (request.context?.lastMessage && request.sessionId) {
-      await handleChatInteraction(
-        supabaseClient,
-        request.sessionId,
-        request.context.lastMessage,
-        {
-          mode: request.mode,
-          profileId: request.profileId,
-          roleId: request.roleId,
-          actionsTaken: response.data?.actionsTaken || []
-        }
-      );
+      try {
+        await handleChatInteraction(
+          supabaseClient,
+          request.sessionId,
+          request.context.lastMessage,
+          {
+            mode: request.mode,
+            profileId: request.profileId,
+            roleId: request.roleId,
+            actionsTaken: response.data?.actionsTaken || []
+          }
+        );
+      } catch (error) {
+        console.error('Chat interaction error:', error);
+        // Don't fail the whole request if chat interaction fails
+      }
     }
 
     return new Response(JSON.stringify(response), {

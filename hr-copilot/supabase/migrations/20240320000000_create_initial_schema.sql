@@ -322,3 +322,45 @@ ALTER TABLE public.capabilities ADD COLUMN company_id uuid;
 ALTER TABLE public.profiles ADD COLUMN company_id uuid;
 ALTER TABLE public.career_paths ADD COLUMN company_id uuid;
 ALTER TABLE public.agent_actions ADD COLUMN company_id uuid;
+
+-- Capabilities
+ALTER TABLE capabilities 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS capabilities_embedding_idx;
+CREATE INDEX capabilities_embedding_idx ON capabilities USING ivfflat (embedding vector_cosine_ops);
+
+-- Companies
+ALTER TABLE companies 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS companies_embedding_idx;
+CREATE INDEX companies_embedding_idx ON companies USING ivfflat (embedding vector_cosine_ops);
+
+-- Divisions
+ALTER TABLE divisions 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS divisions_embedding_idx;
+CREATE INDEX divisions_embedding_idx ON divisions USING ivfflat (embedding vector_cosine_ops);
+
+-- Jobs
+ALTER TABLE jobs 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS jobs_embedding_idx;
+CREATE INDEX jobs_embedding_idx ON jobs USING ivfflat (embedding vector_cosine_ops);
+
+-- Roles
+ALTER TABLE roles 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS roles_embedding_idx;
+CREATE INDEX roles_embedding_idx ON roles USING ivfflat (embedding vector_cosine_ops);
+
+-- Skills
+ALTER TABLE skills 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS skills_embedding_idx;
+CREATE INDEX skills_embedding_idx ON skills USING ivfflat (embedding vector_cosine_ops);
+
+-- Profiles
+ALTER TABLE profiles 
+ALTER COLUMN embedding TYPE vector(1536);
+DROP INDEX IF EXISTS profiles_embedding_idx;
+CREATE INDEX profiles_embedding_idx ON profiles USING ivfflat (embedding vector_cosine_ops);
