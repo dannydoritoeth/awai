@@ -2,6 +2,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
 import { ChatMessage, ChatSender, ConversationSession, ChatError } from './chatTypes.ts';
 import { logAgentAction } from './agent/logAgentAction.ts';
+import { MCPMode } from './mcpTypes.ts';
 
 /**
  * Start a new chat session for a profile
@@ -132,7 +133,7 @@ export async function logAgentResponse(
 export async function getChatHistory(
   supabase: SupabaseClient<Database>,
   sessionId: string
-): Promise<{ history: { session: ConversationSession; messages: ChatMessage[] }; error?: ChatError }> {
+): Promise<{ history: { session: ConversationSession | null; messages: ChatMessage[] }; error?: ChatError }> {
   try {
     // Get session details
     const { data: session, error: sessionError } = await supabase
@@ -181,5 +182,59 @@ export async function getChatHistory(
         details: error
       }
     };
+  }
+}
+
+interface ChatInteractionContext {
+  mode: MCPMode;
+  profileId?: string;
+  roleId?: string;
+  actionsTaken: Array<{
+    tool: string;
+    reason: string;
+    result: any;
+  }>;
+}
+
+/**
+ * Handle chat interactions in the MCP context
+ */
+export async function handleChatInteraction(
+  supabase: SupabaseClient<Database>,
+  sessionId: string,
+  message: string,
+  context: ChatInteractionContext
+): Promise<void> {
+  try {
+    // Log the user message
+    await postUserMessage(supabase, sessionId, message);
+
+    // Create summary of actions taken
+    const actionSummary = context.actionsTaken
+      .map(action => `${action.tool}: ${action.reason}`)
+      .join('\n');
+
+    // Create a response message based on actions
+    const responseMessage = context.actionsTaken.length > 0
+      ? `Based on your message, I took the following actions:\n${actionSummary}`
+      : 'I processed your message but no specific actions were needed.';
+
+    // Log the agent's response with actions taken
+    await logAgentResponse(
+      supabase,
+      sessionId,
+      responseMessage,
+      'mcp_chat_interaction',
+      {
+        mode: context.mode,
+        profileId: context.profileId,
+        roleId: context.roleId
+      },
+      { actionsTaken: context.actionsTaken }
+    );
+
+  } catch (error) {
+    console.error('Error in handleChatInteraction:', error);
+    throw error;
   }
 } 

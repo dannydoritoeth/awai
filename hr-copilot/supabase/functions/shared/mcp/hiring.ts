@@ -1,142 +1,147 @@
-// import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-// import { Database } from '../../database.types.ts';
-// import { MCPRequest, MCPResponse, SemanticMatch } from '../mcpTypes.ts';
-// import { getJobContext } from '../job/getJobContext.ts';
-// import { getRoleContext } from '../role/getRoleContext.ts';
-// import { getCompanyContext } from '../company/getCompanyContext.ts';
-// import { getDivisionContext } from '../division/getDivisionContext.ts';
-// import { getCandidateMatches } from '../getCandidateMatches.ts';
-// import { getCandidateReadiness } from '../getCandidateReadiness.ts';
-// import { logAgentAction } from '../logAgentAction';
-// import { getSemanticMatches } from '../embeddings';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Database } from '../../database.types.ts';
+import { MCPRequest, MCPResponse, SemanticMatch, PlannerRecommendation } from '../mcpTypes.ts';
+import { getSemanticMatches } from '../embeddings.ts';
+import { getCapabilityGaps } from '../role/getCapabilityGaps.ts';
+import { getSkillGaps } from '../role/getSkillGaps.ts';
+import { scoreProfileFit } from '../role/scoreProfileFit.ts';
 
-// export async function runHiringLoop(
-//   supabase: SupabaseClient<Database>,
-//   request: MCPRequest
-// ): Promise<MCPResponse> {
-//   try {
-//     const { jobId, roleId, companyId, divisionId, context } = request;
-//     const matches: SemanticMatch[] = [];
-//     const recommendations: any[] = [];
+export async function runHiringLoop(
+  supabase: SupabaseClient<Database>,
+  request: MCPRequest & { plannerRecommendations?: PlannerRecommendation[] }
+): Promise<MCPResponse> {
+  try {
+    const { roleId, plannerRecommendations = [] } = request;
+    const matches: SemanticMatch[] = [];
+    const actionsTaken: any[] = [];
+    const recommendations: any[] = [];
 
-//     // Get context with embeddings
-//     const jobContext = await getJobContext(supabase, jobId!);
-//     const roleContext = await getRoleContext(supabase, roleId!);
-//     const companyContext = await getCompanyContext(supabase, companyId!);
-//     const divisionContext = await getDivisionContext(supabase, divisionId!);
+    // Execute planner recommendations or use defaults
+    const toolsToRun = plannerRecommendations.length > 0 ? plannerRecommendations : [
+      {
+        tool: 'getMatchingProfiles',
+        reason: 'Default action to find matching profiles',
+        confidence: 0.8,
+        inputs: { roleId }
+      }
+    ];
 
-//     if (jobContext.error || roleContext.error || companyContext.error || divisionContext.error) {
-//       throw new Error('Failed to get context data');
-//     }
+    // Process each recommended tool
+    for (const tool of toolsToRun) {
+      try {
+        let result;
+        switch (tool.tool) {
+          case 'getMatchingProfiles':
+            // Get semantic matches for the role
+            result = await getSemanticMatches(
+              supabase,
+              roleId!,
+              'profiles',
+              10,
+              0.6
+            );
+            matches.push(...result);
+            break;
 
-//     // Get candidate matches using both traditional and semantic matching
-//     const candidateMatches = await getCandidateMatches(supabase, {
-//       jobId: jobId!,
-//       roleId: roleId!,
-//       companyId: companyId!,
-//       divisionId: divisionId!
-//     });
+          case 'scoreProfileFit':
+            if (tool.inputs.profileId) {
+              result = await scoreProfileFit(
+                supabase,
+                tool.inputs.profileId,
+                roleId!
+              );
+              recommendations.push({
+                type: 'profile_fit',
+                profileId: tool.inputs.profileId,
+                score: result.score,
+                details: result.details
+              });
+            }
+            break;
 
-//     if (!candidateMatches.error && candidateMatches.data) {
-//       for (const candidate of candidateMatches.data) {
-//         // Get semantic matches for the candidate
-//         const candidateSemanticMatches = await getSemanticMatches(
-//           supabase,
-//           candidate.embedding,
-//           'profiles',
-//           1,
-//           0.7
-//         );
+          case 'getCapabilityGaps':
+            if (tool.inputs.profileId) {
+              result = await getCapabilityGaps(
+                supabase,
+                tool.inputs.profileId,
+                roleId!
+              );
+              recommendations.push({
+                type: 'capability_gaps',
+                profileId: tool.inputs.profileId,
+                gaps: result.gaps,
+                summary: result.summary
+              });
+            }
+            break;
 
-//         // Get candidate readiness
-//         const readiness = await getCandidateReadiness(supabase, {
-//           profileId: candidate.id,
-//           jobId: jobId!,
-//           roleId: roleId!
-//         });
+          case 'getSkillGaps':
+            if (tool.inputs.profileId) {
+              result = await getSkillGaps(
+                supabase,
+                tool.inputs.profileId,
+                roleId!
+              );
+              recommendations.push({
+                type: 'skill_gaps',
+                profileId: tool.inputs.profileId,
+                gaps: result.gaps,
+                summary: result.summary
+              });
+            }
+            break;
+        }
 
-//         if (readiness.error) continue;
+        // Record the action taken
+        actionsTaken.push({
+          tool: tool.tool,
+          reason: tool.reason,
+          confidence: tool.confidence,
+          inputs: tool.inputs,
+          result
+        });
 
-//         // Combine semantic and traditional matches
-//         matches.push(
-//           ...candidateSemanticMatches.map(match => ({
-//             id: match.entityId,
-//             similarity: match.similarity,
-//             type: 'profile' as const,
-//             metadata: {
-//               jobId: jobId,
-//               roleId: roleId,
-//               companyId: companyId,
-//               divisionId: divisionId
-//             }
-//           }))
-//         );
+      } catch (error) {
+        console.error(`Error executing ${tool.tool}:`, error);
+        // Continue with other tools even if one fails
+      }
+    }
 
-//         recommendations.push({
-//           type: 'candidate_match',
-//           score: readiness.data!.score,
-//           semanticScore: candidateSemanticMatches[0]?.similarity || 0,
-//           summary: readiness.data!.summary,
-//           details: {
-//             profileId: candidate.id,
-//             semanticMatch: candidateSemanticMatches[0],
-//             readiness: readiness.data
-//           }
-//         });
-//       }
-//     }
+    // Sort matches by similarity score
+    matches.sort((a, b) => b.similarity - a.similarity);
 
-//     // Sort recommendations by combined score (traditional + semantic)
-//     recommendations.sort((a, b) => {
-//       const scoreA = (a.score * 0.4) + (a.semanticScore * 0.6);
-//       const scoreB = (b.score * 0.4) + (b.semanticScore * 0.6);
-//       return scoreB - scoreA;
-//     });
+    // Sort recommendations by score if available
+    recommendations.sort((a, b) => {
+      const scoreA = a.score || a.similarity || 0;
+      const scoreB = b.score || b.similarity || 0;
+      return scoreB - scoreA;
+    });
 
-//     // Log the MCP run
-//     await logAgentAction(supabase, {
-//       entityType: 'job',
-//       entityId: jobId!,
-//       payload: {
-//         action: 'mcp_loop_complete',
-//         mode: 'hiring',
-//         recommendations: recommendations.slice(0, 5),
-//         matches: matches.slice(0, 10)
-//       },
-//       semanticMetrics: {
-//         similarityScores: {
-//           profileMatch: matches.find(m => m.type === 'profile')?.similarity,
-//           roleAlignment: matches.find(m => m.type === 'role')?.similarity,
-//           companyAlignment: matches.find(m => m.type === 'company')?.similarity
-//         },
-//         matchingStrategy: 'hybrid',
-//         confidenceScore: 0.8
-//       }
-//     });
+    return {
+      success: true,
+      message: 'Hiring loop completed successfully',
+      data: {
+        matches: matches.slice(0, 10),
+        recommendations: recommendations.slice(0, 5),
+        actionsTaken,
+        nextActions: [
+          'Review top candidate matches',
+          'Assess capability and skill gaps',
+          'Schedule interviews with recommended candidates'
+        ]
+      }
+    };
 
-//     return {
-//       success: true,
-//       message: 'Hiring loop completed successfully',
-//       data: {
-//         matches: matches.slice(0, 10),
-//         recommendations: recommendations.slice(0, 5),
-//         nextActions: [
-//           'Review top candidate matches',
-//           'Schedule interviews with recommended candidates',
-//           'Update job requirements based on market insights'
-//         ]
-//       }
-//     };
-
-//   } catch (error) {
-//     return {
-//       success: false,
-//       message: error.message,
-//       error: {
-//         type: 'PLANNER_ERROR',
-//         message: 'Failed to run hiring loop',
-//         details: error
-//       }
-//     };
-//   }
-// } 
+  } catch (error) {
+    console.error('Error in hiring loop:', error);
+    return {
+      success: false,
+      message: error.message,
+      error: {
+        type: 'HIRING_LOOP_ERROR',
+        message: 'Failed to run hiring loop',
+        details: error
+      }
+    };
+  }
+} 

@@ -4,10 +4,10 @@ import { corsHeaders } from '../shared/cors.ts';
 import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
-import { handleChatInteraction } from '../shared/mcp/chat.ts';
-import { embedContext } from '../shared/mcp/embedding.ts';
+import { handleChatInteraction } from '../shared/chatUtils.ts';
+import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
-import { logAgentAction } from '../shared/mcp/logger.ts';
+import { logAgentAction } from '../shared/agent/logAgentAction.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -38,57 +38,89 @@ serve(async (req) => {
     }
 
     // Check and create embeddings if needed
-    if (request.mode === 'candidate' && request.profileId) {
-      const { data: profile, error } = await supabaseClient
-        .from('profiles')
-        .select('embedding')
-        .eq('id', request.profileId)
-        .single();
+    try {
+      if (request.mode === 'candidate' && request.profileId) {
+        const { data: profile, error } = await supabaseClient
+          .from('profiles')
+          .select('embedding')
+          .eq('id', request.profileId)
+          .single();
 
-      if (!profile?.embedding) {
-        console.log('Creating profile embedding...');
-        await embedContext(supabaseClient, 'profile', request.profileId);
+        if (!profile?.embedding) {
+          console.log('Creating profile embedding...');
+          const success = await embedContext(supabaseClient, 'profile', request.profileId);
+          if (!success) {
+            throw new Error('Failed to create profile embedding');
+          }
+        }
       }
-    }
 
-    if (request.mode === 'hiring' && request.roleId) {
-      const { data: role, error } = await supabaseClient
-        .from('roles')
-        .select('embedding')
-        .eq('id', request.roleId)
-        .single();
+      if (request.mode === 'hiring' && request.roleId) {
+        const { data: role, error } = await supabaseClient
+          .from('roles')
+          .select('embedding')
+          .eq('id', request.roleId)
+          .single();
 
-      if (!role?.embedding) {
-        console.log('Creating role embedding...');
-        await embedContext(supabaseClient, 'role', request.roleId);
+        if (!role?.embedding) {
+          console.log('Creating role embedding...');
+          const success = await embedContext(supabaseClient, 'role', request.roleId);
+          if (!success) {
+            throw new Error('Failed to create role embedding');
+          }
+        }
       }
+    } catch (error) {
+      console.error('Embedding creation error:', error);
+      throw new Error(`Failed to ensure embeddings: ${error.message}`);
     }
 
     // Get AI planner recommendations if there's a message
-    let plannerRecommendations = null;
+    let plannerRecommendations = [];
     if (request.context?.lastMessage) {
       console.log('Getting planner recommendations...');
-      plannerRecommendations = await getPlannerRecommendation(
-        request.context.lastMessage,
-        request.mode === 'candidate' ? [
-          'getSuggestedCareerPaths',
-          'getJobReadiness',
-          'getOpenJobs',
-          'getCapabilityGaps',
-          'getSkillGaps'
-        ] : [
-          'getMatchingProfiles',
-          'scoreProfileFit',
-          'getCapabilityGaps',
-          'getSkillGaps'
-        ],
-        {
-          mode: request.mode,
-          profileId: request.profileId,
-          roleId: request.roleId,
-          semanticContext: request.context.semanticContext
-        }
-      );
+      try {
+        const recommendations = await getPlannerRecommendation(
+          supabaseClient,
+          {
+            mode: request.mode,
+            profileId: request.profileId,
+            roleId: request.roleId,
+            lastMessage: request.context.lastMessage,
+            semanticContext: request.context.semanticContext
+          }
+        );
+        
+        plannerRecommendations = recommendations;
+
+        // Log planner decision for transparency
+        await logAgentAction(supabaseClient, {
+          entityType: request.mode === 'candidate' ? 'profile' : 'role',
+          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+          payload: {
+            action: 'planner_decision',
+            message: request.context.lastMessage,
+            recommendations
+          }
+        });
+
+      } catch (error) {
+        console.error('Planner error:', error);
+        // Provide fallback recommendations if planner fails
+        plannerRecommendations = request.mode === 'candidate' ? 
+          [{ 
+            tool: 'getSuggestedCareerPaths',
+            reason: 'Fallback career path suggestions',
+            confidence: 0.7,
+            inputs: { profileId: request.profileId }
+          }] : 
+          [{
+            tool: 'getMatchingProfiles',
+            reason: 'Fallback profile matching',
+            confidence: 0.7,
+            inputs: { roleId: request.roleId }
+          }];
+      }
     }
 
     // Run the appropriate loop based on mode
@@ -109,17 +141,16 @@ serve(async (req) => {
     if (response.success && response.data?.actionsTaken) {
       for (const action of response.data.actionsTaken) {
         await logAgentAction(supabaseClient, {
-          agentName: 'mcp-planner',
-          actionType: action.tool,
-          targetType: request.mode === 'candidate' ? 'profile' : 'role',
-          targetId: request.mode === 'candidate' ? request.profileId : request.roleId,
-          outcome: action.result,
+          entityType: request.mode === 'candidate' ? 'profile' : 'role',
+          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
           payload: {
+            action: action.tool,
             reason: action.reason,
-            inputs: action.inputs
+            inputs: action.inputs,
+            result: action.result
           },
           confidenceScore: action.confidence || 0.8,
-          sessionId: request.sessionId
+          semanticMetrics: response.data.semanticMetrics
         });
       }
     }
