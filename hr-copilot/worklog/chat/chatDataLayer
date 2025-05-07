@@ -1,0 +1,62 @@
+🛠 Cursor Work Request: Implement AI Chat Data Layer in Supabase (MCP-Enabled)
+
+Project Title:
+AI Career Chat Data Infrastructure
+
+Objective:
+Implement only the schema and edge functions required to support an AI-driven chat interface that interacts with the MCP system.
+
+Scope of Work:
+
+1. Database Tables
+
+Table: conversation_sessions
+- id: uuid, primary key, default gen_random_uuid()
+- profile_id: uuid, foreign key → profile(id)
+- created_at: timestamptz, default now()
+- updated_at: timestamptz, default now()
+- summary: text (optional)
+
+Table: chat_messages
+- id: uuid, primary key, default gen_random_uuid()
+- session_id: uuid, foreign key → conversation_sessions(id)
+- sender: text, check (sender in ['user', 'assistant'])
+- message: text
+- tool_call: jsonb (optional)
+- response_data: jsonb (optional)
+- timestamp: timestamptz, default now()
+
+Note: agent_action is already present and will be reused for AI decision logging.
+
+2. Edge Functions (to be implemented as Supabase Edge Functions)
+
+- startChatSession(profileId)
+  → returns sessionId
+  → creates new conversation_sessions row
+
+- postUserMessage(sessionId, message)
+  → logs user message to chat_messages
+  → returns status or ID
+
+- runPlannerAgent(sessionId)
+  → loads latest message
+  → determines intended MCP action using fast model
+  → optionally calls MCP function
+  → logs response to chat_messages
+
+- logAgentResponse(sessionId, message, actionType)
+  → appends assistant message + action log
+
+- getChatHistory(sessionId)
+  → returns ordered list of messages for frontend
+
+Success Criteria:
+- Messages and sessions are logged in normalized structure
+- AI (planner agent) chooses actions via MCP integration
+- Messages, tool calls, and outcomes are traceable and logged
+
+Dependencies:
+- Supabase project with DB schema applied
+- Supabase Edge Functions deployed
+- Access to OpenAI or Anthropic API for planning layer
+- MCP functions must be callable from planner logic
