@@ -23,7 +23,7 @@ export async function getCapabilityGaps(
       .from('role_capabilities')
       .select(`
         capability_id,
-        level as required_level,
+        level,
         capabilities (
           id,
           name,
@@ -48,7 +48,7 @@ export async function getCapabilityGaps(
       .from('profile_capabilities')
       .select(`
         capability_id,
-        level as profile_level,
+        level,
         capabilities (
           id,
           name,
@@ -71,7 +71,7 @@ export async function getCapabilityGaps(
     // Create a map of profile capabilities for easy lookup
     const profileCapMap = new Map(
       profileCapabilities?.map(pc => [pc.capability_id, {
-        level: pc.profile_level,
+        level: pc.level,
         name: pc.capabilities.name,
         groupName: pc.capabilities.group_name
       }]) || []
@@ -80,7 +80,7 @@ export async function getCapabilityGaps(
     // Analyze gaps
     const gaps: CapabilityGap[] = roleCapabilities?.map(rc => {
       const profileCap = profileCapMap.get(rc.capability_id)
-      const requiredLevel = rc.required_level
+      const requiredLevel = rc.level
       const profileLevel = profileCap?.level
 
       // Calculate gap type and severity

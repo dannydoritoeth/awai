@@ -1,2 +1,3 @@
 sales-copilot/hubspot-app/hubspot.config.yml
 scrape/.env.local
+/hr-copilot/supabase/.temp
