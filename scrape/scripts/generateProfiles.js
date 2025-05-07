@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import { getEmbeddings, generateEmbeddingText } from '../utils/embeddings.js';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -70,9 +71,12 @@ async function generateProfiles(count) {
   console.log(`\nGenerating ${count} profiles...`);
   
   // Fetch roles with their capabilities and skills
+  console.log('Fetching roles, capabilities, and skills...');
   const roles = await fetchRolesWithCapabilitiesAndSkills();
+  console.log(`Fetched ${roles.length} roles`);
   
   // Group roles by similar capabilities to create career paths
+  console.log('\nGrouping roles into career paths...');
   const careerPaths = roles.reduce((paths, role) => {
     const pathKey = role.capabilities
       .filter(c => c.capability_type === 'focus')
@@ -86,19 +90,36 @@ async function generateProfiles(count) {
     paths[pathKey].push(role);
     return paths;
   }, {});
+  
+  const careerPathKeys = Object.keys(careerPaths);
+  console.log(`Created ${careerPathKeys.length} career paths`);
+  
+  if (careerPathKeys.length === 0) {
+    console.error('No career paths were created. This could mean:');
+    console.error('1. No roles were fetched from the database');
+    console.error('2. No roles have focus capabilities');
+    console.error('\nFirst role data:', roles[0]);
+    throw new Error('No career paths available for profile generation');
+  }
 
   const profiles = [];
   const profileCapabilities = [];
   const profileSkills = [];
 
   // Generate profiles
+  console.log('\nStarting profile generation loop...');
   for (let i = 0; i < count; i++) {
+    console.log(`\nGenerating profile ${i + 1} of ${count}`);
+    
     // Select a random career path
-    const careerPathKeys = Object.keys(careerPaths);
     const selectedPathKey = careerPathKeys[Math.floor(Math.random() * careerPathKeys.length)];
     const relatedRoles = careerPaths[selectedPathKey];
+    console.log(`Selected career path with ${relatedRoles?.length || 0} related roles`);
     
-    if (!relatedRoles || relatedRoles.length === 0) continue;
+    if (!relatedRoles || relatedRoles.length === 0) {
+      console.error(`No related roles found for path key: ${selectedPathKey}`);
+      continue;
+    }
 
     const yearsOfExperience = Math.floor(Math.random() * 15) + 2; // 2-17 years
     const profileId = uuidv4();
@@ -114,11 +135,14 @@ async function generateProfiles(count) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    
-    profiles.push(profile);
+    console.log(`Created base profile: ${profile.name} (${profile.role_title})`);
+
+    // First create the Sets and assign capabilities and skills
+    const assignedCapabilities = new Set();
+    const assignedSkills = new Set();
 
     // Assign capabilities from related roles
-    const assignedCapabilities = new Set();
+    console.log('Assigning capabilities...');
     relatedRoles.forEach(role => {
       role.capabilities.forEach(cap => {
         if (!assignedCapabilities.has(cap.capability_id)) {
@@ -132,9 +156,10 @@ async function generateProfiles(count) {
         }
       });
     });
+    console.log(`Assigned ${assignedCapabilities.size} capabilities`);
 
     // Assign skills from related roles
-    const assignedSkills = new Set();
+    console.log('Assigning skills...');
     relatedRoles.forEach(role => {
       role.skills.forEach(skill => {
         if (!assignedSkills.has(skill.skill_id)) {
@@ -149,7 +174,41 @@ async function generateProfiles(count) {
         }
       });
     });
+    console.log(`Assigned ${assignedSkills.size} skills`);
+
+    // Now generate embeddings using the populated Sets
+    console.log('Generating embeddings...');
+    try {
+      // Collect all profile data for embedding
+      const profileData = {
+        ...profile,
+        capabilities: Array.from(assignedCapabilities).map(capId => {
+          const cap = relatedRoles.flatMap(r => r.capabilities).find(c => c.capability_id === capId);
+          return `${cap?.name || ''} (${cap?.level || 'Intermediate'})`;
+        }),
+        skills: Array.from(assignedSkills).map(skillId => {
+          const skill = relatedRoles.flatMap(r => r.skills).find(s => s.skill_id === skillId);
+          return skill?.name || '';
+        })
+      };
+
+      // Generate embedding text and get embeddings
+      const embeddingText = generateEmbeddingText(profileData, 'profile');
+      profile.embedding = await getEmbeddings(embeddingText);
+      console.log(`Generated embedding for profile: ${profile.name}`);
+    } catch (error) {
+      console.error(`Failed to generate embedding for profile ${profile.name}:`, error);
+      profile.embedding = null;
+    }
+    
+    profiles.push(profile);
+    console.log(`Completed profile ${i + 1}`);
   }
+
+  console.log('\nProfile generation summary:');
+  console.log(`Generated ${profiles.length} profiles`);
+  console.log(`Generated ${profileCapabilities.length} capability assignments`);
+  console.log(`Generated ${profileSkills.length} skill assignments`);
 
   return { profiles, profileCapabilities, profileSkills };
 }

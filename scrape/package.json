@@ -8,7 +8,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "scrape": "node crawl.js",
     "prepare-seed": "node scripts/prepareSeedData.js",
-    "profile-seed": "node scripts/generateProfiles.js"
+    "insert-seed": "node scripts/insertSeedData.js",
+    "profile-seed": "node scripts/generateProfiles.js",
+    "process-documents": "node scripts/process-documents.js"
   },
   "repository": {
     "type": "git",
