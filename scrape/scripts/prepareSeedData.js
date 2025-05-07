@@ -180,6 +180,14 @@ function extractCapabilityLevels(roles, capabilities) {
   console.log('\nExtracting capability levels...');
   const capabilityLevels = new Map();
   const capabilityMap = new Map(capabilities.map(c => [c.name, c.id]));
+  
+  // Debug: Log all capability IDs in a structured way
+  console.log('\nAvailable Capabilities:');
+  console.log('----------------------');
+  capabilities.forEach(c => {
+    console.log(`Name: "${c.name}"\nID: ${c.id}\n`);
+  });
+  
   let totalLevels = 0;
 
   roles.forEach(role => {
@@ -188,18 +196,10 @@ function extractCapabilityLevels(roles, capabilities) {
         // Process focus capabilities
         if (Array.isArray(doc.structuredData?.focusCapabilities)) {
           doc.structuredData.focusCapabilities.forEach((cap, idx) => {
-            console.log(`Processing focus capability level ${idx}:`, {
-              value: cap,
-              type: typeof cap,
-              is_string: typeof cap === 'string',
-              raw: JSON.stringify(cap)
-            });
-
             let capabilityName, level;
             if (typeof cap === 'string') {
               [capabilityName, level] = cap.split(' - ').map(s => s.trim());
             } else if (typeof cap === 'object' && cap !== null) {
-              // Handle object format if it exists
               capabilityName = cap.capabilityName || cap.name || cap.capability;
               level = cap.level;
             } else {
@@ -212,7 +212,7 @@ function extractCapabilityLevels(roles, capabilities) {
               if (capabilityId) {
                 const levelKey = `${capabilityId}-${level}`;
                 if (!capabilityLevels.has(levelKey)) {
-                  capabilityLevels.set(levelKey, {
+                  const levelData = {
                     id: uuidv4(),
                     capability_id: capabilityId,
                     level: level,
@@ -220,30 +220,30 @@ function extractCapabilityLevels(roles, capabilities) {
                     behavioral_indicators: [],
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
-                  });
+                  };
+                  capabilityLevels.set(levelKey, levelData);
                   totalLevels++;
-                  console.log(`Added focus capability level: ${capabilityName} - ${level}`);
+                  console.log(`\nAdded Capability Level:`);
+                  console.log(`Capability: "${capabilityName}"`);
+                  console.log(`Level: ${level}`);
+                  console.log(`Using Capability ID: ${capabilityId}`);
                 }
+              } else {
+                console.warn(`\n⚠️ WARNING: No capability ID found`);
+                console.warn(`Capability Name: "${capabilityName}"`);
+                console.warn(`Available names: ${Array.from(capabilityMap.keys()).join(', ')}`);
               }
             }
           });
         }
 
-        // Process complementary capabilities
+        // Process complementary capabilities with similar debug output
         if (Array.isArray(doc.structuredData?.complementaryCapabilities)) {
           doc.structuredData.complementaryCapabilities.forEach((cap, idx) => {
-            console.log(`Processing complementary capability level ${idx}:`, {
-              value: cap,
-              type: typeof cap,
-              is_string: typeof cap === 'string',
-              raw: JSON.stringify(cap)
-            });
-
             let capabilityName, level;
             if (typeof cap === 'string') {
               [capabilityName, level] = cap.split(' - ').map(s => s.trim());
             } else if (typeof cap === 'object' && cap !== null) {
-              // Handle object format if it exists
               capabilityName = cap.capabilityName || cap.name || cap.capability;
               level = cap.level;
             } else {
@@ -256,7 +256,7 @@ function extractCapabilityLevels(roles, capabilities) {
               if (capabilityId) {
                 const levelKey = `${capabilityId}-${level}`;
                 if (!capabilityLevels.has(levelKey)) {
-                  capabilityLevels.set(levelKey, {
+                  const levelData = {
                     id: uuidv4(),
                     capability_id: capabilityId,
                     level: level,
@@ -264,10 +264,18 @@ function extractCapabilityLevels(roles, capabilities) {
                     behavioral_indicators: [],
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
-                  });
+                  };
+                  capabilityLevels.set(levelKey, levelData);
                   totalLevels++;
-                  console.log(`Added complementary capability level: ${capabilityName} - ${level}`);
+                  console.log(`\nAdded Capability Level:`);
+                  console.log(`Capability: "${capabilityName}"`);
+                  console.log(`Level: ${level}`);
+                  console.log(`Using Capability ID: ${capabilityId}`);
                 }
+              } else {
+                console.warn(`\n⚠️ WARNING: No capability ID found`);
+                console.warn(`Capability Name: "${capabilityName}"`);
+                console.warn(`Available names: ${Array.from(capabilityMap.keys()).join(', ')}`);
               }
             }
           });
@@ -276,8 +284,25 @@ function extractCapabilityLevels(roles, capabilities) {
     }
   });
 
-  console.log(`Total unique capability levels extracted: ${totalLevels}`);
-  return Array.from(capabilityLevels.values());
+  const levels = Array.from(capabilityLevels.values());
+  
+  // Debug: Show final capability level summary
+  console.log('\nCapability Levels Summary:');
+  console.log('-------------------------');
+  levels.forEach(level => {
+    console.log(`\nLevel ID: ${level.id}`);
+    console.log(`Capability ID: ${level.capability_id}`);
+    console.log(`Level: ${level.level}`);
+    // Check if this capability ID exists
+    const matchingCap = capabilities.find(c => c.id === level.capability_id);
+    if (!matchingCap) {
+      console.warn(`⚠️ WARNING: This references a non-existent capability ID!`);
+    } else {
+      console.log(`Capability Name: ${matchingCap.name}`);
+    }
+  });
+
+  return levels;
 }
 
 // Create companies seed data
@@ -558,8 +583,41 @@ async function processSeedData() {
       throw new Error('Failed to read source files');
     }
     
-    // Process divisions from both sources
+    // Generate embeddings for companies
+    console.log('\nGenerating embeddings for companies...');
+    for (const company of companies) {
+      try {
+        const companyText = generateEmbeddingText({
+          name: company.name,
+          description: company.description,
+          type: company.type,
+          sector: company.sector
+        });
+        company.embedding = await getEmbeddings(companyText);
+        console.log(`Generated embedding for company: ${company.name}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for company ${company.name}:`, error);
+        company.embedding = null;
+      }
+    }
+    
+    // Process divisions and generate their embeddings
     const divisions = extractDivisions(nswgovJobs, seekJobs, companies[0].id);
+    console.log('\nGenerating embeddings for divisions...');
+    for (const division of divisions.values()) {
+      try {
+        const divisionText = generateEmbeddingText({
+          name: division.name,
+          cluster: division.cluster,
+          agency: division.agency
+        });
+        division.embedding = await getEmbeddings(divisionText);
+        console.log(`Generated embedding for division: ${division.name}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for division ${division.name}:`, error);
+        division.embedding = null;
+      }
+    }
     
     // Process roles and related data
     const roles = new Map(); // Map to store unique roles by key
@@ -803,16 +861,32 @@ async function processSeedData() {
     // Convert roles Map to array for further processing
     const rolesArray = Array.from(roles.values());
 
-    // Extract capabilities, levels, skills and relationships
+    // Extract capabilities and relationships
     const capabilities = extractCapabilities(rolesArray);
+    
+    // Debug: Log capabilities before levels
+    console.log('\nCapabilities before extracting levels:');
+    capabilities.forEach(c => {
+      console.log(`${c.name}: ${c.id}`);
+    });
+    
     const capabilityLevels = extractCapabilityLevels(rolesArray, capabilities);
+    
+    // Debug: Verify capability IDs exist
+    console.log('\nVerifying capability IDs...');
+    const capabilityIds = new Set(capabilities.map(c => c.id));
+    const invalidLevels = capabilityLevels.filter(level => !capabilityIds.has(level.capability_id));
+    if (invalidLevels.length > 0) {
+      console.error('Found invalid capability references:', invalidLevels);
+    }
+    
     const skills = extractSkills(rolesArray);
     const roleCapabilities = createRoleCapabilities(rolesArray, capabilities);
     const roleSkills = createRoleSkills(rolesArray, skills);
     
-    // Extract capabilities and generate embeddings
-    const capabilitiesWithEmbeddings = extractCapabilities(Array.from(roles.values()));
-    for (const capability of capabilitiesWithEmbeddings) {
+    // Generate embeddings for capabilities
+    console.log('\nGenerating embeddings for capabilities...');
+    for (const capability of capabilities) {
       try {
         const capabilityText = `${capability.name} ${capability.description || ''} ${capability.group_name || ''}`;
         capability.embedding = await getEmbeddings(capabilityText);
@@ -823,9 +897,9 @@ async function processSeedData() {
       }
     }
 
-    // Extract skills and generate embeddings
-    const skillsWithEmbeddings = extractSkills(Array.from(roles.values()));
-    for (const skill of skillsWithEmbeddings) {
+    // Generate embeddings for skills
+    console.log('\nGenerating embeddings for skills...');
+    for (const skill of skills) {
       try {
         const skillText = generateEmbeddingText(skill, 'skill');
         skill.embedding = await getEmbeddings(skillText);
@@ -841,9 +915,9 @@ async function processSeedData() {
     await writeSeedFile(TABLES.divisions, Array.from(divisions.values()));
     await writeSeedFile(TABLES.roles, rolesArray);
     await writeSeedFile(TABLES.jobs, jobs);
-    await writeSeedFile(TABLES.capabilities, capabilitiesWithEmbeddings);
+    await writeSeedFile(TABLES.capabilities, capabilities);
     await writeSeedFile(TABLES.capabilityLevels, capabilityLevels);
-    await writeSeedFile(TABLES.skills, skillsWithEmbeddings);
+    await writeSeedFile(TABLES.skills, skills);
     await writeSeedFile(TABLES.roleCapabilities, roleCapabilities);
     await writeSeedFile(TABLES.roleSkills, roleSkills);
     await writeSeedFile(TABLES.jobDocuments, jobDocuments);

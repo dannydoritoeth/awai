@@ -205,6 +205,10 @@ CREATE TABLE IF NOT EXISTS public.job_documents (
   PRIMARY KEY (job_id, document_id)
 );
 
+
+
+
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.divisions ENABLE ROW LEVEL SECURITY;
@@ -281,3 +285,31 @@ CREATE TRIGGER handle_updated_at
   BEFORE UPDATE ON public.career_paths
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at(); 
+
+create extension vector
+with
+  schema extensions;
+
+ALTER TABLE capabilities ADD COLUMN embedding vector(768);
+CREATE INDEX ON capabilities USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE companies ADD COLUMN embedding vector(768);
+CREATE INDEX ON companies USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE divisions ADD COLUMN embedding vector(768);
+CREATE INDEX ON divisions USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE jobs ADD COLUMN embedding vector(768);
+CREATE INDEX ON jobs USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE roles ADD COLUMN embedding vector(768);
+CREATE INDEX ON roles USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE skills ADD COLUMN embedding vector(768);
+CREATE INDEX ON skills USING ivfflat (embedding vector_cosine_ops);
+
+ALTER TABLE profiles ADD COLUMN embedding vector(768);
+CREATE INDEX ON profiles USING ivfflat (embedding vector_cosine_ops);
+
+
+
