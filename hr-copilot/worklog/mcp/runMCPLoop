@@ -1,25 +1,56 @@
-// 🛠 Cursor Work Request: runMcpLoop(profileId?, roleId?, mode)
+// 🧠 Cursor Work Request: runMcpLoop(profileId?, roleId?, mode)
 
 // Objective:
-// Implement an Edge Function `/mcp-loop` that serves as the orchestration point for the MCP system. It should invoke shared functions to run the appropriate loop depending on whether a candidate is exploring roles or a role owner is exploring candidates, with support for both traditional and semantic matching.
+// Implement an AI-powered MCP loop as an Edge Function (`/mcp-loop`) that plans and executes context-aware actions
+// for workforce intelligence (candidate/job and hiring/role). The loop must support freeform input and intelligently 
+// decide which actions to take using an LLM planner agent, with full transparency of reasoning.
 
 // ✅ Requirements
 
-// - Be lightweight and fast (controller only; core logic in shared library).
-// - Be pure (no side effects beyond logging, scoring, and nudging).
-// - This will be used to coordinate shared functions during MCP execution.
-// - It should be implemented as an Edge Function on Supabase.
-// - Use the shared library for core logic to avoid duplication.
-// - Leverage embeddings for semantic matching and recommendations.
-// - Support chat-based interactions through the MCP system.
+// Core Functionality:
+// - Support both 'candidate' and 'hiring' modes
+// - Accept freeform user input (e.g. chat message)
+// - Use AI (LLM) to plan which actions to run from the available MCP functions
+// - Incorporate profile and role embeddings for semantic reasoning
+// - Invoke shared MCP actions (e.g. getOpenJobs, getSuggestedCareerPaths, scoreProfileFit)
+// - Log what was done and why into agent_actions
+
+// Planning AI Agent:
+// - Accept: last user message, available tools/actions, embeddings (profile, role, company)
+// - Use AI (e.g. GPT-4 or Claude) to select which MCP actions to call
+// - Can run multiple actions if relevant
+// - Returns: tool(s) selected, reason(s) for selection, optional arguments
+
+// Explainability:
+// - AI must return a rationale for each action it selects
+// - Responses must include tool name, reason, and expected outcome
+// - Result is logged to agent_actions for transparency
+
+// Planning Tree (per mode):
+// Candidate Mode:
+//   - Check if profile has embedding; embed if missing
+//   - If message is present, use AI to choose:
+//       → getSuggestedCareerPaths
+//       → getJobReadiness + getOpenJobs
+//       → getCapabilityGaps + getSkillGaps
+//   - Synthesize results into recommendations
+//   - Return: recommendations[], matches[], nextActions[]
+
+// Hiring Mode:
+//   - Check if role has embedding; embed if missing
+//   - If message is present, use AI to choose:
+//       → getMatchingProfiles
+//       → scoreProfileFit
+//       → getCapabilityGaps + getSkillGaps
+//   - Return: top candidate profiles with match details
 
 // Function Signature:
-// POST /mcp-loop
+POST /mcp-loop
 {
   profileId?: string;
   roleId?: string;
   mode: 'candidate' | 'hiring';
-  sessionId?: string; // Optional chat session ID for context
+  sessionId?: string;
   context?: {
     lastMessage?: string;
     chatHistory?: ChatMessage[];
@@ -30,46 +61,37 @@
   };
 }
 
-// Shared Controller Files:
+// Shared Modules:
 // - mcp/candidate.ts → runCandidateLoop(profileId, context?)
 // - mcp/hiring.ts → runHiringLoop(roleId, context?)
-// - mcp/embedding.ts → getSemanticMatches(embedding, table, limit)
+// - mcp/embedding.ts → embedContext(), getSemanticMatches()
+// - mcp/planner.ts → getPlannerRecommendation(message, tools[], state)
 // - mcp/chat.ts → handleChatInteraction(sessionId, message, context)
+// - mcp/logger.ts → logAgentAction(entityId, actionType, reason, confidence)
 
-// Candidate Loop (example steps):
-// - getProfileContext (inopenJobscludes profile embedding)
-// - getSuggestedCareerPaths (using semantic role matching)
-// - getRoleDetail → getCapabilityGaps + getSkillGaps (enhanced with embedding similarity)
-// - getOpenJobs → getJobReadiness (using semantic job matching)
-// - getSemanticSkillRecommendations (based on profile and target role embeddings)
-// - handleChatInteraction (process user input and generate responses)
-// - logAgentAction, nudge
+// ✅ Outputs:
+// {
+//   success: true,
+//   data: {
+//     recommendations: [...],
+//     matches: [...],
+//     actionsTaken: [...],
+//     reasoning: [
+//       { tool: 'getOpenJobs', reason: 'User asked about job opportunities' }
+//     ]
+//   }
+// }
 
-// Hiring Loop (example steps):
-// - getRoleDetail (includes role embedding)
-// - getMatchingProfiles (using semantic profile matching)
-// - scoreProfileFit (enhanced with embedding similarity scores)
-// - getProfileContext → getCapabilityGaps + getSkillGaps (using semantic capability matching)
-// - getSemanticCompanyFit (match profile against company/division culture embeddings)
-// - handleChatInteraction (process hiring manager input)
-// - logAgentAction, nudge
+// 🧠 Notes:
+// - Must validate inputs: ensure `profileId` or `roleId` exists for the mode
+// - Auto-embed profile or role if missing
+// - Return fallback suggestions if AI yields no tools
+// - Each MCP call must be wrapped with logging (action, inputs, output, reason)
+// - All semantic matches use cosine similarity (via ivfflat index)
+// - Can run in isolation or be called from the chat planner
 
-// Chat Integration:
-// - Each MCP action can be triggered via chat
-// - Chat context is maintained across interactions
-// - Semantic matching is used to understand user intent
-// - Responses are generated based on MCP state and context
-// - Tool calls and responses are logged for transparency
+// Future Considerations:
+// - Add ranking weights to combine semantic + traditional scores
+// - Expose planner’s decision to frontend for explainability
+// - Let planner optionally create `AgentAction` summaries for journaling
 
-// 🧠 Notes
-// - Must validate inputs: ensure `profileId` or `roleId` is provided depending on mode.
-// - Should log errors or status to `agent_actions` for visibility.
-// - Return a success message and summary (e.g. how many jobs/profiles processed).
-// - Embedding operations should use vector similarity search for efficient matching.
-// - Consider caching embeddings for frequently accessed entities.
-// - Use cosine similarity for semantic matching (supported by ivfflat index).
-// - Chat interactions should maintain context across messages.
-// - Semantic matching should be used to understand user intent in chat.
-// - All actions should be logged for audit and improvement.
-// - Consider rate limiting for embedding operations.
-// - Implement proper error handling for chat interactions.
