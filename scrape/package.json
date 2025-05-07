@@ -1,5 +1,5 @@
 {
-  "name": "government_job_vacancy_scrapper",
+  "name": "scrape",
   "version": "1.0.0",
   "description": "Collects information on available job vacancies from government websites.",
   "main": "crawl.js",
@@ -7,7 +7,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "scrape": "node crawl.js",
-    "prepare-seed": "node scripts/prepareSeedData.js"
+    "prepare-seed": "node scripts/prepareSeedData.js",
+    "profile-seed": "node scripts/generateProfiles.js"
   },
   "repository": {
     "type": "git",
