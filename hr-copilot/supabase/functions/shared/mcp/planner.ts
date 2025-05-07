@@ -7,13 +7,18 @@ import { logAgentAction } from '../agent/logAgentAction.ts';
 const AVAILABLE_ACTIONS = {
   CANDIDATE_MODE: [
     {
+      tool: 'getProfileContext',
+      description: 'Load profile details and embedding',
+      requiresProfileId: true
+    },
+    {
       tool: 'getSuggestedCareerPaths',
-      description: 'Get career path recommendations based on profile',
+      description: 'Recommend future roles based on profile',
       requiresProfileId: true
     },
     {
       tool: 'getJobReadiness',
-      description: 'Assess readiness for specific jobs',
+      description: 'Score profile readiness for a job',
       requiresProfileId: true,
       requiresJobId: true
     },
@@ -24,15 +29,44 @@ const AVAILABLE_ACTIONS = {
     },
     {
       tool: 'getCapabilityGaps',
-      description: 'Analyze gaps in capabilities for a role',
+      description: 'Compare profile capabilities to a role',
       requiresProfileId: true,
       requiresRoleId: true
     },
     {
       tool: 'getSkillGaps',
-      description: 'Analyze gaps in skills for a role',
+      description: 'Compare profile skills to a role',
       requiresProfileId: true,
       requiresRoleId: true
+    },
+    {
+      tool: 'getSemanticSkillRecommendations',
+      description: 'Suggest skill improvements via embeddings',
+      requiresProfileId: true,
+      requiresRoleId: false
+    },
+    {
+      tool: 'getSemanticMatches',
+      description: 'Return semantically similar records',
+      requiresEmbedding: true,
+      requiresTable: true
+    },
+    {
+      tool: 'embedContext',
+      description: 'Generate and store an embedding',
+      requiresEntityType: true,
+      requiresEntityId: true
+    },
+    {
+      tool: 'nudge',
+      description: 'Prompt profile to take an action',
+      requiresProfileId: true,
+      requiresActionType: true
+    },
+    {
+      tool: 'handleChatInteraction',
+      description: 'Interpret chat and guide next steps',
+      requiresChatContext: true
     },
     {
       tool: 'scoreProfileFit',
@@ -43,8 +77,25 @@ const AVAILABLE_ACTIONS = {
   ],
   HIRING_MODE: [
     {
+      tool: 'getRoleDetail',
+      description: 'Load role details and embedding',
+      requiresRoleId: true
+    },
+    {
       tool: 'getMatchingProfiles',
       description: 'Find profiles that match role requirements',
+      requiresRoleId: true
+    },
+    {
+      tool: 'getCapabilityGaps',
+      description: 'Compare a profile to role capability needs',
+      requiresProfileId: true,
+      requiresRoleId: true
+    },
+    {
+      tool: 'getSkillGaps',
+      description: 'Compare a profile to role skill needs',
+      requiresProfileId: true,
       requiresRoleId: true
     },
     {
@@ -52,6 +103,29 @@ const AVAILABLE_ACTIONS = {
       description: 'Calculate fit score for a specific profile',
       requiresProfileId: true,
       requiresRoleId: true
+    },
+    {
+      tool: 'getSemanticCompanyFit',
+      description: 'Compare profile to company/division embedding',
+      requiresProfileId: true,
+      requiresCompanyId: true
+    },
+    {
+      tool: 'embedContext',
+      description: 'Generate and store an embedding',
+      requiresEntityType: true,
+      requiresEntityId: true
+    },
+    {
+      tool: 'nudge',
+      description: 'Send a system-generated prompt',
+      requiresProfileId: true,
+      requiresActionType: true
+    },
+    {
+      tool: 'handleChatInteraction',
+      description: 'Understand and respond to manager input',
+      requiresChatContext: true
     }
   ]
 };
