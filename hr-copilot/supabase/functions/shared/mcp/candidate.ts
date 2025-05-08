@@ -10,6 +10,9 @@ import { getOpenJobs } from '../job/getOpenJobs.ts';
 import { getJobReadiness } from '../job/getJobReadiness.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getSemanticMatches } from '../embeddings.ts';
+import { getProfileData } from '../profile/getProfileData.ts';
+import { getRolesData } from '../role/getRoleData.ts';
+import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
 
 export async function runCandidateLoop(
   supabase: SupabaseClient<Database>,
@@ -88,43 +91,70 @@ export async function runCandidateLoop(
     // Get open jobs with semantic matching
     const openJobs = await getOpenJobs(supabase, undefined, 20);
     if (!openJobs.error && openJobs.data) {
+      // Get all role IDs from jobs
+      const roleIds = openJobs.data
+        .map(job => job.roleId)
+        .filter((id): id is string => !!id);
+
+      // Bulk load all role and profile data upfront
+      const [roleData, profileData] = await Promise.all([
+        getRolesData(supabase, roleIds),
+        getProfileData(supabase, profileId!)
+      ]);
+
+      // Get profile embedding once
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('embedding')
+        .eq('id', profileId!)
+        .single();
+
+      if (profileError || !profile?.embedding) {
+        console.error('Failed to get profile embedding:', profileError);
+        return {
+          success: false,
+          message: 'Failed to get profile embedding',
+          error: {
+            type: 'DATABASE_ERROR',
+            message: 'Failed to get profile embedding',
+            details: profileError
+          }
+        };
+      }
+
+      // Get semantic matches for all roles at once
+      const roleMatches = await getSemanticMatches(
+        supabase,
+        { id: profileId!, table: 'profiles' },
+        'roles',
+        roleIds.length,
+        0.7
+      );
+
+      // Process each job with preloaded data
       for (const job of openJobs.data) {
-        const readiness = await getJobReadiness(supabase, profileId!, job.jobId);
-        if (readiness.error) continue;
+        if (!job.roleId || !roleData[job.roleId]) continue;
 
-        // Get semantic matches for the job using profile's embedding
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('embedding')
-          .eq('id', profileId!)
-          .single();
-
-        if (profileError || !profile?.embedding) {
-          console.error('Failed to get profile embedding:', profileError);
-          continue;
-        }
-
-        // Get semantic matches for the job using profile's embedding
-        const jobMatches = await getSemanticMatches(
-          supabase,
-          { id: profileId!, table: 'profiles' }, // Pass both ID and table name
-          'roles', // Target table is roles since jobs reference roles
-          1,
-          0.7
+        // Calculate job readiness score using preloaded data
+        const readinessScore = calculateJobReadiness(
+          profileData,
+          roleData[job.roleId]
         );
 
-        if (jobMatches.length > 0) {
-          recommendations.push({
-            type: 'job_opportunity',
-            score: readiness.data!.score,
-            semanticScore: jobMatches[0].similarity,
-            summary: readiness.data!.summary,
-            details: {
-              jobId: job.jobId,
-              semanticMatch: jobMatches[0]
-            }
-          });
-        }
+        // Find semantic match for this role
+        const semanticMatch = roleMatches.find(m => m.id === job.roleId);
+        if (!semanticMatch) continue;
+
+        recommendations.push({
+          type: 'job_opportunity',
+          score: readinessScore,
+          semanticScore: semanticMatch.similarity,
+          summary: generateJobSummary(profileData, roleData[job.roleId]),
+          details: {
+            jobId: job.jobId,
+            semanticMatch
+          }
+        });
       }
     }
 

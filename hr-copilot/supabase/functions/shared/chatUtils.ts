@@ -293,7 +293,7 @@ export async function handleChatInteraction(
   sessionId: string | undefined,
   message: string,
   context: ChatInteractionContext
-): Promise<void> {
+): Promise<{ response: string; followUpQuestion?: string }> {
   try {
     // Generate response based on context
     const { response, followUpQuestion } = await generateCandidateResponse(message, context);
@@ -315,7 +315,7 @@ export async function handleChatInteraction(
       }
     });
 
-    // If session ID exists, also log to chat
+    // Only log to chat if session ID exists
     if (sessionId) {
       // Log the user message first
       await postUserMessage(supabase, sessionId, message);
@@ -337,6 +337,9 @@ export async function handleChatInteraction(
         }
       );
     }
+
+    // Return the response and follow-up separately
+    return { response, followUpQuestion };
 
   } catch (error) {
     console.error('Error in handleChatInteraction:', error);

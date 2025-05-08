@@ -214,9 +214,9 @@ serve(async (req) => {
     }
 
     // Handle chat interaction if there's a message
-    if (request.context?.lastMessage && request.sessionId) {
+    if (request.context?.lastMessage) {
       try {
-        await handleChatInteraction(
+        const chatResponse = await handleChatInteraction(
           supabaseClient,
           request.sessionId,
           request.context.lastMessage,
@@ -224,12 +224,34 @@ serve(async (req) => {
             mode: request.mode,
             profileId: request.profileId,
             roleId: request.roleId,
-            actionsTaken: response.data?.actionsTaken || []
+            actionsTaken: response.data?.actionsTaken || [],
+            candidateContext: {
+              matches: response.data?.matches || [],
+              recommendations: response.data?.recommendations || [],
+              nextActions: response.data?.nextActions
+            }
           }
         );
+
+        // Include chat response in the final response
+        response.data = {
+          ...response.data,
+          chatResponse: {
+            message: chatResponse.response,
+            followUpQuestion: chatResponse.followUpQuestion
+          }
+        };
+
       } catch (error) {
         console.error('Chat interaction error:', error);
-        // Don't fail the whole request if chat interaction fails
+        // Include a fallback response if chat generation fails
+        response.data = {
+          ...response.data,
+          chatResponse: {
+            message: "I processed your request but encountered an error generating a detailed response. Please try again.",
+            followUpQuestion: null
+          }
+        };
       }
     }
 
