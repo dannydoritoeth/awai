@@ -235,17 +235,29 @@ async function generateCandidateResponse(
     // Add matches summary if available
     if (topMatches.length > 0) {
       const matchesSummary = topMatches
-        .map(match => `- ${match.name} (${Math.round(match.similarity * 100)}% match)`)
+        .map(match => {
+          const score = Math.round(match.similarity * 100);
+          const details = match.summary || '';
+          return `- ${match.name} (${score}% match)${details ? ': ' + details : ''}`;
+        })
         .join('\n');
-      sections.push(`Top matches found:\n${matchesSummary}`);
+      sections.push(`Based on your profile, here are the top job matches:\n${matchesSummary}`);
     }
 
     // Add recommendations if available
     if (topRecommendations.length > 0) {
       const recommendationsSummary = topRecommendations
-        .map(rec => `- ${rec.summary} (Score: ${Math.round(rec.score)})`)
+        .map(rec => {
+          const traditionalScore = Math.round(rec.score);
+          const semanticScore = rec.semanticScore ? Math.round(rec.semanticScore * 100) : null;
+          const combinedScore = Math.round((traditionalScore * 0.4) + (semanticScore ? semanticScore * 0.6 : 0));
+          
+          return `- ${rec.summary} (Overall Match: ${combinedScore}%${
+            semanticScore ? `, Semantic: ${semanticScore}%` : ''
+          })`;
+        })
         .join('\n');
-      sections.push(`Recommendations:\n${recommendationsSummary}`);
+      sections.push(`Here are detailed job recommendations:\n${recommendationsSummary}`);
     }
 
     // Add gaps summary if available
@@ -255,24 +267,56 @@ async function generateCandidateResponse(
       
       if (missingCapabilities.length > 0 || missingSkills.length > 0) {
         const gapsSummary = [
-          missingCapabilities.length > 0 ? `Key capabilities to develop: ${missingCapabilities.map(g => g.name).join(', ')}` : '',
-          missingSkills.length > 0 ? `Skills to acquire: ${missingSkills.map(g => g.name).join(', ')}` : ''
+          missingCapabilities.length > 0 
+            ? `Key capabilities to develop: ${missingCapabilities.map(g => g.name).join(', ')}` 
+            : '',
+          missingSkills.length > 0 
+            ? `Skills to acquire: ${missingSkills.map(g => g.name).join(', ')}` 
+            : ''
         ].filter(Boolean).join('\n');
-        sections.push(`Development areas:\n${gapsSummary}`);
+        sections.push(`To improve your job matches, consider developing these areas:\n${gapsSummary}`);
       }
     }
 
-    // Add next actions if available
+    // Add next actions with more context
     if (candidateContext.nextActions?.length) {
-      sections.push(`Next steps:\n${candidateContext.nextActions.map(action => `- ${action}`).join('\n')}`);
+      const actionContext = candidateContext.nextActions.map(action => {
+        switch (action) {
+          case 'Review suggested career paths':
+            return `- Review suggested career paths to understand potential growth opportunities`;
+          case 'Explore job opportunities':
+            return `- Explore the recommended job opportunities in detail, focusing on those with highest match scores`;
+          case 'Focus on closing identified skill gaps':
+            return `- Work on developing the identified missing skills and capabilities to improve your job matches`;
+          default:
+            return `- ${action}`;
+        }
+      }).join('\n');
+      sections.push(`Next steps:\n${actionContext}`);
+    }
+
+    // If no matches or recommendations, provide general guidance
+    if (sections.length === 0) {
+      sections.push(
+        "I've analyzed your profile but haven't found strong matches yet. This could be because:",
+        "1. Your profile might need more details about your skills and capabilities",
+        "2. The available jobs might not closely match your current profile",
+        "3. You might want to explore different job categories or roles",
+        "\nI recommend:",
+        "- Adding more details to your profile, especially about your skills and experience",
+        "- Exploring different job categories that might match your skills",
+        "- Considering skill development in areas that are in demand"
+      );
     }
 
     // Generate follow-up question based on context
     let followUpQuestion: string | undefined;
     if (topMatches.length > 0) {
-      followUpQuestion = "Would you like more details about any of these matches or specific recommendations?";
+      followUpQuestion = "Would you like more details about any of these specific job matches or recommendations?";
     } else if (candidateContext.gaps && (candidateContext.gaps.capabilities?.length || candidateContext.gaps.skills?.length)) {
-      followUpQuestion = "Would you like to explore learning resources for any of these development areas?";
+      followUpQuestion = "Would you like to explore specific learning resources or development opportunities for these areas?";
+    } else {
+      followUpQuestion = "Would you like help adding more details to your profile to get better matches?";
     }
 
     return {
@@ -281,7 +325,10 @@ async function generateCandidateResponse(
     };
   } catch (error) {
     console.error('Error generating candidate response:', error);
-    return { response: 'I encountered an error while processing the results.' };
+    return { 
+      response: 'I encountered an error while processing the results. Please try again or contact support if the issue persists.',
+      followUpQuestion: 'Would you like to try a different approach to exploring job opportunities?' 
+    };
   }
 }
 
