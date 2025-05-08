@@ -2,17 +2,12 @@ import { ChatMessage } from './chatTypes.ts';
 
 export type MCPMode = 'candidate' | 'hiring';
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-}
-
 export interface SemanticMatch {
   id: string;
   similarity: number;
   type: 'role' | 'skill' | 'capability' | 'company';
   name: string;
+  summary?: string;
   metadata?: Record<string, any>;
 }
 

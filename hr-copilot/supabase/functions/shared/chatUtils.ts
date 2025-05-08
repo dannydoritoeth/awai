@@ -4,6 +4,13 @@ import { ChatMessage, ChatSender, ConversationSession, ChatError } from './chatT
 import { logAgentAction } from './agent/logAgentAction.ts';
 import { MCPMode, SemanticMatch } from './mcpTypes.ts';
 
+// Type definitions
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 /**
  * Start a new chat session for a profile
  */
@@ -229,98 +236,86 @@ async function generateCandidateResponse(
     const topMatches = candidateContext.matches.slice(0, 3);
     const topRecommendations = candidateContext.recommendations.slice(0, 3);
 
-    // Build response sections
-    const sections: string[] = [];
-
-    // Add matches summary if available
-    if (topMatches.length > 0) {
-      const matchesSummary = topMatches
-        .map(match => {
-          const score = Math.round(match.similarity * 100);
-          const details = match.summary || '';
-          return `- ${match.name} (${score}% match)${details ? ': ' + details : ''}`;
-        })
-        .join('\n');
-      sections.push(`Based on your profile, here are the top job matches:\n${matchesSummary}`);
-    }
-
-    // Add recommendations if available
-    if (topRecommendations.length > 0) {
-      const recommendationsSummary = topRecommendations
-        .map(rec => {
-          const traditionalScore = Math.round(rec.score);
-          const semanticScore = rec.semanticScore ? Math.round(rec.semanticScore * 100) : null;
-          const combinedScore = Math.round((traditionalScore * 0.4) + (semanticScore ? semanticScore * 0.6 : 0));
-          
-          return `- ${rec.summary} (Overall Match: ${combinedScore}%${
-            semanticScore ? `, Semantic: ${semanticScore}%` : ''
-          })`;
-        })
-        .join('\n');
-      sections.push(`Here are detailed job recommendations:\n${recommendationsSummary}`);
-    }
-
-    // Add gaps summary if available
-    if (candidateContext.gaps) {
-      const missingCapabilities = candidateContext.gaps.capabilities?.filter(g => g.gapType === 'missing') || [];
-      const missingSkills = candidateContext.gaps.skills?.filter(g => g.gapType === 'missing') || [];
-      
-      if (missingCapabilities.length > 0 || missingSkills.length > 0) {
-        const gapsSummary = [
-          missingCapabilities.length > 0 
-            ? `Key capabilities to develop: ${missingCapabilities.map(g => g.name).join(', ')}` 
-            : '',
-          missingSkills.length > 0 
-            ? `Skills to acquire: ${missingSkills.map(g => g.name).join(', ')}` 
-            : ''
-        ].filter(Boolean).join('\n');
-        sections.push(`To improve your job matches, consider developing these areas:\n${gapsSummary}`);
-      }
-    }
-
-    // Add next actions with more context
-    if (candidateContext.nextActions?.length) {
-      const actionContext = candidateContext.nextActions.map(action => {
-        switch (action) {
-          case 'Review suggested career paths':
-            return `- Review suggested career paths to understand potential growth opportunities`;
-          case 'Explore job opportunities':
-            return `- Explore the recommended job opportunities in detail, focusing on those with highest match scores`;
-          case 'Focus on closing identified skill gaps':
-            return `- Work on developing the identified missing skills and capabilities to improve your job matches`;
-          default:
-            return `- ${action}`;
-        }
-      }).join('\n');
-      sections.push(`Next steps:\n${actionContext}`);
-    }
-
-    // If no matches or recommendations, provide general guidance
-    if (sections.length === 0) {
-      sections.push(
-        "I've analyzed your profile but haven't found strong matches yet. This could be because:",
-        "1. Your profile might need more details about your skills and capabilities",
-        "2. The available jobs might not closely match your current profile",
-        "3. You might want to explore different job categories or roles",
-        "\nI recommend:",
-        "- Adding more details to your profile, especially about your skills and experience",
-        "- Exploring different job categories that might match your skills",
-        "- Considering skill development in areas that are in demand"
+    // Prepare data for ChatGPT analysis
+    const matchData = topMatches.map(match => {
+      const recommendation = topRecommendations.find(r => 
+        r.details?.roleId === match.id || 
+        r.details?.jobId === match.id
       );
-    }
+      return {
+        title: match.name,
+        similarity: match.similarity,
+        summary: match.summary,
+        details: recommendation?.summary || '',
+        score: recommendation?.score || 0
+      };
+    });
 
-    // Generate follow-up question based on context
-    let followUpQuestion: string | undefined;
-    if (topMatches.length > 0) {
-      followUpQuestion = "Would you like more details about any of these specific job matches or recommendations?";
-    } else if (candidateContext.gaps && (candidateContext.gaps.capabilities?.length || candidateContext.gaps.skills?.length)) {
-      followUpQuestion = "Would you like to explore specific learning resources or development opportunities for these areas?";
-    } else {
-      followUpQuestion = "Would you like help adding more details to your profile to get better matches?";
-    }
+    // Collect all skills and capabilities
+    const allSkills = new Set<string>();
+    const allCapabilities = new Set<string>();
+    
+    topRecommendations.forEach(rec => {
+      if (!rec.summary) return;
+      
+      const skillMatch = rec.summary.match(/Strong match in skills: ([^.]+)/);
+      if (skillMatch) {
+        skillMatch[1].split(', ').forEach(s => allSkills.add(s.trim()));
+      }
+      
+      const skillGaps = rec.summary.match(/Skill gaps: ([^.]+)/);
+      if (skillGaps) {
+        skillGaps[1].split(', ').forEach(s => {
+          const skill = s.replace(/\s*\([^)]*\)/, '').trim();
+          allSkills.add(skill);
+        });
+      }
+      
+      const capabilityGaps = rec.summary.match(/Capability gaps: ([^.]+)/);
+      if (capabilityGaps) {
+        capabilityGaps[1].split(', ').forEach(c => {
+          const capability = c.replace(/\s*\([^)]*\)/, '').trim();
+          allCapabilities.add(capability);
+        });
+      }
+    });
+
+    // Prepare the prompt for ChatGPT
+    const prompt = `As an AI career advisor, analyze these job opportunities and provide personalized advice.
+
+Available Roles:
+${matchData.map(match => `
+- ${match.title}
+  Match Score: ${(match.score * 100).toFixed(1)}%
+  Similarity: ${(match.similarity * 100).toFixed(1)}%
+  Details: ${match.details}`).join('\n')}
+
+Skills identified:
+${Array.from(allSkills).map(skill => `- ${skill}`).join('\n')}
+
+Capabilities needed:
+${Array.from(allCapabilities).map(cap => `- ${cap}`).join('\n')}
+
+User's message: ${message}
+
+Please provide:
+1. A brief overview of how these roles align with the candidate's profile
+2. Specific insights about each role's requirements and opportunities
+3. Practical advice on how to prepare for these roles
+4. Suggested next steps for the candidate
+
+Keep the tone conversational and focus on actionable insights rather than technical scores.
+Ensure the response is detailed and insightful, highlighting specific aspects of each role.
+If there are skill or capability gaps, provide specific suggestions for addressing them.`;
+
+    // Call ChatGPT API
+    const response = await callChatGPT(prompt);
+
+    // Generate a contextual follow-up question based on the response
+    const followUpQuestion = await generateFollowUpQuestion(response, context);
 
     return {
-      response: sections.join('\n\n'),
+      response,
       followUpQuestion
     };
   } catch (error) {
@@ -329,6 +324,68 @@ async function generateCandidateResponse(
       response: 'I encountered an error while processing the results. Please try again or contact support if the issue persists.',
       followUpQuestion: 'Would you like to try a different approach to exploring job opportunities?' 
     };
+  }
+}
+
+/**
+ * Call ChatGPT API with the given prompt
+ */
+async function callChatGPT(prompt: string): Promise<string> {
+  try {
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error('Error calling ChatGPT:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a contextual follow-up question based on the response
+ */
+async function generateFollowUpQuestion(response: string, context: ChatInteractionContext): Promise<string> {
+  try {
+    const prompt = `Based on this career advice response:
+
+${response}
+
+Generate a single, specific follow-up question that would help the candidate get more detailed information about one of the recommended roles or suggested next steps. The question should be contextual and focused on practical career development.
+
+Response format: Just the question, no additional text.`;
+
+    const followUp = await callChatGPT(prompt);
+    return followUp.trim();
+  } catch (error) {
+    console.error('Error generating follow-up question:', error);
+    return 'Would you like to know more about any of these roles or get specific advice about skill development?';
   }
 }
 

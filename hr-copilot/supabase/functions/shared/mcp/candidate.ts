@@ -13,6 +13,7 @@ import { getSemanticMatches } from '../embeddings.ts';
 import { getProfileData } from '../profile/getProfileData.ts';
 import { getRolesData } from '../role/getRoleData.ts';
 import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
+import { testJobMatching } from '../job/testJobMatching.ts';
 
 export async function runCandidateLoop(
   supabase: SupabaseClient<Database>,
@@ -89,76 +90,35 @@ export async function runCandidateLoop(
     // }
 
     // Get open jobs with semantic matching
-    const openJobs = await getOpenJobs(supabase, undefined, 20);
-    if (!openJobs.error && openJobs.data) {
-      // Get all role IDs from jobs
-      const roleIds = openJobs.data
-        .map(job => job.roleId)
-        .filter((id): id is string => !!id);
+    const jobMatchingResult = await testJobMatching(supabase, profileId!, {
+      limit: 20,
+      threshold: 0.7
+    });
 
-      // Bulk load all role and profile data upfront
-      const [roleData, profileData] = await Promise.all([
-        getRolesData(supabase, roleIds),
-        getProfileData(supabase, profileId!)
-      ]);
+    // Add job matches to the response
+    if (jobMatchingResult.matches.length > 0) {
+      matches.push(...jobMatchingResult.matches.map(match => ({
+        id: match.roleId,
+        name: match.jobTitle,
+        similarity: match.semanticScore,
+        type: 'role' as const,
+        summary: match.summary
+      })));
 
-      // Get profile embedding once
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('embedding')
-        .eq('id', profileId!)
-        .single();
-
-      if (profileError || !profile?.embedding) {
-        console.error('Failed to get profile embedding:', profileError);
-        return {
-          success: false,
-          message: 'Failed to get profile embedding',
-          error: {
-            type: 'DATABASE_ERROR',
-            message: 'Failed to get profile embedding',
-            details: profileError
-          }
-        };
-      }
-
-      // Get semantic matches for all roles at once
-      const roleMatches = await getSemanticMatches(
-        supabase,
-        { id: profileId!, table: 'profiles' },
-        'roles',
-        roleIds.length,
-        0.7
-      );
-
-      // Process each job with preloaded data
-      for (const job of openJobs.data) {
-        if (!job.roleId || !roleData[job.roleId]) continue;
-
-        // Calculate job readiness score using preloaded data
-        const readinessScore = calculateJobReadiness(
-          profileData,
-          roleData[job.roleId]
-        );
-
-        // Find semantic match for this role
-        const semanticMatch = roleMatches.find(m => m.id === job.roleId);
-        if (!semanticMatch) continue;
-
-        recommendations.push({
-          type: 'job_opportunity',
-          score: readinessScore,
-          semanticScore: semanticMatch.similarity,
-          summary: generateJobSummary(profileData, roleData[job.roleId]),
-          details: {
-            jobId: job.jobId,
-            semanticMatch
-          }
-        });
-      }
+      recommendations.push(...jobMatchingResult.matches.map(match => ({
+        type: 'job_opportunity',
+        score: match.score,
+        semanticScore: match.semanticScore,
+        summary: match.summary,
+        details: {
+          jobId: match.jobId,
+          roleId: match.roleId,
+          title: match.jobTitle
+        }
+      })));
     }
 
-    // Sort recommendations by combined score (traditional + semantic)
+    // Sort recommendations by combined score
     recommendations.sort((a, b) => {
       const scoreA = (a.score * 0.4) + (a.semanticScore * 0.6);
       const scoreB = (b.score * 0.4) + (b.semanticScore * 0.6);
