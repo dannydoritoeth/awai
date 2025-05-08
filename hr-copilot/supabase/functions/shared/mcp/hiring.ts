@@ -4,7 +4,7 @@ import { MCPRequest, MCPResponse, SemanticMatch, PlannerRecommendation } from '.
 import { getSemanticMatches } from '../embeddings.ts';
 import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
 import { getSkillGaps } from '../profile/getSkillGaps.ts';
-import { scoreProfileFit } from '../agent/scoreProfileFit.ts';
+import { batchScoreProfileFit } from '../agent/scoreProfileFit.ts';
 
 export async function runHiringLoop(
   supabase: SupabaseClient<Database>,
@@ -33,29 +33,36 @@ export async function runHiringLoop(
         switch (tool.tool) {
           case 'getMatchingProfiles':
             // Get semantic matches for the role
-            result = await getSemanticMatches(
+            const semanticMatches = await getSemanticMatches(
               supabase,
-              roleId!,
+              { id: roleId!, table: 'roles' },
               'profiles',
               10,
               0.6
             );
-            matches.push(...result);
-            break;
+            matches.push(...semanticMatches);
 
-          case 'scoreProfileFit':
-            if (tool.inputs.profileId) {
-              result = await scoreProfileFit(
-                supabase,
-                tool.inputs.profileId,
-                roleId!
-              );
-              recommendations.push({
-                type: 'profile_fit',
-                profileId: tool.inputs.profileId,
-                score: result.score,
-                details: result.details
+            // Score all matched profiles in batch
+            if (semanticMatches.length > 0) {
+              const profileIds = semanticMatches.map(match => match.id);
+              const scoreResults = await batchScoreProfileFit(supabase, roleId!, profileIds, {
+                maxRoles: 10,
+                maxConcurrent: 5
               });
+
+              // Add scored results to recommendations
+              for (const result of scoreResults) {
+                if (result.result.data) {
+                  recommendations.push({
+                    type: 'profile_fit',
+                    profileId: result.roleId, // roleId here is actually profileId since we swapped the perspective
+                    score: result.result.data.score,
+                    semanticScore: semanticMatches.find(m => m.id === result.roleId)?.similarity || 0,
+                    summary: result.result.data.matchSummary,
+                    details: result.result.data
+                  });
+                }
+              }
             }
             break;
 
@@ -92,28 +99,24 @@ export async function runHiringLoop(
             break;
         }
 
-        // Record the action taken
+        // Log the action
         actionsTaken.push({
           tool: tool.tool,
           reason: tool.reason,
-          confidence: tool.confidence,
           inputs: tool.inputs,
           result
         });
 
       } catch (error) {
-        console.error(`Error executing ${tool.tool}:`, error);
-        // Continue with other tools even if one fails
+        console.error(`Error executing tool ${tool.tool}:`, error);
+        // Continue with other tools
       }
     }
 
-    // Sort matches by similarity score
-    matches.sort((a, b) => b.similarity - a.similarity);
-
-    // Sort recommendations by score if available
+    // Sort recommendations by combined score
     recommendations.sort((a, b) => {
-      const scoreA = a.score || a.similarity || 0;
-      const scoreB = b.score || b.similarity || 0;
+      const scoreA = (a.score * 0.4) + ((a.semanticScore || 0) * 0.6);
+      const scoreB = (b.score * 0.4) + ((b.semanticScore || 0) * 0.6);
       return scoreB - scoreA;
     });
 
@@ -125,20 +128,19 @@ export async function runHiringLoop(
         recommendations: recommendations.slice(0, 5),
         actionsTaken,
         nextActions: [
-          'Review top candidate matches',
-          'Assess capability and skill gaps',
-          'Schedule interviews with recommended candidates'
+          'Review top candidate profiles',
+          'Schedule interviews',
+          'Assess skill gaps'
         ]
       }
     };
 
   } catch (error) {
-    console.error('Error in hiring loop:', error);
     return {
       success: false,
       message: error.message,
       error: {
-        type: 'HIRING_LOOP_ERROR',
+        type: 'PLANNER_ERROR',
         message: 'Failed to run hiring loop',
         details: error
       }

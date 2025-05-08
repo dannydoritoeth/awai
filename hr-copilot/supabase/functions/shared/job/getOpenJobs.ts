@@ -17,7 +17,8 @@ export interface JobPosting {
 
 export async function getOpenJobs(
   supabase: SupabaseClient,
-  roleId?: string
+  roleId?: string,
+  limit: number = 20 // Default to 20 jobs max
 ): Promise<DatabaseResponse<JobPosting[]>> {
   try {
     // Build query for open jobs
@@ -38,14 +39,15 @@ export async function getOpenJobs(
         remuneration,
         recruiter,
         source_url
-      `);
+      `)
+      .limit(limit); // Apply the limit to the query
 
     // Add filters
     if (roleId) {
       query = query.eq('role_id', roleId);
     }
 
-    // Get all jobs and filter in code for more flexibility
+    // Get jobs with limit applied
     const { data: jobs, error: jobsError } = await query;
 
     if (jobsError) {

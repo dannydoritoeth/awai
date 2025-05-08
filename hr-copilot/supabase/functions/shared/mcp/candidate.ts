@@ -86,7 +86,7 @@ export async function runCandidateLoop(
     // }
 
     // Get open jobs with semantic matching
-    const openJobs = await getOpenJobs(supabase);
+    const openJobs = await getOpenJobs(supabase, undefined, 20);
     if (!openJobs.error && openJobs.data) {
       for (const job of openJobs.data) {
         const readiness = await getJobReadiness(supabase, profileId!, job.jobId);

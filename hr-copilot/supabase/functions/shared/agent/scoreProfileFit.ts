@@ -2,6 +2,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { DatabaseResponse } from '../types.ts';
 import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
 import { getSkillGaps } from '../profile/getSkillGaps.ts';
+import { getSemanticMatches } from '../embeddings.ts';
 
 export interface ProfileFitScore {
   score: number;
@@ -15,6 +16,118 @@ export interface ProfileFitScore {
   skillScore?: number;
 }
 
+export interface BatchScoreResult {
+  roleId: string;
+  result: DatabaseResponse<ProfileFitScore>;
+}
+
+/**
+ * Pre-filter roles using semantic similarity to find the most promising candidates
+ */
+async function preFilterRoles(
+  supabase: SupabaseClient,
+  profileId: string,
+  roleIds: string[],
+  limit: number = 10
+): Promise<string[]> {
+  try {
+    // Get semantic matches for the profile against all roles
+    const matches = await getSemanticMatches(
+      supabase,
+      { id: profileId, table: 'profiles' },
+      'roles',
+      limit,
+      0.3 // Lower threshold to cast a wider net
+    );
+
+    // Filter matches to only include roles we're interested in
+    const filteredMatches = matches
+      .filter(match => roleIds.includes(match.id))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
+
+    // If we don't get enough semantic matches, include some random roles to meet the limit
+    const selectedIds = filteredMatches.map(m => m.id);
+    if (selectedIds.length < limit) {
+      const remainingRoles = roleIds.filter(id => !selectedIds.includes(id));
+      const additionalCount = Math.min(limit - selectedIds.length, remainingRoles.length);
+      if (additionalCount > 0) {
+        // Shuffle remaining roles and take what we need
+        const shuffled = remainingRoles.sort(() => Math.random() - 0.5);
+        selectedIds.push(...shuffled.slice(0, additionalCount));
+      }
+    }
+
+    return selectedIds;
+  } catch (error) {
+    console.error('Error in preFilterRoles:', error);
+    // On error, return a subset of the original roles
+    return roleIds.slice(0, limit);
+  }
+}
+
+/**
+ * Score profile fit against multiple roles in parallel, with pre-filtering
+ */
+export async function batchScoreProfileFit(
+  supabase: SupabaseClient,
+  profileId: string,
+  roleIds: string[],
+  options: {
+    maxConcurrent?: number;
+    continueOnError?: boolean;
+    maxRoles?: number;
+  } = {}
+): Promise<BatchScoreResult[]> {
+  const { maxConcurrent = 5, continueOnError = true, maxRoles = 10 } = options;
+
+  // Pre-filter roles to get the most promising candidates
+  const filteredRoleIds = await preFilterRoles(supabase, profileId, roleIds, maxRoles);
+  console.log(`Pre-filtered from ${roleIds.length} to ${filteredRoleIds.length} roles`);
+
+  // Process filtered roles in chunks
+  const results: BatchScoreResult[] = [];
+  for (let i = 0; i < filteredRoleIds.length; i += maxConcurrent) {
+    const chunk = filteredRoleIds.slice(i, i + maxConcurrent);
+    
+    const chunkPromises = chunk.map(async (roleId): Promise<BatchScoreResult> => {
+      try {
+        const result = await scoreProfileFit(supabase, profileId, roleId);
+        return { roleId, result };
+      } catch (error) {
+        if (!continueOnError) {
+          throw error;
+        }
+        console.error(`Error scoring role ${roleId}:`, error);
+        return {
+          roleId,
+          result: {
+            data: null,
+            error: {
+              type: 'DATABASE_ERROR',
+              message: 'Failed to score profile fit',
+              details: error
+            }
+          }
+        };
+      }
+    });
+
+    const chunkResults = await Promise.all(chunkPromises);
+    results.push(...chunkResults);
+  }
+
+  // Sort results by score (if available) before returning
+  return results.sort((a, b) => {
+    const scoreA = a.result.data?.score ?? 0;
+    const scoreB = b.result.data?.score ?? 0;
+    return scoreB - scoreA;
+  });
+}
+
+/**
+ * Score profile fit for a single role
+ */
 export async function scoreProfileFit(
   supabase: SupabaseClient,
   profileId: string,
@@ -34,9 +147,26 @@ export async function scoreProfileFit(
       };
     }
 
-    // Get capability gaps
-    console.log('Fetching capability gaps...');
-    const capabilityGapsResult = await getCapabilityGaps(supabase, profileId, roleId);
+    // Run gap analysis in parallel
+    const [capabilityGapsResult, skillGapsResult, roleCounts] = await Promise.all([
+      getCapabilityGaps(supabase, profileId, roleId),
+      getSkillGaps(supabase, profileId, roleId),
+      supabase
+        .from('roles')
+        .select(`
+          id,
+          role_capabilities (
+            capability_id
+          ),
+          role_skills (
+            skill_id
+          )
+        `)
+        .eq('id', roleId)
+        .single()
+    ]);
+
+    // Handle errors from parallel requests
     if (capabilityGapsResult.error) {
       console.log('Error getting capability gaps:', capabilityGapsResult.error);
       return {
@@ -44,11 +174,7 @@ export async function scoreProfileFit(
         error: capabilityGapsResult.error
       };
     }
-    console.log('Capability gaps found:', capabilityGapsResult.data?.length || 0);
 
-    // Get skill gaps
-    console.log('Fetching skill gaps...');
-    const skillGapsResult = await getSkillGaps(supabase, profileId, roleId);
     if (skillGapsResult.error) {
       console.log('Error getting skill gaps:', skillGapsResult.error);
       return {
@@ -56,38 +182,21 @@ export async function scoreProfileFit(
         error: skillGapsResult.error
       };
     }
-    console.log('Skill gaps found:', skillGapsResult.data?.length || 0);
 
-    // Get total counts for capabilities and skills
-    console.log('Fetching role requirements counts...');
-    const { data: totalCounts, error: countsError } = await supabase
-      .from('roles')
-      .select(`
-        id,
-        role_capabilities (
-          capability_id
-        ),
-        role_skills (
-          skill_id
-        )
-      `)
-      .eq('id', roleId)
-      .single();
-
-    if (countsError) {
-      console.log('Error getting role requirements counts:', countsError);
+    if (!roleCounts || roleCounts.error) {
+      console.log('Error getting role requirements counts:', roleCounts?.error);
       return {
         data: null,
         error: {
           type: 'DATABASE_ERROR',
           message: 'Failed to get role requirements counts',
-          details: countsError
+          details: roleCounts?.error
         }
       };
     }
 
     // Calculate capability score
-    const totalCapabilities = totalCounts?.role_capabilities?.length || 0;
+    const totalCapabilities = roleCounts.data?.role_capabilities?.length || 0;
     const missingCapabilities = capabilityGapsResult.data?.filter(gap => gap.gapType === 'missing') || [];
     const insufficientCapabilities = capabilityGapsResult.data?.filter(gap => gap.gapType === 'insufficient') || [];
     const capabilityScore = totalCapabilities > 0 
@@ -95,7 +204,7 @@ export async function scoreProfileFit(
       : 100;
 
     // Calculate skill score
-    const totalSkills = totalCounts?.role_skills?.length || 0;
+    const totalSkills = roleCounts.data?.role_skills?.length || 0;
     const missingSkills = skillGapsResult.data?.filter(gap => gap.gapType === 'missing') || [];
     const insufficientSkills = skillGapsResult.data?.filter(gap => gap.gapType === 'insufficient') || [];
     const skillScore = totalSkills > 0
