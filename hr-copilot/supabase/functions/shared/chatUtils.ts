@@ -12,29 +12,35 @@ declare const Deno: {
 };
 
 /**
- * Start a new chat session for a profile
+ * Start a new chat session
  */
 export async function startChatSession(
-  supabase: SupabaseClient<Database>,
-  profileId: string
-): Promise<{ sessionId: string; error?: ChatError }> {
+  supabaseClient: SupabaseClient,
+  entityId: string | null,
+  mode: 'candidate' | 'hiring' | 'general'
+) {
   try {
-    const { data, error } = await supabase
-      .from('conversation_sessions')
-      .insert({ profile_id: profileId })
+    const { data, error } = await supabaseClient
+      .from('chat_sessions')
+      .insert({
+        entity_id: entityId,
+        mode: mode,
+        status: 'active'
+      })
       .select('id')
       .single();
 
     if (error) throw error;
-    return { sessionId: data.id };
-  } catch (error) {
+
     return {
-      sessionId: '',
-      error: {
-        type: 'DATABASE_ERROR',
-        message: 'Failed to create chat session',
-        details: error
-      }
+      sessionId: data.id,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error starting chat session:', error);
+    return {
+      sessionId: null,
+      error
     };
   }
 }
