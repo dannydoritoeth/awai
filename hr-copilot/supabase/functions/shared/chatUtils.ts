@@ -2,7 +2,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
 import { ChatMessage, ChatSender, ConversationSession, ChatError } from './chatTypes.ts';
 import { logAgentAction } from './agent/logAgentAction.ts';
-import { MCPMode } from './mcpTypes.ts';
+import { MCPMode, SemanticMatch } from './mcpTypes.ts';
 
 /**
  * Start a new chat session for a profile
@@ -194,6 +194,94 @@ interface ChatInteractionContext {
     reason: string;
     result: any;
   }>;
+  // Extended context for candidate loop results
+  candidateContext?: {
+    matches: SemanticMatch[];
+    recommendations: Array<{
+      type: string;
+      score: number;
+      semanticScore?: number;
+      summary: string;
+      details: any;
+    }>;
+    nextActions?: string[];
+    gaps?: {
+      capabilities?: Array<{ name: string; gapType: 'missing' | 'insufficient' }>;
+      skills?: Array<{ name: string; gapType: 'missing' | 'insufficient' }>;
+    };
+  };
+}
+/**
+ * Generate a user-friendly response based on candidate context
+ */
+async function generateCandidateResponse(
+  message: string,
+  context: ChatInteractionContext
+): Promise<{ response: string; followUpQuestion?: string }> {
+  try {
+    const candidateContext = context.candidateContext;
+    if (!candidateContext) {
+      return { response: 'I processed your request but no specific recommendations were found.' };
+    }
+
+    // Get top matches and recommendations
+    const topMatches = candidateContext.matches.slice(0, 3);
+    const topRecommendations = candidateContext.recommendations.slice(0, 3);
+
+    // Build response sections
+    const sections: string[] = [];
+
+    // Add matches summary if available
+    if (topMatches.length > 0) {
+      const matchesSummary = topMatches
+        .map(match => `- ${match.name} (${Math.round(match.similarity * 100)}% match)`)
+        .join('\n');
+      sections.push(`Top matches found:\n${matchesSummary}`);
+    }
+
+    // Add recommendations if available
+    if (topRecommendations.length > 0) {
+      const recommendationsSummary = topRecommendations
+        .map(rec => `- ${rec.summary} (Score: ${Math.round(rec.score)})`)
+        .join('\n');
+      sections.push(`Recommendations:\n${recommendationsSummary}`);
+    }
+
+    // Add gaps summary if available
+    if (candidateContext.gaps) {
+      const missingCapabilities = candidateContext.gaps.capabilities?.filter(g => g.gapType === 'missing') || [];
+      const missingSkills = candidateContext.gaps.skills?.filter(g => g.gapType === 'missing') || [];
+      
+      if (missingCapabilities.length > 0 || missingSkills.length > 0) {
+        const gapsSummary = [
+          missingCapabilities.length > 0 ? `Key capabilities to develop: ${missingCapabilities.map(g => g.name).join(', ')}` : '',
+          missingSkills.length > 0 ? `Skills to acquire: ${missingSkills.map(g => g.name).join(', ')}` : ''
+        ].filter(Boolean).join('\n');
+        sections.push(`Development areas:\n${gapsSummary}`);
+      }
+    }
+
+    // Add next actions if available
+    if (candidateContext.nextActions?.length) {
+      sections.push(`Next steps:\n${candidateContext.nextActions.map(action => `- ${action}`).join('\n')}`);
+    }
+
+    // Generate follow-up question based on context
+    let followUpQuestion: string | undefined;
+    if (topMatches.length > 0) {
+      followUpQuestion = "Would you like more details about any of these matches or specific recommendations?";
+    } else if (candidateContext.gaps && (candidateContext.gaps.capabilities?.length || candidateContext.gaps.skills?.length)) {
+      followUpQuestion = "Would you like to explore learning resources for any of these development areas?";
+    }
+
+    return {
+      response: sections.join('\n\n'),
+      followUpQuestion
+    };
+  } catch (error) {
+    console.error('Error generating candidate response:', error);
+    return { response: 'I encountered an error while processing the results.' };
+  }
 }
 
 /**
@@ -201,40 +289,137 @@ interface ChatInteractionContext {
  */
 export async function handleChatInteraction(
   supabase: SupabaseClient<Database>,
-  sessionId: string,
+  sessionId: string | undefined,
   message: string,
   context: ChatInteractionContext
 ): Promise<void> {
   try {
-    // Log the user message
-    await postUserMessage(supabase, sessionId, message);
+    // Generate response based on context
+    const { response, followUpQuestion } = await generateCandidateResponse(message, context);
 
-    // Create summary of actions taken
-    const actionSummary = context.actionsTaken
-      .map(action => `${action.tool}: ${action.reason}`)
-      .join('\n');
+    // Combine response with follow-up if available
+    const fullResponse = followUpQuestion 
+      ? `${response}\n\n${followUpQuestion}`
+      : response;
 
-    // Create a response message based on actions
-    const responseMessage = context.actionsTaken.length > 0
-      ? `Based on your message, I took the following actions:\n${actionSummary}`
-      : 'I processed your message but no specific actions were needed.';
+    // Always log to agent_actions
+    await logAgentAction(supabase, {
+      entityType: context.profileId ? 'profile' : 'role',
+      entityId: context.profileId || context.roleId || '',
+      payload: {
+        stage: 'final_response',
+        message: fullResponse,
+        actionsTaken: context.actionsTaken,
+        candidateContext: context.candidateContext
+      }
+    });
 
-    // Log the agent's response with actions taken
-    await logAgentResponse(
-      supabase,
-      sessionId,
-      responseMessage,
-      'mcp_chat_interaction',
-      {
-        mode: context.mode,
-        profileId: context.profileId,
-        roleId: context.roleId
-      },
-      { actionsTaken: context.actionsTaken }
-    );
+    // If session ID exists, also log to chat
+    if (sessionId) {
+      // Log the user message first
+      await postUserMessage(supabase, sessionId, message);
+
+      // Then log the agent's response
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        fullResponse,
+        'mcp_chat_interaction',
+        {
+          mode: context.mode,
+          profileId: context.profileId,
+          roleId: context.roleId
+        },
+        { 
+          actionsTaken: context.actionsTaken,
+          candidateContext: context.candidateContext
+        }
+      );
+    }
 
   } catch (error) {
     console.error('Error in handleChatInteraction:', error);
     throw error;
+  }
+}
+
+/**
+ * Log a progress update to both agent actions and optionally to chat
+ */
+export async function logProgress(
+  supabase: SupabaseClient<Database>,
+  params: {
+    entityType: 'profile' | 'role' | 'job';
+    entityId: string;
+    stage: 'planning' | 'analysis' | 'scoring' | 'error' | 'summary';
+    message: string;
+    sessionId?: string;
+    payload?: Record<string, any>;
+  }
+): Promise<void> {
+  try {
+    // Always log to agent_actions
+    await logAgentAction(supabase, {
+      entityType: params.entityType,
+      entityId: params.entityId,
+      payload: {
+        stage: params.stage,
+        message: params.message,
+        ...params.payload
+      }
+    });
+
+    // If session ID provided, also log to chat
+    if (params.sessionId) {
+      await logAgentResponse(
+        supabase,
+        params.sessionId,
+        params.message,
+        `mcp_${params.stage}`,
+        { stage: params.stage },
+        params.payload
+      );
+    }
+  } catch (error) {
+    console.error('Error logging progress:', error);
+    // Don't throw - logging failures shouldn't break the main flow
+  }
+}
+
+/**
+ * Get predefined progress messages for common stages
+ */
+export function getProgressMessage(
+  stage: 'planning' | 'analysis' | 'scoring' | 'error' | 'summary',
+  context: {
+    matchCount?: number;
+    errorType?: string;
+    fallbackUsed?: boolean;
+  } = {}
+): string {
+  switch (stage) {
+    case 'planning':
+      return "I'm analyzing your profile to find the best opportunities...";
+    
+    case 'analysis':
+      return "Evaluating your experience and skills against current openings...";
+    
+    case 'scoring':
+      if (context.matchCount === 0) {
+        return "I've completed the analysis but didn't find any strong matches. Let me explain why and suggest some alternatives.";
+      }
+      return `I've found ${context.matchCount} ${context.matchCount === 1 ? 'role that matches' : 'roles that match'} your profile. Let me show you why.`;
+    
+    case 'error':
+      if (context.fallbackUsed) {
+        return "Some data is missing from your profile, so I used alternative methods to make suggestions.";
+      }
+      return "I encountered some issues while analyzing your profile. I'll do my best to provide recommendations with the available information.";
+    
+    case 'summary':
+      return "Here's a summary of what I found...";
+    
+    default:
+      return "Processing your request...";
   }
 } 
