@@ -5,7 +5,7 @@ import { getSemanticMatches } from '../embeddings.ts';
 import { getCapabilityGaps } from '../profile/getCapabilityGaps.ts';
 import { getSkillGaps } from '../profile/getSkillGaps.ts';
 import { batchScoreProfileFit } from '../agent/scoreProfileFit.ts';
-import { getRolesData } from '../role/getRoleData.ts';
+import { getRoleDetail } from '../role/getRoleDetail.ts';
 import { getProfileData } from '../profile/getProfileData.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
@@ -445,12 +445,11 @@ export async function runHiringLoop(
       throw new Error('roleId is required for hiring loop');
     }
 
-    // Get role data first
-    const roleData = await getRolesData(supabase, [roleId]);
-    if (!roleData || !roleData[roleId]) {
-      throw new Error('Failed to load role data');
+    // Get role details
+    const roleDetail = await getRoleDetail(supabase, roleId);
+    if (!roleDetail) {
+      throw new Error('Failed to load role details');
     }
-    const role = roleData[roleId];
 
     // Get hiring matches using the new function
     const { matches, debug } = await getHiringMatches(supabase, roleId, {
@@ -497,27 +496,7 @@ export async function runHiringLoop(
       success: true,
       message: 'Hiring loop completed successfully',
       data: {
-        role: {
-          id: role.id,
-          title: role.title,
-          divisionId: role.divisionId,
-          gradeBand: role.gradeBand,
-          location: role.location,
-          primaryPurpose: role.primaryPurpose,
-          reportingLine: role.reportingLine,
-          directReports: role.directReports,
-          budgetResponsibility: role.budgetResponsibility,
-          capabilities: role.capabilities.map(c => ({
-            name: c.name,
-            required_level: c.required_level,
-            capabilityType: c.capabilityType
-          })),
-          skills: role.skills.map(s => ({
-            name: s.name,
-            required_level: s.required_level,
-            required_years: s.required_years
-          }))
-        },
+        role: roleDetail,
         matches: semanticMatches,
         recommendations: matches.map(match => {
           const matchId = `${roleId}_${match.profileId}`;
