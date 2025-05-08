@@ -190,8 +190,20 @@ export async function getSemanticMatches(
 
       // Ensure type matches SemanticMatch interface
       const entityType = targetTable.slice(0, -1);
-      if (entityType !== 'role' && entityType !== 'skill' && entityType !== 'capability' && entityType !== 'company') {
-        console.warn(`Unexpected entity type: ${entityType}`);
+      console.log('Debug - Semantic Match Processing:', {
+        targetTable,
+        entityType,
+        matchId: match.id,
+        details: details ? 'found' : 'not found'
+      });
+      
+      if (entityType !== 'role' && entityType !== 'skill' && entityType !== 'capability' && entityType !== 'company' && entityType !== 'profile') {
+        console.warn(`Unexpected entity type: ${entityType}`, {
+          allowedTypes: ['role', 'skill', 'capability', 'company', 'profile'],
+          receivedType: entityType,
+          targetTable,
+          matchData: match
+        });
         return null;
       }
 

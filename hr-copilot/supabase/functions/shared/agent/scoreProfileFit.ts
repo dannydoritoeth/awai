@@ -274,4 +274,83 @@ export async function scoreProfileFit(
       }
     };
   }
+}
+
+/**
+ * Score multiple profiles against a single role in parallel, with pre-filtering
+ */
+export async function batchScoreRoleProfiles(
+  supabase: SupabaseClient,
+  roleId: string,
+  profileIds: string[],
+  options: {
+    maxConcurrent?: number;
+    continueOnError?: boolean;
+    maxProfiles?: number;
+  } = {}
+): Promise<BatchScoreResult[]> {
+  const { maxConcurrent = 5, continueOnError = true, maxProfiles = 20 } = options;
+
+  // Pre-filter profiles to get the most promising candidates using semantic search
+  const matches = await getSemanticMatches(
+    supabase,
+    { id: roleId, table: 'roles' },
+    'profiles',
+    maxProfiles,
+    0.3 // Lower threshold to cast a wider net
+  );
+
+  // Filter matches to only include profiles we're interested in
+  const filteredProfileIds = matches
+    .filter(match => profileIds.includes(match.id))
+    .map(match => match.id);
+
+  // Add any remaining profiles up to maxProfiles if we don't have enough matches
+  if (filteredProfileIds.length < maxProfiles) {
+    const remainingProfiles = profileIds
+      .filter(id => !filteredProfileIds.includes(id))
+      .slice(0, maxProfiles - filteredProfileIds.length);
+    filteredProfileIds.push(...remainingProfiles);
+  }
+
+  console.log(`Pre-filtered from ${profileIds.length} to ${filteredProfileIds.length} profiles`);
+
+  // Process filtered profiles in chunks
+  const results: BatchScoreResult[] = [];
+  for (let i = 0; i < filteredProfileIds.length; i += maxConcurrent) {
+    const chunk = filteredProfileIds.slice(i, i + maxConcurrent);
+    
+    const chunkPromises = chunk.map(async (profileId): Promise<BatchScoreResult> => {
+      try {
+        const result = await scoreProfileFit(supabase, profileId, roleId);
+        return { roleId: profileId, result }; // Note: we use roleId field to store profileId for consistency
+      } catch (error) {
+        if (!continueOnError) {
+          throw error;
+        }
+        console.error(`Error scoring profile ${profileId}:`, error);
+        return {
+          roleId: profileId, // Note: we use roleId field to store profileId for consistency
+          result: {
+            data: null,
+            error: {
+              type: 'DATABASE_ERROR',
+              message: 'Failed to score profile fit',
+              details: error
+            }
+          }
+        };
+      }
+    });
+
+    const chunkResults = await Promise.all(chunkPromises);
+    results.push(...chunkResults);
+  }
+
+  // Sort results by score (if available) before returning
+  return results.sort((a, b) => {
+    const scoreA = a.result.data?.score ?? 0;
+    const scoreB = b.result.data?.score ?? 0;
+    return scoreB - scoreA;
+  });
 } 

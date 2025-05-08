@@ -12,6 +12,7 @@ import { getMatchingProfiles } from '../shared/role/getMatchingProfiles.ts'
 import { scoreProfileFit } from '../shared/agent/scoreProfileFit.ts'
 import { getSemanticMatches } from '../shared/embeddings.ts'
 import { testJobMatching } from '../shared/job/testJobMatching.ts'
+import { getHiringMatches } from '../shared/job/hiringMatches.ts'
 
 interface TestFunctionRequest {
   function: string;
@@ -89,7 +90,17 @@ serve(async (req) => {
   }
 
   try {
-    const { action, profileId, limit, threshold } = await req.json()
+    // Read request body once
+    const requestData = await req.json()
+    const { 
+      action, 
+      profileId, 
+      limit, 
+      threshold,
+      sourceId,
+      sourceTable,
+      targetTable 
+    } = requestData
 
     // Create Supabase client
     const supabaseClient = createClient(
@@ -117,7 +128,179 @@ serve(async (req) => {
         })
         break
 
-      // ... other test cases ...
+      case 'testHiringMatches':
+        if (!profileId) {
+          throw new Error('profileId is required for hiring matches test')
+        }
+        console.log('Testing hiring matches for profile:', profileId)
+        result = await getHiringMatches(supabaseClient, profileId, {
+          limit: limit || 5,
+          threshold: threshold || 0.3,
+          maxConcurrent: 5
+        })
+        break
+
+      case 'testSemanticMatching':
+        if (!sourceId || !sourceTable || !targetTable) {
+          throw new Error('sourceId, sourceTable, and targetTable are required for semantic matching test')
+        }
+        
+        // Use a lower threshold for testing
+        const testThreshold = threshold || 0.1 // Lowered from 0.3 to 0.1 for testing
+        
+        console.log('Starting semantic matching test with params:', {
+          sourceId,
+          sourceTable,
+          targetTable,
+          limit: limit || 5,
+          threshold: testThreshold
+        })
+
+        // First verify source exists
+        const selectFields = sourceTable === 'roles' ? 'id, title, embedding' : 'id, name, embedding'
+        console.log('Selecting fields:', selectFields, 'from table:', sourceTable)
+        const { data: source, error: sourceError } = await supabaseClient
+          .from(sourceTable)
+          .select(selectFields)
+          .eq('id', sourceId)
+          .single()
+
+        if (sourceError || !source) {
+          console.error('Source query error:', sourceError)
+          throw new Error(`Source ${sourceTable} with ID ${sourceId} not found: ${sourceError?.message}`)
+        }
+
+        // Transform the response to have a consistent name field
+        const sourceData = sourceTable === 'roles' ? { ...source, name: source.title } : source
+
+        // Check embedding
+        if (!sourceData.embedding) {
+          console.warn('Source has no embedding - attempting to get matches anyway:', {
+            table: sourceTable,
+            id: sourceId,
+            name: sourceData.name || sourceData.title
+          })
+        } else {
+          console.log('Source embedding found:', {
+            table: sourceTable,
+            id: sourceId,
+            name: sourceData.name || sourceData.title,
+            embeddingLength: sourceData.embedding.length
+          })
+        }
+
+        // Check role requirements if this is a role
+        if (sourceTable === 'roles') {
+          console.log('Checking role requirements for:', sourceId)
+          const { data: requirements, error: reqError } = await supabaseClient
+            .from('role_requirements')
+            .select('*')
+            .eq('role_id', sourceId)
+
+          console.log('Role requirements check:', {
+            roleId: sourceId,
+            hasRequirements: requirements && requirements.length > 0,
+            requirementCount: requirements?.length || 0,
+            error: reqError
+          })
+
+          // Also check role capabilities
+          const { data: capabilities, error: capError } = await supabaseClient
+            .from('role_capabilities')
+            .select('*')
+            .eq('role_id', sourceId)
+
+          console.log('Role capabilities check:', {
+            roleId: sourceId,
+            hasCapabilities: capabilities && capabilities.length > 0,
+            capabilityCount: capabilities?.length || 0,
+            error: capError
+          })
+        }
+
+        // Attempt to get semantic matches
+        console.log('Fetching semantic matches...')
+        const matches = await getSemanticMatches(
+          supabaseClient,
+          { id: sourceId, table: sourceTable },
+          targetTable,
+          limit || 5,
+          testThreshold
+        )
+
+        // Log detailed match information
+        console.log('Semantic matching results:', {
+          matchCount: matches.length,
+          threshold: testThreshold,
+          matches: matches.map(m => ({
+            id: m.id,
+            type: m.type,
+            similarity: m.similarity,
+            name: m.name
+          }))
+        })
+
+        // If this is a role looking for profiles, calculate profile fit with correct parameter order
+        if (sourceTable === 'roles') {
+          console.log('Calculating profile fits for matches...')
+          const profileFits = await Promise.all(
+            matches.map(async (match) => {
+              try {
+                // Corrected order: roleId first (sourceId), then profileId (match.id)
+                const fitResult = await scoreProfileFit(supabaseClient, sourceId, match.id)
+                return {
+                  ...match,
+                  fit: fitResult.data
+                }
+              } catch (error) {
+                console.error('Error calculating profile fit:', {
+                  roleId: sourceId,
+                  profileId: match.id,
+                  error: error.message
+                })
+                return match
+              }
+            })
+          )
+
+          // Update matches with fit scores
+          matches.length = 0
+          matches.push(...profileFits)
+        }
+
+        // If no matches, check target table for embeddings
+        if (matches.length === 0) {
+          const { count } = await supabaseClient
+            .from(targetTable)
+            .select('*', { count: 'exact', head: true })
+            .not('embedding', 'is', null)
+          
+          console.log(`${targetTable} embedding stats:`, {
+            totalWithEmbeddings: count
+          })
+        }
+
+        result = {
+          success: true,
+          matches,
+          debug: {
+            sourceFound: true,
+            hasEmbedding: !!sourceData.embedding,
+            matchCount: matches.length,
+            sourceInfo: {
+              id: sourceId,
+              name: sourceData.name || sourceData.title,
+              hasEmbedding: !!sourceData.embedding
+            },
+            matches: matches.map(m => ({
+              id: m.id,
+              type: m.type,
+              similarity: m.similarity,
+              name: m.name
+            }))
+          }
+        }
+        break
 
       default:
         throw new Error(`Unknown action: ${action}`)
