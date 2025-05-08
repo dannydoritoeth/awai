@@ -445,6 +445,13 @@ export async function runHiringLoop(
       throw new Error('roleId is required for hiring loop');
     }
 
+    // Get role data first
+    const roleData = await getRolesData(supabase, [roleId]);
+    if (!roleData || !roleData[roleId]) {
+      throw new Error('Failed to load role data');
+    }
+    const role = roleData[roleId];
+
     // Get hiring matches using the new function
     const { matches, debug } = await getHiringMatches(supabase, roleId, {
       limit: 20,
@@ -454,10 +461,10 @@ export async function runHiringLoop(
 
     // Convert hiring matches to semantic matches format with unique identifiers
     const semanticMatches: SemanticMatch[] = matches.map(match => {
-      const matchId = `${roleId}_${match.profileId}`; // Create unique match identifier
+      const matchId = `${roleId}_${match.profileId}`;
       return {
         id: match.profileId,
-        matchId, // Add matchId for linking
+        matchId,
         similarity: match.semanticScore,
         type: 'profile',
         name: match.name,
@@ -485,17 +492,38 @@ export async function runHiringLoop(
       }
     });
 
-    // Return response with linked matches and recommendations
+    // Return response with linked matches, recommendations, and role details
     return {
       success: true,
       message: 'Hiring loop completed successfully',
       data: {
+        role: {
+          id: role.id,
+          title: role.title,
+          divisionId: role.divisionId,
+          gradeBand: role.gradeBand,
+          location: role.location,
+          primaryPurpose: role.primaryPurpose,
+          reportingLine: role.reportingLine,
+          directReports: role.directReports,
+          budgetResponsibility: role.budgetResponsibility,
+          capabilities: role.capabilities.map(c => ({
+            name: c.name,
+            required_level: c.required_level,
+            capabilityType: c.capabilityType
+          })),
+          skills: role.skills.map(s => ({
+            name: s.name,
+            required_level: s.required_level,
+            required_years: s.required_years
+          }))
+        },
         matches: semanticMatches,
         recommendations: matches.map(match => {
-          const matchId = `${roleId}_${match.profileId}`; // Use same matchId for linking
+          const matchId = `${roleId}_${match.profileId}`;
           return {
             type: 'candidate_match',
-            matchId, // Add matchId for linking
+            matchId,
             profileId: match.profileId,
             score: match.score,
             semanticScore: match.semanticScore,
