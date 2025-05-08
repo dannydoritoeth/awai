@@ -160,39 +160,39 @@ Your task is to:
 2. Select the most appropriate tools to use
 3. Provide a clear reason for each tool selection
 4. Ensure selected tools have required parameters available
-5. Return a JSON array of recommendations
 
-IMPORTANT: You must respond with ONLY a valid JSON array. Each object in the array must have these exact fields:
+IMPORTANT: You must respond with a valid JSON array containing objects with these exact fields:
 {
-  "tool": "name_of_tool",
-  "reason": "clear explanation why this tool is needed",
-  "confidence": number between 0 and 1,
-  "inputs": { object with required parameters }
+  "tool": "string (one of the available tool names)",
+  "reason": "string (explaining why this tool was chosen)",
+  "confidence": "number (0-1)",
+  "inputs": "object (containing required parameters)"
 }
 
-Example response:
+Example response format:
 [
   {
     "tool": "getProfileContext",
-    "reason": "Need to load current profile data to make recommendations",
+    "reason": "Need to load profile details first",
     "confidence": 0.9,
     "inputs": {
       "profileId": "123"
     }
   }
-]`;
+]
+
+Do not include any explanatory text, ONLY output the JSON array.`;
 
     const userMessage = `Context:
 - Mode: ${context.mode}
+- Message: ${context.lastMessage || 'No message provided'}
 - Profile ID: ${context.profileId || 'Not provided'}
 - Role ID: ${context.roleId || 'Not provided'}
 - Job ID: ${context.jobId || 'Not provided'}
 - Current Focus: ${context.semanticContext?.currentFocus || 'None'}
-- User Message: ${context.lastMessage || 'No message provided'}
 
-Based on this context, return a JSON array of recommended tools to use.`;
+Please select the most appropriate tools to use based on this context.`;
 
-    // Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -200,48 +200,26 @@ Based on this context, return a JSON array of recommended tools to use.`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4-turbo-preview',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
-        temperature: 0.2,
-        max_tokens: 1000,
-        response_format: { type: "json_object" }
+        temperature: 0.2
       })
     });
 
-    const result = await response.json();
-    
-    if (!response.ok) {
-      console.error('OpenAI API error:', result);
-      // Fall back to rule-based recommendations
-      return getRuleBasedRecommendations(context);
+    const data = await response.json();
+    const recommendations = JSON.parse(data.choices[0].message.content);
+
+    if (!Array.isArray(recommendations)) {
+      throw new Error('Invalid AI response format - expected array');
     }
 
-    try {
-      // Since we're using response_format: json_object, we need to parse the recommendations field
-      const content = JSON.parse(result.choices[0].message.content);
-      const aiRecommendations = content.recommendations || [];
-      
-      // Validate recommendations
-      if (!Array.isArray(aiRecommendations)) {
-        throw new Error('AI response is not an array');
-      }
-
-      // Ensure each recommendation has required fields and parameters
-      return aiRecommendations.map(rec => validateRecommendation(rec, availableActions));
-
-    } catch (parseError) {
-      console.error('Error parsing AI recommendations:', parseError);
-      // Fall back to rule-based recommendations
-      return getRuleBasedRecommendations(context);
-    }
-
+    return recommendations;
   } catch (error) {
     console.error('Error getting AI recommendations:', error);
-    // Fall back to rule-based recommendations
-    return getRuleBasedRecommendations(context);
+    return [];
   }
 }
 

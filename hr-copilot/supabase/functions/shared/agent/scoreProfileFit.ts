@@ -105,9 +105,10 @@ export async function scoreProfileFit(
     // Calculate semantic score using embeddings
     let semanticScore = 0;
     try {
-      const { data: semanticMatch } = await supabase.rpc('match_embeddings_by_id', {
-        p_query_id: profileId,
-        p_table_name: 'profiles',
+      // Get semantic matches using profile ID and table
+      const { data: semanticMatch } = await supabase.rpc('match_embeddings_by_vector', {
+        p_query_id: { id: profileId, table: 'profiles' },
+        p_table_name: 'roles',
         p_match_threshold: 0,
         p_match_count: 1
       });

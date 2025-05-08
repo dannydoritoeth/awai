@@ -33,17 +33,17 @@ export async function runCandidateLoop(
     //     const roleDetail = await getRoleDetail(supabase, path.target_role.id);
     //     if (roleDetail.error) continue;
 
-    //     // Get semantic matches for capabilities and skills
+    //     // Get semantic matches for capabilities and skills using profile ID
     //     const capabilityMatches = await getSemanticMatches(
     //       supabase,
-    //       profileContext.data!.embedding,
+    //       profileId!, // Use profile ID instead of embedding
     //       'capabilities',
     //       5
     //     );
 
     //     const skillMatches = await getSemanticMatches(
     //       supabase,
-    //       profileContext.data!.embedding,
+    //       profileId!, // Use profile ID instead of embedding
     //       'skills',
     //       5
     //     );
@@ -92,28 +92,38 @@ export async function runCandidateLoop(
         const readiness = await getJobReadiness(supabase, profileId!, job.jobId);
         if (readiness.error) continue;
 
-        // Get semantic matches for the job
-        if (profileContext.data?.profile.embedding) {
-          const jobMatches = await getSemanticMatches(
-            supabase,
-            profileContext.data.profile.embedding,
-            'jobs',
-            1,
-            0.7
-          );
+        // Get semantic matches for the job using profile's embedding
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('embedding')
+          .eq('id', profileId!)
+          .single();
 
-          if (jobMatches.length > 0) {
-            recommendations.push({
-              type: 'job_opportunity',
-              score: readiness.data!.score,
-              semanticScore: jobMatches[0].similarity,
-              summary: readiness.data!.summary,
-              details: {
-                jobId: job.jobId,
-                semanticMatch: jobMatches[0]
-              }
-            });
-          }
+        if (profileError || !profile?.embedding) {
+          console.error('Failed to get profile embedding:', profileError);
+          continue;
+        }
+
+        // Get semantic matches for the job using profile's embedding
+        const jobMatches = await getSemanticMatches(
+          supabase,
+          { id: profileId!, table: 'profiles' }, // Pass both ID and table name
+          'roles', // Target table is roles since jobs reference roles
+          1,
+          0.7
+        );
+
+        if (jobMatches.length > 0) {
+          recommendations.push({
+            type: 'job_opportunity',
+            score: readiness.data!.score,
+            semanticScore: jobMatches[0].similarity,
+            summary: readiness.data!.summary,
+            details: {
+              jobId: job.jobId,
+              semanticMatch: jobMatches[0]
+            }
+          });
         }
       }
     }

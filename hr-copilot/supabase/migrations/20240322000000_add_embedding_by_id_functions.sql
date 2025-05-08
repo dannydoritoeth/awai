@@ -12,9 +12,7 @@ CREATE OR REPLACE FUNCTION match_embeddings_by_id(
 )
 RETURNS TABLE (
   id uuid,
-  similarity float,
-  name text,
-  title text
+  similarity float
 )
 LANGUAGE plpgsql
 AS $$
@@ -33,7 +31,7 @@ BEGIN
 
   -- Use the embedding to find matches
   RETURN QUERY EXECUTE format(
-    'SELECT id, 1 - (embedding <=> $1) as similarity, name, title
+    'SELECT id, 1 - (embedding <=> $1) as similarity
      FROM %I
      WHERE id != $2 AND 1 - (embedding <=> $1) > $3
      ORDER BY similarity DESC
@@ -52,15 +50,13 @@ CREATE OR REPLACE FUNCTION match_embeddings_by_vector(
 )
 RETURNS TABLE (
   id uuid,
-  similarity float,
-  name text,
-  title text
+  similarity float
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
   RETURN QUERY EXECUTE format(
-    'SELECT id, 1 - (embedding <=> $1) as similarity, name, title
+    'SELECT id, 1 - (embedding <=> $1) as similarity
      FROM %I
      WHERE 1 - (embedding <=> $1) > $2
      ORDER BY similarity DESC

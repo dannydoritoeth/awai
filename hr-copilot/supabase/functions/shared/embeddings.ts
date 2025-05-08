@@ -124,8 +124,8 @@ export async function embedContext(
  */
 export async function getSemanticMatches(
   supabase: SupabaseClient<Database>,
-  sourceEmbedding: number[] | string,
-  table: Tables,
+  sourceEmbedding: number[] | { id: string, table: Tables },
+  targetTable: Tables,
   limit: number = 10,
   threshold: number = 0.6
 ): Promise<SemanticMatch[]> {
@@ -133,22 +133,39 @@ export async function getSemanticMatches(
     let rpcName: string;
     let params: Record<string, any>;
 
-    if (typeof sourceEmbedding === 'string') {
-      rpcName = 'match_embeddings_by_id';
+    if (typeof sourceEmbedding === 'object' && 'id' in sourceEmbedding) {
+      // First get the embedding from the source table
+      const { data: source, error: sourceError } = await supabase
+        .from(sourceEmbedding.table)
+        .select('embedding')
+        .eq('id', sourceEmbedding.id)
+        .single();
+
+      if (sourceError || !source?.embedding) {
+        console.error(`Error getting source embedding from ${sourceEmbedding.table}:`, sourceError);
+        return [];
+      }
+
+      // Use the source embedding to find matches in the target table
+      rpcName = 'match_embeddings_by_vector';
       params = {
-        p_query_id: sourceEmbedding,
-        p_table_name: table,
+        p_query_embedding: source.embedding,
+        p_table_name: targetTable,
+        p_match_threshold: threshold,
+        p_match_count: limit
+      };
+    } else if (Array.isArray(sourceEmbedding)) {
+      // If sourceEmbedding is an array, it's already a vector
+      rpcName = 'match_embeddings_by_vector';
+      params = {
+        p_query_embedding: sourceEmbedding,
+        p_table_name: targetTable,
         p_match_threshold: threshold,
         p_match_count: limit
       };
     } else {
-      rpcName = 'match_embeddings_by_vector';
-      params = {
-        p_query_embedding: sourceEmbedding,
-        p_table_name: table,
-        p_match_threshold: threshold,
-        p_match_count: limit
-      };
+      console.error('Invalid sourceEmbedding format');
+      return [];
     }
 
     const { data, error } = await supabase.rpc(rpcName, params);
@@ -163,13 +180,37 @@ export async function getSemanticMatches(
       return [];
     }
 
-    return data.map((match: any) => ({
-      id: match.id,
-      similarity: match.similarity,
-      type: table.slice(0, -1) as EntityType,
-      name: match.name || match.title,
-      metadata: match
-    }));
+    // Get additional details for each match from their respective tables
+    const matchPromises = data.map(async (match) => {
+      const { data: details } = await supabase
+        .from(targetTable)
+        .select('*')
+        .eq('id', match.id)
+        .single();
+
+      // Ensure type matches SemanticMatch interface
+      const entityType = targetTable.slice(0, -1);
+      if (entityType !== 'role' && entityType !== 'skill' && entityType !== 'capability' && entityType !== 'company') {
+        console.warn(`Unexpected entity type: ${entityType}`);
+        return null;
+      }
+
+      const semanticMatch: SemanticMatch = {
+        id: match.id,
+        similarity: match.similarity,
+        type: entityType,
+        name: details?.display_name || details?.name || details?.title || 'Unnamed'
+      };
+
+      if (details) {
+        semanticMatch.metadata = details;
+      }
+
+      return semanticMatch;
+    });
+
+    const results = await Promise.all(matchPromises);
+    return results.filter((match): match is SemanticMatch => match !== null);
   } catch (error) {
     console.error('Error in getSemanticMatches:', error);
     return [];
