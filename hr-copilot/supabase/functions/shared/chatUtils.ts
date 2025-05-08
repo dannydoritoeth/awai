@@ -211,6 +211,7 @@ interface ChatInteractionContext {
     };
   };
 }
+
 /**
  * Generate a user-friendly response based on candidate context
  */
