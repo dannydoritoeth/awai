@@ -364,3 +364,21 @@ ALTER TABLE profiles
 ALTER COLUMN embedding TYPE vector(1536);
 DROP INDEX IF EXISTS profiles_embedding_idx;
 CREATE INDEX profiles_embedding_idx ON profiles USING ivfflat (embedding vector_cosine_ops);
+
+-- Add embedding_text_hash column to all tables with embeddings
+ALTER TABLE profiles ADD COLUMN embedding_text_hash text;
+ALTER TABLE roles ADD COLUMN embedding_text_hash text;
+ALTER TABLE skills ADD COLUMN embedding_text_hash text;
+ALTER TABLE capabilities ADD COLUMN embedding_text_hash text;
+ALTER TABLE companies ADD COLUMN embedding_text_hash text;
+ALTER TABLE divisions ADD COLUMN embedding_text_hash text;
+ALTER TABLE jobs ADD COLUMN embedding_text_hash text;
+
+-- Create index for faster lookups
+CREATE INDEX idx_profiles_embedding_hash ON profiles(embedding_text_hash);
+CREATE INDEX idx_roles_embedding_hash ON roles(embedding_text_hash);
+CREATE INDEX idx_skills_embedding_hash ON skills(embedding_text_hash);
+CREATE INDEX idx_capabilities_embedding_hash ON capabilities(embedding_text_hash);
+CREATE INDEX idx_companies_embedding_hash ON companies(embedding_text_hash);
+CREATE INDEX idx_divisions_embedding_hash ON divisions(embedding_text_hash);
+CREATE INDEX idx_jobs_embedding_hash ON jobs(embedding_text_hash); 

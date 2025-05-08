@@ -162,11 +162,25 @@ Your task is to:
 4. Ensure selected tools have required parameters available
 5. Return a JSON array of recommendations
 
-Each recommendation must include:
-- tool: The name of the tool to use
-- reason: Why this tool is appropriate
-- confidence: A score between 0 and 1
-- inputs: Required parameters for the tool`;
+IMPORTANT: You must respond with ONLY a valid JSON array. Each object in the array must have these exact fields:
+{
+  "tool": "name_of_tool",
+  "reason": "clear explanation why this tool is needed",
+  "confidence": number between 0 and 1,
+  "inputs": { object with required parameters }
+}
+
+Example response:
+[
+  {
+    "tool": "getProfileContext",
+    "reason": "Need to load current profile data to make recommendations",
+    "confidence": 0.9,
+    "inputs": {
+      "profileId": "123"
+    }
+  }
+]`;
 
     const userMessage = `Context:
 - Mode: ${context.mode}
@@ -176,7 +190,7 @@ Each recommendation must include:
 - Current Focus: ${context.semanticContext?.currentFocus || 'None'}
 - User Message: ${context.lastMessage || 'No message provided'}
 
-Please analyze this context and recommend which tools to use.`;
+Based on this context, return a JSON array of recommended tools to use.`;
 
     // Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -192,7 +206,8 @@ Please analyze this context and recommend which tools to use.`;
           { role: 'user', content: userMessage }
         ],
         temperature: 0.2,
-        max_tokens: 1000
+        max_tokens: 1000,
+        response_format: { type: "json_object" }
       })
     });
 
@@ -205,7 +220,9 @@ Please analyze this context and recommend which tools to use.`;
     }
 
     try {
-      const aiRecommendations = JSON.parse(result.choices[0].message.content);
+      // Since we're using response_format: json_object, we need to parse the recommendations field
+      const content = JSON.parse(result.choices[0].message.content);
+      const aiRecommendations = content.recommendations || [];
       
       // Validate recommendations
       if (!Array.isArray(aiRecommendations)) {

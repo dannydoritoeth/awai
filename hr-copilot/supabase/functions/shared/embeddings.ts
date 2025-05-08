@@ -34,7 +34,7 @@ export async function embedContext(
     // Get entity data to embed
     const { data: entity, error: entityError } = await supabase
       .from(entityType + 's') // pluralize table name
-      .select('*')
+      .select('*, embedding')
       .eq('id', entityId)
       .single();
 
@@ -63,7 +63,25 @@ export async function embedContext(
         break;
     }
 
-    // Get embedding from OpenAI
+    // Store the text used for embedding to check for changes
+    const currentTextHash = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(textToEmbed)
+    ).then(hash => Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join(''));
+
+    // Check if we already have an embedding and if the text hasn't changed
+    const { data: existingHash } = await supabase
+      .from(entityType + 's')
+      .select('embedding_text_hash')
+      .eq('id', entityId)
+      .single();
+
+    if (entity.embedding && existingHash?.embedding_text_hash === currentTextHash) {
+      console.log(`Embedding exists and text unchanged for ${entityType} ${entityId}`);
+      return true;
+    }
+
+    // Get embedding from OpenAI only if needed
     const response = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
@@ -79,10 +97,13 @@ export async function embedContext(
     const embedData = await response.json();
     const embedding = embedData.data[0].embedding;
 
-    // Update entity with embedding
+    // Update entity with embedding and hash
     const { error: updateError } = await supabase
       .from(entityType + 's')
-      .update({ embedding })
+      .update({ 
+        embedding,
+        embedding_text_hash: currentTextHash
+      })
       .eq('id', entityId);
 
     if (updateError) {
