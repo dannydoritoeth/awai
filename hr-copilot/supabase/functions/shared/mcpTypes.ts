@@ -4,6 +4,7 @@ export type MCPMode = 'candidate' | 'hiring';
 
 export interface SemanticMatch {
   id: string;
+  matchId?: string;
   similarity: number;
   type: 'profile' | 'role' | 'skill' | 'capability' | 'company';
   name: string;
@@ -72,4 +73,14 @@ export interface MCPState {
   context: MCPContext;
   lastAction?: MCPAction;
   history: MCPAction[];
+}
+
+export interface MatchHistory {
+  matchId: string;
+  roleId: string;
+  profileId: string;
+  timestamp: string;
+  score: number;
+  semanticScore: number;
+  status: 'pending' | 'reviewed' | 'rejected' | 'accepted';
 } 
