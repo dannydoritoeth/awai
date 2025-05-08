@@ -10,7 +10,7 @@ import { getRoleDetail } from '../shared/role/getRoleDetail.ts'
 import { getOpenJobs } from '../shared/job/getOpenJobs.ts'
 import { getMatchingProfiles } from '../shared/role/getMatchingProfiles.ts'
 import { scoreProfileFit } from '../shared/agent/scoreProfileFit.ts'
-import { getSemanticMatches } from '../shared/embeddings.ts'
+import { getSemanticMatches, embedContext } from '../shared/embeddings.ts'
 import { testJobMatching } from '../shared/job/testJobMatching.ts'
 import { getHiringMatches } from '../shared/job/hiringMatches.ts'
 
@@ -126,6 +126,70 @@ serve(async (req) => {
           limit: limit || 20,
           threshold: threshold || 0.7
         })
+        break
+
+      case 'testEmbeddings':
+        const { function: functionName, params } = requestData;
+        console.log(`Testing embedding function: ${functionName}`, params);
+
+        switch (functionName) {
+          case 'embedContext':
+            if (!params.entityType || !params.entityId) {
+              throw new Error('entityType and entityId are required for embedContext');
+            }
+            result = await embedContext(supabaseClient, params.entityType, params.entityId);
+            break;
+
+          case 'match_embeddings_by_vector':
+            if (!params.queryEmbedding || !params.tableName) {
+              throw new Error('queryEmbedding and tableName are required for match_embeddings_by_vector');
+            }
+            result = await supabaseClient.rpc('match_embeddings_by_vector', {
+              p_query_embedding: params.queryEmbedding,
+              p_table_name: params.tableName,
+              p_match_threshold: params.matchThreshold || 0.5,
+              p_match_count: params.matchCount || 10
+            });
+            break;
+
+          case 'match_embeddings_by_id':
+            if (!params.entityId || !params.tableName) {
+              throw new Error('entityId and tableName are required for match_embeddings_by_id');
+            }
+            result = await supabaseClient.rpc('match_embeddings_by_id', {
+              p_query_id: params.entityId,
+              p_table_name: params.tableName,
+              p_match_threshold: params.matchThreshold || 0.5,
+              p_match_count: params.matchCount || 10
+            });
+            break;
+
+          case 'calculate_embedding_similarity':
+            if (!params.sourceId || !params.targetId || !params.sourceTable || !params.targetTable) {
+              throw new Error('sourceId, targetId, sourceTable, and targetTable are required for calculate_embedding_similarity');
+            }
+            result = await supabaseClient.rpc('calculate_embedding_similarity', {
+              source_id: params.sourceId,
+              target_id: params.targetId,
+              source_table: params.sourceTable,
+              target_table: params.targetTable
+            });
+            break;
+
+          case 'get_embedding':
+            if (!params.entityId || !params.tableName) {
+              throw new Error('entityId and tableName are required for get_embedding');
+            }
+            result = await supabaseClient
+              .from(params.tableName)
+              .select('id, embedding')
+              .eq('id', params.entityId)
+              .single();
+            break;
+
+          default:
+            throw new Error(`Function ${functionName} not implemented`);
+        }
         break
 
       case 'testHiringMatches':
