@@ -496,7 +496,6 @@ export async function runHiringLoop(
       success: true,
       message: 'Hiring loop completed successfully',
       data: {
-        role: roleDetail,
         matches: semanticMatches,
         recommendations: matches.map(match => {
           const matchId = `${roleId}_${match.profileId}`;
@@ -510,7 +509,12 @@ export async function runHiringLoop(
             details: match.details
           };
         }),
-        actionsTaken: [],
+        actionsTaken: [
+          'Retrieved role data',
+          'Analyzed candidate matches',
+          'Generated hiring recommendations',
+          'Completed hiring analysis'
+        ],
         nextActions: matches.length > 0 
           ? [
               'Review top candidate profiles',
@@ -521,9 +525,10 @@ export async function runHiringLoop(
               'Broaden search criteria',
               'Review role requirements',
               'Consider alternative roles'
-            ]
+            ],
+        role: roleDetail
       }
-    };
+    } as HiringMCPResponse;
 
   } catch (error) {
     console.error('Error in hiring loop:', error);

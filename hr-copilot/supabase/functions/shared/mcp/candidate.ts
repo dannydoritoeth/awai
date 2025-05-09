@@ -299,6 +299,7 @@ export async function runCandidateLoop(
       }
     });
 
+    // Return CandidateMCPResponse with profile data included
     return {
       success: true,
       message: 'Candidate loop completed successfully',
@@ -313,9 +314,16 @@ export async function runCandidateLoop(
           'Review suggested career paths',
           'Explore job opportunities',
           'Focus on closing identified skill gaps'
-        ]
+        ],
+        actionsTaken: [
+          'Retrieved profile data',
+          'Analyzed skill matches',
+          'Generated career recommendations',
+          'Completed candidate analysis'
+        ],
+        profile: profileData // Include the profile data we already have
       }
-    };
+    } as CandidateMCPResponse;
 
   } catch (error) {
     // Log error to chat if we have a session

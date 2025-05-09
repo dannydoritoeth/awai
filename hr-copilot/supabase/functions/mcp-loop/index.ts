@@ -1,7 +1,19 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
-import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
+import { 
+  MCPResponse, 
+  BaseMCPResponse,
+  HiringMCPResponse,
+  CandidateMCPResponse
+} from '../shared/types/mcpTypes.ts';
+import {
+  findCandidateMatches,
+  findRoleMatches,
+  generateChatResponse,
+  generateRecommendations,
+  determineNextActions
+} from '../shared/mcp/matchingUtils.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
 import { runGeneralLoop } from '../shared/mcp/general.ts';
@@ -38,13 +50,12 @@ function clearRetryCount(sessionId: string): void {
 }
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const request: MCPRequest = await req.json();
+    const request = await req.json();
     console.log('MCP Loop Request:', request);
 
     // Validate request
@@ -61,13 +72,12 @@ serve(async (req) => {
     }
 
     // Track retries if session ID provided
-    let retryCount = 0;
     if (request.sessionId) {
-      retryCount = getRetryCount(request.sessionId);
+      const retryCount = getRetryCount(request.sessionId);
       if (retryCount >= MAX_RETRIES) {
         throw new Error('Maximum retry attempts exceeded');
       }
-      retryTracker.set(request.sessionId, retryCount + 1);
+      incrementRetryCount(request.sessionId);
     }
 
     // Get planner recommendations if message provided
@@ -75,7 +85,7 @@ serve(async (req) => {
     if (request.context?.lastMessage) {
       console.log('Getting planner recommendations...');
       try {
-        const recommendations = await getPlannerRecommendation(
+        plannerRecommendations = await getPlannerRecommendation(
           supabaseClient,
           {
             mode: request.mode,
@@ -85,22 +95,6 @@ serve(async (req) => {
             semanticContext: request.context.semanticContext
           }
         );
-        
-        plannerRecommendations = recommendations;
-
-        // Log planner decision for transparency
-        if (request.mode !== 'general') {
-          await logAgentAction(supabaseClient, {
-            entityType: request.mode === 'candidate' ? 'profile' : 'role',
-            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-            payload: {
-              action: 'planner_decision',
-              message: request.context.lastMessage,
-              recommendations
-            }
-          });
-        }
-
       } catch (error) {
         console.error('Planner error:', error);
         // Provide mode-specific fallback recommendations
@@ -128,22 +122,22 @@ serve(async (req) => {
     }
 
     // Run the appropriate loop based on mode
-    let response: MCPResponse;
+    let mcpResult;
     switch (request.mode) {
       case 'candidate':
-        response = await runCandidateLoop(supabaseClient, {
+        mcpResult = await runCandidateLoop(supabaseClient, {
           ...request,
           plannerRecommendations
         });
         break;
       case 'hiring':
-        response = await runHiringLoop(supabaseClient, {
+        mcpResult = await runHiringLoop(supabaseClient, {
           ...request,
           plannerRecommendations
         });
         break;
       case 'general':
-        response = await runGeneralLoop(supabaseClient, {
+        mcpResult = await runGeneralLoop(supabaseClient, {
           ...request,
           plannerRecommendations
         });
@@ -152,25 +146,66 @@ serve(async (req) => {
         throw new Error(`Unsupported mode: ${request.mode}`);
     }
 
-    // Log the actions taken for non-general modes
+    // Format response using our new structure
+    const baseResponse: BaseMCPResponse = {
+      success: true,
+      data: {
+        matches: mcpResult.data?.matches || [],
+        recommendations: mcpResult.data?.recommendations || [],
+        chatResponse: mcpResult.data?.chatResponse || {
+          message: 'No response generated',
+          followUpQuestion: 'Would you like to try a different approach?'
+        },
+        nextActions: mcpResult.data?.nextActions || [],
+        actionsTaken: [
+          ...(mcpResult.data?.actionsTaken || []),
+          'Retrieved planner recommendations',
+          `Executed ${request.mode} mode processing`,
+          'Applied response formatting'
+        ]
+      }
+    };
+
+    // Add mode-specific data
+    let response: MCPResponse;
+    if (request.mode === 'hiring') {
+      response = mcpResult as HiringMCPResponse;
+    } else if (request.mode === 'candidate') {
+      response = mcpResult as CandidateMCPResponse;
+    } else {
+      response = baseResponse;
+    }
+
+    // Log actions for non-general modes
     if (response.success && response.data?.actionsTaken && request.mode !== 'general') {
       for (const action of response.data.actionsTaken) {
-        await logAgentAction(supabaseClient, {
-          entityType: request.mode === 'candidate' ? 'profile' : 'role',
-          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-          payload: {
-            action: action.tool,
-            reason: action.reason,
-            inputs: action.inputs,
-            result: action.result
-          }
-        });
+        if (typeof action === 'string') {
+          await logAgentAction(supabaseClient, {
+            entityType: request.mode === 'candidate' ? 'profile' : 'role',
+            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+            payload: {
+              action,
+              reason: 'MCP Processing Step',
+              result: null
+            }
+          });
+        } else {
+          await logAgentAction(supabaseClient, {
+            entityType: request.mode === 'candidate' ? 'profile' : 'role',
+            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+            payload: {
+              action: action.tool,
+              reason: action.reason,
+              result: action.result
+            }
+          });
+        }
       }
     }
 
     // Clear retry count on success
     if (request.sessionId) {
-      retryTracker.delete(request.sessionId);
+      clearRetryCount(request.sessionId);
     }
 
     return new Response(JSON.stringify(response), {
@@ -178,20 +213,12 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('MCP Loop Error:', error);
-    
-    const response: MCPResponse = {
+    console.error('Error in MCP loop:', error);
+    return new Response(JSON.stringify({
       success: false,
-      message: error.message,
-      error: {
-        type: error.type || 'INTERNAL_ERROR',
-        message: error.message,
-        details: error
-      }
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: error.type === 'VALIDATION_ERROR' ? 400 : 500,
+      error: error.message
+    }), {
+      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
