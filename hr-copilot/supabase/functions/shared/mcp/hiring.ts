@@ -9,6 +9,7 @@ import { getRoleDetail } from '../role/getRoleDetail.ts';
 import { getProfileData } from '../profile/getProfileData.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
+import { logAgentResponse } from '../chatUtils.ts';
 
 // Type definitions
 declare const Deno: {
@@ -339,9 +340,19 @@ export async function runHiringLoop(
   request: MCPRequest
 ): Promise<MCPResponse> {
   try {
-    const { roleId } = request;
+    const { roleId, sessionId } = request;
     if (!roleId) {
       throw new Error('roleId is required for hiring loop');
+    }
+
+    // Log starting analysis
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I'm analyzing the role requirements and finding the best candidate matches...",
+        'mcp_analysis_start'
+      );
     }
 
     // Get role details
@@ -350,12 +361,32 @@ export async function runHiringLoop(
       throw new Error('Failed to load role details');
     }
 
+    // Log role data loaded
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I've loaded the role requirements and am now searching for matching candidates...",
+        'mcp_data_loaded'
+      );
+    }
+
     // Get hiring matches using the new function
     const { matches, debug } = await getHiringMatches(supabase, roleId, {
       limit: 20,
       threshold: 0.5,
       maxConcurrent: 5
     });
+
+    // Log matches found
+    if (sessionId && matches.length > 0) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        `I've found ${matches.length} potential candidates. Analyzing their qualifications in detail...`,
+        'mcp_matches_found'
+      );
+    }
 
     // Convert hiring matches to semantic matches format with unique identifiers
     const semanticMatches: SemanticMatch[] = matches?.map(match => {
@@ -424,6 +455,22 @@ export async function runHiringLoop(
       request.context?.lastMessage
     );
 
+    // Log the final AI response to chat
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        chatResponse.response,
+        'mcp_final_response',
+        undefined,
+        {
+          matches: semanticMatches.slice(0, 5),
+          recommendations: processedMatches?.slice(0, 3),
+          followUpQuestion: chatResponse.followUpQuestion
+        }
+      );
+    }
+
     // Return response with linked matches, recommendations, and role details
     return {
       success: true,
@@ -475,6 +522,17 @@ export async function runHiringLoop(
 
   } catch (error) {
     console.error('Error in hiring loop:', error);
+
+    // Log error to chat if we have a session
+    if (request.sessionId) {
+      await logAgentResponse(
+        supabase,
+        request.sessionId,
+        "I encountered an error while analyzing candidates for this role. Let me know if you'd like to try again.",
+        'mcp_error'
+      );
+    }
+
     return {
       success: false,
       error: {

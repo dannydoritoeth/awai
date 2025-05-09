@@ -2,11 +2,9 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { MCPRequest, MCPResponse, MCPAction, SemanticMatch, EntityType } from '../mcpTypes.ts';
-import { logProgress } from '../chatUtils.ts';
-import { getSemanticMatches } from '../semanticSearch.ts';
-import { generateEmbedding } from '../semanticSearch.ts';
+import { logProgress, logAgentResponse, handleChatInteraction } from '../chatUtils.ts';
+import { getSemanticMatches, generateEmbedding } from '../semanticSearch.ts';
 import { getPlannerRecommendation } from './planner.ts';
-import { handleChatInteraction } from '../chatUtils.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 
 declare const Deno: {
@@ -361,79 +359,130 @@ Keep the tone conversational and focus on practical insights.`;
  * Run the general analysis loop for data insights
  */
 export async function runGeneralLoop(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   request: MCPRequest
 ): Promise<MCPResponse> {
   try {
-    if (!request.context?.lastMessage) {
-      throw new Error('Message is required for general analysis');
+    const { context, sessionId } = request;
+    const matches: SemanticMatch[] = [];
+    const recommendations: any[] = [];
+
+    // Log starting analysis
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I'm analyzing your request and searching across our knowledge base...",
+        'mcp_analysis_start'
+      );
     }
 
-    // Generate embedding for the message
-    const embedding = await generateEmbedding(request.context.lastMessage);
-    console.log('request.context.lastMessage:', request.context.lastMessage);
+    // Get semantic matches based on the message
+    const embedding = await generateEmbedding(context?.lastMessage || '');
 
-    console.log('Generated embedding for message:', {
-      length: embedding.length,
-      sample: embedding.slice(0, 5)
-    });
+    // Log embedding generated
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I've processed your request and am now finding relevant matches...",
+        'mcp_data_loaded'
+      );
+    }
 
-    // Get semantic matches using getSemanticMatches
-    const matches = await getSemanticMatches(supabase, {
-      embedding,
-      entityTypes: ['role', 'job', 'profile', 'division', 'company'],
-      limit: 20,
-      perTypeLimit: 10,
-      minScore: 0.3
-    });
+    // Get semantic matches across different entity types
+    const [roleMatches, profileMatches, skillMatches] = await Promise.all([
+      getSemanticMatches(supabase, {
+        embedding,
+        entityTypes: ['role'],
+        limit: 10,
+        minScore: 0.5
+      }),
+      getSemanticMatches(supabase, {
+        embedding,
+        entityTypes: ['profile'],
+        limit: 10,
+        minScore: 0.5
+      }),
+      getSemanticMatches(supabase, {
+        embedding,
+        entityTypes: ['skill'],
+        limit: 10,
+        minScore: 0.5
+      })
+    ]);
 
-    // Log matches by type
-    const matchesByType = matches.reduce((acc, m) => {
-      acc[m.type] = (acc[m.type] || []).concat(m);
-      return acc;
-    }, {} as Record<string, SemanticMatch[]>);
+    // Add all matches to the response
+    matches.push(...roleMatches, ...profileMatches, ...skillMatches);
 
-    console.log('Matches by type:', Object.entries(matchesByType).map(([type, matches]) => ({
-      type,
-      count: matches.length,
-      matches: matches.map(m => ({
-        id: m.id,
-        name: m.name,
-        similarity: m.similarity
-      }))
-    })));
+    // Log matches found
+    if (sessionId && matches.length > 0) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        `I've found ${matches.length} relevant matches across roles, profiles, and skills. Analyzing the results...`,
+        'mcp_matches_found'
+      );
+    }
 
-    // Create recommendations from matches
-    const recommendations = matches.map(match => ({
-      type: 'semantic_match',
-      score: match.similarity,
-      semanticScore: match.similarity,
-      summary: match.summary || `Found matching ${match.type}: ${match.name}`,
-      details: {
-        id: match.id,
+    // Sort matches by similarity
+    matches.sort((a, b) => b.similarity - a.similarity);
+
+    // Generate recommendations based on matches
+    recommendations.push(
+      ...matches.map(match => ({
         type: match.type,
-        name: match.name,
-        metadata: match.metadata
-      }
-    }));
-
-    console.log('Generated recommendations:', {
-      count: recommendations.length,
-      samples: recommendations.slice(0, 2).map(r => ({
-        type: r.type,
-        score: r.score,
-        summary: r.summary
+        score: match.similarity,
+        summary: match.summary || `${match.type} match: ${match.name}`,
+        details: match.metadata
       }))
-    });
+    );
 
-    // Generate chat response using both matches and recommendations
+    // Generate insights using ChatGPT
     const chatResponse = await generateGeneralResponse(
       supabase,
-      request.context.lastMessage,
+      context?.lastMessage || '',
       matches,
       recommendations,
-      request.sessionId
+      sessionId
     );
+
+    // Log the final AI response to chat
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        chatResponse.response,
+        'mcp_final_response',
+        undefined,
+        {
+          matches: matches.slice(0, 5),
+          recommendations: recommendations.slice(0, 3),
+          followUpQuestion: chatResponse.followUpQuestion
+        }
+      );
+    }
+
+    // Log the MCP run
+    await logAgentAction(supabase, {
+      entityType: 'chat',
+      entityId: sessionId || 'general',
+      payload: {
+        action: 'mcp_loop_complete',
+        mode: 'general',
+        matches: matches.slice(0, 10),
+        recommendations: recommendations.slice(0, 5)
+      },
+      semanticMetrics: {
+        similarityScores: {
+          roleMatch: matches.find(m => m.type === 'role')?.similarity,
+          skillAlignment: matches.find(m => m.type === 'skill')?.similarity,
+          capabilityAlignment: matches.find(m => m.type === 'capability')?.similarity
+        },
+        matchingStrategy: 'semantic',
+        confidenceScore: matches.length > 0 ? matches[0].similarity : 0
+      }
+    });
 
     return {
       success: true,
@@ -455,37 +504,34 @@ export async function runGeneralLoop(
         actionsTaken: [
           {
             tool: 'generateEmbedding',
-            reason: 'Generated message embedding for semantic search',
+            reason: 'Processed query embedding for semantic search',
             result: { length: embedding.length },
-            confidence: 1.0,
-            inputs: { message: request.context.lastMessage },
-            timestamp: new Date().toISOString()
-          },
-          {
-            tool: 'getSemanticMatches',
-            reason: 'Retrieved semantic matches across entities',
-            result: { matchCount: matches.length },
             confidence: 0.9,
-            inputs: { entityTypes: ['role', 'job', 'profile', 'division', 'company'] },
+            inputs: { message: context?.lastMessage },
             timestamp: new Date().toISOString()
           },
           {
-            tool: 'createRecommendations',
-            reason: 'Created recommendations from matches',
-            result: { recommendationCount: recommendations.length },
-            confidence: 0.85,
-            inputs: { matches: matches.length },
+            tool: 'semanticSearch',
+            reason: 'Found semantic matches across roles, profiles, and skills',
+            result: { matchCount: matches.length },
+            confidence: matches.length > 0 ? 0.8 : 0.5,
+            inputs: { entityTypes: ['role', 'profile', 'skill'] },
             timestamp: new Date().toISOString()
           },
           {
-            tool: 'generateInsights',
-            reason: 'Generated AI insights from data',
-            result: { hasResponse: !!chatResponse.response },
+            tool: 'generateRecommendations',
+            reason: 'Generated recommendations based on matches',
+            result: { count: recommendations.length },
+            confidence: 0.7,
+            inputs: { matches: matches.slice(0, 5) },
+            timestamp: new Date().toISOString()
+          },
+          {
+            tool: 'completeAnalysis',
+            reason: 'Completed general analysis with insights',
+            result: { success: true },
             confidence: 0.8,
-            inputs: { 
-              matchCount: matches.length,
-              recommendationCount: recommendations.length 
-            },
+            inputs: {},
             timestamp: new Date().toISOString()
           }
         ]
@@ -493,13 +539,24 @@ export async function runGeneralLoop(
     };
 
   } catch (error) {
-    console.error('General analysis error:', error);
+    console.error('Error in general loop:', error);
+
+    // Log error to chat if we have a session
+    if (request.sessionId) {
+      await logAgentResponse(
+        supabase,
+        request.sessionId,
+        "I encountered an error while analyzing your request. Let me know if you'd like to try again.",
+        'mcp_error'
+      );
+    }
+
     return {
       success: false,
       message: error.message,
       error: {
-        type: 'ANALYSIS_ERROR',
-        message: error.message,
+        type: 'PLANNER_ERROR',
+        message: 'Failed to run general loop',
         details: error
       }
     };
