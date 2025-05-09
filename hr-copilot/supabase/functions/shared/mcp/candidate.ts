@@ -26,89 +26,39 @@ async function generateCandidateInsights(
   message?: string
 ): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
   try {
-    // Get top matches and recommendations
-    const topMatches = matches.slice(0, 3);
-    const topRecommendations = recommendations.slice(0, 3);
-
-    // Prepare data for ChatGPT analysis
-    const matchData = topMatches.map(match => {
-      const recommendation = topRecommendations.find(r => 
-        r.details?.roleId === match.id || 
-        r.details?.jobId === match.id
-      );
+    if (!matches || matches.length === 0) {
       return {
-        title: match.name,
-        similarity: match.similarity,
-        summary: match.summary,
-        details: recommendation?.summary || '',
-        score: recommendation?.score || 0
+        response: "No matching opportunities found to analyze.",
+        followUpQuestion: "Would you like to adjust the search criteria?",
+        prompt: "No matches to analyze"
       };
-    });
+    }
 
-    // Collect all skills and capabilities
-    const allSkills = new Set<string>();
-    const allCapabilities = new Set<string>();
-    
-    topRecommendations.forEach(rec => {
-      if (!rec.summary) return;
-      
-      const skillMatch = rec.summary.match(/Strong match in skills: ([^.]+)/);
-      if (skillMatch) {
-        skillMatch[1].split(', ').forEach(s => allSkills.add(s.trim()));
-      }
-      
-      const skillGaps = rec.summary.match(/Skill gaps: ([^.]+)/);
-      if (skillGaps) {
-        skillGaps[1].split(', ').forEach(s => {
-          const skill = s.replace(/\s*\([^)]*\)/, '').trim();
-          allSkills.add(skill);
-        });
-      }
-      
-      const capabilityGaps = rec.summary.match(/Capability gaps: ([^.]+)/);
-      if (capabilityGaps) {
-        capabilityGaps[1].split(', ').forEach(c => {
-          const capability = c.replace(/\s*\([^)]*\)/, '').trim();
-          allCapabilities.add(capability);
-        });
-      }
-    });
-
-    // Prepare the prompt for ChatGPT
+    // Prepare the prompt with raw JSON data
     const prompt = `As an AI career advisor, analyze this candidate's profile and potential opportunities.
 
-CANDIDATE PROFILE
-Name: ${profileData.name || 'Not specified'}
-Current Role: ${profileData.role_title || 'Not specified'}
-Division: ${profileData.division || 'Not specified'}
-Experience Level: ${profileData.experience_level || 'Not specified'}
-Key Skills: ${profileData.skills?.map(s => s.name).join(', ') || 'Not specified'}
-Key Capabilities: ${profileData.capabilities?.map(c => c.name).join(', ') || 'Not specified'}
+Schema hint:
+Profile contains skills, capabilities, experience, and preferences.
+Matches contain roles with similarity scores and skill/capability alignment.
+Recommendations contain specific opportunities with detailed fit analysis.
 
-Available Roles:
-${matchData.map(match => `
-- ${match.title}
-  Match Score: ${(match.score * 100).toFixed(1)}%
-  Similarity: ${(match.similarity * 100).toFixed(1)}%
-  Details: ${match.details}`).join('\n')}
+${message || 'Please analyze the opportunities and provide career recommendations.'}
 
-Skills identified:
-${Array.from(allSkills).map(skill => `- ${skill}`).join('\n')}
+${JSON.stringify({
+  profile: profileData,
+  matches: matches.slice(0, 5),  // Only take top 5 matches
+  recommendations: recommendations.slice(0, 5)  // Only take top 5 recommendations
+}, null, 2)}
 
-Capabilities needed:
-${Array.from(allCapabilities).map(cap => `- ${cap}`).join('\n')}
+Please provide a comprehensive career analysis with the following sections:
 
-${message ? `User's message: ${message}` : ''}
+1. PROFILE OVERVIEW
+2. OPPORTUNITY ANALYSIS
+3. SKILL GAP ASSESSMENT
+4. CAREER PATH RECOMMENDATIONS
+5. NEXT STEPS
 
-Please provide:
-1. A brief overview of how the candidate's profile aligns with these roles
-2. Specific insights about each role's requirements and how they match the candidate's experience
-3. Practical advice on how to leverage existing skills and develop new ones
-4. A relevant follow-up question to help explore further
-
-Keep the tone conversational and focus on actionable insights rather than technical scores.
-Ensure the response is detailed and insightful, highlighting specific aspects of each role.
-If there are skill or capability gaps, provide specific suggestions for addressing them.`;
+Keep the analysis conversational and focused on actionable career development insights.`;
 
     // Call ChatGPT API
     const apiKey = Deno.env.get('OPENAI_API_KEY');
