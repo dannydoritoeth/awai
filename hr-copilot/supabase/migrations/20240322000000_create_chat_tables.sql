@@ -25,6 +25,22 @@ CREATE INDEX idx_conversation_sessions_profile ON conversation_sessions(profile_
 CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
 CREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp);
 
+
+-- Add mode and entity_id columns to conversation_sessions
+ALTER TABLE conversation_sessions
+ADD COLUMN mode text CHECK (mode IN ('candidate', 'hiring', 'general')),
+ADD COLUMN entity_id uuid,
+ADD COLUMN status text DEFAULT 'active';
+
+-- Add index for common queries
+CREATE INDEX idx_conversation_sessions_mode ON conversation_sessions(mode);
+CREATE INDEX idx_conversation_sessions_entity ON conversation_sessions(entity_id);
+
+-- Add foreign key constraints
+ALTER TABLE conversation_sessions
+ADD CONSTRAINT fk_entity_profile FOREIGN KEY (entity_id) REFERENCES profiles(id) ON DELETE CASCADE,
+ADD CONSTRAINT fk_entity_role FOREIGN KEY (entity_id) REFERENCES roles(id) ON DELETE CASCADE; 
+
 -- Add RLS policies
 -- ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;

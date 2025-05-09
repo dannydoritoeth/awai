@@ -16,15 +16,15 @@ declare const Deno: {
  */
 export async function startChatSession(
   supabaseClient: SupabaseClient,
-  entityId: string | null,
-  mode: 'candidate' | 'hiring' | 'general'
+  mode: 'candidate' | 'hiring' | 'general',
+  entityId?: string
 ) {
   try {
     const { data, error } = await supabaseClient
-      .from('chat_sessions')
+      .from('conversation_sessions')
       .insert({
-        entity_id: entityId,
-        mode: mode,
+        mode,
+        entity_id: entityId || null,
         status: 'active'
       })
       .select('id')
@@ -171,6 +171,9 @@ export async function getChatHistory(
         session: {
           id: session.id,
           profileId: session.profile_id,
+          mode: session.mode,
+          entityId: session.entity_id,
+          status: session.status,
           createdAt: session.created_at,
           updatedAt: session.updated_at,
           summary: session.summary

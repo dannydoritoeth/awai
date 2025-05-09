@@ -15,6 +15,9 @@ export interface ChatMessage {
 export interface ConversationSession {
   id: string;
   profileId: string;
+  mode: 'candidate' | 'hiring' | 'general';
+  entityId?: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
   summary?: string;

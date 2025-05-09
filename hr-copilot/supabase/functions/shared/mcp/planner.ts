@@ -47,9 +47,9 @@ const AVAILABLE_ACTIONS = {
     },
     {
       tool: 'getSemanticMatches',
-      description: 'Return semantically similar records',
+      description: 'Find semantically similar entities across the system',
       requiresEmbedding: true,
-      requiresTable: true
+      requiresEntityTypes: true
     },
     {
       tool: 'embedContext',
@@ -126,12 +126,36 @@ const AVAILABLE_ACTIONS = {
       tool: 'handleChatInteraction',
       description: 'Understand and respond to manager input',
       requiresChatContext: true
+    },
+    {
+      tool: 'getSemanticMatches',
+      description: 'Find semantically similar entities across the system',
+      requiresEmbedding: true,
+      requiresEntityTypes: true
+    }
+  ],
+  GENERAL_MODE: [
+    {
+      tool: 'getSemanticMatches',
+      description: 'Find semantically similar entities across the system',
+      requiresEmbedding: true,
+      requiresEntityTypes: true
+    },
+    {
+      tool: 'handleChatInteraction',
+      description: 'Process general chat interactions',
+      requiresChatContext: true
+    },
+    {
+      tool: 'embedContext',
+      description: 'Generate and store an embedding',
+      requiresText: true
     }
   ]
 };
 
 interface PlannerContext {
-  mode: 'candidate' | 'hiring';
+  mode: 'candidate' | 'hiring' | 'general';
   profileId?: string;
   roleId?: string;
   jobId?: string;
@@ -147,7 +171,7 @@ interface PlannerContext {
  */
 async function getAIRecommendations(
   context: PlannerContext,
-  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE
+  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE
 ): Promise<PlannerRecommendation[]> {
   try {
     const systemPrompt = `You are an AI career planning assistant that helps select the most appropriate actions to take based on user context and available tools.
@@ -228,7 +252,7 @@ Please select the most appropriate tools to use based on this context.`;
  */
 function validateRecommendation(
   recommendation: any,
-  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE
+  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE
 ): PlannerRecommendation {
   const actionDef = availableActions.find(a => a.tool === recommendation.tool);
   if (!actionDef) {
@@ -318,15 +342,17 @@ export async function getPlannerRecommendation(
     const { mode } = context;
     const availableActions = mode === 'candidate' 
       ? AVAILABLE_ACTIONS.CANDIDATE_MODE 
-      : AVAILABLE_ACTIONS.HIRING_MODE;
+      : mode === 'hiring' 
+        ? AVAILABLE_ACTIONS.HIRING_MODE 
+        : AVAILABLE_ACTIONS.GENERAL_MODE;
 
     // Get recommendations from AI
     const recommendations = await getAIRecommendations(context, availableActions);
 
     // Log the planner's recommendations
     await logAgentAction(supabase, {
-      entityType: mode === 'candidate' ? 'profile' : 'role',
-      entityId: mode === 'candidate' ? context.profileId! : context.roleId!,
+      entityType: mode === 'candidate' ? 'profile' : mode === 'hiring' ? 'role' : 'general',
+      entityId: mode === 'candidate' ? context.profileId! : mode === 'hiring' ? context.roleId! : 'general',
       payload: {
         action: 'planner_recommendation',
         recommendations,

@@ -4,6 +4,7 @@ import { corsHeaders } from '../shared/cors.ts';
 import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
+import { runGeneralLoop } from '../shared/mcp/general.ts';
 import { handleChatInteraction } from '../shared/chatUtils.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
@@ -49,27 +50,27 @@ serve(async (req) => {
 
     // Check retry count
     if (getRetryCount(sessionId) >= MAX_RETRIES) {
-      clearRetryCount(sessionId); // Reset for next attempt
+      clearRetryCount(sessionId);
       throw new Error('Max retries exceeded. Please try again later.');
     }
 
-    // Validate required fields
+    // Validate mode
     if (!request.mode) {
       throw new Error('Mode is required');
     }
 
+    // Validate IDs based on mode
     if (request.mode === 'candidate' && !request.profileId) {
       throw new Error('Profile ID is required for candidate mode');
     }
-
     if (request.mode === 'hiring' && !request.roleId) {
       throw new Error('Role ID is required for hiring mode');
     }
 
-    // Check and create embeddings if needed
+    // Check and create embeddings if needed for non-general modes
     try {
       if (request.mode === 'candidate' && request.profileId) {
-        const { data: profile, error } = await supabaseClient
+        const { data: profile } = await supabaseClient
           .from('profiles')
           .select('embedding')
           .eq('id', request.profileId)
@@ -85,7 +86,7 @@ serve(async (req) => {
       }
 
       if (request.mode === 'hiring' && request.roleId) {
-        const { data: role, error } = await supabaseClient
+        const { data: role } = await supabaseClient
           .from('roles')
           .select('embedding')
           .eq('id', request.roleId)
@@ -123,19 +124,21 @@ serve(async (req) => {
         plannerRecommendations = recommendations;
 
         // Log planner decision for transparency
-        await logAgentAction(supabaseClient, {
-          entityType: request.mode === 'candidate' ? 'profile' : 'role',
-          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-          payload: {
-            action: 'planner_decision',
-            message: request.context.lastMessage,
-            recommendations
-          }
-        });
+        if (request.mode !== 'general') {
+          await logAgentAction(supabaseClient, {
+            entityType: request.mode === 'candidate' ? 'profile' : 'role',
+            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+            payload: {
+              action: 'planner_decision',
+              message: request.context.lastMessage,
+              recommendations
+            }
+          });
+        }
 
       } catch (error) {
         console.error('Planner error:', error);
-        // Provide fallback recommendations if planner fails
+        // Provide mode-specific fallback recommendations
         plannerRecommendations = request.mode === 'candidate' ? 
           [{ 
             tool: 'getSuggestedCareerPaths',
@@ -143,11 +146,18 @@ serve(async (req) => {
             confidence: 0.7,
             inputs: { profileId: request.profileId }
           }] : 
+          request.mode === 'hiring' ?
           [{
             tool: 'getMatchingProfiles',
             reason: 'Fallback profile matching',
             confidence: 0.7,
             inputs: { roleId: request.roleId }
+          }] :
+          [{
+            tool: 'analyzeSkillsAndCapabilities',
+            reason: 'Fallback general analysis',
+            confidence: 0.7,
+            inputs: {}
           }];
       }
     }
@@ -155,16 +165,27 @@ serve(async (req) => {
     // Run the appropriate loop based on mode
     let response: MCPResponse;
     try {
-      if (request.mode === 'candidate') {
-        response = await runCandidateLoop(supabaseClient, {
-          ...request,
-          plannerRecommendations
-        });
-      } else {
-        response = await runHiringLoop(supabaseClient, {
-          ...request,
-          plannerRecommendations
-        });
+      switch (request.mode) {
+        case 'candidate':
+          response = await runCandidateLoop(supabaseClient, {
+            ...request,
+            plannerRecommendations
+          });
+          break;
+        case 'hiring':
+          response = await runHiringLoop(supabaseClient, {
+            ...request,
+            plannerRecommendations
+          });
+          break;
+        case 'general':
+          response = await runGeneralLoop(supabaseClient, {
+            ...request,
+            plannerRecommendations
+          });
+          break;
+        default:
+          throw new Error(`Unsupported mode: ${request.mode}`);
       }
 
       // Clear retry count on success
@@ -195,8 +216,8 @@ serve(async (req) => {
       });
     }
 
-    // Log the actions taken
-    if (response.success && response.data?.actionsTaken) {
+    // Log the actions taken for non-general modes
+    if (response.success && response.data?.actionsTaken && request.mode !== 'general') {
       for (const action of response.data.actionsTaken) {
         await logAgentAction(supabaseClient, {
           entityType: request.mode === 'candidate' ? 'profile' : 'role',
@@ -206,9 +227,7 @@ serve(async (req) => {
             reason: action.reason,
             inputs: action.inputs,
             result: action.result
-          },
-          confidenceScore: action.confidence || 0.8,
-          semanticMetrics: response.data.semanticMetrics
+          }
         });
       }
     }
@@ -225,11 +244,11 @@ serve(async (req) => {
             profileId: request.profileId,
             roleId: request.roleId,
             actionsTaken: response.data?.actionsTaken || [],
-            candidateContext: {
+            candidateContext: request.mode === 'candidate' ? {
               matches: response.data?.matches || [],
               recommendations: response.data?.recommendations || [],
               nextActions: response.data?.nextActions
-            }
+            } : undefined
           }
         );
 

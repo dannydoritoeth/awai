@@ -26,10 +26,12 @@ async function callMCPLoop(sessionId: string, message: string, mode: 'candidate'
     body: JSON.stringify({
       mode,
       sessionId,
-      ...(mode === 'candidate' ? { profileId: entityId } : {}),
-      ...(mode === 'hiring' ? { roleId: entityId } : {}),
+      // Only include profileId/roleId if not in general mode
+      ...(mode === 'candidate' && entityId ? { profileId: entityId } : {}),
+      ...(mode === 'hiring' && entityId ? { roleId: entityId } : {}),
       context: {
-        lastMessage: message
+        lastMessage: message,
+        mode // Include mode in context to ensure proper handling
       }
     })
   });
@@ -50,6 +52,7 @@ serve(async (req) => {
 
   try {
     const { action, sessionId, message, profileId, roleId } = await req.json();
+    console.log('Received request:', { action, sessionId, message, profileId, roleId });
 
     // Validate required fields
     if (!action) {
@@ -58,13 +61,15 @@ serve(async (req) => {
 
     switch (action) {
       case 'startSession': {
+        console.log('Starting new session with params:', { profileId, roleId, message });
+        
         // Allow starting a general session with no IDs
         if (profileId && roleId) {
           throw new Error('Cannot provide both Profile ID and Role ID - choose one mode');
         }
 
         let mode: 'candidate' | 'hiring' | 'general';
-        let entityId: string | null = null;
+        let entityId: string | undefined;
 
         if (profileId) {
           mode = 'candidate';
@@ -76,22 +81,97 @@ serve(async (req) => {
           mode = 'general';
         }
 
-        const { sessionId: newSessionId, error: startError } = await startChatSession(
-          supabaseClient,
-          entityId,
-          mode
-        );
-        if (startError) throw startError;
-        
-        return new Response(
-          JSON.stringify({ 
+        console.log('Determined mode and entityId:', { mode, entityId });
+
+        try {
+          // Start the chat session
+          const { sessionId: newSessionId, error: startError } = await startChatSession(
+            supabaseClient,
+            mode,
+            entityId
+          );
+          
+          console.log('Chat session created:', { newSessionId, startError });
+          
+          if (startError) {
+            console.error('Failed to start chat session:', startError);
+            throw startError;
+          }
+
+          if (!newSessionId) {
+            throw new Error('Failed to create session - no session ID returned');
+          }
+
+          let initialResponse;
+          // If there's an initial message, process it
+          if (message) {
+            console.log('Processing initial message:', message);
+            
+            try {
+              // Save the user's message
+              const { messageId, error: postError } = await postUserMessage(
+                supabaseClient,
+                newSessionId,
+                message
+              );
+              if (postError) throw postError;
+
+              console.log('User message posted:', { messageId });
+
+              // Process through MCP loop
+              const mcpResult = await callMCPLoop(
+                newSessionId,
+                message,
+                mode,
+                entityId
+              );
+              
+              console.log('MCP loop result:', mcpResult);
+
+              if (!mcpResult.success || !mcpResult.data?.chatResponse) {
+                throw new Error('Failed to get response from MCP loop');
+              }
+
+              // Log assistant's reply
+              const { error: replyError } = await logAgentResponse(
+                supabaseClient,
+                newSessionId,
+                mcpResult.data.chatResponse.message
+              );
+              if (replyError) throw replyError;
+
+              initialResponse = {
+                messageId,
+                reply: mcpResult.data.chatResponse.message,
+                followUpQuestion: mcpResult.data.chatResponse.followUpQuestion
+              };
+
+              console.log('Initial response prepared:', initialResponse);
+            } catch (error) {
+              console.error('Error processing initial message:', error);
+              throw new Error(`Failed to process initial message: ${error.message}`);
+            }
+          }
+          
+          const response = {
             sessionId: newSessionId,
             mode,
-            entityId 
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
+            entityId,
+            ...(initialResponse && { initialResponse })
+          };
+
+          console.log('Sending successful response:', response);
+
+          return new Response(
+            JSON.stringify(response), 
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        } catch (error) {
+          console.error('Error in startSession:', error);
+          throw new Error(`Failed to start chat session: ${error.message}`);
+        }
       }
 
       case 'postMessage': {
@@ -105,7 +185,7 @@ serve(async (req) => {
 
         // Get session details to determine mode and entity ID
         const { data: session, error: sessionError } = await supabaseClient
-          .from('chat_sessions')
+          .from('conversation_sessions')
           .select('mode, entity_id')
           .eq('id', sessionId)
           .single();
@@ -176,7 +256,7 @@ serve(async (req) => {
     
     const chatError: ChatError = {
       type: error.type || 'INTERNAL_ERROR',
-      message: error.message,
+      message: error.message || 'An unexpected error occurred',
       details: error
     };
 
