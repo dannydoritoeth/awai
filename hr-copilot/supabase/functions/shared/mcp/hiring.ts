@@ -254,64 +254,19 @@ async function generateHiringInsights(
       };
     }
 
-    const topMatches = matches.slice(0, 5);
+    // Prepare the prompt with raw JSON data
+    const prompt = `As a hiring advisor, analyze the following role and candidates.
 
-    // Calculate aggregate statistics for candidate pool
-    const avgScore = topMatches.reduce((sum, m) => sum + (m.score || 0), 0) / topMatches.length;
-    const avgCapabilityMatch = topMatches.reduce((sum, m) => {
-      const matched = m.details?.capabilities?.matched?.length || 0;
-      const total = matched + 
-        (m.details?.capabilities?.missing?.length || 0) + 
-        (m.details?.capabilities?.insufficient?.length || 0);
-      return sum + (total > 0 ? (matched / total) * 100 : 0);
-    }, 0) / topMatches.length;
+Schema hint:
+Role contains title, purpose, capabilities (focus/complementary), skills (level + years).
+Each candidate contains name, scores, matched/missing skills and capabilities.
 
-    // Prepare the prompt for ChatGPT
-    const prompt = `As a hiring advisor, provide a detailed analysis for the hiring manager.
+${message || 'Please analyze the candidates for this role and provide hiring recommendations.'}
 
-ROLE DETAILS
-Title: ${roleData.title || 'Not specified'}
-Grade Band: ${roleData.gradeBand || 'Not specified'}
-Location: ${roleData.location || 'Not specified'}
-Division: ${roleData.divisionId || 'Not specified'}
-
-Primary Purpose:
-${roleData.primaryPurpose || 'Not specified'}
-
-Reporting Structure:
-- Reports to: ${roleData.reportingLine || 'Not specified'}
-- Direct Reports: ${roleData.directReports || 'None'}
-- Budget Responsibility: ${roleData.budgetResponsibility || 'None'}
-
-Required Capabilities:
-${roleData.capabilities?.map(c => 
-  `- ${c.name} (Level ${c.required_level})${c.capabilityType ? ` [${c.capabilityType}]` : ''}`
-).join('\n') || 'None specified'}
-
-Required Skills:
-${roleData.skills?.map(s => 
-  `- ${s.name} (Level ${s.required_level}, ${s.required_years}+ years)`
-).join('\n') || 'None specified'}
-
-CANDIDATE POOL METRICS
-- Number of Candidates: ${topMatches.length}
-- Average Match Score: ${avgScore.toFixed(1)}%
-- Average Capability Alignment: ${avgCapabilityMatch.toFixed(1)}%
-
-TOP CANDIDATES:
-${topMatches?.map(match => `
-Candidate: ${match.name || 'Anonymous'}
-Overall Match: ${((match.score || 0) * 100).toFixed(1)}%
-Strong Areas:
-- Capabilities: ${match.details?.capabilities?.matched?.join(', ') || 'None'}
-- Skills: ${match.details?.skills?.matched?.join(', ') || 'None'}
-Development Areas:
-- Missing Capabilities: ${match.details?.capabilities?.missing?.join(', ') || 'None'}
-- Missing Skills: ${match.details?.skills?.missing?.join(', ') || 'None'}
-- Insufficient Capabilities: ${match.details?.capabilities?.insufficient?.join(', ') || 'None'}
-- Insufficient Skills: ${match.details?.skills?.insufficient?.join(', ') || 'None'}`).join('\n')}
-
-${message ? `Additional Context: ${message}` : ''}
+${JSON.stringify({ 
+  role: roleData, 
+  candidates: matches.slice(0, 5)  // Only take top 5 candidates
+}, null, 2)}
 
 Please provide a comprehensive hiring analysis with the following sections:
 
@@ -363,7 +318,6 @@ Keep the analysis objective and data-driven, focusing on actionable insights for
       throw new Error('Invalid response format from OpenAI API');
     }
 
-    // Generate a relevant follow-up question
     return {
       response: chatResponse,
       followUpQuestion: "Would you like to focus on any specific aspects of these candidates?",
