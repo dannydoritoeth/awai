@@ -1,10 +1,22 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
-import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
+import { 
+  MCPResponse, 
+  BaseMCPResponse,
+  HiringMCPResponse,
+  CandidateMCPResponse
+} from '../shared/types/mcpTypes.ts';
+import {
+  findCandidateMatches,
+  findRoleMatches,
+  generateChatResponse,
+  generateRecommendations,
+  determineNextActions
+} from '../shared/mcp/matchingUtils.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
-import { handleChatInteraction } from '../shared/chatUtils.ts';
+import { runGeneralLoop } from '../shared/mcp/general.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
@@ -38,22 +50,15 @@ function clearRetryCount(sessionId: string): void {
 }
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const request: MCPRequest = await req.json();
-    const sessionId = request.sessionId || 'default';
+    const request = await req.json();
+    console.log('MCP Loop Request:', request);
 
-    // Check retry count
-    if (getRetryCount(sessionId) >= MAX_RETRIES) {
-      clearRetryCount(sessionId); // Reset for next attempt
-      throw new Error('Max retries exceeded. Please try again later.');
-    }
-
-    // Validate required fields
+    // Validate request
     if (!request.mode) {
       throw new Error('Mode is required');
     }
@@ -66,50 +71,21 @@ serve(async (req) => {
       throw new Error('Role ID is required for hiring mode');
     }
 
-    // Check and create embeddings if needed
-    try {
-      if (request.mode === 'candidate' && request.profileId) {
-        const { data: profile, error } = await supabaseClient
-          .from('profiles')
-          .select('embedding')
-          .eq('id', request.profileId)
-          .single();
-
-        if (!profile?.embedding) {
-          console.log('Creating profile embedding...');
-          const success = await embedContext(supabaseClient, 'profile', request.profileId);
-          if (!success) {
-            throw new Error('Failed to create profile embedding');
-          }
-        }
+    // Track retries if session ID provided
+    if (request.sessionId) {
+      const retryCount = getRetryCount(request.sessionId);
+      if (retryCount >= MAX_RETRIES) {
+        throw new Error('Maximum retry attempts exceeded');
       }
-
-      if (request.mode === 'hiring' && request.roleId) {
-        const { data: role, error } = await supabaseClient
-          .from('roles')
-          .select('embedding')
-          .eq('id', request.roleId)
-          .single();
-
-        if (!role?.embedding) {
-          console.log('Creating role embedding...');
-          const success = await embedContext(supabaseClient, 'role', request.roleId);
-          if (!success) {
-            throw new Error('Failed to create role embedding');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Embedding creation error:', error);
-      throw new Error(`Failed to ensure embeddings: ${error.message}`);
+      incrementRetryCount(request.sessionId);
     }
 
-    // Get AI planner recommendations if there's a message
+    // Get planner recommendations if message provided
     let plannerRecommendations = [];
     if (request.context?.lastMessage) {
       console.log('Getting planner recommendations...');
       try {
-        const recommendations = await getPlannerRecommendation(
+        plannerRecommendations = await getPlannerRecommendation(
           supabaseClient,
           {
             mode: request.mode,
@@ -119,23 +95,9 @@ serve(async (req) => {
             semanticContext: request.context.semanticContext
           }
         );
-        
-        plannerRecommendations = recommendations;
-
-        // Log planner decision for transparency
-        await logAgentAction(supabaseClient, {
-          entityType: request.mode === 'candidate' ? 'profile' : 'role',
-          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-          payload: {
-            action: 'planner_decision',
-            message: request.context.lastMessage,
-            recommendations
-          }
-        });
-
       } catch (error) {
         console.error('Planner error:', error);
-        // Provide fallback recommendations if planner fails
+        // Provide mode-specific fallback recommendations
         plannerRecommendations = request.mode === 'candidate' ? 
           [{ 
             tool: 'getSuggestedCareerPaths',
@@ -143,116 +105,107 @@ serve(async (req) => {
             confidence: 0.7,
             inputs: { profileId: request.profileId }
           }] : 
+          request.mode === 'hiring' ?
           [{
             tool: 'getMatchingProfiles',
             reason: 'Fallback profile matching',
             confidence: 0.7,
             inputs: { roleId: request.roleId }
+          }] :
+          [{
+            tool: 'analyzeSkillsAndCapabilities',
+            reason: 'Fallback general analysis',
+            confidence: 0.7,
+            inputs: {}
           }];
       }
     }
 
     // Run the appropriate loop based on mode
+    let mcpResult;
+    switch (request.mode) {
+      case 'candidate':
+        mcpResult = await runCandidateLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      case 'hiring':
+        mcpResult = await runHiringLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      case 'general':
+        mcpResult = await runGeneralLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      default:
+        throw new Error(`Unsupported mode: ${request.mode}`);
+    }
+
+    // Format response using our new structure
+    const baseResponse: BaseMCPResponse = {
+      success: true,
+      data: {
+        matches: mcpResult.data?.matches || [],
+        recommendations: mcpResult.data?.recommendations || [],
+        chatResponse: mcpResult.data?.chatResponse || {
+          message: 'No response generated',
+          followUpQuestion: 'Would you like to try a different approach?'
+        },
+        nextActions: mcpResult.data?.nextActions || [],
+        actionsTaken: [
+          ...(mcpResult.data?.actionsTaken || []),
+          'Retrieved planner recommendations',
+          `Executed ${request.mode} mode processing`,
+          'Applied response formatting'
+        ]
+      }
+    };
+
+    // Add mode-specific data
     let response: MCPResponse;
-    try {
-      if (request.mode === 'candidate') {
-        response = await runCandidateLoop(supabaseClient, {
-          ...request,
-          plannerRecommendations
-        });
-      } else {
-        response = await runHiringLoop(supabaseClient, {
-          ...request,
-          plannerRecommendations
-        });
-      }
-
-      // Clear retry count on success
-      clearRetryCount(sessionId);
-
-    } catch (error) {
-      console.error(`${request.mode} loop error:`, error);
-      incrementRetryCount(sessionId);
-      
-      // If we haven't exceeded retries, throw to trigger retry
-      if (getRetryCount(sessionId) < MAX_RETRIES) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-        throw error;
-      }
-      
-      // If we've exceeded retries, return a failure response
-      return new Response(JSON.stringify({
-        success: false,
-        message: `Failed to complete ${request.mode} loop after ${MAX_RETRIES} attempts`,
-        error: {
-          type: 'LOOP_ERROR',
-          message: error.message,
-          details: error
-        }
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    if (request.mode === 'hiring') {
+      response = mcpResult as HiringMCPResponse;
+    } else if (request.mode === 'candidate') {
+      response = mcpResult as CandidateMCPResponse;
+    } else {
+      response = baseResponse;
     }
 
-    // Log the actions taken
-    if (response.success && response.data?.actionsTaken) {
+    // Log actions for non-general modes
+    if (response.success && response.data?.actionsTaken && request.mode !== 'general') {
       for (const action of response.data.actionsTaken) {
-        await logAgentAction(supabaseClient, {
-          entityType: request.mode === 'candidate' ? 'profile' : 'role',
-          entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-          payload: {
-            action: action.tool,
-            reason: action.reason,
-            inputs: action.inputs,
-            result: action.result
-          },
-          confidenceScore: action.confidence || 0.8,
-          semanticMetrics: response.data.semanticMetrics
-        });
+        if (typeof action === 'string') {
+          await logAgentAction(supabaseClient, {
+            entityType: request.mode === 'candidate' ? 'profile' : 'role',
+            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+            payload: {
+              action,
+              reason: 'MCP Processing Step',
+              result: null
+            }
+          });
+        } else {
+          await logAgentAction(supabaseClient, {
+            entityType: request.mode === 'candidate' ? 'profile' : 'role',
+            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+            payload: {
+              action: action.tool,
+              reason: action.reason,
+              result: action.result
+            }
+          });
+        }
       }
     }
 
-    // Handle chat interaction if there's a message
-    if (request.context?.lastMessage) {
-      try {
-        const chatResponse = await handleChatInteraction(
-          supabaseClient,
-          request.sessionId,
-          request.context.lastMessage,
-          {
-            mode: request.mode,
-            profileId: request.profileId,
-            roleId: request.roleId,
-            actionsTaken: response.data?.actionsTaken || [],
-            candidateContext: {
-              matches: response.data?.matches || [],
-              recommendations: response.data?.recommendations || [],
-              nextActions: response.data?.nextActions
-            }
-          }
-        );
-
-        // Include chat response in the final response
-        response.data = {
-          ...response.data,
-          chatResponse: {
-            message: chatResponse.response,
-            followUpQuestion: chatResponse.followUpQuestion
-          }
-        };
-
-      } catch (error) {
-        console.error('Chat interaction error:', error);
-        // Include a fallback response if chat generation fails
-        response.data = {
-          ...response.data,
-          chatResponse: {
-            message: "I processed your request but encountered an error generating a detailed response. Please try again.",
-            followUpQuestion: null
-          }
-        };
-      }
+    // Clear retry count on success
+    if (request.sessionId) {
+      clearRetryCount(request.sessionId);
     }
 
     return new Response(JSON.stringify(response), {
@@ -260,20 +213,12 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('MCP Loop Error:', error);
-    
-    const response: MCPResponse = {
+    console.error('Error in MCP loop:', error);
+    return new Response(JSON.stringify({
       success: false,
-      message: error.message,
-      error: {
-        type: error.type || 'INTERNAL_ERROR',
-        message: error.message,
-        details: error
-      }
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: error.type === 'VALIDATION_ERROR' ? 400 : 500,
+      error: error.message
+    }), {
+      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }

@@ -2,7 +2,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { SemanticMetrics } from '../embeddings.ts';
 
-export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division';
+export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division' | 'chat';
 
 export interface AgentAction {
   entityType: EntityType;

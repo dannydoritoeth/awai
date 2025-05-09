@@ -1,0 +1,17 @@
+MCP-LOOP Response Data 
+ - All: matches, recommendations, chatResponse, actionsTaken, nextActions, aiPrompt
+ - Hiring: role
+ - Candidate: profile
+ - General: <all>
+
+
+Hiring mcp-loop data 
+ - missing chatResponse
+ - empty actionsTaken
+
+Candidate mcp-loop data 
+ - missing profileData
+ - missing actionsTaken
+
+General mcp-loop data
+ - missing actionsTaken

@@ -14,15 +14,129 @@ import { getProfileData } from '../profile/getProfileData.ts';
 import { getRolesData } from '../role/getRoleData.ts';
 import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
 import { testJobMatching } from '../job/testJobMatching.ts';
+import { logAgentResponse } from '../chatUtils.ts';
+
+/**
+ * Generate candidate insights using ChatGPT
+ */
+async function generateCandidateInsights(
+  matches: SemanticMatch[],
+  recommendations: any[],
+  profileData: any,
+  message?: string
+): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
+  try {
+    if (!matches || matches.length === 0) {
+      return {
+        response: "No matching opportunities found to analyze.",
+        followUpQuestion: "Would you like to adjust the search criteria?",
+        prompt: "No matches to analyze"
+      };
+    }
+
+    // Prepare the prompt with raw JSON data
+    const prompt = `As an AI career advisor, analyze this candidate's profile and potential opportunities.
+
+Schema hint:
+Profile contains skills, capabilities, experience, and preferences.
+Matches contain roles with similarity scores and skill/capability alignment.
+Recommendations contain specific opportunities with detailed fit analysis.
+
+${message || 'Please analyze the opportunities and provide career recommendations.'}
+
+${JSON.stringify({
+  profile: profileData,
+  matches: matches.slice(0, 5),  // Only take top 5 matches
+  recommendations: recommendations.slice(0, 5)  // Only take top 5 recommendations
+}, null, 2)}
+
+Please provide a comprehensive career analysis with the following sections:
+
+1. PROFILE OVERVIEW
+2. OPPORTUNITY ANALYSIS
+3. SKILL GAP ASSESSMENT
+4. CAREER PATH RECOMMENDATIONS
+5. NEXT STEPS
+
+Keep the analysis conversational and focused on actionable career development insights.`;
+
+    // Call ChatGPT API
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`ChatGPT API error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from ChatGPT API');
+    }
+
+    const chatResponse = data.choices[0].message.content;
+
+    // Split response into main content and follow-up question
+    const parts = chatResponse.split(/\n\nFollow-up question:/i);
+    return {
+      response: parts[0].trim(),
+      followUpQuestion: parts[1]?.trim(),
+      prompt
+    };
+
+  } catch (error) {
+    console.error('Error generating candidate insights:', error);
+    return {
+      response: 'I encountered an error while analyzing the opportunities. Please try again or contact support if the issue persists.',
+      followUpQuestion: 'Would you like me to focus on specific aspects of your career interests?',
+      prompt: 'Error occurred while generating prompt'
+    };
+  }
+}
 
 export async function runCandidateLoop(
   supabase: SupabaseClient<Database>,
   request: MCPRequest
 ): Promise<MCPResponse> {
   try {
-    const { profileId, context } = request;
+    const { profileId, context, sessionId } = request;
     const matches: SemanticMatch[] = [];
     const recommendations: any[] = [];
+
+    // Log starting analysis
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I'm analyzing your profile and finding the best role matches for your skills...",
+        'mcp_analysis_start'
+      );
+    }
 
     // Get profile context with embedding
     const profileContext = await getProfileContext(supabase, profileId!);
@@ -30,64 +144,21 @@ export async function runCandidateLoop(
       throw new Error(`Failed to get profile context: ${profileContext.error.message}`);
     }
 
-    // Get career path suggestions using semantic matching
-    // const careerPaths = await getSuggestedCareerPaths(supabase, profileId!);
-    // if (!careerPaths.error && careerPaths.data) {
-    //   for (const path of careerPaths.data) {
-    //     const roleDetail = await getRoleDetail(supabase, path.target_role.id);
-    //     if (roleDetail.error) continue;
+    // Get profile data
+    const profileData = await getProfileData(supabase, profileId!);
+    if (!profileData) {
+      throw new Error('Failed to get profile data');
+    }
 
-    //     // Get semantic matches for capabilities and skills using profile ID
-    //     const capabilityMatches = await getSemanticMatches(
-    //       supabase,
-    //       profileId!, // Use profile ID instead of embedding
-    //       'capabilities',
-    //       5
-    //     );
-
-    //     const skillMatches = await getSemanticMatches(
-    //       supabase,
-    //       profileId!, // Use profile ID instead of embedding
-    //       'skills',
-    //       5
-    //     );
-
-    //     // Get traditional gap analysis
-    //     const gaps = await getCapabilityGaps(supabase, profileId!, path.target_role.id);
-    //     const skillGaps = await getSkillGaps(supabase, profileId!, path.target_role.id);
-
-    //     // Combine semantic and traditional matches
-    //     matches.push(
-    //       ...capabilityMatches.map(match => ({
-    //         id: match.entityId,
-    //         similarity: match.similarity,
-    //         type: 'capability' as const,
-    //         metadata: { roleId: path.target_role.id }
-    //       })),
-    //       ...skillMatches.map(match => ({
-    //         id: match.entityId,
-    //         similarity: match.similarity,
-    //         type: 'skill' as const,
-    //         metadata: { roleId: path.target_role.id }
-    //       }))
-    //     );
-
-    //     recommendations.push({
-    //       type: 'career_path',
-    //       score: path.popularity_score || 0,
-    //       semanticScore: (capabilityMatches[0]?.similarity || 0 + skillMatches[0]?.similarity || 0) / 2,
-    //       summary: `Career path to ${path.target_role.title}`,
-    //       details: {
-    //         capabilityGaps: gaps.data?.length || 0,
-    //         skillGaps: skillGaps.data?.length || 0,
-    //         semanticMatches: {
-    //           capabilities: capabilityMatches.length,
-    //           skills: skillMatches.length
-    //         }
-    //       }
-    //     });
-    //   }
-    // }
+    // Log profile data loaded
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I've loaded your profile data and am now looking for matching opportunities...",
+        'mcp_data_loaded'
+      );
+    }
 
     // Get open jobs with semantic matching
     const jobMatchingResult = await testJobMatching(supabase, profileId!, {
@@ -116,6 +187,16 @@ export async function runCandidateLoop(
           title: match.jobTitle
         }
       })));
+
+      // Log matches found
+      if (sessionId) {
+        await logAgentResponse(
+          supabase,
+          sessionId,
+          `I've found ${matches.length} potential role matches. Analyzing them in detail...`,
+          'mcp_matches_found'
+        );
+      }
     }
 
     // Sort recommendations by combined score
@@ -124,6 +205,30 @@ export async function runCandidateLoop(
       const scoreB = (b.score * 0.4) + (b.semanticScore * 0.6);
       return scoreB - scoreA;
     });
+
+    // Generate insights using ChatGPT
+    const chatResponse = await generateCandidateInsights(
+      matches,
+      recommendations,
+      profileData,
+      context?.lastMessage
+    );
+
+    // Log the final AI response to chat
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        chatResponse.response,
+        'mcp_final_response',
+        undefined,
+        {
+          matches: matches.slice(0, 5),
+          recommendations: recommendations.slice(0, 3),
+          followUpQuestion: chatResponse.followUpQuestion
+        }
+      );
+    }
 
     // Log the MCP run
     await logAgentAction(supabase, {
@@ -146,21 +251,44 @@ export async function runCandidateLoop(
       }
     });
 
+    // Return CandidateMCPResponse with profile data included
     return {
       success: true,
       message: 'Candidate loop completed successfully',
       data: {
         matches: matches.slice(0, 10),
         recommendations: recommendations.slice(0, 5),
+        chatResponse: {
+          message: chatResponse.response,
+          followUpQuestion: chatResponse.followUpQuestion,
+          aiPrompt: chatResponse.prompt
+        },
         nextActions: [
           'Review suggested career paths',
           'Explore job opportunities',
           'Focus on closing identified skill gaps'
-        ]
+        ],
+        actionsTaken: [
+          'Retrieved profile data',
+          'Analyzed skill matches',
+          'Generated career recommendations',
+          'Completed candidate analysis'
+        ],
+        profile: profileData
       }
-    };
+    } as CandidateMCPResponse;
 
   } catch (error) {
+    // Log error to chat if we have a session
+    if (request.sessionId) {
+      await logAgentResponse(
+        supabase,
+        request.sessionId,
+        "I encountered an error while analyzing your profile. Let me know if you'd like to try again.",
+        'mcp_error'
+      );
+    }
+
     return {
       success: false,
       message: error.message,

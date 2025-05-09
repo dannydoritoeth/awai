@@ -1,0 +1,58 @@
+// 🛠 Cursor Work Request: getSemanticMatches (Multi-Entity Semantic Search)
+
+// Objective:
+// Implement a unified function to perform semantic similarity search across multiple entity types
+// (roles, jobs, profiles, divisions, companies), with optional filtering by `companyId` and metadata.
+// This supports general-purpose exploration, AI planning, and cross-entity analysis.
+
+// ✅ Function Signature:
+getSemanticMatches({
+  embedding: number[],
+  entityTypes: ('role' | 'job' | 'profile' | 'division' | 'company')[],
+  companyId?: string,                      // Optional — filter by owning company (e.g. NSW, DCCEEW)
+  filters?: Record<string, string>,       // Optional — e.g. cluster, location
+  limit?: number,                          // Total result cap (default: 10)
+  perTypeLimit?: number,                   // Optional max results per entity type
+  minScore?: number                        // Optional cosine similarity cutoff (default: 0.7)
+}): Promise<SemanticMatch[]>
+
+// ✅ Return Type:
+type SemanticMatch = {
+  entityId: string,
+  entityType: 'role' | 'job' | 'profile' | 'division' | 'company',
+  similarity: number,
+  metadata?: Record<string, any> // e.g. title, location, division name
+}
+
+// ✅ What It Should Do:
+
+// 1. Accept a query embedding and entity types to search (e.g. ['role', 'profile'])
+// 2. For each entity type:
+//    - Run a cosine similarity search using pgvector
+//    - Optionally filter by `companyId` (e.g. where company_id = $1)
+//    - Apply any additional metadata filters
+// 3. Rank and return top matches by similarity
+// 4. Include metadata for synthesis (e.g. title, agency, cluster)
+
+// ✅ Example Use Cases:
+
+// • “Find roles like this one within DCCEEW”
+// • “Who at Company X has a similar skill profile?”
+// • “What jobs align with this compliance-themed question?”
+// • “Show me similar divisions to Water & Policy Strategy”
+
+// ✅ Requirements:
+
+// Each relevant table (roles, jobs, etc.) must have:
+// - `embedding vector`
+// - `company_id uuid`
+// - `title/name`
+// - `id`
+
+// ✅ Technical Notes:
+
+// - Use ivfflat index for each embedding column
+// - Build response using a common interface for planner use
+// - Limit I/O: use `perTypeLimit` to avoid over-fetching
+// - Filter by `companyId` using `WHERE company_id = $1` if provided
+

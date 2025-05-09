@@ -1,11 +1,14 @@
 import { ChatMessage } from './chatTypes.ts';
 
-export type MCPMode = 'candidate' | 'hiring';
+export type MCPMode = 'candidate' | 'hiring' | 'general';
+
+export type EntityType = 'profile' | 'role' | 'job' | 'general' | 'division' | 'company' | 'chat';
 
 export interface SemanticMatch {
   id: string;
+  matchId?: string;
   similarity: number;
-  type: 'role' | 'skill' | 'capability' | 'company';
+  type: 'profile' | 'role' | 'skill' | 'capability' | 'company';
   name: string;
   summary?: string;
   metadata?: Record<string, any>;
@@ -41,6 +44,7 @@ export interface MCPAction {
 export interface MCPRequest {
   profileId?: string;
   roleId?: string;
+  companyId?: string;
   mode: MCPMode;
   sessionId?: string;
   context?: MCPContext;
@@ -72,4 +76,14 @@ export interface MCPState {
   context: MCPContext;
   lastAction?: MCPAction;
   history: MCPAction[];
+}
+
+export interface MatchHistory {
+  matchId: string;
+  roleId: string;
+  profileId: string;
+  timestamp: string;
+  score: number;
+  semanticScore: number;
+  status: 'pending' | 'reviewed' | 'rejected' | 'accepted';
 } 

@@ -1,0 +1,58 @@
+// 🧠 Cursor Work Request: Integrate Chat API with MCP Loop
+
+// Objective:
+// When a user posts a chat message, route it through the mcp-loop for intelligent planning, execution, and response.
+// Log the assistant’s reply as a structured response in the chat history. Ensure this is fast, traceable, and extensible.
+
+// Entry Point:
+// Supabase Edge Function: `/chat-api`
+// Handles actions: 'startSession', 'postMessage', 'getHistory'
+
+// ✅ What Needs to Happen When action === 'postMessage'
+
+// 1. Save user message to `chat_messages`
+//    - Reuse existing `postUserMessage()` util
+
+// 2. Call `/mcp-loop` with:
+//    - `mode: 'candidate'` (for now — future-proof for 'hiring')
+//    - `profileId` (from request)
+//    - `sessionId` (optional, but used to track retries and chat context)
+//    - `context.lastMessage` = message
+
+// 3. Expect the mcp-loop to return:
+// {
+//   data: {
+//     chatResponse: {
+//       message: "AI-generated response string",
+//       followUpQuestion?: "Optional string"
+//     }
+//   }
+// }
+
+// 4. Log the assistant reply via `logAgentResponse()`
+//    - sender: 'assistant'
+//    - sessionId: from request
+//    - message: chatResponse.message
+
+// 5. Return the reply (and optional follow-up) to the frontend
+
+// Required Imports:
+// import { postUserMessage, logAgentResponse } from '../shared/chatUtils.ts';
+
+// API Contract (MCPRequest):
+// type MCPRequest = {
+//   profileId: string;
+//   mode: 'candidate';
+//   sessionId?: string;
+//   context: {
+//     lastMessage: string;
+//   };
+// }
+
+// Sample Output:
+// return JSON.stringify({ reply: "You’re a great fit for these two roles...", followUpQuestion: "Would you like to explore one of them?" })
+
+// Bonus (Optional):
+// - Handle fallback gracefully if mcp-loop returns no chatResponse
+// - Include chatResponse.metadata for advanced debugging later
+
