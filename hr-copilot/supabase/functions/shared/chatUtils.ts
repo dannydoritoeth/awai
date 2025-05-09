@@ -210,7 +210,6 @@ interface ChatInteractionContext {
     reason: string;
     result: any;
   }>;
-  // Extended context for candidate loop results
   candidateContext?: {
     matches: SemanticMatch[];
     recommendations: Array<{
@@ -229,257 +228,6 @@ interface ChatInteractionContext {
 }
 
 /**
- * Generate a user-friendly response based on candidate context
- */
-async function generateCandidateResponse(
-  message: string,
-  context: ChatInteractionContext
-): Promise<{ response: string; followUpQuestion?: string }> {
-  try {
-    const candidateContext = context.candidateContext;
-    if (!candidateContext) {
-      return { response: 'I processed your request but no specific recommendations were found.' };
-    }
-
-    // Get top matches and recommendations
-    const topMatches = candidateContext.matches.slice(0, 3);
-    const topRecommendations = candidateContext.recommendations.slice(0, 3);
-
-    // Prepare data for ChatGPT analysis
-    const matchData = topMatches.map(match => {
-      const recommendation = topRecommendations.find(r => 
-        r.details?.roleId === match.id || 
-        r.details?.jobId === match.id
-      );
-      return {
-        title: match.name,
-        similarity: match.similarity,
-        summary: match.summary,
-        details: recommendation?.summary || '',
-        score: recommendation?.score || 0
-      };
-    });
-
-    // Collect all skills and capabilities
-    const allSkills = new Set<string>();
-    const allCapabilities = new Set<string>();
-    
-    topRecommendations.forEach(rec => {
-      if (!rec.summary) return;
-      
-      const skillMatch = rec.summary.match(/Strong match in skills: ([^.]+)/);
-      if (skillMatch) {
-        skillMatch[1].split(', ').forEach(s => allSkills.add(s.trim()));
-      }
-      
-      const skillGaps = rec.summary.match(/Skill gaps: ([^.]+)/);
-      if (skillGaps) {
-        skillGaps[1].split(', ').forEach(s => {
-          const skill = s.replace(/\s*\([^)]*\)/, '').trim();
-          allSkills.add(skill);
-        });
-      }
-      
-      const capabilityGaps = rec.summary.match(/Capability gaps: ([^.]+)/);
-      if (capabilityGaps) {
-        capabilityGaps[1].split(', ').forEach(c => {
-          const capability = c.replace(/\s*\([^)]*\)/, '').trim();
-          allCapabilities.add(capability);
-        });
-      }
-    });
-
-    // Prepare the prompt for ChatGPT
-    const prompt = `As an AI career advisor, analyze these job opportunities and provide personalized advice.
-
-Available Roles:
-${matchData.map(match => `
-- ${match.title}
-  Match Score: ${(match.score * 100).toFixed(1)}%
-  Similarity: ${(match.similarity * 100).toFixed(1)}%
-  Details: ${match.details}`).join('\n')}
-
-Skills identified:
-${Array.from(allSkills).map(skill => `- ${skill}`).join('\n')}
-
-Capabilities needed:
-${Array.from(allCapabilities).map(cap => `- ${cap}`).join('\n')}
-
-User's message: ${message}
-
-Please provide:
-1. A brief overview of how these roles align with the candidate's profile
-2. Specific insights about each role's requirements and opportunities
-3. Practical advice on how to prepare for these roles
-4. Suggested next steps for the candidate
-
-Keep the tone conversational and focus on actionable insights rather than technical scores.
-Ensure the response is detailed and insightful, highlighting specific aspects of each role.
-If there are skill or capability gaps, provide specific suggestions for addressing them.`;
-
-    // Call ChatGPT API
-    const response = await callChatGPT(prompt);
-
-    // Generate a contextual follow-up question based on the response
-    const followUpQuestion = await generateFollowUpQuestion(response, context);
-
-    return {
-      response,
-      followUpQuestion
-    };
-  } catch (error) {
-    console.error('Error generating candidate response:', error);
-    return { 
-      response: 'I encountered an error while processing the results. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like to try a different approach to exploring job opportunities?' 
-    };
-  }
-}
-
-/**
- * Call ChatGPT API with the given prompt
- */
-async function callChatGPT(prompt: string): Promise<string> {
-  try {
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
-    });
-
-    const data = await response.json();
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('Error calling ChatGPT:', error);
-    throw error;
-  }
-}
-
-/**
- * Generate a contextual follow-up question based on the response
- */
-async function generateFollowUpQuestion(response: string, context: ChatInteractionContext): Promise<string> {
-  try {
-    const prompt = `Based on this career advice response:
-
-${response}
-
-Generate a single, specific follow-up question that would help the candidate get more detailed information about one of the recommended roles or suggested next steps. The question should be contextual and focused on practical career development.
-
-Response format: Just the question, no additional text.`;
-
-    const followUp = await callChatGPT(prompt);
-    return followUp.trim();
-  } catch (error) {
-    console.error('Error generating follow-up question:', error);
-    return 'Would you like to know more about any of these roles or get specific advice about skill development?';
-  }
-}
-
-/**
- * Generate a user-friendly response for general mode
- */
-async function generateGeneralResponse(
-  message: string,
-  context: ChatInteractionContext
-): Promise<{ response: string; followUpQuestion?: string }> {
-  try {
-    const matches = context.candidateContext?.matches || [];
-    const recommendations = context.candidateContext?.recommendations || [];
-
-    if (!matches.length) {
-      return { 
-        response: 'I processed your request but no relevant matches were found.',
-        followUpQuestion: 'Would you like to try a different search approach or explore other areas?'
-      };
-    }
-
-    // Prepare data for ChatGPT analysis
-    const prompt = `As an AI career advisor, analyze these matches and provide insights about career opportunities.
-
-User's question: ${message}
-
-Relevant Matches:
-${matches.map(match => `- ${match.name} (${match.type}, similarity: ${(match.similarity * 100).toFixed(1)}%)
-  ${match.metadata?.description || ''}`).join('\n')}
-
-Please provide:
-1. A clear, direct answer to the user's question
-2. Specific insights about the matched roles/jobs
-3. Key requirements or qualifications if available
-4. A relevant follow-up question to help explore further
-
-Keep the tone conversational and focus on practical insights.`;
-
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an experienced career advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
-    });
-
-    const data = await response.json();
-    const chatResponse = data.choices[0].message.content;
-
-    // Split response into main content and follow-up question
-    const parts = chatResponse.split(/\n\nFollow-up question:/i);
-    return {
-      response: parts[0].trim(),
-      followUpQuestion: parts[1]?.trim()
-    };
-  } catch (error) {
-    console.error('Error generating general response:', error);
-    return { 
-      response: 'I found some relevant matches but encountered an error generating a detailed response. Would you like me to show you the matches directly?',
-      followUpQuestion: 'Or would you like to try a different search approach?' 
-    };
-  }
-}
-
-/**
  * Handle chat interactions in the MCP context
  */
 export async function handleChatInteraction(
@@ -489,55 +237,28 @@ export async function handleChatInteraction(
   context: ChatInteractionContext
 ): Promise<{ response: string; followUpQuestion?: string }> {
   try {
-    // Generate response based on mode
-    const { response, followUpQuestion } = context.mode === 'general'
-      ? await generateGeneralResponse(message, context)
-      : await generateCandidateResponse(message, context);
+    let response: string;
+    let followUpQuestion: string | undefined;
 
-    // Combine response with follow-up if available
-    const fullResponse = followUpQuestion 
-      ? `${response}\n\n${followUpQuestion}`
-      : response;
-
-    // Always log to agent_actions
-    if (context.mode !== 'general' && (context.profileId || context.roleId)) {
-      await logAgentAction(supabase, {
-        entityType: context.profileId ? 'profile' : 'role',
-        entityId: context.profileId || context.roleId || '',
-        payload: {
-          stage: 'final_response',
-          message: fullResponse,
-          actionsTaken: context.actionsTaken,
-          candidateContext: context.candidateContext
-        }
-      });
-    }
+    // Log the interaction start
+    await logAgentAction(supabase, {
+      entityType: context.profileId ? 'profile' : 'role',
+      entityId: context.profileId || context.roleId || '',
+      payload: {
+        stage: 'chat_interaction_start',
+        message,
+        context
+      }
+    });
 
     // Only log to chat if session ID exists
     if (sessionId) {
       // Log the user message first
       await postUserMessage(supabase, sessionId, message);
-
-      // Then log the agent's response
-      await logAgentResponse(
-        supabase,
-        sessionId,
-        fullResponse,
-        'mcp_chat_interaction',
-        {
-          mode: context.mode,
-          profileId: context.profileId,
-          roleId: context.roleId
-        },
-        { 
-          actionsTaken: context.actionsTaken,
-          candidateContext: context.candidateContext
-        }
-      );
     }
 
     // Return the response and follow-up separately
-    return { response, followUpQuestion };
+    return { response: "Please use the appropriate MCP loop for responses", followUpQuestion: undefined };
 
   } catch (error) {
     console.error('Error in handleChatInteraction:', error);

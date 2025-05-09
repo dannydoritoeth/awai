@@ -15,6 +15,148 @@ import { getRolesData } from '../role/getRoleData.ts';
 import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
 import { testJobMatching } from '../job/testJobMatching.ts';
 
+/**
+ * Generate candidate insights using ChatGPT
+ */
+async function generateCandidateInsights(
+  matches: SemanticMatch[],
+  recommendations: any[],
+  message?: string
+): Promise<{ response: string; followUpQuestion?: string }> {
+  try {
+    // Get top matches and recommendations
+    const topMatches = matches.slice(0, 3);
+    const topRecommendations = recommendations.slice(0, 3);
+
+    // Prepare data for ChatGPT analysis
+    const matchData = topMatches.map(match => {
+      const recommendation = topRecommendations.find(r => 
+        r.details?.roleId === match.id || 
+        r.details?.jobId === match.id
+      );
+      return {
+        title: match.name,
+        similarity: match.similarity,
+        summary: match.summary,
+        details: recommendation?.summary || '',
+        score: recommendation?.score || 0
+      };
+    });
+
+    // Collect all skills and capabilities
+    const allSkills = new Set<string>();
+    const allCapabilities = new Set<string>();
+    
+    topRecommendations.forEach(rec => {
+      if (!rec.summary) return;
+      
+      const skillMatch = rec.summary.match(/Strong match in skills: ([^.]+)/);
+      if (skillMatch) {
+        skillMatch[1].split(', ').forEach(s => allSkills.add(s.trim()));
+      }
+      
+      const skillGaps = rec.summary.match(/Skill gaps: ([^.]+)/);
+      if (skillGaps) {
+        skillGaps[1].split(', ').forEach(s => {
+          const skill = s.replace(/\s*\([^)]*\)/, '').trim();
+          allSkills.add(skill);
+        });
+      }
+      
+      const capabilityGaps = rec.summary.match(/Capability gaps: ([^.]+)/);
+      if (capabilityGaps) {
+        capabilityGaps[1].split(', ').forEach(c => {
+          const capability = c.replace(/\s*\([^)]*\)/, '').trim();
+          allCapabilities.add(capability);
+        });
+      }
+    });
+
+    // Prepare the prompt for ChatGPT
+    const prompt = `As an AI career advisor, analyze these job opportunities and provide personalized advice.
+
+Available Roles:
+${matchData.map(match => `
+- ${match.title}
+  Match Score: ${(match.score * 100).toFixed(1)}%
+  Similarity: ${(match.similarity * 100).toFixed(1)}%
+  Details: ${match.details}`).join('\n')}
+
+Skills identified:
+${Array.from(allSkills).map(skill => `- ${skill}`).join('\n')}
+
+Capabilities needed:
+${Array.from(allCapabilities).map(cap => `- ${cap}`).join('\n')}
+
+${message ? `User's message: ${message}` : ''}
+
+Please provide:
+1. A brief overview of how these roles align with the candidate's profile
+2. Specific insights about each role's requirements and opportunities
+3. Practical advice on how to prepare for these roles
+4. A relevant follow-up question to help explore further
+
+Keep the tone conversational and focus on actionable insights rather than technical scores.
+Ensure the response is detailed and insightful, highlighting specific aspects of each role.
+If there are skill or capability gaps, provide specific suggestions for addressing them.`;
+
+    // Call ChatGPT API
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`ChatGPT API error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from ChatGPT API');
+    }
+
+    const chatResponse = data.choices[0].message.content;
+
+    // Split response into main content and follow-up question
+    const parts = chatResponse.split(/\n\nFollow-up question:/i);
+    return {
+      response: parts[0].trim(),
+      followUpQuestion: parts[1]?.trim()
+    };
+
+  } catch (error) {
+    console.error('Error generating candidate insights:', error);
+    return {
+      response: 'I encountered an error while analyzing the opportunities. Please try again or contact support if the issue persists.',
+      followUpQuestion: 'Would you like me to focus on specific aspects of your career interests?'
+    };
+  }
+}
+
 export async function runCandidateLoop(
   supabase: SupabaseClient<Database>,
   request: MCPRequest
@@ -125,6 +267,13 @@ export async function runCandidateLoop(
       return scoreB - scoreA;
     });
 
+    // Generate insights using ChatGPT
+    const chatResponse = await generateCandidateInsights(
+      matches,
+      recommendations,
+      context?.lastMessage
+    );
+
     // Log the MCP run
     await logAgentAction(supabase, {
       entityType: 'profile',
@@ -152,6 +301,10 @@ export async function runCandidateLoop(
       data: {
         matches: matches.slice(0, 10),
         recommendations: recommendations.slice(0, 5),
+        chatResponse: {
+          message: chatResponse.response,
+          followUpQuestion: chatResponse.followUpQuestion
+        },
         nextActions: [
           'Review suggested career paths',
           'Explore job opportunities',

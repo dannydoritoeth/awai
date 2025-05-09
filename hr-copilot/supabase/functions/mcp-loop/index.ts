@@ -5,7 +5,6 @@ import { MCPRequest, MCPResponse, MCPMode } from '../shared/mcpTypes.ts';
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
 import { runGeneralLoop } from '../shared/mcp/general.ts';
-import { handleChatInteraction } from '../shared/chatUtils.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
@@ -46,66 +45,32 @@ serve(async (req) => {
 
   try {
     const request: MCPRequest = await req.json();
-    const sessionId = request.sessionId || 'default';
+    console.log('MCP Loop Request:', request);
 
-    // Check retry count
-    if (getRetryCount(sessionId) >= MAX_RETRIES) {
-      clearRetryCount(sessionId);
-      throw new Error('Max retries exceeded. Please try again later.');
-    }
-
-    // Validate mode
+    // Validate request
     if (!request.mode) {
       throw new Error('Mode is required');
     }
 
-    // Validate IDs based on mode
     if (request.mode === 'candidate' && !request.profileId) {
       throw new Error('Profile ID is required for candidate mode');
     }
+
     if (request.mode === 'hiring' && !request.roleId) {
       throw new Error('Role ID is required for hiring mode');
     }
 
-    // Check and create embeddings if needed for non-general modes
-    try {
-      if (request.mode === 'candidate' && request.profileId) {
-        const { data: profile } = await supabaseClient
-          .from('profiles')
-          .select('embedding')
-          .eq('id', request.profileId)
-          .single();
-
-        if (!profile?.embedding) {
-          console.log('Creating profile embedding...');
-          const success = await embedContext(supabaseClient, 'profile', request.profileId);
-          if (!success) {
-            throw new Error('Failed to create profile embedding');
-          }
-        }
+    // Track retries if session ID provided
+    let retryCount = 0;
+    if (request.sessionId) {
+      retryCount = getRetryCount(request.sessionId);
+      if (retryCount >= MAX_RETRIES) {
+        throw new Error('Maximum retry attempts exceeded');
       }
-
-      if (request.mode === 'hiring' && request.roleId) {
-        const { data: role } = await supabaseClient
-          .from('roles')
-          .select('embedding')
-          .eq('id', request.roleId)
-          .single();
-
-        if (!role?.embedding) {
-          console.log('Creating role embedding...');
-          const success = await embedContext(supabaseClient, 'role', request.roleId);
-          if (!success) {
-            throw new Error('Failed to create role embedding');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Embedding creation error:', error);
-      throw new Error(`Failed to ensure embeddings: ${error.message}`);
+      retryTracker.set(request.sessionId, retryCount + 1);
     }
 
-    // Get AI planner recommendations if there's a message
+    // Get planner recommendations if message provided
     let plannerRecommendations = [];
     if (request.context?.lastMessage) {
       console.log('Getting planner recommendations...');
@@ -164,56 +129,27 @@ serve(async (req) => {
 
     // Run the appropriate loop based on mode
     let response: MCPResponse;
-    try {
-      switch (request.mode) {
-        case 'candidate':
-          response = await runCandidateLoop(supabaseClient, {
-            ...request,
-            plannerRecommendations
-          });
-          break;
-        case 'hiring':
-          response = await runHiringLoop(supabaseClient, {
-            ...request,
-            plannerRecommendations
-          });
-          break;
-        case 'general':
-          response = await runGeneralLoop(supabaseClient, {
-            ...request,
-            plannerRecommendations
-          });
-          break;
-        default:
-          throw new Error(`Unsupported mode: ${request.mode}`);
-      }
-
-      // Clear retry count on success
-      clearRetryCount(sessionId);
-
-    } catch (error) {
-      console.error(`${request.mode} loop error:`, error);
-      incrementRetryCount(sessionId);
-      
-      // If we haven't exceeded retries, throw to trigger retry
-      if (getRetryCount(sessionId) < MAX_RETRIES) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-        throw error;
-      }
-      
-      // If we've exceeded retries, return a failure response
-      return new Response(JSON.stringify({
-        success: false,
-        message: `Failed to complete ${request.mode} loop after ${MAX_RETRIES} attempts`,
-        error: {
-          type: 'LOOP_ERROR',
-          message: error.message,
-          details: error
-        }
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    switch (request.mode) {
+      case 'candidate':
+        response = await runCandidateLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      case 'hiring':
+        response = await runHiringLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      case 'general':
+        response = await runGeneralLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
+      default:
+        throw new Error(`Unsupported mode: ${request.mode}`);
     }
 
     // Log the actions taken for non-general modes
@@ -232,46 +168,9 @@ serve(async (req) => {
       }
     }
 
-    // Handle chat interaction if there's a message
-    if (request.context?.lastMessage) {
-      try {
-        const chatResponse = await handleChatInteraction(
-          supabaseClient,
-          request.sessionId,
-          request.context.lastMessage,
-          {
-            mode: request.mode,
-            profileId: request.profileId,
-            roleId: request.roleId,
-            actionsTaken: response.data?.actionsTaken || [],
-            candidateContext: request.mode === 'candidate' ? {
-              matches: response.data?.matches || [],
-              recommendations: response.data?.recommendations || [],
-              nextActions: response.data?.nextActions
-            } : undefined
-          }
-        );
-
-        // Include chat response in the final response
-        response.data = {
-          ...response.data,
-          chatResponse: {
-            message: chatResponse.response,
-            followUpQuestion: chatResponse.followUpQuestion
-          }
-        };
-
-      } catch (error) {
-        console.error('Chat interaction error:', error);
-        // Include a fallback response if chat generation fails
-        response.data = {
-          ...response.data,
-          chatResponse: {
-            message: "I processed your request but encountered an error generating a detailed response. Please try again.",
-            followUpQuestion: null
-          }
-        };
-      }
+    // Clear retry count on success
+    if (request.sessionId) {
+      retryTracker.delete(request.sessionId);
     }
 
     return new Response(JSON.stringify(response), {
