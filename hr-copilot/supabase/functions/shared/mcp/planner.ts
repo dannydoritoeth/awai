@@ -352,7 +352,7 @@ export async function getPlannerRecommendation(
     // Log the planner's recommendations
     await logAgentAction(supabase, {
       entityType: mode === 'candidate' ? 'profile' : mode === 'hiring' ? 'role' : 'general',
-      entityId: mode === 'candidate' ? context.profileId! : mode === 'hiring' ? context.roleId! : 'general',
+      entityId: mode === 'candidate' ? context.profileId! : mode === 'hiring' ? context.roleId! : undefined,
       payload: {
         action: 'planner_recommendation',
         recommendations,

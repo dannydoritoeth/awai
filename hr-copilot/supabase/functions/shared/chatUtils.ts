@@ -417,16 +417,18 @@ export async function handleChatInteraction(
       : response;
 
     // Always log to agent_actions
-    await logAgentAction(supabase, {
-      entityType: context.profileId ? 'profile' : 'role',
-      entityId: context.profileId || context.roleId || '',
-      payload: {
-        stage: 'final_response',
-        message: fullResponse,
-        actionsTaken: context.actionsTaken,
-        candidateContext: context.candidateContext
-      }
-    });
+    if (context.mode !== 'general' && (context.profileId || context.roleId)) {
+      await logAgentAction(supabase, {
+        entityType: context.profileId ? 'profile' : 'role',
+        entityId: context.profileId || context.roleId || '',
+        payload: {
+          stage: 'final_response',
+          message: fullResponse,
+          actionsTaken: context.actionsTaken,
+          candidateContext: context.candidateContext
+        }
+      });
+    }
 
     // Only log to chat if session ID exists
     if (sessionId) {
@@ -467,7 +469,7 @@ export async function logProgress(
   supabase: SupabaseClient<Database>,
   params: {
     entityType: 'profile' | 'role' | 'job';
-    entityId: string;
+    entityId?: string;
     stage: 'planning' | 'analysis' | 'scoring' | 'error' | 'summary';
     message: string;
     sessionId?: string;
@@ -475,16 +477,18 @@ export async function logProgress(
   }
 ): Promise<void> {
   try {
-    // Always log to agent_actions
-    await logAgentAction(supabase, {
-      entityType: params.entityType,
-      entityId: params.entityId,
-      payload: {
-        stage: params.stage,
-        message: params.message,
-        ...params.payload
-      }
-    });
+    // Only log to agent_actions if we have an entityId
+    if (params.entityId) {
+      await logAgentAction(supabase, {
+        entityType: params.entityType,
+        entityId: params.entityId,
+        payload: {
+          stage: params.stage,
+          message: params.message,
+          ...params.payload
+        }
+      });
+    }
 
     // If session ID provided, also log to chat
     if (params.sessionId) {
