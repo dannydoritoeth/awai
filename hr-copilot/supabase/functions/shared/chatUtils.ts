@@ -399,6 +399,87 @@ Response format: Just the question, no additional text.`;
 }
 
 /**
+ * Generate a user-friendly response for general mode
+ */
+async function generateGeneralResponse(
+  message: string,
+  context: ChatInteractionContext
+): Promise<{ response: string; followUpQuestion?: string }> {
+  try {
+    const matches = context.candidateContext?.matches || [];
+    const recommendations = context.candidateContext?.recommendations || [];
+
+    if (!matches.length) {
+      return { 
+        response: 'I processed your request but no relevant matches were found.',
+        followUpQuestion: 'Would you like to try a different search approach or explore other areas?'
+      };
+    }
+
+    // Prepare data for ChatGPT analysis
+    const prompt = `As an AI career advisor, analyze these matches and provide insights about career opportunities.
+
+User's question: ${message}
+
+Relevant Matches:
+${matches.map(match => `- ${match.name} (${match.type}, similarity: ${(match.similarity * 100).toFixed(1)}%)
+  ${match.metadata?.description || ''}`).join('\n')}
+
+Please provide:
+1. A clear, direct answer to the user's question
+2. Specific insights about the matched roles/jobs
+3. Key requirements or qualifications if available
+4. A relevant follow-up question to help explore further
+
+Keep the tone conversational and focus on practical insights.`;
+
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an experienced career advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    const data = await response.json();
+    const chatResponse = data.choices[0].message.content;
+
+    // Split response into main content and follow-up question
+    const parts = chatResponse.split(/\n\nFollow-up question:/i);
+    return {
+      response: parts[0].trim(),
+      followUpQuestion: parts[1]?.trim()
+    };
+  } catch (error) {
+    console.error('Error generating general response:', error);
+    return { 
+      response: 'I found some relevant matches but encountered an error generating a detailed response. Would you like me to show you the matches directly?',
+      followUpQuestion: 'Or would you like to try a different search approach?' 
+    };
+  }
+}
+
+/**
  * Handle chat interactions in the MCP context
  */
 export async function handleChatInteraction(
@@ -408,8 +489,10 @@ export async function handleChatInteraction(
   context: ChatInteractionContext
 ): Promise<{ response: string; followUpQuestion?: string }> {
   try {
-    // Generate response based on context
-    const { response, followUpQuestion } = await generateCandidateResponse(message, context);
+    // Generate response based on mode
+    const { response, followUpQuestion } = context.mode === 'general'
+      ? await generateGeneralResponse(message, context)
+      : await generateCandidateResponse(message, context);
 
     // Combine response with follow-up if available
     const fullResponse = followUpQuestion 

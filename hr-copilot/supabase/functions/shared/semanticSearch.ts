@@ -1,16 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
-
-export type EntityType = 'role' | 'job' | 'profile' | 'division' | 'company';
-
-export interface SemanticMatch {
-  id: string;
-  entityType: EntityType;
-  name: string;
-  similarity: number;
-  summary?: string;
-  metadata?: Record<string, any>;
-}
+import { SemanticMatch, EntityType } from './mcpTypes.ts';
 
 export interface SemanticSearchParams {
   embedding: number[];
@@ -42,22 +32,39 @@ export async function getSemanticMatches(
   const results: SemanticMatch[] = [];
 
   // Helper to build common query parts
-  const buildQuery = (table: string, nameField: string = 'title') => {
-    let query = supabase
+  const buildQuery = async (table: string, nameField: string = 'title') => {
+    // First get matches from vector similarity search
+    const { data: matches, error: rpcError } = await supabase
       .rpc('match_embeddings_by_vector', {
         p_query_embedding: embedding,
         p_table_name: table,
         p_match_threshold: minScore,
         p_match_count: perTypeLimit
-      })
+      });
+
+    if (rpcError) {
+      console.error(`RPC error for ${table}:`, rpcError);
+      return [];
+    }
+
+    if (!matches || !matches.length) {
+      return [];
+    }
+
+    // Then get full details for the matched IDs
+    let query = supabase
+      .from(table)
       .select(`
         id,
         ${nameField},
-        similarity,
-        metadata:raw_json
+        metadata:raw_json,
+        division:divisions (
+          name,
+          cluster,
+          agency
+        )
       `)
-      .from(table)
-      .order('similarity', { ascending: false });
+      .in('id', matches.map(m => m.id));
 
     // Apply company filter if provided
     if (companyId) {
@@ -71,111 +78,63 @@ export async function getSemanticMatches(
     }
 
     // Apply additional filters
-    Object.entries(filters).forEach(([key, value]) => {
+    Object.entries(filters || {}).forEach(([key, value]) => {
       if (value) {
         query = query.eq(key, value);
       }
     });
 
-    return query;
+    const { data: details, error: queryError } = await query;
+
+    if (queryError) {
+      console.error(`Query error for ${table}:`, queryError);
+      return [];
+    }
+
+    // Combine similarity scores with details
+    return details?.map(item => {
+      const match = matches.find(m => m.id === item.id);
+      return {
+        id: item.id,
+        type: table.slice(0, -1) as EntityType,
+        name: item[nameField] || 'Unnamed',
+        similarity: match?.similarity || 0,
+        metadata: {
+          ...item.metadata,
+          ...(item.division && {
+            division: item.division.name,
+            cluster: item.division.cluster,
+            agency: item.division.agency
+          })
+        }
+      };
+    }) || [];
   };
 
   // Process each entity type in parallel
-  await Promise.all(entityTypes.map(async (entityType) => {
+  const matchPromises = entityTypes.map(async (entityType) => {
     try {
-      let query;
-      switch (entityType) {
-        case 'role':
-          query = buildQuery('roles')
-            .select(`
-              division:divisions (
-                name,
-                cluster,
-                agency
-              )
-            `);
-          break;
+      const matches = await buildQuery(
+        `${entityType}s`, // Convert type to table name
+        entityType === 'role' || entityType === 'job' ? 'title' : 'name'
+      );
+      
+      console.log(`${entityType} matches:`, {
+        count: matches.length,
+        matches: matches.map(m => ({
+          id: m.id,
+          name: m.name,
+          similarity: m.similarity
+        }))
+      });
 
-        case 'job':
-          query = buildQuery('jobs')
-            .select(`
-              role:roles (
-                title,
-                division:divisions (
-                  name,
-                  cluster,
-                  agency
-                )
-              )
-            `);
-          break;
-
-        case 'profile':
-          query = buildQuery('profiles', 'name')
-            .select(`
-              role_title,
-              division
-            `);
-          break;
-
-        case 'division':
-          query = buildQuery('divisions', 'name')
-            .select(`
-              cluster,
-              agency,
-              company:companies (
-                name
-              )
-            `);
-          break;
-
-        case 'company':
-          query = buildQuery('companies', 'name');
-          break;
-
-        default:
-          console.warn(`Unsupported entity type: ${entityType}`);
-          return;
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error(`Error fetching ${entityType} matches:`, error);
-        return;
-      }
-
-      if (data) {
-        results.push(...data.map(item => ({
-          id: item.id,
-          entityType,
-          name: item[item.title ? 'title' : 'name'],
-          similarity: item.similarity,
-          metadata: {
-            ...item.metadata,
-            ...(item.division && {
-              division: item.division.name,
-              cluster: item.division.cluster,
-              agency: item.division.agency
-            }),
-            ...(item.role && {
-              roleTitle: item.role.title,
-              division: item.role.division.name,
-              cluster: item.role.division.cluster,
-              agency: item.role.division.agency
-            }),
-            ...(item.company && {
-              companyName: item.company.name
-            }),
-            role_title: item.role_title,
-            division: item.division
-          }
-        })));
-      }
+      results.push(...matches);
     } catch (error) {
       console.error(`Error processing ${entityType}:`, error);
     }
-  }));
+  });
+
+  await Promise.all(matchPromises);
 
   // Sort by similarity and apply global limit
   return results
@@ -200,7 +159,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'text-embedding-3-small',
+        model: 'text-embedding-ada-002',
         input: text
       })
     });

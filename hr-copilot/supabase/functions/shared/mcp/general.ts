@@ -1,3 +1,4 @@
+// @deno-types="https://esm.sh/v128/@supabase/supabase-js@2.7.1/dist/module/index.d.ts"
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { MCPRequest, MCPResponse, MCPAction, SemanticMatch, EntityType } from '../mcpTypes.ts';
@@ -6,6 +7,12 @@ import { getSemanticMatches } from '../semanticSearch.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 import { getPlannerRecommendation } from './planner.ts';
 import { handleChatInteraction } from '../chatUtils.ts';
+
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 interface AnalysisInsight {
   type: string;
@@ -18,6 +25,13 @@ interface StatsResult {
   distribution: Record<string, number>;
   topValues: string[];
   summary: string;
+}
+
+interface ActionResult {
+  tool: string;
+  reason: string;
+  result: any;
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -144,165 +158,99 @@ export async function runGeneralLoop(
   request: MCPRequest
 ): Promise<MCPResponse> {
   try {
-    const insights: AnalysisInsight[] = [];
-    const actionsTaken: MCPAction[] = [];
-
-    // Log the start of analysis
-    await logProgress(supabase, {
-      entityType: 'profile',
-      entityId: request.sessionId || undefined,
-      stage: 'planning',
-      message: "Starting AI-guided analysis...",
-      sessionId: request.sessionId
-    });
-
     if (!request.context?.lastMessage) {
       throw new Error('Message is required for general analysis');
     }
 
-    // 1. Generate embedding for the user's message
+    // Generate embedding for the message
     const embedding = await generateEmbedding(request.context.lastMessage);
-    
-    // 2. Get planner recommendations
-    const plannerRecommendations = await getPlannerRecommendation(supabase, {
-      mode: 'general',
-      lastMessage: request.context.lastMessage,
-      semanticContext: request.context.semanticContext
+    console.log('request.context.lastMessage:', request.context.lastMessage);
+
+    console.log('Generated embedding for message:', {
+      length: embedding.length,
+      sample: embedding.slice(0, 5)
     });
 
-    // 3. Execute planner recommendations
-    for (const rec of plannerRecommendations) {
-      try {
-        switch (rec.tool) {
-          case 'getSemanticMatches': {
-            const matches = await getSemanticMatches(supabase, {
-              embedding,
-              entityTypes: rec.inputs.entityTypes || ['role', 'job', 'profile', 'division', 'company'],
-              companyId: request.companyId,
-              minScore: rec.inputs.minScore || 0.5,
-              limit: rec.inputs.limit || 20
-            });
 
-            insights.push({
-              type: 'semantic_matches',
-              data: matches,
-              summary: `Found ${matches.length} semantically relevant items`
-            });
+    // Get semantic matches using getSemanticMatches
+    const matches = await getSemanticMatches(supabase, {
+      embedding,
+      entityTypes: ['role', 'job', 'profile', 'division', 'company'],
+      limit: 20,
+      perTypeLimit: 10,
+      minScore: 0.3
+    });
 
-            actionsTaken.push({
-              tool: rec.tool,
-              reason: rec.reason,
-              result: { matchCount: matches.length },
-              confidence: rec.confidence,
-              inputs: rec.inputs,
-              timestamp: new Date().toISOString()
-            });
-            break;
-          }
+    console.log('Semantic matches found:', {
+      count: matches.length,
+      types: matches.reduce((acc, m) => {
+        acc[m.type] = (acc[m.type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      matches: matches.map(m => ({
+        id: m.id,
+        type: m.type,
+        name: m.name,
+        similarity: m.similarity
+      }))
+    });
 
-          case 'analyzeStats': {
-            const stats = await analyzeStats(
-              supabase,
-              rec.inputs.entityType,
-              rec.inputs.groupBy
-            );
-
-            insights.push({
-              type: 'statistical_analysis',
-              data: stats,
-              summary: stats.summary
-            });
-
-            actionsTaken.push({
-              tool: rec.tool,
-              reason: rec.reason,
-              result: stats,
-              confidence: rec.confidence,
-              inputs: rec.inputs,
-              timestamp: new Date().toISOString()
-            });
-            break;
-          }
-
-          case 'embedContext': {
-            // Store the embedding for future use
-            const { data, error } = await supabase
-              .from(rec.inputs.entityType)
-              .update({ embedding })
-              .eq('id', rec.inputs.entityId);
-
-            if (error) throw error;
-
-            actionsTaken.push({
-              tool: rec.tool,
-              reason: rec.reason,
-              result: { success: !error },
-              confidence: rec.confidence,
-              inputs: rec.inputs,
-              timestamp: new Date().toISOString()
-            });
-            break;
-          }
-
-          default:
-            console.warn(`Unsupported tool: ${rec.tool}`);
-        }
-      } catch (error) {
-        console.error(`Error executing tool ${rec.tool}:`, error);
-        actionsTaken.push({
-          tool: rec.tool,
-          reason: rec.reason,
-          result: { error: error.message },
-          confidence: rec.confidence,
-          inputs: rec.inputs,
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    // Generate recommendations based on insights
-    const recommendations = insights.map(insight => ({
-      type: insight.type,
-      score: 1.0, // Default score for general insights
-      semanticScore: insight.type === 'semantic_matches' ? 1.0 : undefined,
-      summary: insight.summary || `Analysis of ${insight.type.replace(/_/g, ' ')}`,
-      details: insight.data
-    }));
-
-    // Generate chat response using the shared handler
+    // Generate chat response
     const chatResponse = await handleChatInteraction(
       supabase,
       request.sessionId,
       request.context.lastMessage,
       {
         mode: 'general',
-        actionsTaken,
+        actionsTaken: [{
+          tool: 'getSemanticMatches',
+          reason: 'Finding relevant roles and jobs',
+          result: { 
+            matchCount: matches.length,
+            matchTypes: matches.reduce((acc, m) => {
+              acc[m.type] = (acc[m.type] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>)
+          },
+          metadata: {
+            timestamp: new Date().toISOString()
+          }
+        } as ActionResult],
         candidateContext: {
-          matches: insights.find(i => i.type === 'semantic_matches')?.data || [],
-          recommendations,
-          nextActions: ['refine_analysis', 'explore_specific_area', 'get_detailed_stats']
+          matches,
+          recommendations: matches.map(match => ({
+            type: 'semantic_match',
+            score: match.similarity,
+            semanticScore: match.similarity,
+            summary: match.summary || `Found matching ${match.type}: ${match.name}`,
+            details: {
+              id: match.id,
+              type: match.type,
+              name: match.name,
+              metadata: match.metadata
+            }
+          }))
         }
       }
     );
-
-    // Log completion
-    await logProgress(supabase, {
-      entityType: 'profile',
-      entityId: request.sessionId || undefined,
-      stage: 'summary',
-      message: `Completed AI-guided analysis with ${insights.length} insights`,
-      sessionId: request.sessionId,
-      payload: { insights, recommendations }
-    });
 
     return {
       success: true,
       message: 'General analysis completed successfully',
       data: {
-        matches: insights.find(i => i.type === 'semantic_matches')?.data as SemanticMatch[],
-        recommendations,
-        actionsTaken,
-        nextActions: ['refine_analysis', 'explore_specific_area', 'get_detailed_stats'],
+        matches,
+        recommendations: matches.map(match => ({
+          type: 'semantic_match',
+          score: match.similarity,
+          semanticScore: match.similarity,
+          summary: match.summary || `Found matching ${match.type}: ${match.name}`,
+          details: {
+            id: match.id,
+            type: match.type,
+            name: match.name,
+            metadata: match.metadata
+          }
+        })),
         chatResponse: {
           message: chatResponse.response,
           followUpQuestion: chatResponse.followUpQuestion
