@@ -2,7 +2,7 @@ import { ChatMessage } from './chatTypes.ts';
 
 export type MCPMode = 'candidate' | 'hiring' | 'general';
 
-export type EntityType = 'profile' | 'role' | 'job' | 'general' | 'division' | 'company';
+export type EntityType = 'profile' | 'role' | 'job' | 'general' | 'division' | 'company' | 'chat';
 
 export interface SemanticMatch {
   id: string;

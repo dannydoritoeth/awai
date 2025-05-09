@@ -7,6 +7,7 @@ import { getSemanticMatches } from '../semanticSearch.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 import { getPlannerRecommendation } from './planner.ts';
 import { handleChatInteraction } from '../chatUtils.ts';
+import { logAgentAction } from '../agent/logAgentAction.ts';
 
 declare const Deno: {
   env: {
@@ -68,47 +69,202 @@ async function analyzeStats(
 }
 
 /**
+ * Truncate and format match data for the prompt
+ */
+function formatMatchesForPrompt(matches: SemanticMatch[], limit: number = 5): string {
+  return matches
+    .slice(0, limit)
+    .map(match => {
+      // Truncate metadata to essential fields only
+      const metadata = match.metadata ? {
+        division: match.metadata.division,
+        cluster: match.metadata.cluster,
+        agency: match.metadata.agency
+      } : {};
+
+      return `- ${match.name || 'Unnamed'} (${match.type}, similarity: ${(match.similarity * 100).toFixed(1)}%)
+  Summary: ${(match.summary || 'No summary available').slice(0, 200)}
+  Key Details: ${JSON.stringify(metadata)}`;
+    })
+    .join('\n');
+}
+
+/**
+ * Truncate and format recommendations for the prompt
+ */
+function formatRecommendationsForPrompt(recommendations: any[], limit: number = 5): string {
+  return recommendations
+    .slice(0, limit)
+    .map(rec => {
+      // Extract only essential details
+      const details = rec.details ? {
+        id: rec.details.id,
+        type: rec.details.type,
+        name: rec.details.name
+      } : {};
+
+      return `- ${rec.type}: ${(rec.summary || '').slice(0, 200)}
+  Score: ${(rec.score * 100).toFixed(1)}%
+  Key Details: ${JSON.stringify(details)}`;
+    })
+    .join('\n');
+}
+
+/**
  * Generate a user-friendly response from insights
  */
 async function generateGeneralResponse(
+  supabase: SupabaseClient<Database>,
   message: string,
-  insights: AnalysisInsight[],
-  recommendations: any[]
+  matches: SemanticMatch[],
+  recommendations: any[],
+  sessionId?: string
 ): Promise<{ response: string; followUpQuestion?: string }> {
+  const loggingId = sessionId || `chat_${Date.now()}`;
+  
   try {
+    console.log('Starting generateGeneralResponse with:', {
+      messageLength: message?.length,
+      matchCount: matches?.length,
+      recommendationCount: recommendations?.length
+    });
+
+    // Validate inputs
+    if (!Array.isArray(matches)) {
+      throw new Error('Matches must be an array');
+    }
+    if (!Array.isArray(recommendations)) {
+      throw new Error('Recommendations must be an array');
+    }
+
+    // Group matches by type for better analysis
+    console.log('Grouping matches by type...');
+    const matchesByType = matches.reduce((acc, m) => {
+      if (!m || !m.type) {
+        console.warn('Invalid match found:', m);
+        return acc;
+      }
+      acc[m.type] = (acc[m.type] || []).concat(m);
+      return acc;
+    }, {} as Record<string, SemanticMatch[]>);
+
+    console.log('Matches grouped by type:', Object.keys(matchesByType));
+
+    // Check if we have any valid matches
+    const hasValidMatches = Object.values(matchesByType).some(typeMatches => typeMatches.length > 0);
+    console.log('Has valid matches:', hasValidMatches);
+
+    if (!hasValidMatches) {
+      const response = "I've analyzed your request but couldn't find any relevant matches. Would you like to try a different search approach or explore other areas?";
+      
+      // Log the no-matches case
+      await logAgentAction(supabase, {
+        entityType: 'chat',
+        entityId: loggingId,
+        payload: {
+          stage: 'no_matches',
+          message: response,
+          metadata: {
+            userQuery: message,
+            timestamp: new Date().toISOString()
+          }
+        }
+      });
+
+      return {
+        response,
+        followUpQuestion: "Would you like me to broaden the search criteria or focus on a specific aspect of your query?"
+      };
+    }
+
+    // Log match statistics
+    try {
+      console.log('Processing matches for response:', {
+        totalMatches: matches.length,
+        matchesByType: Object.entries(matchesByType).map(([type, matches]) => ({
+          type,
+          count: matches.length,
+          avgSimilarity: matches.reduce((sum, m) => sum + m.similarity, 0) / matches.length,
+          sampleMatch: matches[0] ? {
+            id: matches[0].id,
+            name: matches[0].name,
+            similarity: matches[0].similarity
+          } : null
+        }))
+      });
+    } catch (statsError) {
+      console.error('Error processing match statistics:', statsError);
+    }
+
     // Prepare data for response generation
-    const matchData = insights
-      .filter(i => i.type === 'semantic_matches')
-      .map(i => i.data)
-      .flat();
-
-    const statsData = insights
-      .filter(i => i.type === 'statistical_analysis')
-      .map(i => i.data);
-
-    // Call ChatGPT API
+    console.log('Preparing ChatGPT prompt...');
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
       throw new Error('OpenAI API key not found');
     }
 
+    // Format matches for prompt
+    let matchesPromptSection = '';
+    try {
+      matchesPromptSection = Object.entries(matchesByType).map(([type, typeMatches]) => `
+${type.toUpperCase()} Matches (showing top 5 of ${typeMatches.length}):
+${formatMatchesForPrompt(typeMatches)}`).join('\n');
+    } catch (formatError) {
+      console.error('Error formatting matches for prompt:', formatError);
+      matchesPromptSection = 'Error formatting matches';
+    }
+
+    // Format recommendations for prompt
+    let recommendationsPromptSection = '';
+    try {
+      recommendationsPromptSection = formatRecommendationsForPrompt(recommendations);
+    } catch (formatError) {
+      console.error('Error formatting recommendations for prompt:', formatError);
+      recommendationsPromptSection = 'Error formatting recommendations';
+    }
+
+    // Format the prompt with truncated data
     const prompt = `As an AI career advisor, analyze this data and provide insights about the most common skills in demand.
 
 User's question: ${message}
 
-Semantic Matches:
-${matchData.map(match => `- ${match.name || 'Unnamed'}: ${match.summary || 'No summary'}`).join('\n')}
+Top Semantic Matches by Type:
+${matchesPromptSection}
 
-Statistical Analysis:
-${statsData.map(stat => `- ${stat.summary || 'No summary available'}`).join('\n')}
+Top Recommendations (showing top 5 of ${recommendations.length}):
+${recommendationsPromptSection}
 
 Please provide:
 1. A clear, concise answer to the user's question
-2. Specific insights from the data
-3. Actionable recommendations
+2. Specific insights from the matches, particularly focusing on ${Object.keys(matchesByType).join(', ')} matches
+3. Actionable recommendations based on the data
 4. A relevant follow-up question
 
 Keep the tone conversational and focus on practical insights.`;
+
+    console.log('Prompt prepared, logging to agent actions...');
+
+    // Log the prompt being sent to ChatGPT
+    await logAgentAction(supabase, {
+      entityType: 'chat',
+      entityId: loggingId,
+      payload: {
+        stage: 'chatgpt_prompt',
+        message: prompt,
+        metadata: {
+          matchCount: matches.length,
+          matchesByType: Object.fromEntries(
+            Object.entries(matchesByType).map(([type, matches]) => [type, matches.length])
+          ),
+          recommendationCount: recommendations.length,
+          truncatedMatchCount: Math.min(matches.length, 5),
+          truncatedRecommendationCount: Math.min(recommendations.length, 5),
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+
+    console.log('Making ChatGPT API call...');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -133,8 +289,37 @@ Keep the tone conversational and focus on practical insights.`;
       })
     });
 
+    console.log('ChatGPT API response received, status:', response.status);
+    
     const data = await response.json();
+    
+    // Validate the response data
+    if (!response.ok) {
+      throw new Error(`ChatGPT API error: ${data.error?.message || 'Unknown error'}`);
+    }
+    
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from ChatGPT API');
+    }
+
     const chatResponse = data.choices[0].message.content;
+
+    // Log the ChatGPT response
+    await logAgentAction(supabase, {
+      entityType: 'chat',
+      entityId: loggingId,
+      payload: {
+        stage: 'chatgpt_response',
+        message: chatResponse,
+        metadata: {
+          model: 'gpt-4-turbo-preview',
+          temperature: 0.7,
+          timestamp: new Date().toISOString(),
+          responseStatus: response.status,
+          responseOk: response.ok
+        }
+      }
+    });
 
     // Split response into main content and follow-up question
     const parts = chatResponse.split(/\n\nFollow-up question:/i);
@@ -143,9 +328,27 @@ Keep the tone conversational and focus on practical insights.`;
       followUpQuestion: parts[1]?.trim()
     };
   } catch (error) {
-    console.error('Error generating response:', error);
+    console.error('Error in generateGeneralResponse:', error);
+    
+    // Log the error with full context
+    await logAgentAction(supabase, {
+      entityType: 'chat',
+      entityId: loggingId,
+      payload: {
+        stage: 'error',
+        error: error.message,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          errorStack: error.stack,
+          matchCount: matches?.length,
+          recommendationCount: recommendations?.length,
+          errorDetails: error
+        }
+      }
+    });
+    
     return {
-      response: "I've analyzed the data but encountered an error generating a detailed response. The analysis shows some relevant matches and statistics that could be helpful for your query. Would you like me to focus on a specific aspect of the findings?",
+      response: "I've analyzed the data but encountered an error generating a detailed response. The analysis shows some relevant matches and recommendations that could be helpful for your query. Would you like me to focus on a specific aspect of the findings?",
     };
   }
 }
@@ -171,7 +374,6 @@ export async function runGeneralLoop(
       sample: embedding.slice(0, 5)
     });
 
-
     // Get semantic matches using getSemanticMatches
     const matches = await getSemanticMatches(supabase, {
       embedding,
@@ -181,57 +383,52 @@ export async function runGeneralLoop(
       minScore: 0.3
     });
 
-    console.log('Semantic matches found:', {
+    // Log matches by type
+    const matchesByType = matches.reduce((acc, m) => {
+      acc[m.type] = (acc[m.type] || []).concat(m);
+      return acc;
+    }, {} as Record<string, SemanticMatch[]>);
+
+    console.log('Matches by type:', Object.entries(matchesByType).map(([type, matches]) => ({
+      type,
       count: matches.length,
-      types: matches.reduce((acc, m) => {
-        acc[m.type] = (acc[m.type] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
       matches: matches.map(m => ({
         id: m.id,
-        type: m.type,
         name: m.name,
         similarity: m.similarity
       }))
+    })));
+
+    // Create recommendations from matches
+    const recommendations = matches.map(match => ({
+      type: 'semantic_match',
+      score: match.similarity,
+      semanticScore: match.similarity,
+      summary: match.summary || `Found matching ${match.type}: ${match.name}`,
+      details: {
+        id: match.id,
+        type: match.type,
+        name: match.name,
+        metadata: match.metadata
+      }
+    }));
+
+    console.log('Generated recommendations:', {
+      count: recommendations.length,
+      samples: recommendations.slice(0, 2).map(r => ({
+        type: r.type,
+        score: r.score,
+        summary: r.summary
+      }))
     });
 
-    // Generate chat response
-    const chatResponse = await handleChatInteraction(
+    // Generate chat response using both matches and recommendations
+    const chatResponse = await generateGeneralResponse(
       supabase,
-      request.sessionId,
       request.context.lastMessage,
-      {
-        mode: 'general',
-        actionsTaken: [{
-          tool: 'getSemanticMatches',
-          reason: 'Finding relevant roles and jobs',
-          result: { 
-            matchCount: matches.length,
-            matchTypes: matches.reduce((acc, m) => {
-              acc[m.type] = (acc[m.type] || 0) + 1;
-              return acc;
-            }, {} as Record<string, number>)
-          },
-          metadata: {
-            timestamp: new Date().toISOString()
-          }
-        } as ActionResult],
-        candidateContext: {
-          matches,
-          recommendations: matches.map(match => ({
-            type: 'semantic_match',
-            score: match.similarity,
-            semanticScore: match.similarity,
-            summary: match.summary || `Found matching ${match.type}: ${match.name}`,
-            details: {
-              id: match.id,
-              type: match.type,
-              name: match.name,
-              metadata: match.metadata
-            }
-          }))
-        }
-      }
+      matches,
+      recommendations,
+      request.sessionId
     );
 
     return {
@@ -239,18 +436,7 @@ export async function runGeneralLoop(
       message: 'General analysis completed successfully',
       data: {
         matches,
-        recommendations: matches.map(match => ({
-          type: 'semantic_match',
-          score: match.similarity,
-          semanticScore: match.similarity,
-          summary: match.summary || `Found matching ${match.type}: ${match.name}`,
-          details: {
-            id: match.id,
-            type: match.type,
-            name: match.name,
-            metadata: match.metadata
-          }
-        })),
+        recommendations,
         chatResponse: {
           message: chatResponse.response,
           followUpQuestion: chatResponse.followUpQuestion
