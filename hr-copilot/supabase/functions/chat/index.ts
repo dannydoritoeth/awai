@@ -45,22 +45,26 @@ async function callMCPLoop(sessionId: string, message: string, mode: 'candidate'
 }
 
 /**
- * Process the initial message for a new chat session
+ * Process the initial message when starting a session
  */
 async function processInitialMessage(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   sessionId: string,
-  mode: 'candidate' | 'hiring' | 'general',
-  entityId: string | null | undefined,
+  mode: MCPMode,
+  entityId: string | null,
   message: string
 ): Promise<{ error: ChatError | null }> {
   try {
-    // Post the initial message
-    const { error: messageError } = await postUserMessage(supabase, sessionId, message);
+    // First log the user's message
+    const { error: messageError } = await postUserMessage(
+      supabase,
+      sessionId,
+      message
+    );
     if (messageError) throw messageError;
 
-    // Call MCP loop to process the message
-    const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
+    // Call MCP loop asynchronously
+    fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/mcp-loop', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -68,25 +72,24 @@ async function processInitialMessage(
       },
       body: JSON.stringify({
         mode,
-        sessionId,
         profileId: mode === 'candidate' ? entityId : undefined,
         roleId: mode === 'hiring' ? entityId : undefined,
+        sessionId,
         context: {
           lastMessage: message
         }
       })
+    }).catch(error => {
+      console.error('Error calling MCP loop:', error);
+      // We catch but don't throw since this is async and we don't want to block session creation
     });
-
-    if (!mcpResponse.ok) {
-      throw new Error(`Failed to process initial message: ${await mcpResponse.text()}`);
-    }
 
     return { error: null };
   } catch (error) {
     console.error('Error processing initial message:', error);
     return {
       error: {
-        type: 'DATABASE_ERROR',
+        type: 'PROCESSING_ERROR',
         message: 'Failed to process initial message',
         details: error
       }

@@ -69,6 +69,25 @@ ADD CONSTRAINT check_entity_id_required
     (mode != 'general' AND entity_id IS NOT NULL)
   ); 
 
+
+-- Drop existing foreign key constraints
+ALTER TABLE conversation_sessions
+DROP CONSTRAINT IF EXISTS fk_entity_profile,
+DROP CONSTRAINT IF EXISTS fk_entity_role;
+
+-- Add conditional foreign key constraints based on mode
+-- ALTER TABLE conversation_sessions
+-- ADD CONSTRAINT check_entity_references
+--   CHECK (
+--     (mode = 'candidate' AND EXISTS (SELECT 1 FROM profiles WHERE id = entity_id)) OR
+--     (mode = 'hiring' AND EXISTS (SELECT 1 FROM roles WHERE id = entity_id)) OR
+--     (mode = 'general' AND entity_id IS NULL)
+--   );
+
+-- Add indexes to improve performance
+-- CREATE INDEX idx_conversation_sessions_entity_mode ON conversation_sessions(entity_id, mode); 
+
+
 -- Add RLS policies
 -- ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
