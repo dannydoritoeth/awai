@@ -13,6 +13,11 @@ import { scoreProfileFit } from '../shared/agent/scoreProfileFit.ts'
 import { getSemanticMatches, embedContext } from '../shared/embeddings.ts'
 import { testJobMatching } from '../shared/job/testJobMatching.ts'
 import { getHiringMatches } from '../shared/job/hiringMatches.ts'
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { Database } from '../database.types.ts'
+import { testSemanticMatching } from '../shared/tests/testSemanticMatching.ts'
+import { generateEmbedding } from '../shared/semanticSearch.ts'
+import { SemanticMatch } from '../shared/mcpTypes.ts'
 
 interface TestFunctionRequest {
   function: string;
@@ -99,7 +104,8 @@ serve(async (req) => {
       threshold,
       sourceId,
       sourceTable,
-      targetTable 
+      targetTable,
+      message
     } = requestData
 
     // Create Supabase client
@@ -365,6 +371,101 @@ serve(async (req) => {
           }
         }
         break
+
+      case 'testGeneralSearch':
+        if (!message) {
+          throw new Error('message is required for general semantic search test')
+        }
+
+        console.log('Starting general semantic search test with message:', message)
+
+        // First, let's check for roles with "scientist" in the title
+        const { data: scientistRoles, error: rolesError } = await supabaseClient
+          .from('roles')
+          .select('id, title, embedding')
+          .ilike('title', '%scientist%')
+
+        console.log('Scientist roles found:', {
+          count: scientistRoles?.length || 0,
+          roles: scientistRoles?.map(r => ({
+            id: r.id,
+            title: r.title,
+            hasEmbedding: !!r.embedding
+          }))
+        })
+
+        if (rolesError) {
+          console.error('Error fetching scientist roles:', rolesError)
+        }
+
+        // Generate embedding for the message
+        const embedding = await generateEmbedding(message)
+        console.log('Generated embedding for message:', {
+          length: embedding.length,
+          sample: embedding.slice(0, 5)
+        })
+
+        // Check similarity directly with scientist roles
+        if (scientistRoles?.length) {
+          for (const role of scientistRoles) {
+            if (role.embedding) {
+              const { data: similarity } = await supabaseClient.rpc('calculate_cosine_similarity', {
+                embedding_1: embedding,
+                embedding_2: role.embedding
+              })
+              console.log(`Direct similarity with ${role.title}:`, similarity)
+            }
+          }
+        }
+
+        // Search across all entity types
+        const entityTypes = ['role', 'job', 'profile', 'division', 'company'] as const
+        console.log('Searching across entity types:', entityTypes)
+
+        // Use a lower threshold for testing
+        const searchThreshold = threshold || 0.3
+        console.log('Using search threshold:', searchThreshold)
+
+        const searchResults = await getSemanticMatches(supabaseClient, {
+          embedding,
+          entityTypes,
+          limit: limit || 20,
+          perTypeLimit: 5,
+          minScore: searchThreshold
+        })
+
+        // Log detailed results
+        console.log('Search results:', {
+          totalMatches: searchResults.length,
+          matchesByType: searchResults.reduce((acc, match) => {
+            acc[match.type] = (acc[match.type] || 0) + 1
+            return acc
+          }, {} as Record<string, number>),
+          matches: searchResults.map(match => ({
+            id: match.id,
+            type: match.type,
+            name: match.name,
+            similarity: match.similarity,
+            metadata: match.metadata
+          }))
+        })
+
+        return new Response(JSON.stringify({
+          success: true,
+          results: searchResults,
+          debug: {
+            message,
+            entityTypes,
+            matchCount: searchResults.length,
+            scientistRoles: scientistRoles?.map(r => ({
+              id: r.id,
+              title: r.title,
+              hasEmbedding: !!r.embedding
+            }))
+          }
+        }), {
+          headers: corsHeaders
+        })
 
       default:
         throw new Error(`Unknown action: ${action}`)
