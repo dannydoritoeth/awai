@@ -119,7 +119,7 @@ async function generateGeneralResponse(
   matches: SemanticMatch[],
   recommendations: any[],
   sessionId?: string
-): Promise<{ response: string; followUpQuestion?: string }> {
+): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
   const loggingId = sessionId || `chat_${Date.now()}`;
   
   try {
@@ -173,7 +173,8 @@ async function generateGeneralResponse(
 
       return {
         response,
-        followUpQuestion: "Would you like me to broaden the search criteria or focus on a specific aspect of your query?"
+        followUpQuestion: "Would you like me to broaden the search criteria or focus on a specific aspect of your query?",
+        prompt: ''
       };
     }
 
@@ -228,15 +229,15 @@ ${formatMatchesForPrompt(typeMatches)}`).join('\n');
 
 User's question: ${message}
 
-Top Semantic Matches by Type:
-${matchesPromptSection}
-
-Top Recommendations (showing top 5 of ${recommendations.length}):
-${recommendationsPromptSection}
+Data:
+${JSON.stringify({
+  matches: matches.slice(0, 5),
+  recommendations: recommendations.slice(0, 5)
+}, null, 2)}
 
 Please provide:
 1. A clear, concise answer to the user's question
-2. Specific insights from the matches, particularly focusing on ${Object.keys(matchesByType).join(', ')} matches
+2. Specific insights from the matches
 3. Actionable recommendations based on the data
 4. A relevant follow-up question
 
@@ -325,7 +326,8 @@ Keep the tone conversational and focus on practical insights.`;
     const parts = chatResponse.split(/\n\nFollow-up question:/i);
     return {
       response: parts[0].trim(),
-      followUpQuestion: parts[1]?.trim()
+      followUpQuestion: parts[1]?.trim(),
+      prompt: prompt
     };
   } catch (error) {
     console.error('Error in generateGeneralResponse:', error);
@@ -349,6 +351,8 @@ Keep the tone conversational and focus on practical insights.`;
     
     return {
       response: "I've analyzed the data but encountered an error generating a detailed response. The analysis shows some relevant matches and recommendations that could be helpful for your query. Would you like me to focus on a specific aspect of the findings?",
+      followUpQuestion: undefined,
+      prompt: ''
     };
   }
 }
@@ -439,8 +443,52 @@ export async function runGeneralLoop(
         recommendations,
         chatResponse: {
           message: chatResponse.response,
-          followUpQuestion: chatResponse.followUpQuestion
-        }
+          followUpQuestion: chatResponse.followUpQuestion,
+          aiPrompt: chatResponse.prompt
+        },
+        nextActions: [
+          'Review semantic matches',
+          'Explore recommended paths',
+          'Analyze skill requirements',
+          'Consider alternative roles'
+        ],
+        actionsTaken: [
+          {
+            tool: 'generateEmbedding',
+            reason: 'Generated message embedding for semantic search',
+            result: { length: embedding.length },
+            confidence: 1.0,
+            inputs: { message: request.context.lastMessage },
+            timestamp: new Date().toISOString()
+          },
+          {
+            tool: 'getSemanticMatches',
+            reason: 'Retrieved semantic matches across entities',
+            result: { matchCount: matches.length },
+            confidence: 0.9,
+            inputs: { entityTypes: ['role', 'job', 'profile', 'division', 'company'] },
+            timestamp: new Date().toISOString()
+          },
+          {
+            tool: 'createRecommendations',
+            reason: 'Created recommendations from matches',
+            result: { recommendationCount: recommendations.length },
+            confidence: 0.85,
+            inputs: { matches: matches.length },
+            timestamp: new Date().toISOString()
+          },
+          {
+            tool: 'generateInsights',
+            reason: 'Generated AI insights from data',
+            result: { hasResponse: !!chatResponse.response },
+            confidence: 0.8,
+            inputs: { 
+              matchCount: matches.length,
+              recommendationCount: recommendations.length 
+            },
+            timestamp: new Date().toISOString()
+          }
+        ]
       }
     };
 
