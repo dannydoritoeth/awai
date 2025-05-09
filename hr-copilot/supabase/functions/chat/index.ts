@@ -63,8 +63,8 @@ async function processInitialMessage(
     );
     if (messageError) throw messageError;
 
-    // Call MCP loop asynchronously
-    fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/mcp-loop', {
+    // Call MCP loop and wait for response
+    const mcpResponse = await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/mcp-loop', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,10 +79,31 @@ async function processInitialMessage(
           lastMessage: message
         }
       })
-    }).catch(error => {
-      console.error('Error calling MCP loop:', error);
-      // We catch but don't throw since this is async and we don't want to block session creation
     });
+
+    if (!mcpResponse.ok) {
+      const error = await mcpResponse.json();
+      throw new Error(`MCP Loop failed: ${error.message || 'Unknown error'}`);
+    }
+
+    const mcpResult = await mcpResponse.json();
+    
+    if (!mcpResult.success || !mcpResult.data?.chatResponse) {
+      throw new Error('Failed to get response from MCP loop');
+    }
+
+    // Log the AI's response
+    const { error: replyError } = await logAgentResponse(
+      supabase,
+      sessionId,
+      mcpResult.data.chatResponse.message,
+      'initial_response',
+      undefined,
+      {
+        followUpQuestion: mcpResult.data.chatResponse.followUpQuestion
+      }
+    );
+    if (replyError) throw replyError;
 
     return { error: null };
   } catch (error) {
