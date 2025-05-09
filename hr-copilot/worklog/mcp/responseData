@@ -1,5 +1,5 @@
 MCP-LOOP Response Data 
- - All: matches, recommendations, chatResponse, actionsTaken, nextActions
+ - All: matches, recommendations, chatResponse, actionsTaken, nextActions, aiPrompt
  - Hiring: role
  - Candidate: profile
  - General: <all>

@@ -134,7 +134,7 @@ async function processHiringMatches(
 
     // 3. Bulk load profile data
     console.log('Loading profile data...');
-    const profileIds = profileMatches.map(match => match.id);
+    const profileIds = profileMatches?.map(match => match.id);
     const dataStartTime = Date.now();
     const profilesData: Record<string, any> = {};
     for (const id of profileIds) {
@@ -244,24 +244,33 @@ async function generateHiringInsights(
   matches: HiringMatch[],
   roleData: RoleData,
   message?: string
-): Promise<{ response: string; followUpQuestion?: string }> {
+): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
   try {
+    if (!matches || matches.length === 0) {
+      return {
+        response: "No matching candidates found to analyze.",
+        followUpQuestion: "Would you like to adjust the search criteria?",
+        prompt: "No candidates to analyze"
+      };
+    }
+
     const topMatches = matches.slice(0, 5);
 
     // Calculate aggregate statistics for candidate pool
-    const avgScore = topMatches.reduce((sum, m) => sum + m.score, 0) / topMatches.length;
+    const avgScore = topMatches.reduce((sum, m) => sum + (m.score || 0), 0) / topMatches.length;
     const avgCapabilityMatch = topMatches.reduce((sum, m) => {
-      const capabilities = m.details?.capabilities || [];
-      const missingCapabilities = m.details?.missingCapabilities || [];
-      const total = capabilities.length + missingCapabilities.length;
-      return sum + (total > 0 ? (capabilities.length / total) * 100 : 0);
+      const matched = m.details?.capabilities?.matched?.length || 0;
+      const total = matched + 
+        (m.details?.capabilities?.missing?.length || 0) + 
+        (m.details?.capabilities?.insufficient?.length || 0);
+      return sum + (total > 0 ? (matched / total) * 100 : 0);
     }, 0) / topMatches.length;
 
     // Prepare the prompt for ChatGPT
     const prompt = `As a hiring advisor, provide a detailed analysis for the hiring manager.
 
 ROLE DETAILS
-Title: ${roleData.title}
+Title: ${roleData.title || 'Not specified'}
 Grade Band: ${roleData.gradeBand || 'Not specified'}
 Location: ${roleData.location || 'Not specified'}
 Division: ${roleData.divisionId || 'Not specified'}
@@ -275,10 +284,14 @@ Reporting Structure:
 - Budget Responsibility: ${roleData.budgetResponsibility || 'None'}
 
 Required Capabilities:
-${roleData.capabilities.map(c => `- ${c.name} (Level ${c.required_level})${c.capabilityType ? ` [${c.capabilityType}]` : ''}`).join('\n')}
+${roleData.capabilities?.map(c => 
+  `- ${c.name} (Level ${c.required_level})${c.capabilityType ? ` [${c.capabilityType}]` : ''}`
+).join('\n') || 'None specified'}
 
 Required Skills:
-${roleData.skills.map(s => `- ${s.name} (Level ${s.required_level}, ${s.required_years}+ years)`).join('\n')}
+${roleData.skills?.map(s => 
+  `- ${s.name} (Level ${s.required_level}, ${s.required_years}+ years)`
+).join('\n') || 'None specified'}
 
 CANDIDATE POOL METRICS
 - Number of Candidates: ${topMatches.length}
@@ -286,69 +299,29 @@ CANDIDATE POOL METRICS
 - Average Capability Alignment: ${avgCapabilityMatch.toFixed(1)}%
 
 TOP CANDIDATES:
-${topMatches.map(match => `
-Candidate: ${match.name}
-Overall Match: ${(match.score * 100).toFixed(1)}%
+${topMatches?.map(match => `
+Candidate: ${match.name || 'Anonymous'}
+Overall Match: ${((match.score || 0) * 100).toFixed(1)}%
 Strong Areas:
-- Capabilities: ${match.details?.capabilities?.join(', ') || 'None'}
-- Skills: ${match.details?.skills?.join(', ') || 'None'}
+- Capabilities: ${match.details?.capabilities?.matched?.join(', ') || 'None'}
+- Skills: ${match.details?.skills?.matched?.join(', ') || 'None'}
 Development Areas:
-- Missing Capabilities: ${match.details?.missingCapabilities?.join(', ') || 'None'}
-- Missing Skills: ${match.details?.missingSkills?.join(', ') || 'None'}`).join('\n')}
+- Missing Capabilities: ${match.details?.capabilities?.missing?.join(', ') || 'None'}
+- Missing Skills: ${match.details?.skills?.missing?.join(', ') || 'None'}
+- Insufficient Capabilities: ${match.details?.capabilities?.insufficient?.join(', ') || 'None'}
+- Insufficient Skills: ${match.details?.skills?.insufficient?.join(', ') || 'None'}`).join('\n')}
 
 ${message ? `Additional Context: ${message}` : ''}
 
 Please provide a comprehensive hiring analysis with the following sections:
 
 1. ROLE REQUIREMENTS OVERVIEW
-- Key capabilities and skills needed for success
-- Critical requirements vs. nice-to-have
-- Impact of the role within the organization
-
 2. CANDIDATE POOL QUALITY
-- Overall assessment of candidate pool
-- Distribution of skills and capabilities
-- Areas where candidates are strong/weak as a group
-- Diversity of experience and backgrounds
-
 3. INDIVIDUAL CANDIDATE ASSESSMENTS
-For each candidate:
-- Key strengths and alignment with role requirements
-- Specific gaps and development needs
-- Risk assessment and growth potential
-- Cultural fit considerations
-
 4. INTERVIEW RECOMMENDATIONS
-For each candidate:
-- Specific areas to probe based on their profile
-- Technical assessment focus areas
-- Leadership and management capability assessment
-- Sample questions to assess gap areas
-- Suggested interview panel composition
-
 5. HIRING RECOMMENDATIONS
-- Priority candidates to focus on
-- Suggested next steps in hiring process
-- Risk mitigation strategies
-- Timeline recommendations
-- Onboarding considerations
 
-Keep the analysis objective and data-driven, focusing on actionable insights for the hiring manager.
-Highlight both immediate fit and long-term potential.
-If there are concerning gaps, be direct about their impact on role success.`;
-
-    // Log the prompt to agent_actions
-    await logAgentAction(supabase, {
-      entityType: 'role',
-      entityId: roleData.id,
-      payload: {
-        action: 'generate_hiring_insights',
-        prompt,
-        candidateCount: topMatches.length,
-        avgScore,
-        avgCapabilityMatch
-      }
-    });
+Keep the analysis objective and data-driven, focusing on actionable insights for the hiring manager.`;
 
     // Call ChatGPT API
     const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -379,58 +352,30 @@ If there are concerning gaps, be direct about their impact on role success.`;
       })
     });
 
+    if (!response.ok) {
+      throw new Error('Failed to generate insights from OpenAI API');
+    }
+
     const data = await response.json();
-    const chatResponse = data.choices[0].message.content;
+    const chatResponse = data.choices?.[0]?.message?.content;
 
-    // Generate follow-up question focused on hiring decision
-    const followUpPrompt = `Based on this hiring analysis:
+    if (!chatResponse) {
+      throw new Error('Invalid response format from OpenAI API');
+    }
 
-${chatResponse}
-
-Generate a single, specific follow-up question that would help the hiring manager make a better hiring decision. Focus on:
-1. Comparing top candidates
-2. Assessing specific risks
-3. Validating key capabilities
-4. Timeline considerations
-5. Interview strategy
-
-Response format: Just the question, no additional text.`;
-
-    const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an AI hiring advisor. Generate a focused follow-up question to help the hiring manager make a better hiring decision.'
-          },
-          {
-            role: 'user',
-            content: followUpPrompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 100
-      })
-    });
-
-    const followUpData = await followUpResponse.json();
-    const followUpQuestion = followUpData.choices[0].message.content.trim();
-
+    // Generate a relevant follow-up question
     return {
       response: chatResponse,
-      followUpQuestion
+      followUpQuestion: "Would you like to focus on any specific aspects of these candidates?",
+      prompt
     };
+
   } catch (error) {
     console.error('Error generating hiring insights:', error);
     return {
       response: 'I encountered an error while analyzing the candidates. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates\' qualifications?'
+      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates\' qualifications?',
+      prompt: 'Error occurred while generating prompt'
     };
   }
 }
@@ -459,7 +404,7 @@ export async function runHiringLoop(
     });
 
     // Convert hiring matches to semantic matches format with unique identifiers
-    const semanticMatches: SemanticMatch[] = matches.map(match => {
+    const semanticMatches: SemanticMatch[] = matches?.map(match => {
       const matchId = `${roleId}_${match.profileId}`;
       return {
         id: match.profileId,
@@ -491,13 +436,47 @@ export async function runHiringLoop(
       }
     });
 
+    // Convert matches to the format expected by generateHiringInsights
+    const processedMatches = matches?.map(match => {
+      // Extract capabilities and skills from details
+      const capabilities = {
+        matched: match.details?.capabilities?.matched || [],
+        missing: match.details?.capabilities?.missing || [],
+        insufficient: match.details?.capabilities?.insufficient || []
+      };
+      
+      const skills = {
+        matched: match.details?.skills?.matched || [],
+        missing: match.details?.skills?.missing || [],
+        insufficient: match.details?.skills?.insufficient || []
+      };
+
+      return {
+        profileId: match.profileId,
+        name: match.name,
+        score: match.score || 0,
+        semanticScore: match.semanticScore || 0,
+        details: {
+          capabilities,
+          skills
+        }
+      };
+    });
+
+    // Generate insights using ChatGPT
+    const chatResponse = await generateHiringInsights(
+      processedMatches || [],
+      roleDetail,
+      request.context?.lastMessage
+    );
+
     // Return response with linked matches, recommendations, and role details
     return {
       success: true,
       message: 'Hiring loop completed successfully',
       data: {
         matches: semanticMatches,
-        recommendations: matches.map(match => {
+        recommendations: matches?.map(match => {
           const matchId = `${roleId}_${match.profileId}`;
           return {
             type: 'candidate_match',
@@ -509,13 +488,23 @@ export async function runHiringLoop(
             details: match.details
           };
         }),
+        chatResponse: chatResponse ? {
+          message: chatResponse.response || "No insights generated",
+          followUpQuestion: chatResponse.followUpQuestion || "Would you like to analyze specific aspects of the candidates?",
+          aiPrompt: chatResponse.prompt
+        } : {
+          message: "Failed to generate hiring insights",
+          followUpQuestion: "Would you like to try analyzing the candidates again?",
+          aiPrompt: null
+        },
         actionsTaken: [
           'Retrieved role data',
           'Analyzed candidate matches',
           'Generated hiring recommendations',
+          chatResponse ? 'Generated hiring insights' : 'Attempted to generate hiring insights',
           'Completed hiring analysis'
         ],
-        nextActions: matches.length > 0 
+        nextActions: matches?.length > 0 
           ? [
               'Review top candidate profiles',
               'Schedule interviews',

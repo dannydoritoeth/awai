@@ -24,7 +24,7 @@ async function generateCandidateInsights(
   recommendations: any[],
   profileData: any,
   message?: string
-): Promise<{ response: string; followUpQuestion?: string }> {
+): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
   try {
     // Get top matches and recommendations
     const topMatches = matches.slice(0, 3);
@@ -155,14 +155,16 @@ If there are skill or capability gaps, provide specific suggestions for addressi
     const parts = chatResponse.split(/\n\nFollow-up question:/i);
     return {
       response: parts[0].trim(),
-      followUpQuestion: parts[1]?.trim()
+      followUpQuestion: parts[1]?.trim(),
+      prompt
     };
 
   } catch (error) {
     console.error('Error generating candidate insights:', error);
     return {
       response: 'I encountered an error while analyzing the opportunities. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like me to focus on specific aspects of your career interests?'
+      followUpQuestion: 'Would you like me to focus on specific aspects of your career interests?',
+      prompt: 'Error occurred while generating prompt'
     };
   }
 }
@@ -308,7 +310,8 @@ export async function runCandidateLoop(
         recommendations: recommendations.slice(0, 5),
         chatResponse: {
           message: chatResponse.response,
-          followUpQuestion: chatResponse.followUpQuestion
+          followUpQuestion: chatResponse.followUpQuestion,
+          aiPrompt: chatResponse.prompt
         },
         nextActions: [
           'Review suggested career paths',
@@ -321,7 +324,7 @@ export async function runCandidateLoop(
           'Generated career recommendations',
           'Completed candidate analysis'
         ],
-        profile: profileData // Include the profile data we already have
+        profile: profileData
       }
     } as CandidateMCPResponse;
 
