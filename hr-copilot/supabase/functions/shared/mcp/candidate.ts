@@ -21,6 +21,7 @@ import { testJobMatching } from '../job/testJobMatching.ts';
 async function generateCandidateInsights(
   matches: SemanticMatch[],
   recommendations: any[],
+  profileData: any,
   message?: string
 ): Promise<{ response: string; followUpQuestion?: string }> {
   try {
@@ -73,7 +74,15 @@ async function generateCandidateInsights(
     });
 
     // Prepare the prompt for ChatGPT
-    const prompt = `As an AI career advisor, analyze these job opportunities and provide personalized advice.
+    const prompt = `As an AI career advisor, analyze this candidate's profile and potential opportunities.
+
+CANDIDATE PROFILE
+Name: ${profileData.name || 'Not specified'}
+Current Role: ${profileData.role_title || 'Not specified'}
+Division: ${profileData.division || 'Not specified'}
+Experience Level: ${profileData.experience_level || 'Not specified'}
+Key Skills: ${profileData.skills?.map(s => s.name).join(', ') || 'Not specified'}
+Key Capabilities: ${profileData.capabilities?.map(c => c.name).join(', ') || 'Not specified'}
 
 Available Roles:
 ${matchData.map(match => `
@@ -91,9 +100,9 @@ ${Array.from(allCapabilities).map(cap => `- ${cap}`).join('\n')}
 ${message ? `User's message: ${message}` : ''}
 
 Please provide:
-1. A brief overview of how these roles align with the candidate's profile
-2. Specific insights about each role's requirements and opportunities
-3. Practical advice on how to prepare for these roles
+1. A brief overview of how the candidate's profile aligns with these roles
+2. Specific insights about each role's requirements and how they match the candidate's experience
+3. Practical advice on how to leverage existing skills and develop new ones
 4. A relevant follow-up question to help explore further
 
 Keep the tone conversational and focus on actionable insights rather than technical scores.
@@ -172,64 +181,11 @@ export async function runCandidateLoop(
       throw new Error(`Failed to get profile context: ${profileContext.error.message}`);
     }
 
-    // Get career path suggestions using semantic matching
-    // const careerPaths = await getSuggestedCareerPaths(supabase, profileId!);
-    // if (!careerPaths.error && careerPaths.data) {
-    //   for (const path of careerPaths.data) {
-    //     const roleDetail = await getRoleDetail(supabase, path.target_role.id);
-    //     if (roleDetail.error) continue;
-
-    //     // Get semantic matches for capabilities and skills using profile ID
-    //     const capabilityMatches = await getSemanticMatches(
-    //       supabase,
-    //       profileId!, // Use profile ID instead of embedding
-    //       'capabilities',
-    //       5
-    //     );
-
-    //     const skillMatches = await getSemanticMatches(
-    //       supabase,
-    //       profileId!, // Use profile ID instead of embedding
-    //       'skills',
-    //       5
-    //     );
-
-    //     // Get traditional gap analysis
-    //     const gaps = await getCapabilityGaps(supabase, profileId!, path.target_role.id);
-    //     const skillGaps = await getSkillGaps(supabase, profileId!, path.target_role.id);
-
-    //     // Combine semantic and traditional matches
-    //     matches.push(
-    //       ...capabilityMatches.map(match => ({
-    //         id: match.entityId,
-    //         similarity: match.similarity,
-    //         type: 'capability' as const,
-    //         metadata: { roleId: path.target_role.id }
-    //       })),
-    //       ...skillMatches.map(match => ({
-    //         id: match.entityId,
-    //         similarity: match.similarity,
-    //         type: 'skill' as const,
-    //         metadata: { roleId: path.target_role.id }
-    //       }))
-    //     );
-
-    //     recommendations.push({
-    //       type: 'career_path',
-    //       score: path.popularity_score || 0,
-    //       semanticScore: (capabilityMatches[0]?.similarity || 0 + skillMatches[0]?.similarity || 0) / 2,
-    //       summary: `Career path to ${path.target_role.title}`,
-    //       details: {
-    //         capabilityGaps: gaps.data?.length || 0,
-    //         skillGaps: skillGaps.data?.length || 0,
-    //         semanticMatches: {
-    //           capabilities: capabilityMatches.length,
-    //           skills: skillMatches.length
-    //         }
-    //       }
-    //     });
-    //   }
-    // }
+    // Get profile data
+    const profileData = await getProfileData(supabase, profileId!);
+    if (!profileData) {
+      throw new Error('Failed to get profile data');
+    }
 
     // Get open jobs with semantic matching
     const jobMatchingResult = await testJobMatching(supabase, profileId!, {
@@ -271,6 +227,7 @@ export async function runCandidateLoop(
     const chatResponse = await generateCandidateInsights(
       matches,
       recommendations,
+      profileData,
       context?.lastMessage
     );
 
