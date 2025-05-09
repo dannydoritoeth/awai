@@ -1,0 +1,18 @@
+A user starts a new chat session by calling startSession. 
+profileId? > candidate
+roleId? > hiring
+neither > general
+
+The process should:
+ - validate profile & role id exist if they are passed in
+ - get a new sessionId 
+ - create a new chat message with the message if passed in
+ - call the mcp-loop in a new request async, passing the sessionid. 
+ - return immediately with the new sessionId
+
+
+{
+  "action": "startSession",
+  "profileId": "1fe082ab-4fa0-483e-943d-9e96509dfc58",
+  "message": "What roles best suit my skill set"
+}

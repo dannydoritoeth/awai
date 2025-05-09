@@ -128,15 +128,28 @@ async function startSession(
   initialMessage?: string
 ): Promise<{ sessionId: string | null; error: ChatError | null }> {
   try {
-    // For general mode, entity_id should be NULL
-    const finalEntityId = mode === 'general' ? null : entityId;
+    // Validate entity ID exists if provided
+    if (entityId) {
+      const table = mode === 'candidate' ? 'profiles' : mode === 'hiring' ? 'roles' : null;
+      if (table) {
+        const { data, error } = await supabaseClient
+          .from(table)
+          .select('id')
+          .eq('id', entityId)
+          .single();
+
+        if (error || !data) {
+          throw new Error(`Invalid ${mode === 'candidate' ? 'profile' : 'role'} ID provided`);
+        }
+      }
+    }
 
     // Create the session
     const { data: session, error: sessionError } = await supabaseClient
       .from('conversation_sessions')
       .insert({
         mode,
-        entity_id: finalEntityId,
+        entity_id: mode === 'general' ? null : entityId,
         status: 'active'
       })
       .select('id')
@@ -144,21 +157,48 @@ async function startSession(
 
     if (sessionError) throw sessionError;
 
-    // If there's an initial message, process it
-    if (initialMessage && session) {
-      const { error: messageError } = await processInitialMessage(
-        supabaseClient,
-        session.id,
-        mode,
-        finalEntityId,
-        initialMessage
-      );
+    const sessionId = session?.id;
+    if (!sessionId) {
+      throw new Error('Failed to create session - no session ID returned');
+    }
 
-      if (messageError) throw messageError;
+    // If there's an initial message, log it and trigger MCP asynchronously
+    if (initialMessage) {
+      // Log the initial message
+      await postUserMessage(supabaseClient, sessionId, initialMessage);
+
+      // Trigger MCP loop asynchronously
+      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+        },
+        body: JSON.stringify({
+          mode,
+          sessionId,
+          ...(mode === 'candidate' ? { profileId: entityId } : {}),
+          ...(mode === 'hiring' ? { roleId: entityId } : {}),
+          context: {
+            lastMessage: initialMessage
+          }
+        })
+      }).catch(error => {
+        console.error('Async MCP call failed:', error);
+        // Log the error but don't block the response
+        logAgentAction(supabaseClient, {
+          entityType: 'chat',
+          entityId: sessionId,
+          payload: {
+            stage: 'mcp_error',
+            error: error.message
+          }
+        }).catch(console.error);
+      });
     }
 
     return {
-      sessionId: session?.id || null,
+      sessionId,
       error: null
     };
   } catch (error) {
@@ -166,8 +206,8 @@ async function startSession(
     return {
       sessionId: null,
       error: {
-        type: 'DATABASE_ERROR',
-        message: 'Failed to start chat session',
+        type: 'SESSION_ERROR',
+        message: error.message || 'Failed to start chat session',
         details: error
       }
     };

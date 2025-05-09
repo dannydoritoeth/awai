@@ -1,6 +1,7 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
-import { SemanticMatch, EntityType } from './mcpTypes.ts';
+import { SemanticMatch } from './mcpTypes.ts';
+import { EntityType } from './embeddings.ts';
 
 export interface SemanticSearchParams {
   embedding: number[];
