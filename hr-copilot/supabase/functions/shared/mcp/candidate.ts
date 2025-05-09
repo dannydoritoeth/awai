@@ -14,6 +14,7 @@ import { getProfileData } from '../profile/getProfileData.ts';
 import { getRolesData } from '../role/getRoleData.ts';
 import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
 import { testJobMatching } from '../job/testJobMatching.ts';
+import { logAgentResponse } from '../chatUtils.ts';
 
 /**
  * Generate candidate insights using ChatGPT
@@ -171,9 +172,19 @@ export async function runCandidateLoop(
   request: MCPRequest
 ): Promise<MCPResponse> {
   try {
-    const { profileId, context } = request;
+    const { profileId, context, sessionId } = request;
     const matches: SemanticMatch[] = [];
     const recommendations: any[] = [];
+
+    // Log starting analysis
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I'm analyzing your profile and finding the best role matches for your skills...",
+        'mcp_analysis_start'
+      );
+    }
 
     // Get profile context with embedding
     const profileContext = await getProfileContext(supabase, profileId!);
@@ -185,6 +196,16 @@ export async function runCandidateLoop(
     const profileData = await getProfileData(supabase, profileId!);
     if (!profileData) {
       throw new Error('Failed to get profile data');
+    }
+
+    // Log profile data loaded
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I've loaded your profile data and am now looking for matching opportunities...",
+        'mcp_data_loaded'
+      );
     }
 
     // Get open jobs with semantic matching
@@ -214,6 +235,16 @@ export async function runCandidateLoop(
           title: match.jobTitle
         }
       })));
+
+      // Log matches found
+      if (sessionId) {
+        await logAgentResponse(
+          supabase,
+          sessionId,
+          `I've found ${matches.length} potential role matches. Analyzing them in detail...`,
+          'mcp_matches_found'
+        );
+      }
     }
 
     // Sort recommendations by combined score
@@ -230,6 +261,22 @@ export async function runCandidateLoop(
       profileData,
       context?.lastMessage
     );
+
+    // Log the final AI response to chat
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        chatResponse.response,
+        'mcp_final_response',
+        undefined,
+        {
+          matches: matches.slice(0, 5),
+          recommendations: recommendations.slice(0, 3),
+          followUpQuestion: chatResponse.followUpQuestion
+        }
+      );
+    }
 
     // Log the MCP run
     await logAgentAction(supabase, {
@@ -271,6 +318,16 @@ export async function runCandidateLoop(
     };
 
   } catch (error) {
+    // Log error to chat if we have a session
+    if (request.sessionId) {
+      await logAgentResponse(
+        supabase,
+        request.sessionId,
+        "I encountered an error while analyzing your profile. Let me know if you'd like to try again.",
+        'mcp_error'
+      );
+    }
+
     return {
       success: false,
       message: error.message,
