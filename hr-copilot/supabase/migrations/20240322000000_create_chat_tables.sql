@@ -41,6 +41,34 @@ ALTER TABLE conversation_sessions
 ADD CONSTRAINT fk_entity_profile FOREIGN KEY (entity_id) REFERENCES profiles(id) ON DELETE CASCADE,
 ADD CONSTRAINT fk_entity_role FOREIGN KEY (entity_id) REFERENCES roles(id) ON DELETE CASCADE; 
 
+
+
+-- Drop existing foreign key constraints
+ALTER TABLE conversation_sessions
+DROP CONSTRAINT IF EXISTS fk_entity_profile,
+DROP CONSTRAINT IF EXISTS fk_entity_role;
+
+-- Add new foreign key constraints that allow NULL values
+ALTER TABLE conversation_sessions
+ADD CONSTRAINT fk_entity_profile 
+  FOREIGN KEY (entity_id) 
+  REFERENCES profiles(id) 
+  ON DELETE CASCADE
+  DEFERRABLE INITIALLY DEFERRED,
+ADD CONSTRAINT fk_entity_role
+  FOREIGN KEY (entity_id) 
+  REFERENCES roles(id) 
+  ON DELETE CASCADE
+  DEFERRABLE INITIALLY DEFERRED;
+
+-- Add check constraint to ensure entity_id is required for non-general modes
+ALTER TABLE conversation_sessions
+ADD CONSTRAINT check_entity_id_required
+  CHECK (
+    (mode = 'general' AND entity_id IS NULL) OR
+    (mode != 'general' AND entity_id IS NOT NULL)
+  ); 
+
 -- Add RLS policies
 -- ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;

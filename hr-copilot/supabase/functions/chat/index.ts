@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
 import {
   startChatSession,
@@ -44,6 +44,112 @@ async function callMCPLoop(sessionId: string, message: string, mode: 'candidate'
   return mcpResponse.json();
 }
 
+/**
+ * Process the initial message for a new chat session
+ */
+async function processInitialMessage(
+  supabase: SupabaseClient,
+  sessionId: string,
+  mode: 'candidate' | 'hiring' | 'general',
+  entityId: string | null | undefined,
+  message: string
+): Promise<{ error: ChatError | null }> {
+  try {
+    // Post the initial message
+    const { error: messageError } = await postUserMessage(supabase, sessionId, message);
+    if (messageError) throw messageError;
+
+    // Call MCP loop to process the message
+    const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+      },
+      body: JSON.stringify({
+        mode,
+        sessionId,
+        profileId: mode === 'candidate' ? entityId : undefined,
+        roleId: mode === 'hiring' ? entityId : undefined,
+        context: {
+          lastMessage: message
+        }
+      })
+    });
+
+    if (!mcpResponse.ok) {
+      throw new Error(`Failed to process initial message: ${await mcpResponse.text()}`);
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('Error processing initial message:', error);
+    return {
+      error: {
+        type: 'DATABASE_ERROR',
+        message: 'Failed to process initial message',
+        details: error
+      }
+    };
+  }
+}
+
+/**
+ * Start a new chat session
+ */
+async function startSession(
+  supabaseClient: SupabaseClient,
+  mode: 'candidate' | 'hiring' | 'general',
+  entityId?: string,
+  initialMessage?: string
+): Promise<{ sessionId: string | null; error: ChatError | null }> {
+  try {
+    // For general mode, entity_id should be NULL
+    const finalEntityId = mode === 'general' ? null : entityId;
+
+    // Create the session
+    const { data: session, error: sessionError } = await supabaseClient
+      .from('conversation_sessions')
+      .insert({
+        mode,
+        entity_id: finalEntityId,
+        status: 'active'
+      })
+      .select('id')
+      .single();
+
+    if (sessionError) throw sessionError;
+
+    // If there's an initial message, process it
+    if (initialMessage && session) {
+      const { error: messageError } = await processInitialMessage(
+        supabaseClient,
+        session.id,
+        mode,
+        finalEntityId,
+        initialMessage
+      );
+
+      if (messageError) throw messageError;
+    }
+
+    return {
+      sessionId: session?.id || null,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error in startSession:', error);
+    return {
+      sessionId: null,
+      error: {
+        type: 'DATABASE_ERROR',
+        message: 'Failed to start chat session',
+        details: error
+      }
+    };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -85,10 +191,11 @@ serve(async (req) => {
 
         try {
           // Start the chat session
-          const { sessionId: newSessionId, error: startError } = await startChatSession(
+          const { sessionId: newSessionId, error: startError } = await startSession(
             supabaseClient,
             mode,
-            entityId
+            entityId,
+            message // Pass the initial message to our new function
           );
           
           console.log('Chat session created:', { newSessionId, startError });
@@ -103,53 +210,18 @@ serve(async (req) => {
           }
 
           let initialResponse;
-          // If there's an initial message, process it
+          // If there's an initial message, it's already been processed by startSession
           if (message) {
-            console.log('Processing initial message:', message);
+            // Get the latest message to return as initial response
+            const { history } = await getChatHistory(supabaseClient, newSessionId);
+            const lastMessage = history?.messages?.[history.messages.length - 1];
             
-            try {
-              // Save the user's message
-              const { messageId, error: postError } = await postUserMessage(
-                supabaseClient,
-                newSessionId,
-                message
-              );
-              if (postError) throw postError;
-
-              console.log('User message posted:', { messageId });
-
-              // Process through MCP loop
-              const mcpResult = await callMCPLoop(
-                newSessionId,
-                message,
-                mode,
-                entityId
-              );
-              
-              console.log('MCP loop result:', mcpResult);
-
-              if (!mcpResult.success || !mcpResult.data?.chatResponse) {
-                throw new Error('Failed to get response from MCP loop');
-              }
-
-              // Log assistant's reply
-              const { error: replyError } = await logAgentResponse(
-                supabaseClient,
-                newSessionId,
-                mcpResult.data.chatResponse.message
-              );
-              if (replyError) throw replyError;
-
+            if (lastMessage && lastMessage.sender === 'assistant') {
               initialResponse = {
-                messageId,
-                reply: mcpResult.data.chatResponse.message,
-                followUpQuestion: mcpResult.data.chatResponse.followUpQuestion
+                messageId: lastMessage.id,
+                reply: lastMessage.message,
+                followUpQuestion: null // You might want to store this in the message metadata if needed
               };
-
-              console.log('Initial response prepared:', initialResponse);
-            } catch (error) {
-              console.error('Error processing initial message:', error);
-              throw new Error(`Failed to process initial message: ${error.message}`);
             }
           }
           

@@ -44,6 +44,7 @@ export interface MCPAction {
 export interface MCPRequest {
   profileId?: string;
   roleId?: string;
+  companyId?: string;
   mode: MCPMode;
   sessionId?: string;
   context?: MCPContext;
