@@ -1,0 +1,5 @@
+Job: Implement a simple 1s polling on the chat table for new messages.
+
+This isn't the best solution but will do for a demo 
+
+Load the chats for the given session id and display any new ones that are returned in order. 

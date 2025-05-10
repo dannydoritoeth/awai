@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { startSession } from '@/lib/api/chat';
 
 export default function Home() {
   const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -13,17 +16,33 @@ export default function Home() {
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-
-    // Reset height to auto to get the correct scrollHeight
     textarea.style.height = 'auto';
-    // Set new height based on scrollHeight, with a max of 150px
     textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
   }, [query]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      router.push(`/c?context=open&query=${encodeURIComponent(query.trim())}`);
+    setError(null);
+    if (!query.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const response = await startSession({
+        action: 'startSession',
+        message: query.trim()
+      });
+      console.log('startSession response:', response);
+      if (!response.sessionId) {
+        setError('No sessionId returned from API.');
+        setIsLoading(false);
+        return;
+      }
+      router.push(`/c/${response.sessionId}?context=open`);
+    } catch (error: any) {
+      console.error('Failed to start session:', error);
+      setError(error?.message || 'Failed to start session.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -101,21 +120,29 @@ export default function Home() {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (query.trim()) {
-                      router.push(`/c?context=open&query=${encodeURIComponent(query.trim())}`);
+                      handleSubmit(e);
                     }
                   }
                 }}
+                disabled={isLoading}
               />
               <button
                 type="submit"
                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!query.trim()}
+                disabled={!query.trim() || isLoading}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                )}
               </button>
             </div>
+            {error && (
+              <p className="text-sm text-red-600 text-center">{error}</p>
+            )}
             <p className="text-sm text-gray-500 text-center">
               Type your question about roles, candidates, or skills matching
             </p>

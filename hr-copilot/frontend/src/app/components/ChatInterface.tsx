@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -46,9 +48,9 @@ export default function ChatInterface({ onSendMessage, messages = [], isLoading 
   };
 
   return (
-    <div className="flex flex-col h-full select-none">
+    <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 mb-[76px]">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -61,7 +63,28 @@ export default function ChatInterface({ onSendMessage, messages = [], isLoading 
                   : 'bg-gray-100 text-gray-900'
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap font-medium">{msg.text}</p>
+              <div className={`text-sm whitespace-pre-wrap ${
+                msg.sender === 'user' 
+                  ? 'prose-invert' 
+                  : 'prose'
+              } prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    // Override heading styles
+                    h1: (props) => <h1 className="text-lg font-bold" {...props} />,
+                    h2: (props) => <h2 className="text-base font-bold" {...props} />,
+                    h3: (props) => <h3 className="text-base font-bold" {...props} />,
+                    // Ensure links are properly colored
+                    a: (props) => <a className="underline" {...props} />,
+                    // Style lists
+                    ul: (props) => <ul className="list-disc list-inside" {...props} />,
+                    ol: (props) => <ol className="list-decimal list-inside" {...props} />,
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
+              </div>
               <p className="text-xs mt-1 opacity-80">
                 {msg.timestamp.toLocaleTimeString([], { 
                   hour: '2-digit', 
@@ -84,8 +107,8 @@ export default function ChatInterface({ onSendMessage, messages = [], isLoading 
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="border-t border-gray-200 p-4">
+      {/* Input Area - Fixed at bottom */}
+      <div className="fixed max-w-[766px] bottom-0 left-1/2 -translate-x-1/2 right-0 border-t border-gray-200 p-4 bg-white rounded-b-2xl" style={{ width: 'inherit' }}>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <div className="flex-1 relative">
             <textarea
@@ -94,7 +117,7 @@ export default function ChatInterface({ onSendMessage, messages = [], isLoading 
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type your message..."
-              className="w-full resize-none rounded-lg border-none focus:border-none focus:outline-none focus:ring-0 text-gray-900 placeholder:text-gray-500 text-sm py-2 min-h-[40px] max-h-[150px] pr-4 selection:bg-blue-100"
+              className="w-full resize-none rounded-lg bg-gray-50 border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 placeholder:text-gray-500 text-sm py-2 px-3 min-h-[40px] max-h-[150px] selection:bg-blue-100"
               rows={1}
             />
           </div>

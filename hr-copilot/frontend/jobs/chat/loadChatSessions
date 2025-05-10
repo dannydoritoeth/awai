@@ -1,0 +1,3 @@
+On the left bar there is the history of chat sessions. 
+currently it is using dummy data. 
+Replace this with loading all the chat sessions from the db 

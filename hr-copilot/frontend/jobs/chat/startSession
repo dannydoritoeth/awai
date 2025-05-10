@@ -1,0 +1,51 @@
+Job: Implement the startSession function for the chat API.
+
+Steps
+ - from the home page the user starts a new session by clicking the "Start Session" button
+ - this calls the corresponding endpoint below
+ - the session will be created in the database and returned in the response 
+ - the url for the chat page will be /c/{sessionId}
+ - the chat page will load the chat history for the session (detailed in the next job)
+
+//candidate
+//https://vcwtxzmoembolyuiceuc.supabase.co/functions/v1/chat
+{
+    "action": "startSession",
+    "profileId": "1fe082ab-4fa0-483e-943d-9e96509dfc58",
+    "message": "What roles best suit my skill set"
+  }
+//response
+{
+    "sessionId": "aa454e64-5bf0-43eb-ad3a-fbc8c9113551",
+    "mode": "candidate",
+    "entityId": "1fe082ab-4fa0-483e-943d-9e96509dfc58"
+}
+
+//hiring
+//https://vcwtxzmoembolyuiceuc.supabase.co/functions/v1/chat
+{
+    "action": "startSession",
+    "roleId": "071f5e4e-2973-490e-b825-b745d828d842",
+    "message": "Which candidates are most suited to this role and why"
+}
+  
+//response
+{
+    "sessionId": "9216d5a7-edaa-4cf5-954a-92ac7e58789f",
+    "mode": "hiring",
+    "entityId": "071f5e4e-2973-490e-b825-b745d828d842"
+}
+
+
+//general
+//https://vcwtxzmoembolyuiceuc.supabase.co/functions/v1/chat
+{
+  "action": "startSession",
+  "message": "What career paths combine science and working outdoors"
+}
+//response
+{
+    "sessionId": "aa4044de-41ee-46e8-997b-d5b6bfcc494b",
+    "mode": "general"
+}
+

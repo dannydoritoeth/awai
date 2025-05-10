@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
+import { startSession, getSessionMessages } from '@/lib/api/chat';
 
 interface Message {
   id: string;
@@ -9,6 +10,7 @@ interface Message {
 }
 
 interface ProfileData {
+  id: string;
   name: string;
   currentRole: string;
   department: string;
@@ -34,26 +36,113 @@ interface UnifiedResultsViewProps {
   profileData?: ProfileData | null;
   roleData?: RoleData | null;
   startContext?: 'profile' | 'role' | 'open';
+  sessionId?: string;
 }
 
 export default function UnifiedResultsView({ 
   profileData, 
   roleData, 
-  startContext = 'open' 
+  startContext = 'open',
+  sessionId
 }: UnifiedResultsViewProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'candidates' | 'roles'>(() => {
-    // Set initial tab based on context
+  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
-    return 'candidates';
+    return 'matches';
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [additionalContext, setAdditionalContext] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const lastMessageId = useRef<string | null>(null);
+  const seenMessageIds = useRef<Set<string>>(new Set());
+
+  // Poll for new messages
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const pollMessages = async () => {
+      try {
+        const newMessages = await getSessionMessages(sessionId);
+        
+        // Filter out messages we've already seen
+        const unseenMessages = newMessages.filter(msg => !seenMessageIds.current.has(msg.id));
+
+        if (unseenMessages.length > 0) {
+          // Update seen message IDs
+          unseenMessages.forEach(msg => seenMessageIds.current.add(msg.id));
+          lastMessageId.current = unseenMessages[unseenMessages.length - 1].id;
+
+          // Convert and add new messages
+          const convertedMessages: Message[] = unseenMessages.map(msg => ({
+            id: msg.id,
+            text: msg.message,
+            sender: msg.sender === 'assistant' ? 'ai' : 'user',
+            timestamp: new Date(msg.timestamp)
+          }));
+
+          setMessages(prev => [...prev, ...convertedMessages]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+      }
+    };
+
+    // Initial fetch
+    pollMessages();
+
+    // Set up polling interval
+    const intervalId = setInterval(pollMessages, 1000);
+
+    // Cleanup
+    return () => {
+      clearInterval(intervalId);
+      seenMessageIds.current.clear();
+    };
+  }, [sessionId]);
+
+  // Initialize session
+  useEffect(() => {
+    const initializeSession = async () => {
+      if (messages.length > 0 || !sessionId) return;
+
+      let initialMessage = '';
+      const request: Parameters<typeof startSession>[0] = {
+        action: 'startSession',
+        message: ''
+      };
+
+      if (profileData) {
+        initialMessage = `I'm interested in finding roles that match my profile. I'm currently a ${profileData.currentRole} in ${profileData.department} with skills in ${profileData.skills.join(', ')}.`;
+        if (profileData.preferences?.desiredRoles) {
+          initialMessage += ` I'm particularly interested in roles like ${profileData.preferences.desiredRoles.join(', ')}.`;
+        }
+        if (additionalContext) {
+          initialMessage += ` Additional context: ${additionalContext}`;
+        }
+        request.profileId = profileData.id;
+      } else if (roleData) {
+        initialMessage = `I'm looking for candidates who would be a good fit for this ${roleData.title} role in ${roleData.department}. The role requires skills in ${roleData.skills.join(', ')}.`;
+        request.roleId = roleData.id;
+      }
+
+      if (initialMessage) {
+        request.message = initialMessage;
+        try {
+          await startSession(request);
+        } catch (error) {
+          console.error('Failed to initialize session:', error);
+        }
+      }
+    };
+
+    initializeSession();
+  }, [profileData, roleData, additionalContext, sessionId, messages.length]);
 
   const handleSendMessage = async (message: string) => {
-    // Add user message
+    if (!sessionId) return;
+
+    // Add user message to local state
     const userMessage: Message = {
       id: Date.now().toString(),
       text: message,
@@ -63,18 +152,30 @@ export default function UnifiedResultsView({
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // TODO: Send message to AI and get response
-    // For now, simulate AI response after a delay
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "I'm analyzing your request. This is a placeholder response that will be replaced with actual AI responses once the backend is integrated.",
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
+    try {
+      // Send message to API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          action: 'sendMessage',
+          sessionId,
+          message
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // TODO: Show error message to user
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const renderProfile = () => (
@@ -216,10 +317,10 @@ export default function UnifiedResultsView({
   );
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
-      <div className="w-1/2 bg-white rounded-2xl shadow-sm">
-        <div className="h-[600px]">
+      <div className="flex-1 max-w-[766px] bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="h-full">
           <ChatInterface
             onSendMessage={handleSendMessage}
             messages={messages}
@@ -229,7 +330,7 @@ export default function UnifiedResultsView({
       </div>
 
       {/* Right Panel - Context and Results */}
-      <div className="w-1/2 bg-white rounded-2xl shadow-sm flex flex-col">
+      <div className="w-[350px] bg-white rounded-2xl shadow-sm flex flex-col">
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
           <div className="flex">
@@ -259,26 +360,15 @@ export default function UnifiedResultsView({
               </button>
             )}
 
-            {/* Always show Candidates tab */}
+            {/* Always show Matches tab */}
             <button
               className={`px-6 py-4 text-sm font-medium transition-colors relative
-                ${activeTab === 'candidates'
+                ${activeTab === 'matches'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('candidates')}
+              onClick={() => setActiveTab('matches')}
             >
-              Matching Candidates
-            </button>
-
-            {/* Always show Roles tab */}
-            <button
-              className={`px-6 py-4 text-sm font-medium transition-colors relative
-                ${activeTab === 'roles'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('roles')}
-            >
-              Matching Roles
+              Matches
             </button>
           </div>
         </div>
@@ -287,8 +377,7 @@ export default function UnifiedResultsView({
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
-          {activeTab === 'candidates' && <LoadingState />}
-          {activeTab === 'roles' && <LoadingState />}
+          {activeTab === 'matches' && <LoadingState />}
         </div>
       </div>
     </div>
