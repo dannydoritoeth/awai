@@ -63,7 +63,7 @@ async function generateCandidateInsights(
       excludeFields: ['metadata', 'raw_data', 'embedding']
     };
 
-    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
+    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
 
     // Call ChatGPT API
     const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -78,7 +78,7 @@ async function generateCandidateInsights(
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',

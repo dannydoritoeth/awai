@@ -228,7 +228,7 @@ async function generateGeneralResponse(
       excludeFields: ['metadata', 'raw_data', 'embedding']
     };
 
-    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
+    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
 
     console.log('Prompt prepared, logging to agent actions...');
 
@@ -262,7 +262,7 @@ async function generateGeneralResponse(
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -301,7 +301,7 @@ async function generateGeneralResponse(
         stage: 'chatgpt_response',
         message: chatResponse,
         metadata: {
-          model: 'gpt-4-turbo-preview',
+          model: 'gpt-4o',
           temperature: 0.7,
           timestamp: new Date().toISOString(),
           responseStatus: response.status,

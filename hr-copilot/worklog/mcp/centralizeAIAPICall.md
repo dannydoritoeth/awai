@@ -46,7 +46,7 @@ export async function invokeChatModel(
   const apiKey = Deno.env.get('OPENAI_API_KEY');
 
   const payload = {
-    model: options?.model || 'gpt-4-turbo-preview',
+    model: options?.model || 'gpt-4o',
     messages: prompt.messages || [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user }

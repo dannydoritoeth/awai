@@ -15,8 +15,7 @@ export interface ModelProfile {
  * Model ID type
  */
 export type ModelId = 
-  | 'openai:gpt-4-turbo-preview'
-  | 'openai:gpt-3.5-turbo'
+  | 'openai:gpt-4o'
   | 'anthropic:claude-3-opus'
   | 'mistral:mixtral-8x7b';
 
@@ -60,7 +59,7 @@ export interface PromptResult {
  * Model profiles configuration
  */
 export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
-  'openai:gpt-4-turbo-preview': {
+  'openai:gpt-4o': {
     provider: 'openai',
     maxTokens: 128000,
     maxInputTokens: 126000,

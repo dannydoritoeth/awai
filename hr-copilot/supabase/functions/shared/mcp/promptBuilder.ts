@@ -11,8 +11,8 @@ import {
 // Override the placeholder tokenizers with actual implementations
 const modelProfiles = {
   ...MODEL_PROFILES,
-  'openai:gpt-4-turbo-preview': {
-    ...MODEL_PROFILES['openai:gpt-4-turbo-preview'],
+  'openai:gpt-4o': {
+    ...MODEL_PROFILES['openai:gpt-4o'],
     tokenizer: gpt4Encode
   },
   'openai:gpt-3.5-turbo': {

@@ -225,7 +225,7 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
       excludeFields: ['metadata']
     };
 
-    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
+    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -234,7 +234,7 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: prompt.system },
           { role: 'user', content: prompt.user }
