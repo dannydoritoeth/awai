@@ -10,6 +10,7 @@ import { getProfileData } from '../profile/getProfileData.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
 import { logAgentResponse } from '../chatUtils.ts';
+import { buildSafePrompt } from './promptBuilder.ts';
 
 // Type definitions
 declare const Deno: {
@@ -255,29 +256,34 @@ async function generateHiringInsights(
       };
     }
 
-    // Prepare the prompt with raw JSON data
-    const prompt = `As a hiring advisor, analyze the following role and candidates.
+    const systemPrompt = 'You are an experienced technical hiring advisor helping a hiring manager evaluate candidates. Focus on providing clear, actionable insights based on candidate skills, capabilities, and potential. Be direct about both strengths and concerns.';
 
-Schema hint:
-Role contains title, purpose, capabilities (focus/complementary), skills (level + years).
-Each candidate contains name, scores, matched/missing skills and capabilities.
+    const promptData = {
+      systemPrompt,
+      userMessage: message || 'Please analyze the candidates for this role and provide hiring recommendations.',
+      data: {
+        role: roleData,
+        candidates: matches.slice(0, 5)
+      },
+      context: {
+        sections: [
+          'ROLE REQUIREMENTS OVERVIEW',
+          'CANDIDATE POOL QUALITY',
+          'INDIVIDUAL CANDIDATE ASSESSMENTS',
+          'INTERVIEW RECOMMENDATIONS',
+          'HIRING RECOMMENDATIONS'
+        ]
+      }
+    };
 
-${message || 'Please analyze the candidates for this role and provide hiring recommendations.'}
+    const promptOptions = {
+      maxItems: 5,
+      maxFieldLength: 200,
+      priorityFields: ['name', 'score', 'semanticScore', 'summary', 'matched', 'missing', 'insufficient'],
+      excludeFields: ['metadata', 'raw_data', 'embedding']
+    };
 
-${JSON.stringify({ 
-  role: roleData, 
-  candidates: matches.slice(0, 5)  // Only take top 5 candidates
-}, null, 2)}
-
-Please provide a comprehensive hiring analysis with the following sections:
-
-1. ROLE REQUIREMENTS OVERVIEW
-2. CANDIDATE POOL QUALITY
-3. INDIVIDUAL CANDIDATE ASSESSMENTS
-4. INTERVIEW RECOMMENDATIONS
-5. HIRING RECOMMENDATIONS
-
-Keep the analysis objective and data-driven, focusing on actionable insights for the hiring manager.`;
+    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
 
     // Call ChatGPT API
     const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -296,11 +302,11 @@ Keep the analysis objective and data-driven, focusing on actionable insights for
         messages: [
           {
             role: 'system',
-            content: 'You are an experienced technical hiring advisor helping a hiring manager evaluate candidates. Focus on providing clear, actionable insights based on candidate skills, capabilities, and potential. Be direct about both strengths and concerns.'
+            content: prompt.system
           },
           {
             role: 'user',
-            content: prompt
+            content: prompt.user
           }
         ],
         temperature: 0.7,
@@ -322,7 +328,7 @@ Keep the analysis objective and data-driven, focusing on actionable insights for
     return {
       response: chatResponse,
       followUpQuestion: "Would you like to focus on any specific aspects of these candidates?",
-      prompt
+      prompt: prompt.user
     };
 
   } catch (error) {

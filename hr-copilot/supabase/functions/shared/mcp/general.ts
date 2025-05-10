@@ -6,6 +6,7 @@ import { logProgress, logAgentResponse, handleChatInteraction } from '../chatUti
 import { getSemanticMatches, generateEmbedding } from '../semanticSearch.ts';
 import { getPlannerRecommendation } from './planner.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
+import { buildSafePrompt } from './promptBuilder.ts';
 
 declare const Deno: {
   env: {
@@ -155,7 +156,6 @@ async function generateGeneralResponse(
     if (!hasValidMatches) {
       const response = "I've analyzed your request but couldn't find any relevant matches. Would you like to try a different search approach or explore other areas?";
       
-      // Log the no-matches case
       await logAgentAction(supabase, {
         entityType: 'chat',
         entityId: loggingId,
@@ -202,44 +202,33 @@ async function generateGeneralResponse(
       throw new Error('OpenAI API key not found');
     }
 
-    // Format matches for prompt
-    let matchesPromptSection = '';
-    try {
-      matchesPromptSection = Object.entries(matchesByType).map(([type, typeMatches]) => `
-${type.toUpperCase()} Matches (showing top 5 of ${typeMatches.length}):
-${formatMatchesForPrompt(typeMatches)}`).join('\n');
-    } catch (formatError) {
-      console.error('Error formatting matches for prompt:', formatError);
-      matchesPromptSection = 'Error formatting matches';
-    }
+    const systemPrompt = 'You are an experienced career advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.';
 
-    // Format recommendations for prompt
-    let recommendationsPromptSection = '';
-    try {
-      recommendationsPromptSection = formatRecommendationsForPrompt(recommendations);
-    } catch (formatError) {
-      console.error('Error formatting recommendations for prompt:', formatError);
-      recommendationsPromptSection = 'Error formatting recommendations';
-    }
+    const promptData = {
+      systemPrompt,
+      userMessage: message,
+      data: {
+        matches: matches.slice(0, 5),
+        recommendations: recommendations.slice(0, 5)
+      },
+      context: {
+        sections: [
+          'CLEAR ANSWER TO USER QUESTION',
+          'SPECIFIC INSIGHTS FROM MATCHES',
+          'ACTIONABLE RECOMMENDATIONS',
+          'RELEVANT FOLLOW-UP'
+        ]
+      }
+    };
 
-    // Format the prompt with truncated data
-    const prompt = `As an AI career advisor, analyze this data and provide insights about the most common skills in demand.
+    const promptOptions = {
+      maxItems: 5,
+      maxFieldLength: 200,
+      priorityFields: ['name', 'type', 'similarity', 'summary'],
+      excludeFields: ['metadata', 'raw_data', 'embedding']
+    };
 
-User's question: ${message}
-
-Data:
-${JSON.stringify({
-  matches: matches.slice(0, 5),
-  recommendations: recommendations.slice(0, 5)
-}, null, 2)}
-
-Please provide:
-1. A clear, concise answer to the user's question
-2. Specific insights from the matches
-3. Actionable recommendations based on the data
-4. A relevant follow-up question
-
-Keep the tone conversational and focus on practical insights.`;
+    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
 
     console.log('Prompt prepared, logging to agent actions...');
 
@@ -249,7 +238,7 @@ Keep the tone conversational and focus on practical insights.`;
       entityId: loggingId,
       payload: {
         stage: 'chatgpt_prompt',
-        message: prompt,
+        message: prompt.user,
         metadata: {
           matchCount: matches.length,
           matchesByType: Object.fromEntries(
@@ -258,7 +247,8 @@ Keep the tone conversational and focus on practical insights.`;
           recommendationCount: recommendations.length,
           truncatedMatchCount: Math.min(matches.length, 5),
           truncatedRecommendationCount: Math.min(recommendations.length, 5),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          promptMetadata: prompt.metadata
         }
       }
     });
@@ -276,11 +266,11 @@ Keep the tone conversational and focus on practical insights.`;
         messages: [
           {
             role: 'system',
-            content: 'You are an experienced career advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.'
+            content: prompt.system
           },
           {
             role: 'user',
-            content: prompt
+            content: prompt.user
           }
         ],
         temperature: 0.7,
@@ -325,7 +315,7 @@ Keep the tone conversational and focus on practical insights.`;
     return {
       response: parts[0].trim(),
       followUpQuestion: parts[1]?.trim(),
-      prompt: prompt
+      prompt: prompt.user
     };
   } catch (error) {
     console.error('Error in generateGeneralResponse:', error);

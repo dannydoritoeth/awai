@@ -15,6 +15,7 @@ import { getRolesData } from '../role/getRoleData.ts';
 import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.ts';
 import { testJobMatching } from '../job/testJobMatching.ts';
 import { logAgentResponse } from '../chatUtils.ts';
+import { buildSafePrompt } from './promptBuilder.ts';
 
 /**
  * Generate candidate insights using ChatGPT
@@ -34,31 +35,35 @@ async function generateCandidateInsights(
       };
     }
 
-    // Prepare the prompt with raw JSON data
-    const prompt = `As an AI career advisor, analyze this candidate's profile and potential opportunities.
+    const systemPrompt = 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.';
 
-Schema hint:
-Profile contains skills, capabilities, experience, and preferences.
-Matches contain roles with similarity scores and skill/capability alignment.
-Recommendations contain specific opportunities with detailed fit analysis.
+    const promptData = {
+      systemPrompt,
+      userMessage: message || 'Please analyze the opportunities and provide career recommendations.',
+      data: {
+        profile: profileData,
+        matches: matches.slice(0, 5),
+        recommendations: recommendations.slice(0, 5)
+      },
+      context: {
+        sections: [
+          'PROFILE OVERVIEW',
+          'OPPORTUNITY ANALYSIS',
+          'SKILL GAP ASSESSMENT',
+          'CAREER PATH RECOMMENDATIONS',
+          'NEXT STEPS'
+        ]
+      }
+    };
 
-${message || 'Please analyze the opportunities and provide career recommendations.'}
+    const promptOptions = {
+      maxItems: 5,
+      maxFieldLength: 200,
+      priorityFields: ['name', 'title', 'summary', 'score', 'semanticScore'],
+      excludeFields: ['metadata', 'raw_data', 'embedding']
+    };
 
-${JSON.stringify({
-  profile: profileData,
-  matches: matches.slice(0, 5),  // Only take top 5 matches
-  recommendations: recommendations.slice(0, 5)  // Only take top 5 recommendations
-}, null, 2)}
-
-Please provide a comprehensive career analysis with the following sections:
-
-1. PROFILE OVERVIEW
-2. OPPORTUNITY ANALYSIS
-3. SKILL GAP ASSESSMENT
-4. CAREER PATH RECOMMENDATIONS
-5. NEXT STEPS
-
-Keep the analysis conversational and focused on actionable career development insights.`;
+    const prompt = buildSafePrompt('openai:gpt-4-turbo-preview', promptData, promptOptions);
 
     // Call ChatGPT API
     const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -77,11 +82,11 @@ Keep the analysis conversational and focused on actionable career development in
         messages: [
           {
             role: 'system',
-            content: 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.'
+            content: prompt.system
           },
           {
             role: 'user',
-            content: prompt
+            content: prompt.user
           }
         ],
         temperature: 0.7,
@@ -106,7 +111,7 @@ Keep the analysis conversational and focused on actionable career development in
     return {
       response: parts[0].trim(),
       followUpQuestion: parts[1]?.trim(),
-      prompt
+      prompt: prompt.user // Return the actual prompt used
     };
 
   } catch (error) {
