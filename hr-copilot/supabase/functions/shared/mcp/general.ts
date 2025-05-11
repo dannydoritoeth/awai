@@ -202,7 +202,7 @@ async function generateGeneralResponse(
       throw new Error('OpenAI API key not found');
     }
 
-    const systemPrompt = 'You are an experienced career advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.';
+    const systemPrompt = 'You are an experienced advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.';
 
     const promptData = {
       systemPrompt,

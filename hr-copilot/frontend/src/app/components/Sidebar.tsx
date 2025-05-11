@@ -154,7 +154,7 @@ export default function Sidebar({
                     ? 'bg-blue-50 text-blue-700 border border-blue-200' 
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
               >
-                Candidates
+                Profiles
               </button>
             </div>
           </div>

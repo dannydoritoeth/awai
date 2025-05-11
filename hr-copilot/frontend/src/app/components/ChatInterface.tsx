@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import TypewriterText from './TypewriterText';
 
 interface Message {
   id: string;
@@ -63,28 +62,10 @@ export default function ChatInterface({ onSendMessage, messages = [], isLoading 
                   : 'bg-gray-100 text-gray-900'
               }`}
             >
-              <div className={`text-sm whitespace-pre-wrap ${
-                msg.sender === 'user' 
-                  ? 'prose-invert' 
-                  : 'prose'
-              } prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // Override heading styles
-                    h1: (props) => <h1 className="text-lg font-bold" {...props} />,
-                    h2: (props) => <h2 className="text-base font-bold" {...props} />,
-                    h3: (props) => <h3 className="text-base font-bold" {...props} />,
-                    // Ensure links are properly colored
-                    a: (props) => <a className="underline" {...props} />,
-                    // Style lists
-                    ul: (props) => <ul className="list-disc list-inside" {...props} />,
-                    ol: (props) => <ol className="list-decimal list-inside" {...props} />,
-                  }}
-                >
-                  {msg.text}
-                </ReactMarkdown>
-              </div>
+              <TypewriterText 
+                text={msg.text} 
+                isAI={msg.sender === 'ai'}
+              />
               <p className="text-xs mt-1 opacity-80">
                 {msg.timestamp.toLocaleTimeString([], { 
                   hour: '2-digit', 
