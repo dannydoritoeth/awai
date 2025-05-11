@@ -3,22 +3,24 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-interface Profile {
+interface Role {
   id: string;
-  name: string;
-  currentRole: string;
+  title: string;
   department: string;
+  location: string;
+  description: string;
+  requirements: string[];
   skills: string[];
 }
 
-interface ProfileFinderProps {
-  onProfileSelect: (profile: Profile) => void;
+interface RoleFinderProps {
+  onRoleSelect: (role: Role) => void;
 }
 
-export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
+export default function RoleFinder({ onRoleSelect }: RoleFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [searchResults, setSearchResults] = useState<Role[]>([]);
 
   // Perform initial search on component mount
   useEffect(() => {
@@ -34,14 +36,14 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
     
     try {
       let query = supabase
-        .from('profiles')
-        .select('id, name, role_title, division, skills:profile_skills(skill:skills(name))')
-        .order('name', { ascending: true })
+        .from('roles')
+        .select('id, title, division_id, location, primary_purpose, divisions(name), skills:role_skills(skill:skills(name))')
+        .order('title', { ascending: true })
         .limit(10);
       
       // Apply search filter if query is provided
       if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,role_title.ilike.%${searchQuery}%,division.ilike.%${searchQuery}%`);
+        query = query.or(`title.ilike.%${searchQuery}%,primary_purpose.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%`);
       }
       
       const { data, error } = await query;
@@ -50,35 +52,50 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
         throw error;
       }
       
-      // Transform the data to match our Profile interface
-      const profiles: Profile[] = [];
+      // Transform the data to match our Role interface
+      const roles: Role[] = [];
       
       if (data) {
-        for (const profile of data) {
+        for (const role of data) {
           // Extract skills from the joins
           const skillList: string[] = [];
           
-          if (profile.skills && Array.isArray(profile.skills)) {
-            for (const skillObj of profile.skills) {
+          if (role.skills && Array.isArray(role.skills)) {
+            for (const skillObj of role.skills) {
               if (skillObj.skill && skillObj.skill.name) {
                 skillList.push(skillObj.skill.name);
               }
             }
           }
           
-          profiles.push({
-            id: profile.id,
-            name: profile.name || 'Unnamed Profile',
-            currentRole: profile.role_title || 'No Role',
-            department: profile.division || 'No Division',
+          // Split the primary purpose into requirements (simple approach)
+          const primaryPurpose = role.primary_purpose || '';
+          const requirements = primaryPurpose
+            .split('.')
+            .filter(sentence => sentence.trim().length > 0)
+            .slice(0, 3); // Just take first 3 sentences as requirements
+          
+          // Get division name
+          let departmentName = 'No Division';
+          if (role.divisions && typeof role.divisions === 'object' && role.divisions.name) {
+            departmentName = role.divisions.name;
+          }
+          
+          roles.push({
+            id: role.id,
+            title: role.title || 'Unnamed Role',
+            department: departmentName,
+            location: role.location || 'No Location',
+            description: role.primary_purpose || 'No description available',
+            requirements,
             skills: skillList
           });
         }
       }
       
-      setSearchResults(profiles);
+      setSearchResults(roles);
     } catch (error) {
-      console.error('Error searching profiles:', error);
+      console.error('Error searching roles:', error);
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +111,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, role, or department..."
+              placeholder="Search by title, department, or skills..."
               className="w-full rounded-lg border-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-10"
             />
             <svg
@@ -117,7 +134,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
           type="submit"
           className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          Search Profiles
+          Search Roles
         </button>
       </form>
 
@@ -130,24 +147,24 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
         <div className="space-y-2">
           {searchResults.length === 0 && searchQuery && !isLoading ? (
             <div className="text-center py-8 text-gray-500">
-              No profiles found matching your search.
+              No roles found matching your search.
             </div>
           ) : (
-            searchResults.map((profile) => (
+            searchResults.map((role) => (
               <button
-                key={profile.id}
-                onClick={() => onProfileSelect(profile)}
+                key={role.id}
+                onClick={() => onRoleSelect(role)}
                 className="w-full p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-left"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900">{profile.name}</h3>
-                    <p className="text-sm text-gray-600">{profile.currentRole}</p>
-                    <p className="text-xs text-gray-500">{profile.department}</p>
+                    <h3 className="text-sm font-medium text-gray-900">{role.title}</h3>
+                    <p className="text-sm text-gray-600">{role.department}</p>
+                    <p className="text-xs text-gray-500">{role.location}</p>
                     
-                    {profile.skills && profile.skills.length > 0 && (
+                    {role.skills && role.skills.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {profile.skills.slice(0, 3).map((skill, index) => (
+                        {role.skills.slice(0, 3).map((skill, index) => (
                           <span
                             key={index}
                             className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full"
@@ -155,9 +172,9 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
                             {skill}
                           </span>
                         ))}
-                        {profile.skills.length > 3 && (
+                        {role.skills.length > 3 && (
                           <span className="px-2 py-0.5 text-gray-500 text-xs">
-                            +{profile.skills.length - 3} more
+                            +{role.skills.length - 3} more
                           </span>
                         )}
                       </div>

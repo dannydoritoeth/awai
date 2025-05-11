@@ -38,9 +38,10 @@ export default function Home() {
         return;
       }
       router.push(`/c/${response.sessionId}?context=open`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to start session:', error);
-      setError(error?.message || 'Failed to start session.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start session.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -74,10 +75,10 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Start with a Profile
+                Search for a Profile
               </h2>
               <p className="text-gray-600">
-                Find roles that match a specific profile
+                Find suitable roles for a professional profile
               </p>
             </div>
           </Link>
@@ -93,10 +94,10 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Start with a Role
+                Search for a Role
               </h2>
               <p className="text-gray-600">
-                Find candidates for a specific role
+                Find suitable candidates for a specific role
               </p>
             </div>
           </Link>
