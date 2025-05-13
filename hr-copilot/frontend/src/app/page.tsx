@@ -53,10 +53,26 @@ export default function Home() {
       <div className="max-w-4xl mx-auto text-center mb-16">
         <div className="bg-white/50 backdrop-blur-sm py-8 px-4 rounded-3xl shadow-sm">
           <h1 className="text-5xl font-bold text-blue-600 mb-4 tracking-tight">
-            TalentPathAI
+            Welcome to the TalentPathAI Demo
           </h1>
-          <p className="text-2xl text-blue-950 font-medium">
-            Intelligent HR matching for roles and candidates
+          <p className="text-2xl text-blue-950 font-medium mb-8">
+            Explore intelligent HR matching using real DCCEEW public sector role data and synthetic candidate profiles.
+          </p>
+
+          <div className="text-xl text-blue-950 space-y-4 mb-8">
+            <p className="flex items-center justify-left gap-3">
+              <span>🔍</span> Start with a Profile – Discover which roles align with a sample employee’s skills
+            </p>
+            <p className="flex items-center justify-left gap-3">
+              <span>🧩</span> Start with a Role – Find matching candidates from our generated talent pool
+            </p>
+            <p className="flex items-center justify-left gap-3">
+              <span>💬</span> Chat with the Platform – Ask anything about roles, skills, or candidate fit
+            </p>
+          </div>
+
+          <p className="text-lg text-blue-950/80 italic">
+          This demo showcases AI-powered matching between real job descriptions and auto-generated candidate profiles. All data is anonymised and intended for demonstration purposes only.
           </p>
         </div>
       </div>
