@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface Role {
@@ -13,6 +13,23 @@ interface Role {
   skills: string[];
 }
 
+// Define the shape of data returned from Supabase
+interface SupabaseRole {
+  id: string;
+  title: string | null;
+  division_id: string | null;
+  location: string | null;
+  primary_purpose: string | null;
+  divisions: {
+    name: string;
+  } | null;
+  skills: {
+    skill: {
+      name: string;
+    }
+  }[] | null;
+}
+
 interface RoleFinderProps {
   onRoleSelect: (role: Role) => void;
 }
@@ -22,12 +39,7 @@ export default function RoleFinder({ onRoleSelect }: RoleFinderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<Role[]>([]);
 
-  // Perform initial search on component mount
-  useEffect(() => {
-    handleSearch();
-  }, []);
-
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = useCallback(async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
     }
@@ -56,7 +68,7 @@ export default function RoleFinder({ onRoleSelect }: RoleFinderProps) {
       const roles: Role[] = [];
       
       if (data) {
-        for (const role of data) {
+        for (const role of data as unknown as SupabaseRole[]) {
           // Extract skills from the joins
           const skillList: string[] = [];
           
@@ -99,7 +111,12 @@ export default function RoleFinder({ onRoleSelect }: RoleFinderProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchQuery]);
+
+  // Perform initial search on component mount
+  useEffect(() => {
+    handleSearch();
+  }, [handleSearch]);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">

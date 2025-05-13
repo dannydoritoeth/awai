@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import UnifiedResultsView from '../components/UnifiedResultsView';
 import ProfileFinder from '../components/ProfileFinder';
@@ -25,7 +25,8 @@ interface Role {
   skills: string[];
 }
 
-export default function ChatPage() {
+// Separate component that uses useSearchParams
+function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const context = searchParams.get('context') as 'profile' | 'role' | 'open';
@@ -172,5 +173,26 @@ export default function ChatPage() {
         />
       </div>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex flex-col items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ChatPageContent />
+    </Suspense>
   );
 } 

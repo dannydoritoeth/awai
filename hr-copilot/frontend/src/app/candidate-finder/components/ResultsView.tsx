@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 interface RoleData {
   jobTitle?: string;
@@ -115,10 +116,12 @@ export default function ResultsView({ roleData }: ResultsViewProps) {
           <div className="p-6 border-b border-gray-100">
             <div className="flex items-start gap-4">
               {candidate.imageUrl ? (
-                <img
+                <Image
                   src={candidate.imageUrl}
                   alt={candidate.name}
-                  className="w-14 h-14 rounded-full"
+                  width={56}
+                  height={56}
+                  className="rounded-full"
                 />
               ) : (
                 <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center">
@@ -213,7 +216,7 @@ export default function ResultsView({ roleData }: ResultsViewProps) {
         <div className="flex-1 overflow-y-auto mb-6 space-y-4">
           <div className="bg-blue-50 rounded-lg p-4 max-w-[80%]">
             <p className="text-base text-gray-700 leading-relaxed">
-              I've analyzed the role requirements and found several strong matches. 
+              I&apos;ve analyzed the role requirements and found several strong matches. 
               Sarah Chen stands out with a 95% match due to her extensive experience 
               with React and TypeScript, plus her team leadership background.
             </p>
@@ -260,7 +263,7 @@ export default function ResultsView({ roleData }: ResultsViewProps) {
             </button>
           </div>
           <button
-            onClick={() => window.location.reload()} // Temporary solution - should use proper state management
+            onClick={() => window.location.reload()}
             className="text-sm font-medium text-blue-600 hover:text-blue-700"
           >
             Edit Role →

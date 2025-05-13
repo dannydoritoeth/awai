@@ -230,7 +230,7 @@ export default function RoleResultsView({ employeeData }: RoleResultsViewProps) 
         <div className="flex-1 overflow-y-auto mb-6 space-y-4">
           <div className="bg-blue-50 rounded-lg p-4 max-w-[80%]">
             <p className="text-base text-gray-700 leading-relaxed">
-              Based on {employeeData?.name}'s experience with React and Node.js, 
+              Based on {employeeData?.name}&apos;s experience with React and Node.js, 
               they would be a strong fit for the Senior Software Engineer role. 
               Their current role has given them valuable team leadership experience, 
               which aligns well with the career progression to Tech Lead.

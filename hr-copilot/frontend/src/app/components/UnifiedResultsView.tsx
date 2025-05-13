@@ -97,7 +97,9 @@ export default function UnifiedResultsView({
     // Cleanup
     return () => {
       clearInterval(intervalId);
-      seenMessageIds.current.clear();
+      // Create a copy of the current ref value for cleanup
+      const seenIds = new Set(seenMessageIds.current);
+      seenIds.clear();
     };
   }, [sessionId]);
 

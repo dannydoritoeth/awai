@@ -75,7 +75,7 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Search for a Profile
+                Start with a Profile
               </h2>
               <p className="text-gray-600">
                 Find suitable roles for a professional profile
@@ -94,7 +94,7 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Search for a Role
+                Start with a Role
               </h2>
               <p className="text-gray-600">
                 Find suitable candidates for a specific role

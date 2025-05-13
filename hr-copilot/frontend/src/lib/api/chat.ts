@@ -11,14 +11,24 @@ interface StartSessionResponse {
   entityId?: string;
 }
 
+interface ToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+interface ResponseData {
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+
 interface ChatMessage {
   id: string;
   session_id: string;
   sender: 'user' | 'assistant';
   message: string;
   timestamp: string;
-  tool_call?: any;
-  response_data?: any;
+  tool_call?: ToolCall;
+  response_data?: ResponseData;
 }
 
 export async function startSession(req: StartSessionRequest): Promise<StartSessionResponse> {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface Profile {
@@ -9,6 +9,19 @@ interface Profile {
   currentRole: string;
   department: string;
   skills: string[];
+}
+
+// Define the shape of data returned from Supabase
+interface SupabaseProfile {
+  id: string;
+  name: string | null;
+  role_title: string | null;
+  division: string | null;
+  skills: {
+    skill: {
+      name: string;
+    }
+  }[] | null;
 }
 
 interface ProfileFinderProps {
@@ -20,12 +33,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
 
-  // Perform initial search on component mount
-  useEffect(() => {
-    handleSearch();
-  }, []);
-
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = useCallback(async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
     }
@@ -54,7 +62,7 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
       const profiles: Profile[] = [];
       
       if (data) {
-        for (const profile of data) {
+        for (const profile of data as unknown as SupabaseProfile[]) {
           // Extract skills from the joins
           const skillList: string[] = [];
           
@@ -82,7 +90,12 @@ export default function ProfileFinder({ onProfileSelect }: ProfileFinderProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchQuery]);
+
+  // Perform initial search on component mount
+  useEffect(() => {
+    handleSearch();
+  }, [handleSearch]);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
