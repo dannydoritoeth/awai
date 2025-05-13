@@ -1,5 +1,7 @@
+The following data needs to be the response but also logged in agent_actions
+
 MCP-LOOP Response Data 
- - All: matches, recommendations, chatResponse, actionsTaken, nextActions, aiPrompt
+ - All: matches, recommendations, chatResponse, actionsTaken, nextActions, aiPrompt, aiConfig
  - Hiring: role
  - Candidate: profile
  - General: <all>

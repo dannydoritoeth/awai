@@ -3,96 +3,17 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { ChatSession, loadChatSessions } from '@/lib/supabase';
 
-interface HistoryItem {
-  id: string;
-  title: string;
-  timestamp: string;
+interface HistoryItem extends ChatSession {
   path: string;
-  type: 'role' | 'candidate' | 'general';
 }
 
 type ItemType = 'roles' | 'candidates' | null;
 
 const STORAGE_KEYS = {
   MENU_OPEN: 'hr_copilot_menu_open',
-  RECENT_ROLES: 'hr_copilot_recent_roles',
-  RECENT_CANDIDATES: 'hr_copilot_recent_candidates',
 };
-
-// Sample historical data
-const SAMPLE_HISTORY: HistoryItem[] = [
-  {
-    id: '1',
-    title: 'Senior Software Engineer Role',
-    timestamp: new Date().toISOString(), // Today
-    path: '/c/1',
-    type: 'role'
-  },
-  {
-    id: '2',
-    title: 'John Smith - Full Stack Developer',
-    timestamp: new Date().toISOString(), // Today
-    path: '/c/2',
-    type: 'candidate'
-  },
-  {
-    id: '3',
-    title: 'Product Manager Position',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
-    path: '/c/3',
-    type: 'role'
-  },
-  {
-    id: '4',
-    title: 'AI Skills Analysis Query',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
-    path: '/c/4',
-    type: 'general'
-  },
-  {
-    id: '5',
-    title: 'Sarah Johnson - Data Scientist',
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-    path: '/c/5',
-    type: 'candidate'
-  },
-  {
-    id: '6',
-    title: 'Marketing Lead Search',
-    timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    path: '/c/6',
-    type: 'role'
-  },
-  {
-    id: '7',
-    title: 'Team Structure Analysis',
-    timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), // 6 days ago
-    path: '/c/7',
-    type: 'general'
-  },
-  {
-    id: '8',
-    title: 'DevOps Engineer Role',
-    timestamp: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days ago
-    path: '/c/8',
-    type: 'role'
-  },
-  {
-    id: '9',
-    title: 'Michael Brown - UX Designer',
-    timestamp: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), // 20 days ago
-    path: '/c/9',
-    type: 'candidate'
-  },
-  {
-    id: '10',
-    title: 'Department Skills Gap Analysis',
-    timestamp: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(), // 25 days ago
-    path: '/c/10',
-    type: 'general'
-  }
-];
 
 function getStoredValue<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue;
@@ -116,7 +37,7 @@ function groupItemsByDate(items: HistoryItem[]) {
   monthAgo.setDate(monthAgo.getDate() - 30);
 
   return items.reduce((groups, item) => {
-    const itemDate = new Date(item.timestamp);
+    const itemDate = new Date(item.created_at);
     if (itemDate >= today) {
       groups.today.push(item);
     } else if (itemDate >= yesterday) {
@@ -144,13 +65,31 @@ export default function Sidebar({
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [selectedType, setSelectedType] = useState<ItemType>(null);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
 
   useEffect(() => {
     setIsClient(true);
     setIsMenuOpen(getStoredValue(STORAGE_KEYS.MENU_OPEN, true));
-    // Load sample data initially
-    setHistoryItems(SAMPLE_HISTORY);
+    
+    // Load actual chat sessions
+    const fetchSessions = async () => {
+      try {
+        setIsLoading(true);
+        const sessions = await loadChatSessions();
+        const items: HistoryItem[] = sessions.map(session => ({
+          ...session,
+          path: `/c/${session.id}` // Construct the path based on session ID
+        }));
+        setHistoryItems(items);
+      } catch (error) {
+        console.error('Failed to load chat sessions:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSessions();
   }, []);
 
   useEffect(() => {
@@ -160,7 +99,7 @@ export default function Sidebar({
 
   const filteredItems = selectedType 
     ? historyItems.filter(item => 
-        selectedType === 'roles' ? item.type === 'role' : item.type === 'candidate'
+        selectedType === 'roles' ? item.mode === 'hiring' : item.mode === 'candidate'
       )
     : historyItems;
   
@@ -215,91 +154,107 @@ export default function Sidebar({
                     ? 'bg-blue-50 text-blue-700 border border-blue-200' 
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
               >
-                Candidates
+                Profiles
               </button>
             </div>
           </div>
 
           {/* Items List Grouped by Date */}
           <div className="flex-1 overflow-y-auto px-4 py-2">
-            {/* Today's Items */}
-            {groupedItems.today.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-medium text-gray-500 mb-2">Today</h3>
-                <div className="space-y-1">
-                  {groupedItems.today.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.path}
-                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
-                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
-                      }`}
-                    >
-                      <div className="text-sm">{item.title}</div>
-                    </Link>
-                  ))}
-                </div>
+            {isLoading ? (
+              // Loading state
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            )}
+            ) : (
+              <>
+                {/* Today's Items */}
+                {groupedItems.today.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-xs font-medium text-gray-500 mb-2">Today</h3>
+                    <div className="space-y-1">
+                      {groupedItems.today.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`${item.path}?context=${item.mode === 'candidate' ? 'profile' : item.mode === 'hiring' ? 'role' : 'open'}`}
+                          className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                            pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                          }`}
+                        >
+                          <div className="text-sm">{item.title}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Yesterday's Items */}
-            {groupedItems.yesterday.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-medium text-gray-500 mb-2">Yesterday</h3>
-                <div className="space-y-1">
-                  {groupedItems.yesterday.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.path}
-                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
-                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
-                      }`}
-                    >
-                      <div className="text-sm">{item.title}</div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+                {/* Yesterday's Items */}
+                {groupedItems.yesterday.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-xs font-medium text-gray-500 mb-2">Yesterday</h3>
+                    <div className="space-y-1">
+                      {groupedItems.yesterday.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`${item.path}?context=${item.mode === 'candidate' ? 'profile' : item.mode === 'hiring' ? 'role' : 'open'}`}
+                          className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                            pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                          }`}
+                        >
+                          <div className="text-sm">{item.title}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Previous 7 Days */}
-            {groupedItems.week.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 7 Days</h3>
-                <div className="space-y-1">
-                  {groupedItems.week.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.path}
-                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
-                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
-                      }`}
-                    >
-                      <div className="text-sm">{item.title}</div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+                {/* Previous 7 Days */}
+                {groupedItems.week.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 7 Days</h3>
+                    <div className="space-y-1">
+                      {groupedItems.week.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`${item.path}?context=${item.mode === 'candidate' ? 'profile' : item.mode === 'hiring' ? 'role' : 'open'}`}
+                          className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                            pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                          }`}
+                        >
+                          <div className="text-sm">{item.title}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Previous 30 Days */}
-            {groupedItems.month.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 30 Days</h3>
-                <div className="space-y-1">
-                  {groupedItems.month.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.path}
-                      className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
-                        pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
-                      }`}
-                    >
-                      <div className="text-sm">{item.title}</div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+                {/* Previous 30 Days */}
+                {groupedItems.month.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-xs font-medium text-gray-500 mb-2">Previous 30 Days</h3>
+                    <div className="space-y-1">
+                      {groupedItems.month.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={`${item.path}?context=${item.mode === 'candidate' ? 'profile' : item.mode === 'hiring' ? 'role' : 'open'}`}
+                          className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
+                            pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+                          }`}
+                        >
+                          <div className="text-sm">{item.title}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No items state */}
+                {Object.values(groupedItems).every(group => group.length === 0) && (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500">No chat sessions found</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

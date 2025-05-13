@@ -2,6 +2,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { PlannerRecommendation, MCPContext } from '../mcpTypes.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
+import { buildSafePrompt } from './promptBuilder.ts';
 
 // Available MCP actions that can be recommended by the planner
 const AVAILABLE_ACTIONS = {
@@ -176,9 +177,6 @@ async function getAIRecommendations(
   try {
     const systemPrompt = `You are an AI career planning assistant that helps select the most appropriate actions to take based on user context and available tools.
 
-Available tools:
-${availableActions.map(action => `- ${action.tool}: ${action.description}`).join('\n')}
-
 Your task is to:
 1. Analyze the user's message and context
 2. Select the most appropriate tools to use
@@ -191,31 +189,43 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
   "reason": "string (explaining why this tool was chosen)",
   "confidence": "number (0-1)",
   "inputs": "object (containing required parameters)"
-}
+}`;
 
-Example response format:
-[
-  {
-    "tool": "getProfileContext",
-    "reason": "Need to load profile details first",
-    "confidence": 0.9,
-    "inputs": {
-      "profileId": "123"
-    }
-  }
-]
+    const promptData = {
+      systemPrompt,
+      userMessage: 'Please select the most appropriate tools to use based on this context.',
+      data: {
+        context: {
+          mode: context.mode,
+          message: context.lastMessage || 'No message provided',
+          profileId: context.profileId || 'Not provided',
+          roleId: context.roleId || 'Not provided',
+          jobId: context.jobId || 'Not provided',
+          currentFocus: context.semanticContext?.currentFocus || 'None'
+        },
+        availableTools: availableActions.map(action => ({
+          tool: action.tool,
+          description: action.description,
+          requirements: Object.entries(action)
+            .filter(([key]) => key.startsWith('requires'))
+            .map(([key]) => key.replace('requires', '').toLowerCase())
+        }))
+      },
+      context: {
+        format: 'json',
+        responseType: 'array',
+        maxTools: 3
+      }
+    };
 
-Do not include any explanatory text, ONLY output the JSON array.`;
+    const promptOptions = {
+      maxItems: 10,
+      maxFieldLength: 200,
+      priorityFields: ['tool', 'description', 'requirements'],
+      excludeFields: ['metadata']
+    };
 
-    const userMessage = `Context:
-- Mode: ${context.mode}
-- Message: ${context.lastMessage || 'No message provided'}
-- Profile ID: ${context.profileId || 'Not provided'}
-- Role ID: ${context.roleId || 'Not provided'}
-- Job ID: ${context.jobId || 'Not provided'}
-- Current Focus: ${context.semanticContext?.currentFocus || 'None'}
-
-Please select the most appropriate tools to use based on this context.`;
+    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -224,10 +234,10 @@ Please select the most appropriate tools to use based on this context.`;
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
+          { role: 'system', content: prompt.system },
+          { role: 'user', content: prompt.user }
         ],
         temperature: 0.2
       })

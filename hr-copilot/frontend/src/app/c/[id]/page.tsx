@@ -1,33 +1,8 @@
 'use client';
 
-import UnifiedResultsView from '../../components/UnifiedResultsView';
-import { useEffect, useState, use } from 'react';
-
-// Sample data for testing
-const SAMPLE_EMPLOYEE = {
-  name: "John Smith",
-  currentRole: "Full Stack Developer",
-  department: "Engineering",
-  tenure: "2 years",
-  skills: ["React", "TypeScript", "Node.js", "Python", "AWS"],
-  preferences: {
-    desiredRoles: ["Senior Developer", "Tech Lead", "Engineering Manager"]
-  }
-};
-
-const SAMPLE_ROLE = {
-  id: "1",
-  title: "Senior Software Engineer",
-  department: "Engineering",
-  location: "Remote",
-  description: "We're looking for an experienced software engineer to join our team...",
-  requirements: [
-    "5+ years of experience in software development",
-    "Strong knowledge of React and TypeScript",
-    "Experience with cloud platforms (AWS/GCP/Azure)"
-  ],
-  skills: ["React", "TypeScript", "Node.js", "AWS", "System Design"]
-};
+import { use, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import UnifiedResultsView from '@/app/components/UnifiedResultsView';
 
 interface PageProps {
   params: Promise<{
@@ -35,80 +10,53 @@ interface PageProps {
   }>;
 }
 
-export default function ChatPage({ params }: PageProps) {
-  const resolvedParams = use(params);
-  const [chatData, setChatData] = useState<{
-    type: 'role' | 'candidate' | 'general';
-    employeeData?: typeof SAMPLE_EMPLOYEE;
-    roleData?: typeof SAMPLE_ROLE;
-  } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+// Component that uses useSearchParams
+function ChatPageContent({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const context = searchParams.get('context') as 'profile' | 'role' | 'open';
 
   useEffect(() => {
-    // Simulate loading chat data
-    const loadChatData = async () => {
-      setIsLoading(true);
-      try {
-        const id = resolvedParams.id;
-        console.log('Loading chat data for ID:', id); // Debug log
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // For testing, let's show different data based on the ID
-        if (id === '1') {
-          setChatData({
-            type: 'role',
-            roleData: SAMPLE_ROLE
-          });
-        } else if (id === '2') {
-          setChatData({
-            type: 'candidate',
-            employeeData: SAMPLE_EMPLOYEE
-          });
-        } else {
-          setChatData({
-            type: 'general'
-          });
-        }
-      } catch (error) {
-        console.error('Error loading chat data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (!context) {
+      router.push('/');
+    }
+  }, [context, router]);
 
-    loadChatData();
-  }, [resolvedParams.id]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500">Loading chat...</div>
-      </div>
-    );
+  // If no context is provided, show nothing while redirecting
+  if (!context) {
+    return null;
   }
 
-  // Map the chat data type to UnifiedResultsView context type
-  const getStartContext = () => {
-    if (!chatData) return 'open';
-    switch (chatData.type) {
-      case 'role':
-        return 'role';
-      case 'candidate':
-        return 'employee';
-      default:
-        return 'open';
-    }
-  };
-
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <UnifiedResultsView
-        employeeData={chatData?.employeeData}
-        roleData={chatData?.roleData}
-        startContext={getStartContext()}
-      />
+    <div className="min-h-screen flex items-start justify-center py-8 px-4">
+      <div className="w-full max-w-[1200px]">
+        <UnifiedResultsView
+          startContext={context}
+          sessionId={sessionId}
+        />
+      </div>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+        <p className="text-gray-600">Loading conversation...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ChatPage({ params }: PageProps) {
+  const resolvedParams = use(params);
+  
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ChatPageContent sessionId={resolvedParams.id} />
+    </Suspense>
   );
 } 
