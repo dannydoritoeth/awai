@@ -4,8 +4,7 @@ CREATE TABLE conversation_sessions (
   profile_id uuid REFERENCES profiles(id),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  summary text,
-  CONSTRAINT fk_profile FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+  summary text
 );
 
 -- Create chat messages table
@@ -41,8 +40,6 @@ ALTER TABLE conversation_sessions
 ADD CONSTRAINT fk_entity_profile FOREIGN KEY (entity_id) REFERENCES profiles(id) ON DELETE CASCADE,
 ADD CONSTRAINT fk_entity_role FOREIGN KEY (entity_id) REFERENCES roles(id) ON DELETE CASCADE; 
 
-
-
 -- Drop existing foreign key constraints
 ALTER TABLE conversation_sessions
 DROP CONSTRAINT IF EXISTS fk_entity_profile,
@@ -70,10 +67,15 @@ ADD CONSTRAINT check_entity_id_required
   ); 
 
 
--- Drop existing foreign key constraints
-ALTER TABLE conversation_sessions
-DROP CONSTRAINT IF EXISTS fk_entity_profile,
-DROP CONSTRAINT IF EXISTS fk_entity_role;
+-- Chat messages
+-- Chat messages
+ALTER TABLE chat_messages ADD COLUMN embedding vector(1536);
+CREATE INDEX ON chat_messages USING ivfflat (embedding vector_cosine_ops);
+
+-- -- Drop existing foreign key constraints
+-- ALTER TABLE conversation_sessions
+-- DROP CONSTRAINT IF EXISTS fk_entity_profile,
+-- DROP CONSTRAINT IF EXISTS fk_entity_role;
 
 -- Add conditional foreign key constraints based on mode
 -- ALTER TABLE conversation_sessions
