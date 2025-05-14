@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ChatInterface from './ChatInterface';
-import { startSession, getSessionMessages } from '@/lib/api/chat';
+import { startSession } from '@/lib/api/chat';
 import { getBrowserSessionId } from '@/lib/browserSession';
 import { events, EVENT_NAMES } from '@/lib/events';
+
+interface ChatMessage {
+  id: string;
+  message: string;
+  sender: 'assistant' | 'user';
+  timestamp: string;
+}
 
 interface Message {
   id: string;
@@ -56,42 +63,58 @@ export default function UnifiedResultsView({
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [additionalContext, setAdditionalContext] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const lastMessageId = useRef<string | null>(null);
-  const seenMessageIds = useRef<Set<string>>(new Set());
+  const [additionalContext, setAdditionalContext] = useState('');
+  const seenMessageIds = useRef(new Set<string>());
 
-  // Poll for new messages
-  useEffect(() => {
+  // Memoize pollMessages function
+  const pollMessages = useCallback(async () => {
     if (!sessionId) return;
 
-    const pollMessages = async () => {
-      try {
-        const newMessages = await getSessionMessages(sessionId);
-        
-        // Filter out messages we've already seen
-        const unseenMessages = newMessages.filter(msg => !seenMessageIds.current.has(msg.id));
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          action: 'getHistory',
+          sessionId
+        })
+      });
 
-        if (unseenMessages.length > 0) {
-          // Update seen message IDs
-          unseenMessages.forEach(msg => seenMessageIds.current.add(msg.id));
-          lastMessageId.current = unseenMessages[unseenMessages.length - 1].id;
-
-          // Convert and add new messages
-          const convertedMessages: Message[] = unseenMessages.map(msg => ({
-            id: msg.id,
-            text: msg.message,
-            sender: msg.sender === 'assistant' ? 'ai' : 'user',
-            timestamp: new Date(msg.timestamp)
-          }));
-
-          setMessages(prev => [...prev, ...convertedMessages]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch messages:', error);
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
       }
-    };
 
+      const data = await response.json();
+      if (!data.messages) return;
+
+      // Filter out messages we've already seen
+      const newMessages = data.messages.filter((msg: ChatMessage) => !seenMessageIds.current.has(msg.id));
+
+      if (newMessages.length > 0) {
+        // Add new message IDs to seen set
+        newMessages.forEach((msg: ChatMessage) => seenMessageIds.current.add(msg.id));
+
+        // Update messages state
+        setMessages(prev => [...prev, ...newMessages.map((msg: ChatMessage) => ({
+          id: msg.id,
+          text: msg.message,
+          sender: msg.sender === 'assistant' ? 'ai' : 'user',
+          timestamp: new Date(msg.timestamp)
+        }))]);
+
+        // If we got new messages, stop loading
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Failed to poll messages:', error);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
     // Initial fetch
     pollMessages();
 
@@ -101,11 +124,13 @@ export default function UnifiedResultsView({
     // Cleanup
     return () => {
       clearInterval(intervalId);
-      // Create a copy of the current ref value for cleanup
-      const seenIds = new Set(seenMessageIds.current);
-      seenIds.clear();
+      // Store the ref value in a variable for cleanup
+      const currentSeenIds = seenMessageIds.current;
+      if (currentSeenIds) {
+        currentSeenIds.clear();
+      }
     };
-  }, [sessionId]);
+  }, [sessionId, pollMessages]);
 
   // Initialize session
   useEffect(() => {
@@ -151,7 +176,7 @@ export default function UnifiedResultsView({
     };
 
     initializeSession();
-  }, [profileData, roleData, additionalContext, sessionId]);
+  }, [profileData, roleData, additionalContext, sessionId, setSessionId]);
 
   const handleSendMessage = async (message: string) => {
     if (!sessionId) return;
