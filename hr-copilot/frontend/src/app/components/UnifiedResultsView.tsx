@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
 import { startSession, getSessionMessages } from '@/lib/api/chat';
+import { getBrowserSessionId } from '@/lib/browserSession';
+import { events, EVENT_NAMES } from '@/lib/events';
 
 interface Message {
   id: string;
@@ -109,9 +111,11 @@ export default function UnifiedResultsView({
       if (messages.length > 0 || !sessionId) return;
 
       let initialMessage = '';
+      const browserSessionId = getBrowserSessionId();
       const request: Parameters<typeof startSession>[0] = {
         action: 'startSession',
-        message: ''
+        message: '',
+        browserSessionId
       };
 
       if (profileData) {
@@ -132,6 +136,7 @@ export default function UnifiedResultsView({
         request.message = initialMessage;
         try {
           await startSession(request);
+          events.emit(EVENT_NAMES.SESSION_CREATED);
         } catch (error) {
           console.error('Failed to initialize session:', error);
         }

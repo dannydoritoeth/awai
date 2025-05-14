@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { startSession } from '@/lib/api/chat';
+import { getBrowserSessionId } from '@/lib/browserSession';
+import { events, EVENT_NAMES } from '@/lib/events';
 
 export default function Home() {
   const [query, setQuery] = useState('');
@@ -27,9 +29,11 @@ export default function Home() {
 
     setIsLoading(true);
     try {
+      const browserSessionId = getBrowserSessionId();
       const response = await startSession({
         action: 'startSession',
-        message: query.trim()
+        message: query.trim(),
+        browserSessionId
       });
       console.log('startSession response:', response);
       if (!response.sessionId) {
@@ -37,6 +41,7 @@ export default function Home() {
         setIsLoading(false);
         return;
       }
+      events.emit(EVENT_NAMES.SESSION_CREATED);
       router.push(`/c/${response.sessionId}?context=open`);
     } catch (error: unknown) {
       console.error('Failed to start session:', error);
@@ -61,7 +66,7 @@ export default function Home() {
 
           <div className="text-xl text-blue-950 space-y-4 mb-8">
             <p className="flex items-center justify-left gap-3">
-              <span>🔍</span> Start with a Profile – Discover which roles align with a sample employee’s skills
+              <span>🔍</span> Start with a Profile – Discover which roles align with a sample employee's skills
             </p>
             <p className="flex items-center justify-left gap-3">
               <span>🧩</span> Start with a Role – Find matching candidates from our generated talent pool
