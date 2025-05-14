@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ChatSession, loadChatSessions } from '@/lib/supabase';
+import { events, EVENT_NAMES } from '@/lib/events';
 
 interface HistoryItem extends ChatSession {
   path: string;
@@ -68,28 +69,35 @@ export default function Sidebar({
   const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
 
+  const loadSessions = async () => {
+    try {
+      setIsLoading(true);
+      const sessions = await loadChatSessions();
+      const items: HistoryItem[] = sessions.map(session => ({
+        ...session,
+        path: `/c/${session.id}` // Construct the path based on session ID
+      }));
+      setHistoryItems(items);
+    } catch (error) {
+      console.error('Failed to load chat sessions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     setIsClient(true);
     setIsMenuOpen(getStoredValue(STORAGE_KEYS.MENU_OPEN, true));
     
-    // Load actual chat sessions
-    const fetchSessions = async () => {
-      try {
-        setIsLoading(true);
-        const sessions = await loadChatSessions();
-        const items: HistoryItem[] = sessions.map(session => ({
-          ...session,
-          path: `/c/${session.id}` // Construct the path based on session ID
-        }));
-        setHistoryItems(items);
-      } catch (error) {
-        console.error('Failed to load chat sessions:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Load initial sessions
+    loadSessions();
 
-    fetchSessions();
+    // Subscribe to session creation events
+    const unsubscribe = events.subscribe(EVENT_NAMES.SESSION_CREATED, loadSessions);
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

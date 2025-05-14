@@ -6,6 +6,8 @@ import UnifiedResultsView from '../components/UnifiedResultsView';
 import ProfileFinder from '../components/ProfileFinder';
 import RoleFinder from '../components/RoleFinder';
 import { startSession } from '@/lib/api/chat';
+import { getBrowserSessionId } from '@/lib/browserSession';
+import { events, EVENT_NAMES } from '@/lib/events';
 
 interface Profile {
   id: string;
@@ -53,12 +55,16 @@ function ChatPageContent() {
         ? `I'm interested in finding roles that match this profile`
         : `I'm looking for candidates who would be a good fit for this role`;
 
+      const browserSessionId = getBrowserSessionId();
+      
       const result = await startSession({
         action: 'startSession',
         message: initialMessage,
+        browserSessionId,
         ...(type === 'profile' ? { profileId: entityId } : { roleId: entityId })
       });
       
+      events.emit(EVENT_NAMES.SESSION_CREATED);
       setSessionId(result.sessionId);
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -135,6 +141,7 @@ function ChatPageContent() {
             }}
             startContext="profile"
             sessionId={sessionId}
+            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -158,6 +165,7 @@ function ChatPageContent() {
             }}
             startContext="role"
             sessionId={sessionId}
+            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -170,6 +178,7 @@ function ChatPageContent() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <UnifiedResultsView
           startContext={context}
+          setSessionId={setSessionId}
         />
       </div>
     </div>

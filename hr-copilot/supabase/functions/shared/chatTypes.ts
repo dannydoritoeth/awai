@@ -14,7 +14,8 @@ export interface ChatMessage {
 
 export interface ConversationSession {
   id: string;
-  profileId: string;
+  profileId?: string;
+  browserSessionId?: string;
   mode: 'candidate' | 'hiring' | 'general';
   entityId?: string;
   status: string;

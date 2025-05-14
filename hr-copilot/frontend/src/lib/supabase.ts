@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getBrowserSessionId } from './browserSession';
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
   throw new Error('Missing environment variable NEXT_PUBLIC_SUPABASE_URL');
@@ -49,9 +50,12 @@ function generateTitle(session: ChatSession): string {
 }
 
 export async function loadChatSessions(): Promise<ChatSession[]> {
+  const browserSessionId = getBrowserSessionId();
+  
   const { data, error } = await supabase
     .from('conversation_sessions')
     .select('*')
+    .eq('browser_session_id', browserSessionId)
     .order('created_at', { ascending: false });
 
   if (error) {
