@@ -43,11 +43,23 @@ export async function startSession(req: StartSessionRequest): Promise<StartSessi
     body: JSON.stringify(req)
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
+    // If the server returned an error object, use that
+    if (data.error) {
+      throw new Error(`Failed to start session: ${data.error.message || data.error}`);
+    }
+    // Otherwise use the status text
     throw new Error(`Failed to start session: ${response.statusText}`);
   }
 
-  return response.json();
+  // Check if we got a valid session ID
+  if (!data.sessionId) {
+    throw new Error('Failed to start session: No session ID returned');
+  }
+
+  return data;
 }
 
 export async function getSessionMessages(sessionId: string): Promise<ChatMessage[]> {

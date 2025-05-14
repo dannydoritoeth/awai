@@ -292,7 +292,7 @@ serve(async (req) => {
               initialResponse = {
                 messageId: lastMessage.id,
                 reply: lastMessage.message,
-                followUpQuestion: null // You might want to store this in the message metadata if needed
+                followUpQuestion: null
               };
             }
           }
@@ -314,7 +314,7 @@ serve(async (req) => {
           );
         } catch (error) {
           console.error('Error in startSession:', error);
-          throw new Error(`Failed to start chat session: ${error.message}`);
+          throw new Error(`Failed to start chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
@@ -398,15 +398,18 @@ serve(async (req) => {
   } catch (error) {
     console.error('Chat API Error:', error);
     
-    const chatError: ChatError = {
-      type: error.type || 'INTERNAL_ERROR',
-      message: error.message || 'An unexpected error occurred',
+    const chatError = {
+      type: error instanceof Error ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
       details: error
     };
 
-    return new Response(JSON.stringify({ error: chatError }), {
-      status: error.type === 'VALIDATION_ERROR' ? 400 : 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({ error: chatError }), 
+      {
+        status: chatError.type === 'VALIDATION_ERROR' ? 400 : 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 }); 
