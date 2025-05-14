@@ -3,12 +3,14 @@ interface StartSessionRequest {
   profileId?: string;
   roleId?: string;
   message: string;
+  browserSessionId: string;
 }
 
 interface StartSessionResponse {
   sessionId: string;
   mode: 'candidate' | 'hiring' | 'general';
   entityId?: string;
+  error?: string;
 }
 
 interface ToolCall {
@@ -23,12 +25,12 @@ interface ResponseData {
 
 interface ChatMessage {
   id: string;
-  session_id: string;
+  sessionId: string;
   sender: 'user' | 'assistant';
   message: string;
   timestamp: string;
-  tool_call?: ToolCall;
-  response_data?: ResponseData;
+  toolCall?: ToolCall;
+  responseData?: ResponseData;
 }
 
 export async function startSession(req: StartSessionRequest): Promise<StartSessionResponse> {

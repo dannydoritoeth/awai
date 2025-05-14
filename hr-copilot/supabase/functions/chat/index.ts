@@ -125,6 +125,7 @@ async function startSession(
   supabaseClient: SupabaseClient,
   mode: 'candidate' | 'hiring' | 'general',
   entityId?: string,
+  browserSessionId?: string,
   initialMessage?: string
 ): Promise<{ sessionId: string | null; error: ChatError | null }> {
   try {
@@ -150,6 +151,7 @@ async function startSession(
       .insert({
         mode,
         entity_id: mode === 'general' ? null : entityId,
+        browser_session_id: browserSessionId,
         status: 'active'
       })
       .select('id')
@@ -221,8 +223,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, sessionId, message, profileId, roleId } = await req.json();
-    console.log('Received request:', { action, sessionId, message, profileId, roleId });
+    const { action, sessionId, message, profileId, roleId, browserSessionId } = await req.json();
+    console.log('Received request:', { action, sessionId, message, profileId, roleId, browserSessionId });
 
     // Validate required fields
     if (!action) {
@@ -231,8 +233,13 @@ serve(async (req) => {
 
     switch (action) {
       case 'startSession': {
-        console.log('Starting new session with params:', { profileId, roleId, message });
+        console.log('Starting new session with params:', { profileId, roleId, message, browserSessionId });
         
+        // Require browserSessionId for anonymous users
+        if (!browserSessionId) {
+          throw new Error('Browser session ID is required');
+        }
+
         // Allow starting a general session with no IDs
         if (profileId && roleId) {
           throw new Error('Cannot provide both Profile ID and Role ID - choose one mode');
@@ -259,7 +266,8 @@ serve(async (req) => {
             supabaseClient,
             mode,
             entityId,
-            message // Pass the initial message to our new function
+            browserSessionId,
+            message
           );
           
           console.log('Chat session created:', { newSessionId, startError });

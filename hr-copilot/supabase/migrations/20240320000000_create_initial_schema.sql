@@ -313,15 +313,11 @@ CREATE INDEX ON profiles USING ivfflat (embedding vector_cosine_ops);
 
 ALTER TABLE public.roles ADD COLUMN company_id uuid REFERENCES public.companies(id);
 ALTER TABLE public.jobs ADD COLUMN company_id uuid REFERENCES public.companies(id);
-
-
-ALTER TABLE public.roles ADD COLUMN company_id uuid;
-ALTER TABLE public.jobs ADD COLUMN company_id uuid;
-ALTER TABLE public.skills ADD COLUMN company_id uuid;
-ALTER TABLE public.capabilities ADD COLUMN company_id uuid;
-ALTER TABLE public.profiles ADD COLUMN company_id uuid;
-ALTER TABLE public.career_paths ADD COLUMN company_id uuid;
-ALTER TABLE public.agent_actions ADD COLUMN company_id uuid;
+ALTER TABLE public.skills ADD COLUMN company_id uuid REFERENCES public.companies(id);
+ALTER TABLE public.capabilities ADD COLUMN company_id uuid REFERENCES public.companies(id);
+ALTER TABLE public.profiles ADD COLUMN company_id uuid REFERENCES public.companies(id);
+ALTER TABLE public.career_paths ADD COLUMN company_id uuid REFERENCES public.companies(id);
+ALTER TABLE public.agent_actions ADD COLUMN company_id uuid REFERENCES public.companies(id);
 
 -- Capabilities
 ALTER TABLE capabilities 
