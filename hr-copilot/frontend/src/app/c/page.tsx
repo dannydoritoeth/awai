@@ -141,6 +141,7 @@ function ChatPageContent() {
             }}
             startContext="profile"
             sessionId={sessionId}
+            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -164,6 +165,7 @@ function ChatPageContent() {
             }}
             startContext="role"
             sessionId={sessionId}
+            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -176,6 +178,7 @@ function ChatPageContent() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <UnifiedResultsView
           startContext={context}
+          setSessionId={setSessionId}
         />
       </div>
     </div>

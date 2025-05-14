@@ -39,13 +39,15 @@ interface UnifiedResultsViewProps {
   roleData?: RoleData | null;
   startContext?: 'profile' | 'role' | 'open';
   sessionId?: string;
+  setSessionId?: (sessionId: string) => void;
 }
 
 export default function UnifiedResultsView({ 
   profileData, 
   roleData, 
   startContext = 'open',
-  sessionId
+  sessionId,
+  setSessionId
 }: UnifiedResultsViewProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
     if (startContext === 'profile') return 'profile';
@@ -108,7 +110,8 @@ export default function UnifiedResultsView({
   // Initialize session
   useEffect(() => {
     const initializeSession = async () => {
-      if (messages.length > 0 || !sessionId) return;
+      // Don't create a new session if we already have one
+      if (sessionId) return;
 
       let initialMessage = '';
       const browserSessionId = getBrowserSessionId();
@@ -135,8 +138,12 @@ export default function UnifiedResultsView({
       if (initialMessage) {
         request.message = initialMessage;
         try {
-          await startSession(request);
+          const response = await startSession(request);
           events.emit(EVENT_NAMES.SESSION_CREATED);
+          // Update the sessionId in the parent component
+          if (response.sessionId && setSessionId) {
+            setSessionId(response.sessionId);
+          }
         } catch (error) {
           console.error('Failed to initialize session:', error);
         }
@@ -144,7 +151,7 @@ export default function UnifiedResultsView({
     };
 
     initializeSession();
-  }, [profileData, roleData, additionalContext, sessionId, messages.length]);
+  }, [profileData, roleData, additionalContext, sessionId]);
 
   const handleSendMessage = async (message: string) => {
     if (!sessionId) return;
