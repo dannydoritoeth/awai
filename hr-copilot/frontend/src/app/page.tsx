@@ -66,7 +66,7 @@ export default function Home() {
 
           <div className="text-xl text-blue-950 space-y-4 mb-8">
             <p className="flex items-center justify-left gap-3">
-              <span>🔍</span> Start with a Profile – Discover which roles align with a sample employee's skills
+              <span>🔍</span> Start with a Profile – Discover which roles align with a sample employee&apos;s skills
             </p>
             <p className="flex items-center justify-left gap-3">
               <span>🧩</span> Start with a Role – Find matching candidates from our generated talent pool
