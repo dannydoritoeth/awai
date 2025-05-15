@@ -144,10 +144,57 @@ export async function getSemanticMatches(
 }
 
 /**
+ * Convert a JSON object to readable text format
+ */
+function jsonToReadableText(obj: Record<string, any>, indent = 0): string {
+  const pad = '  '.repeat(indent);
+  return Object.entries(obj)
+    .filter(([key]) => !key.includes('id') && !key.includes('embedding')) // Filter out id and embedding fields
+    .map(([key, value]) => {
+      if (Array.isArray(value)) {
+        // Handle arrays - only include string values
+        const stringValues = value.filter(v => typeof v === 'string');
+        if (stringValues.length > 0) {
+          return `${pad}${key}:\n${stringValues.map(v => `${pad}  ${v}`).join('\n')}`;
+        }
+        return '';
+      } else if (typeof value === 'object' && value !== null) {
+        const nestedText = jsonToReadableText(value, indent + 1);
+        return nestedText ? `${pad}${key}:\n${nestedText}` : '';
+      } else if (typeof value === 'string') {
+        return `${pad}${key}: ${value}`;
+      }
+      return '';
+    })
+    .filter(text => text.length > 0) // Remove empty strings
+    .join('\n');
+}
+
+/**
  * Helper to generate embeddings for text using OpenAI
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  console.log('Generating embedding for:', text);
   try {
+    // Try to parse as JSON first
+    let processedText = text;
+    try {
+      const jsonObj = JSON.parse(text);
+      // If it's JSON, convert to readable text format
+      if (typeof jsonObj === 'object' && jsonObj !== null) {
+        processedText = jsonToReadableText(jsonObj);
+        console.log('Processed text:', processedText);
+      }
+    } catch (e) {
+      // Not JSON, use as is
+      processedText = text;
+    }
+
+    // Ensure the text is not too long for the API
+    if (processedText.length > 8000) {
+      processedText = processedText.substring(0, 8000);
+    }
+
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
       throw new Error('OpenAI API key not found');
@@ -161,11 +208,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       },
       body: JSON.stringify({
         model: 'text-embedding-ada-002',
-        input: text
+        input: processedText
       })
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${JSON.stringify(data.error || data)}`);
+    }
     return data.data[0].embedding;
   } catch (error) {
     console.error('Error generating embedding:', error);

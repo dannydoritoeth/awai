@@ -1,30 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
-import { startSession } from '@/lib/api/chat';
-import { getBrowserSessionId } from '@/lib/browserSession';
-import { events, EVENT_NAMES } from '@/lib/events';
-
-interface ChatMessage {
-  id: string;
-  message: string;
-  sender: 'assistant' | 'user';
-  timestamp: string;
-}
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'ai';
-  timestamp: Date;
-}
+import { getSessionMessages } from '@/lib/api/chat';
+import type { ChatMessage, ResponseData } from '@/types/chat';
 
 interface ProfileData {
   id: string;
   name: string;
-  currentRole: string;
-  department: string;
-  tenure: string;
-  skills: string[];
+  currentRole?: string;
+  department?: string;
+  tenure?: string;
+  skills: Array<{
+    name: string;
+    level: number;
+  }>;
+  roles: Array<{
+    title: string;
+    company: string;
+    years: number;
+  }>;
   preferences?: {
     desiredRoles: string[];
   };
@@ -34,187 +27,165 @@ interface ProfileData {
 interface RoleData {
   id: string;
   title: string;
-  department: string;
-  location: string;
-  description: string;
-  requirements: string[];
-  skills: string[];
+  company: string;
+  department?: string;
+  location?: string;
+  description?: string;
+  requirements: Array<{
+    name: string;
+    level: number;
+  }>;
 }
 
 interface UnifiedResultsViewProps {
-  profileData?: ProfileData | null;
-  roleData?: RoleData | null;
+  sessionId: string;
+  profileData?: ProfileData;
+  roleData?: RoleData;
   startContext?: 'profile' | 'role' | 'open';
-  sessionId?: string;
-  setSessionId?: (sessionId: string) => void;
 }
 
 export default function UnifiedResultsView({ 
-  profileData, 
-  roleData, 
-  startContext = 'open',
   sessionId,
-  setSessionId
+  profileData,
+  roleData,
+  startContext = 'open'
 }: UnifiedResultsViewProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
     return 'matches';
   });
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [additionalContext, setAdditionalContext] = useState('');
-  const seenMessageIds = useRef(new Set<string>());
-
-  // Memoize pollMessages function
-  const pollMessages = useCallback(async () => {
-    if (!sessionId) return;
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({
-          action: 'getHistory',
-          sessionId
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch messages');
-      }
-
-      const data = await response.json();
-      if (!data.messages) return;
-
-      // Filter out messages we've already seen
-      const newMessages = data.messages.filter((msg: ChatMessage) => !seenMessageIds.current.has(msg.id));
-
-      if (newMessages.length > 0) {
-        // Add new message IDs to seen set
-        newMessages.forEach((msg: ChatMessage) => seenMessageIds.current.add(msg.id));
-
-        // Update messages state
-        setMessages(prev => [...prev, ...newMessages.map((msg: ChatMessage) => ({
-          id: msg.id,
-          text: msg.message,
-          sender: msg.sender === 'assistant' ? 'ai' : 'user',
-          timestamp: new Date(msg.timestamp)
-        }))]);
-
-        // If we got new messages, stop loading
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('Failed to poll messages:', error);
-    }
-  }, [sessionId]);
+  const pollTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
+    setAdditionalContext(profileData?.additionalContext || '');
+  }, [profileData]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const pollMessages = async () => {
+      try {
+        const newMessages = await getSessionMessages(sessionId);
+        setMessages(prev => {
+          // Create a Set of existing message IDs for efficient lookup
+          const existingIds = new Set(prev.map(msg => msg.id));
+          
+          // Filter out messages we already have
+          const uniqueNewMessages = newMessages.filter(msg => !existingIds.has(msg.id));
+          
+          // Only update if we have new unique messages
+          if (uniqueNewMessages.length > 0) {
+            return [...prev, ...uniqueNewMessages] as ChatMessage[];
+          }
+          return prev;
+        });
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+      }
+    };
+
     // Initial fetch
     pollMessages();
 
-    // Set up polling interval
-    const intervalId = setInterval(pollMessages, 1000);
+    // Set up polling
+    pollTimeoutRef.current = setInterval(pollMessages, 2000);
 
     // Cleanup
     return () => {
-      clearInterval(intervalId);
-      // Store the ref value in a variable for cleanup
-      const currentSeenIds = seenMessageIds.current;
-      if (currentSeenIds) {
-        currentSeenIds.clear();
+      if (pollTimeoutRef.current) {
+        clearInterval(pollTimeoutRef.current);
       }
     };
-  }, [sessionId, pollMessages]);
-
-  // Initialize session
-  useEffect(() => {
-    const initializeSession = async () => {
-      // Don't create a new session if we already have one
-      if (sessionId) return;
-
-      let initialMessage = '';
-      const browserSessionId = getBrowserSessionId();
-      const request: Parameters<typeof startSession>[0] = {
-        action: 'startSession',
-        message: '',
-        browserSessionId
-      };
-
-      if (profileData) {
-        initialMessage = `I'm interested in finding roles that match my profile. I'm currently a ${profileData.currentRole} in ${profileData.department} with skills in ${profileData.skills.join(', ')}.`;
-        if (profileData.preferences?.desiredRoles) {
-          initialMessage += ` I'm particularly interested in roles like ${profileData.preferences.desiredRoles.join(', ')}.`;
-        }
-        if (additionalContext) {
-          initialMessage += ` Additional context: ${additionalContext}`;
-        }
-        request.profileId = profileData.id;
-      } else if (roleData) {
-        initialMessage = `I'm looking for candidates who would be a good fit for this ${roleData.title} role in ${roleData.department}. The role requires skills in ${roleData.skills.join(', ')}.`;
-        request.roleId = roleData.id;
-      }
-
-      if (initialMessage) {
-        request.message = initialMessage;
-        try {
-          const response = await startSession(request);
-          events.emit(EVENT_NAMES.SESSION_CREATED);
-          // Update the sessionId in the parent component
-          if (response.sessionId && setSessionId) {
-            setSessionId(response.sessionId);
-          }
-        } catch (error) {
-          console.error('Failed to initialize session:', error);
-        }
-      }
-    };
-
-    initializeSession();
-  }, [profileData, roleData, additionalContext, sessionId, setSessionId]);
+  }, [sessionId]);
 
   const handleSendMessage = async (message: string) => {
-    if (!sessionId) return;
+    if (!sessionId || !message.trim()) return;
 
+    const messageId = crypto.randomUUID();
+    
     // Add user message to local state
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: message,
+    const userMessage: ChatMessage = {
+      id: messageId,
+      message: message,
       sender: 'user',
-      timestamp: new Date(),
+      timestamp: new Date().toISOString()
     };
-    setMessages(prev => [...prev, userMessage]);
+    
+    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
     setIsLoading(true);
 
     try {
-      // Send message to API
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
-          action: 'sendMessage',
+          action: 'postMessage',
           sessionId,
+          messageId,
           message
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      // Don't add AI response locally - it will come through polling
+      await response.json();
+      
     } catch (error) {
       console.error('Failed to send message:', error);
-      // TODO: Show error message to user
+
+      // Remove the user message if the send failed
+      setMessages((prev: ChatMessage[]) => prev.filter(msg => msg.id !== messageId));
+
+      // Show error message to user
+      const errorMessageId = crypto.randomUUID();
+      const errorMessage: ChatMessage = {
+        id: errorMessageId,
+        message: error instanceof Error 
+          ? `Error: ${error.message}` 
+          : 'Sorry, I encountered an error. Please try again.',
+        sender: 'assistant',
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const formatNumber = (n: number): string => {
+    return n.toString();
+  };
+
+  const renderSkillLevel = (skill: { name: string; level: number }, index: number) => {
+    return (
+      <div key={index} className="flex items-center gap-2">
+        <span>{skill.name}</span>
+        <span className="text-gray-500">{formatNumber(skill.level)}</span>
+      </div>
+    );
+  };
+
+  const renderRole = (role: { title: string; company: string; years: number }, index: number) => {
+    return (
+      <div key={index} className="mb-2">
+        <div className="font-medium">{role.title}</div>
+        <div className="text-sm text-gray-500">
+          {role.company} • {role.years} years
+        </div>
+      </div>
+    );
   };
 
   const renderProfile = () => (
@@ -242,30 +213,16 @@ export default function UnifiedResultsView({
         <div>
           <h3 className="text-sm font-medium text-gray-700 mb-2">Key Skills</h3>
           <div className="flex flex-wrap gap-2">
-            {profileData.skills.map((skill, index) => (
-              <span
-                key={index}
-                className="px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full font-medium"
-              >
-                {skill}
-              </span>
-            ))}
+            {profileData.skills.map((skill, index) => renderSkillLevel(skill, index))}
           </div>
         </div>
       )}
 
-      {profileData?.preferences?.desiredRoles && (
+      {profileData?.roles && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Career Interests</h3>
-          <div className="flex flex-wrap gap-2">
-            {profileData.preferences.desiredRoles.map((role, index) => (
-              <span
-                key={index}
-                className="px-3 py-1 bg-green-50 text-green-700 text-sm rounded-full font-medium"
-              >
-                {role}
-              </span>
-            ))}
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Previous Roles</h3>
+          <div className="flex flex-col gap-2">
+            {profileData.roles.map((role, index) => renderRole(role, index))}
           </div>
         </div>
       )}
@@ -361,8 +318,8 @@ export default function UnifiedResultsView({
       <div className="flex-1 max-w-[766px] bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="h-full">
           <ChatInterface
-            onSendMessage={handleSendMessage}
             messages={messages}
+            onSendMessage={handleSendMessage}
             isLoading={isLoading}
           />
         </div>

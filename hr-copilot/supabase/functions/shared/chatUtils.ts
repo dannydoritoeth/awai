@@ -18,14 +18,16 @@ declare const Deno: {
 export async function startChatSession(
   supabaseClient: SupabaseClient,
   mode: 'candidate' | 'hiring' | 'general',
-  entityId?: string
+  entityId?: string,
+  browserSessionId?: string
 ) {
   try {
     const { data, error } = await supabaseClient
       .from('conversation_sessions')
       .insert({
         mode,
-        entity_id: entityId || null,
+        entity_id: mode === 'general' ? null : entityId,
+        browser_session_id: browserSessionId,
         status: 'active'
       })
       .select('id')
@@ -34,13 +36,13 @@ export async function startChatSession(
     if (error) throw error;
 
     return {
-      sessionId: data.id,
+      data,
       error: null
     };
   } catch (error) {
     console.error('Error starting chat session:', error);
     return {
-      sessionId: null,
+      data: null,
       error
     };
   }
@@ -52,7 +54,8 @@ export async function startChatSession(
 export async function postUserMessage(
   supabase: SupabaseClient<Database>,
   sessionId: string,
-  message: string
+  message: string,
+  messageId?: string
 ): Promise<{ messageId: string; error?: ChatError }> {
   try {
     // Generate embedding for the message
@@ -61,6 +64,7 @@ export async function postUserMessage(
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
+        id: messageId, // Use provided messageId if available
         session_id: sessionId,
         sender: 'user',
         message,
