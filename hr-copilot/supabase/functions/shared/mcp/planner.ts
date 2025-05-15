@@ -161,9 +161,15 @@ interface PlannerContext {
   roleId?: string;
   jobId?: string;
   lastMessage?: string;
+  chatHistory?: ChatMessage[];
+  agentActions?: AgentAction[];
+  contextEmbedding?: number[];
+  summary?: string;
   semanticContext?: {
     currentFocus?: 'role' | 'skill' | 'capability' | 'company';
     previousMatches?: any[];
+    previousFocus?: 'role' | 'job' | 'capability' | 'company';
+    matchingTopic?: string;
   };
 }
 
@@ -178,10 +184,11 @@ async function getAIRecommendations(
     const systemPrompt = `You are an AI career planning assistant that helps select the most appropriate actions to take based on user context and available tools.
 
 Your task is to:
-1. Analyze the user's message and context
-2. Select the most appropriate tools to use
-3. Provide a clear reason for each tool selection
-4. Ensure selected tools have required parameters available
+1. Analyze the user's message, chat history, and previous actions
+2. Consider the conversation summary and semantic context
+3. Select the most appropriate tools to use
+4. Provide a clear reason for each tool selection
+5. Ensure selected tools have required parameters available
 
 IMPORTANT: You must respond with a valid JSON array containing objects with these exact fields:
 {
@@ -201,7 +208,13 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
           profileId: context.profileId || 'Not provided',
           roleId: context.roleId || 'Not provided',
           jobId: context.jobId || 'Not provided',
-          currentFocus: context.semanticContext?.currentFocus || 'None'
+          currentFocus: context.semanticContext?.currentFocus || 'None',
+          previousFocus: context.semanticContext?.previousFocus || 'None',
+          matchingTopic: context.semanticContext?.matchingTopic || 'None',
+          summary: context.summary || 'No summary available',
+          chatHistoryLength: context.chatHistory?.length || 0,
+          agentActionsLength: context.agentActions?.length || 0,
+          hasContextEmbedding: !!context.contextEmbedding
         },
         availableTools: availableActions.map(action => ({
           tool: action.tool,
@@ -282,18 +295,52 @@ function validateRecommendation(
  */
 function getRuleBasedRecommendations(context: PlannerContext): PlannerRecommendation[] {
   const recommendations: PlannerRecommendation[] = [];
-  const { mode, profileId, roleId } = context;
+  const { mode, profileId, roleId, semanticContext, chatHistory, agentActions, contextEmbedding } = context;
     
+  // If we have a context embedding, always consider semantic matches first
+  if (contextEmbedding) {
+    recommendations.push({
+      tool: 'getSemanticMatches',
+      reason: 'Using conversation context to find relevant matches',
+      confidence: 0.9,
+      inputs: {
+        embedding: contextEmbedding,
+        entityTypes: mode === 'candidate' ? ['role', 'skill'] : mode === 'hiring' ? ['profile', 'capability'] : ['role', 'profile', 'skill']
+      }
+    });
+  }
+
+  // If we have previous actions, consider their outcomes
+  if (agentActions?.length) {
+    const lastAction = agentActions[0];
+    if (lastAction.payload.type === 'skill_gap' || lastAction.payload.type === 'capability_gap') {
+      recommendations.push({
+        tool: lastAction.payload.type === 'skill_gap' ? 'getSkillGaps' : 'getCapabilityGaps',
+        reason: 'Following up on previously identified gaps',
+        confidence: 0.85,
+        inputs: { profileId, roleId }
+      });
+    }
+  }
+
   // Basic action selection based on context
   if (mode === 'candidate' && profileId) {
-    recommendations.push({
-      tool: 'getSuggestedCareerPaths',
-      reason: 'Providing career path recommendations based on profile context',
-      confidence: 0.9,
-      inputs: { profileId }
-    });
+    // If we have chat history, check if we've already suggested career paths
+    const hasCareerPathSuggestion = chatHistory?.some(msg => 
+      msg.toolCall?.tool === 'getSuggestedCareerPaths'
+    );
 
-    if (roleId) {
+    if (!hasCareerPathSuggestion) {
+      recommendations.push({
+        tool: 'getSuggestedCareerPaths',
+        reason: 'Providing career path recommendations based on profile context',
+        confidence: 0.9,
+        inputs: { profileId }
+      });
+    }
+
+    // If focusing on a specific role
+    if (roleId || semanticContext?.currentFocus === 'role') {
       recommendations.push(
         {
           tool: 'getCapabilityGaps',
@@ -310,7 +357,8 @@ function getRuleBasedRecommendations(context: PlannerContext): PlannerRecommenda
       );
     }
 
-    if (!roleId) {
+    // If no specific role focus yet
+    if (!roleId && !semanticContext?.currentFocus) {
       recommendations.push({
         tool: 'getOpenJobs',
         reason: 'Finding relevant job opportunities',
@@ -321,14 +369,21 @@ function getRuleBasedRecommendations(context: PlannerContext): PlannerRecommenda
   }
 
   if (mode === 'hiring' && roleId) {
-    recommendations.push({
-      tool: 'getMatchingProfiles',
-      reason: 'Finding candidates that match role requirements',
-      confidence: 0.9,
-      inputs: { roleId }
-    });
+    // If we have chat history, check if we've already found matches
+    const hasMatchingProfiles = chatHistory?.some(msg => 
+      msg.toolCall?.tool === 'getMatchingProfiles'
+    );
 
-    if (profileId) {
+    if (!hasMatchingProfiles) {
+      recommendations.push({
+        tool: 'getMatchingProfiles',
+        reason: 'Finding candidates that match role requirements',
+        confidence: 0.9,
+        inputs: { roleId }
+      });
+    }
+
+    if (profileId || semanticContext?.currentFocus === 'profile') {
       recommendations.push({
         tool: 'scoreProfileFit',
         reason: 'Evaluating specific candidate fit for role',
@@ -336,6 +391,21 @@ function getRuleBasedRecommendations(context: PlannerContext): PlannerRecommenda
         inputs: { profileId, roleId }
       });
     }
+  }
+
+  // If we have a conversation summary, use it to guide recommendations
+  if (context.summary) {
+    recommendations.push({
+      tool: 'handleChatInteraction',
+      reason: 'Using conversation summary to provide contextual guidance',
+      confidence: 0.8,
+      inputs: {
+        summary: context.summary,
+        mode,
+        profileId,
+        roleId
+      }
+    });
   }
 
   return recommendations;

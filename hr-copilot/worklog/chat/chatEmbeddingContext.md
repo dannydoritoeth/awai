@@ -1,34 +1,21 @@
-# 🧠 Work Request: Implement Chat Message Embeddings + Session Context Loader
+# 🧠 Work Request: Implement Chat Message Embeddings + Session Context Loader (Incremental Steps Only)
 
 ## Objective
 
-Enable the AI to reference prior messages during chat interactions by embedding user/assistant messages and loading relevant context for each session.
-
-This allows the MCP system to reason across multi-turn conversations and adapt to evolving questions and topics.
+Enable the AI to reference prior messages and actions during chat interactions by embedding user/assistant messages and agent actions, then loading relevant context for each session — **implemented in small, verifiable steps**.
 
 ---
 
-## ✅ Deliverables
+## ✅ Step-by-Step Deliverables
 
-### 1. Add Embedding Support to `chat_messages` (ALEADY DONE)
+### ✅ STEP 1: Embed Messages on Insert (No Other Changes)
 
-**Schema Change**  
-Add a new column to `chat_messages`:
+Update only the insert logic in `postUserMessage` and `logAgentResponse` to include embedding.
 
-```sql
-ALTER TABLE chat_messages ADD COLUMN embedding vector(1536);
-```
-
-> Use the same dimension as your existing embeddings (OpenAI = 1536, Google = 768, etc.)
-
----
-
-### 2. Embed Messages on Insert
-
-In `postUserMessage` and `logAgentResponse`, embed the message and store it:
-
-import { getSemanticMatches, generateEmbedding } from '../semanticSearch.ts';
+**Changes**:
 ```ts
+import { generateEmbedding } from '../semanticSearch.ts';
+
 const embedding = await generateEmbedding(message);
 await supabase.from('chat_messages').insert({
   session_id,
@@ -38,40 +25,82 @@ await supabase.from('chat_messages').insert({
 });
 ```
 
+**Test**:
+- Confirm that new rows in `chat_messages` contain the embedding vector.
+- Existing logic should be untouched.
+
 ---
 
-### 3. Add `getConversationContext(sessionId)` Helper
+### ✅ STEP 1a: Add `embedding` Column to `agent_actions`
 
-**New file**: `shared/context/getConversationContext.ts`
+**Schema Change**:
+```sql
+ALTER TABLE agent_actions ADD COLUMN embedding vector(1536);
+```
 
-This should:
-- Query the last N messages for the session (default: 10)
-- Optionally rank by semantic similarity to the latest message
-- Return:
+---
+
+### ✅ STEP 1b: Set `session_id` + Embed on Insert
+
+Ensure `session_id` is properly set when inserting into `agent_actions`, and generate an embedding based on a stringified action summary:
+
+```ts
+import { generateEmbedding } from '../semanticSearch.ts';
+
+const actionSummary = `${action_type}: ${JSON.stringify(input_data)} -> ${JSON.stringify(output_data)}`;
+const embedding = await generateEmbedding(actionSummary);
+
+await supabase.from('agent_actions').insert({
+  session_id,
+  action_type,
+  input_data,
+  output_data,
+  embedding
+});
+```
+
+**Test**:
+- Check that recent `agent_actions` include the session ID and a valid embedding.
+
+---
+
+### 🟡 STEP 2 (After Approval): Create `getConversationContext(sessionId)` Helper
+
+(New file: `shared/context/getConversationContext.ts`)
+
+**Functionality**:
+- Retrieve the last N chat messages (default 10)
+- Retrieve the last M agent actions (default 5)
+- Return interface:
 
 ```ts
 export interface ConversationContext {
   history: ChatMessage[];
-  summary?: string; // (optional) running summary from conversation_sessions
-  contextEmbedding?: number[]; // averaged or recent embedding
+  agentActions?: AgentAction[];
+  summary?: string;
+  contextEmbedding?: number[];
 }
 ```
 
-Implementation notes:
-- Consider excluding system/debug messages from history
-- If available, use `conversation_sessions.summary` as fallback
-- You can use average of the last 3 embeddings for `contextEmbedding`
+**Implementation Notes**:
+- Exclude system/debug messages
+- Pull `summary` from `conversation_sessions`
+- Compute `contextEmbedding` as average of last 3 embeddings (chat + actions)
+
+**Test**:
+- Call with a mock session ID; confirm correct return shape and values
 
 ---
 
-### 4. Update MCPRequest Context
+### 🟡 STEP 3: Update MCP Types
 
-Update `MCPRequest.context` to accept full conversation context:
+Update `shared/mcpTypes.ts`:
 
 ```ts
-interface MCPContext {
+export interface MCPContext {
   lastMessage: string;
   chatHistory?: ChatMessage[];
+  agentActions?: AgentAction[];
   contextEmbedding?: number[];
   summary?: string;
   semanticContext?: {
@@ -81,28 +110,53 @@ interface MCPContext {
 }
 ```
 
----
-
-### 5. Usage in MCP Loop + Planner
-
-Ensure:
-- The `mcp-loop` passes `getConversationContext(sessionId)` to the planner
-- The planner and chat summarizer have access to:
-  - `chatHistory`
-  - `summary`
-  - `contextEmbedding`
+**Test**:
+- Ensure types compile and reflect new context
 
 ---
 
-## 🧪 Optional (Future-Ready)
+### 🟡 STEP 4: Pass `getConversationContext` into MCP Loop
 
-- Add a `contextSimilarityScore` to returned context matches
-- Precompute session summaries using a background agent or `after insert` trigger
+**Changes**:
+- Inside `mcp-loop`, call `getConversationContext(sessionId)`
+- Pass returned `ConversationContext` into planner
+
+**Test**:
+- Confirm `chatHistory`, `summary`, `contextEmbedding`, and `agentActions` are passed into planner input
+
+---
+
+### 🟡 STEP 5: Use Context in Planner + Summarizer
+
+Ensure planner/summarizer access:
+
+- `context.chatHistory`
+- `context.agentActions`
+- `context.summary`
+- `context.contextEmbedding`
+
+**Test**:
+- Add logging/validation in planner/summarizer to confirm access
+
+---
+
+## ❗ Do Not
+
+- Refactor unrelated files or logic
+- Add new features not listed above
+- Change database or table structure beyond what's defined
 
 ---
 
 ## 📁 File Locations
 
-- `shared/chatUtils.ts` — update insert functions to include embedding
-- `shared/context/getConversationContext.ts` — new file
-- `shared/mcpTypes.ts` — add `ConversationContext` and `MCPContext` types
+- `shared/chatUtils.ts` — embed on insert ✅
+- `shared/context/getConversationContext.ts` — context helper
+- `shared/mcpTypes.ts` — context type update
+- `shared/mcpLoop.ts` — load context + pass to planner
+- `planner.ts` / `summarizer.ts` — consume context
+- `agent_action_logger.ts` — update insert logic
+
+---
+
+Once STEP 1 and STEP 1a/1b are approved, proceed to STEP 2.

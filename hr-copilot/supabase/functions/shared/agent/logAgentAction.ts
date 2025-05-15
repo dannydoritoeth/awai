@@ -1,6 +1,7 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../database.types.ts';
 import { SemanticMetrics } from '../embeddings.ts';
+import { generateEmbedding } from '../semanticSearch.ts';
 
 export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division' | 'chat';
 
@@ -18,17 +19,27 @@ export async function logAgentAction(
   supabase: SupabaseClient<Database>,
   action: AgentAction
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from('agent_actions')
-    .insert({
-      target_type: action.entityType,
-      target_id: action.entityId,
-      payload: action.payload,
-      confidence_score: action.semanticMetrics?.confidenceScore || null,
-      outcome: JSON.stringify(action.semanticMetrics || {})
-    });
+  try {
+    // Generate a summary of the action for embedding
+    const actionSummary = `${action.entityType} ${action.payload.type || action.payload.stage || 'action'}: ${JSON.stringify(action.payload)}`;
+    const embedding = await generateEmbedding(actionSummary);
 
-  if (error) {
+    const { error } = await supabase
+      .from('agent_actions')
+      .insert({
+        target_type: action.entityType,
+        target_id: action.entityId,
+        payload: action.payload,
+        confidence_score: action.semanticMetrics?.confidenceScore || null,
+        outcome: JSON.stringify(action.semanticMetrics || {}),
+        embedding
+      });
+
+    if (error) {
+      console.error('Failed to log agent action:', error);
+      throw error;
+    }
+  } catch (error) {
     console.error('Failed to log agent action:', error);
     throw error;
   }

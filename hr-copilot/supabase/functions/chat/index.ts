@@ -31,7 +31,21 @@ async function callMCPLoop(sessionId: string, message: string, mode: 'candidate'
       ...(mode === 'hiring' && entityId ? { roleId: entityId } : {}),
       context: {
         lastMessage: message,
-        mode // Include mode in context to ensure proper handling
+        mode,
+        // Initialize empty arrays for history and actions to prevent undefined errors
+        chatHistory: [],
+        agentActions: [],
+        // Add a default empty summary
+        summary: '',
+        // Initialize semantic context for general mode
+        semanticContext: {
+          currentFocus: undefined,
+          previousMatches: [],
+          previousFocus: undefined,
+          matchingTopic: undefined
+        },
+        // Initialize an empty contextEmbedding array
+        contextEmbedding: []
       }
     })
   });
@@ -76,7 +90,22 @@ async function processInitialMessage(
         roleId: mode === 'hiring' ? entityId : undefined,
         sessionId,
         context: {
-          lastMessage: message
+          lastMessage: message,
+          mode,
+          // Initialize empty arrays for history and actions to prevent undefined errors
+          chatHistory: [],
+          agentActions: [],
+          // Add a default empty summary
+          summary: '',
+          // Initialize semantic context for general mode
+          semanticContext: {
+            currentFocus: undefined,
+            previousMatches: [],
+            previousFocus: undefined,
+            matchingTopic: undefined
+          },
+          // Initialize an empty contextEmbedding array
+          contextEmbedding: []
         }
       })
     });
@@ -129,40 +158,19 @@ async function startSession(
   initialMessage?: string
 ): Promise<{ sessionId: string | null; error: ChatError | null }> {
   try {
-    // Validate entity ID exists if provided
-    if (entityId) {
-      const table = mode === 'candidate' ? 'profiles' : mode === 'hiring' ? 'roles' : null;
-      if (table) {
-        const { data, error } = await supabaseClient
-          .from(table)
-          .select('id')
-          .eq('id', entityId)
-          .single();
+    // Create new session
+    const { data: session, error: sessionError } = await startChatSession(
+      supabaseClient,
+      mode,
+      entityId,
+      browserSessionId
+    );
 
-        if (error || !data) {
-          throw new Error(`Invalid ${mode === 'candidate' ? 'profile' : 'role'} ID provided`);
-        }
-      }
+    if (sessionError || !session) {
+      throw sessionError || new Error('Failed to create session');
     }
 
-    // Create the session
-    const { data: session, error: sessionError } = await supabaseClient
-      .from('conversation_sessions')
-      .insert({
-        mode,
-        entity_id: mode === 'general' ? null : entityId,
-        browser_session_id: browserSessionId,
-        status: 'active'
-      })
-      .select('id')
-      .single();
-
-    if (sessionError) throw sessionError;
-
-    const sessionId = session?.id;
-    if (!sessionId) {
-      throw new Error('Failed to create session - no session ID returned');
-    }
+    const sessionId = session.id;
 
     // If there's an initial message, log it and trigger MCP asynchronously
     if (initialMessage) {
@@ -182,7 +190,22 @@ async function startSession(
           ...(mode === 'candidate' ? { profileId: entityId } : {}),
           ...(mode === 'hiring' ? { roleId: entityId } : {}),
           context: {
-            lastMessage: initialMessage
+            lastMessage: initialMessage,
+            mode,
+            // Initialize empty arrays for history and actions to prevent undefined errors
+            chatHistory: [],
+            agentActions: [],
+            // Add a default empty summary
+            summary: '',
+            // Initialize semantic context for general mode
+            semanticContext: {
+              currentFocus: undefined,
+              previousMatches: [],
+              previousFocus: undefined,
+              matchingTopic: undefined
+            },
+            // Initialize an empty contextEmbedding array
+            contextEmbedding: []
           }
         })
       }).catch(error => {
@@ -223,7 +246,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, sessionId, message, profileId, roleId, browserSessionId } = await req.json();
+    const requestBody = await req.json();
+    const { action, sessionId, message, profileId, roleId, browserSessionId, messageId: requestMessageId } = requestBody;
     console.log('Received request:', { action, sessionId, message, profileId, roleId, browserSessionId });
 
     // Validate required fields
@@ -256,6 +280,7 @@ serve(async (req) => {
           entityId = roleId;
         } else {
           mode = 'general';
+          entityId = undefined; // Ensure entity_id is null for general mode
         }
 
         console.log('Determined mode and entityId:', { mode, entityId });
@@ -327,56 +352,83 @@ serve(async (req) => {
           throw new Error('Message is required');
         }
 
-        // Get session details to determine mode and entity ID
-        const { data: session, error: sessionError } = await supabaseClient
-          .from('conversation_sessions')
-          .select('mode, entity_id')
-          .eq('id', sessionId)
-          .single();
+        console.log('Processing postMessage:', { sessionId, requestMessageId, message });
 
-        if (sessionError || !session) {
-          throw new Error('Invalid session ID or session not found');
-        }
+        try {
+          // Get session details to determine mode and entity ID
+          const { data: session, error: sessionError } = await supabaseClient
+            .from('conversation_sessions')
+            .select('mode, entity_id')
+            .eq('id', sessionId)
+            .single();
 
-        // Save user message
-        const { messageId, error: postError } = await postUserMessage(
-          supabaseClient,
-          sessionId,
-          message
-        );
-        if (postError) throw postError;
+          if (sessionError) {
+            console.error('Session lookup error:', sessionError);
+            throw new Error('Failed to lookup session');
+          }
 
-        // Call MCP loop with session context
-        const mcpResult = await callMCPLoop(
-          sessionId,
-          message,
-          session.mode,
-          session.entity_id || undefined
-        );
-        
-        if (!mcpResult.success || !mcpResult.data?.chatResponse) {
-          throw new Error('Failed to get response from MCP loop');
-        }
+          if (!session) {
+            throw new Error('Invalid session ID or session not found');
+          }
 
-        // Log assistant's reply
-        const { error: replyError } = await logAgentResponse(
-          supabaseClient,
-          sessionId,
-          mcpResult.data.chatResponse.message
-        );
-        if (replyError) throw replyError;
+          // Always log the user message with the provided messageId or generate a new one
+          let messageId = requestMessageId || crypto.randomUUID();
+          console.log('Logging user message with ID:', messageId);
+          
+          const { error: postError } = await postUserMessage(
+            supabaseClient,
+            sessionId,
+            message,
+            messageId // Pass the messageId to use for logging
+          );
+          
+          if (postError) {
+            console.error('Error posting user message:', postError);
+            throw postError;
+          }
 
-        // Return the response
-        return new Response(
-          JSON.stringify({
+          // Call MCP loop with session context
+          console.log('Calling MCP loop');
+          const mcpResult = await callMCPLoop(
+            sessionId,
+            message,
+            session.mode,
+            session.entity_id || undefined
+          );
+          
+          if (!mcpResult.success) {
+            console.error('MCP loop failed:', mcpResult);
+            throw new Error('Failed to get response from MCP loop');
+          }
+
+          if (!mcpResult.data?.chatResponse) {
+            console.error('Invalid MCP response:', mcpResult);
+            throw new Error('Invalid response format from MCP loop');
+          }
+
+          // Generate a unique ID for the AI response
+          const aiResponseId = crypto.randomUUID();
+          console.log('Generated AI response ID:', aiResponseId);
+
+          // Return the response with consistent IDs
+          const response = {
             messageId,
+            aiMessageId: aiResponseId,
             reply: mcpResult.data.chatResponse.message,
             followUpQuestion: mcpResult.data.chatResponse.followUpQuestion
-          }), 
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
+          };
+          console.log('Sending response:', response);
+
+          return new Response(
+            JSON.stringify(response), 
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        } catch (error) {
+          console.error('Error in postMessage handler:', error);
+          throw error; // Let the main error handler format the response
+        }
       }
 
       case 'getHistory':
