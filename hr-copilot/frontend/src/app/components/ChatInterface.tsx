@@ -75,8 +75,28 @@ export default function ChatInterface({
                   : 'bg-gray-100 text-gray-900'
               }`}
             >
-              <div className={`prose prose-sm max-w-none ${message.sender === 'user' ? 'prose-invert' : ''}`}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <div className={`prose prose-sm max-w-none overflow-x-auto ${message.sender === 'user' ? 'prose-invert' : ''}`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: (props) => <h1 className="text-lg font-bold mt-0 mb-2" {...props} />,
+                    h2: (props) => <h2 className="text-base font-bold mt-0 mb-2" {...props} />,
+                    h3: (props) => <h3 className="text-base font-semibold mt-0 mb-1" {...props} />,
+                    p: (props) => <p className="mt-0 mb-2 last:mb-0" {...props} />,
+                    ul: (props) => <ul className="list-disc list-inside mt-0 mb-2" {...props} />,
+                    ol: (props) => <ol className="list-decimal list-inside mt-0 mb-2" {...props} />,
+                    li: (props) => <li className="mt-0 mb-1" {...props} />,
+                    a: (props) => <a className="text-blue-500 hover:text-blue-600 underline" {...props} />,
+                    code: ({inline, ...props}: {inline?: boolean} & React.HTMLProps<HTMLElement>) => 
+                      inline ? (
+                        <code className="bg-gray-200 rounded px-1 py-0.5 text-sm" {...props} />
+                      ) : (
+                        <code className="block bg-gray-200 rounded p-2 text-sm overflow-x-auto" {...props} />
+                      ),
+                    pre: (props) => <pre className="bg-gray-200 rounded p-2 overflow-x-auto" {...props} />,
+                    blockquote: (props) => <blockquote className="border-l-4 border-gray-300 pl-4 italic" {...props} />,
+                  }}
+                >
                   {message.message}
                 </ReactMarkdown>
               </div>
