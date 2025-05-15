@@ -20,6 +20,7 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
+  const [hasInitialScroll, setHasInitialScroll] = useState(false);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -37,12 +38,16 @@ export default function ChatInterface({
   };
 
   useEffect(() => {
-    // Only scroll if we have new messages
-    if (messages.length > prevMessagesLengthRef.current) {
+    // Only scroll if we have new messages and it's not the initial load
+    if (messages.length > prevMessagesLengthRef.current && hasInitialScroll) {
       scrollToBottom();
-      prevMessagesLengthRef.current = messages.length;
     }
-  }, [messages]);
+    // If this is the first time we have messages, mark initial scroll as done
+    if (messages.length > 0 && !hasInitialScroll) {
+      setHasInitialScroll(true);
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, hasInitialScroll]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

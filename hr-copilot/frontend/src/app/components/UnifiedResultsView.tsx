@@ -49,7 +49,9 @@ export default function UnifiedResultsView({
   startContext = 'open'
 }: UnifiedResultsViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
@@ -58,10 +60,24 @@ export default function UnifiedResultsView({
     return 'matches';
   });
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageRef = useRef<ChatMessage | null>(null);
 
   useEffect(() => {
     setAdditionalContext(profileData?.additionalContext || '');
   }, [profileData]);
+
+  useEffect(() => {
+    // Update isWaitingForResponse based on the last message
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.sender === 'user') {
+        setIsWaitingForResponse(true);
+      } else {
+        setIsWaitingForResponse(false);
+      }
+      lastMessageRef.current = lastMessage;
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -78,12 +94,22 @@ export default function UnifiedResultsView({
           
           // Only update if we have new unique messages
           if (uniqueNewMessages.length > 0) {
+            setIsInitializing(false);
+            setIsLoading(false);
+            
+            // Check if we received an AI response
+            const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
+            if (hasNewAIMessage) {
+              setIsWaitingForResponse(false);
+            }
+            
             return [...prev, ...uniqueNewMessages] as ChatMessage[];
           }
           return prev;
         });
       } catch (error) {
         console.error('Failed to fetch messages:', error);
+        setIsLoading(false);
       }
     };
 
@@ -93,11 +119,18 @@ export default function UnifiedResultsView({
     // Set up polling
     pollTimeoutRef.current = setInterval(pollMessages, 2000);
 
+    // Set a timeout to disable initializing state if no messages arrive
+    const initTimeout = setTimeout(() => {
+      setIsInitializing(false);
+      setIsLoading(false);
+    }, 5000);
+
     // Cleanup
     return () => {
       if (pollTimeoutRef.current) {
         clearInterval(pollTimeoutRef.current);
       }
+      clearTimeout(initTimeout);
     };
   }, [sessionId]);
 
@@ -115,6 +148,7 @@ export default function UnifiedResultsView({
     };
     
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
+    setIsWaitingForResponse(true); // Set waiting state when sending message
     setIsLoading(true);
 
     try {
@@ -136,7 +170,6 @@ export default function UnifiedResultsView({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Don't add AI response locally - it will come through polling
       await response.json();
       
     } catch (error) {
@@ -144,6 +177,7 @@ export default function UnifiedResultsView({
 
       // Remove the user message if the send failed
       setMessages((prev: ChatMessage[]) => prev.filter(msg => msg.id !== messageId));
+      setIsWaitingForResponse(false); // Reset waiting state on error
 
       // Show error message to user
       const errorMessageId = crypto.randomUUID();
@@ -319,7 +353,7 @@ export default function UnifiedResultsView({
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
-            isLoading={isLoading}
+            isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
           />
         </div>
       </div>
