@@ -20,7 +20,8 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
-  const [hasInitialScroll, setHasInitialScroll] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -37,21 +38,45 @@ export default function ChatInterface({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Handle user scroll interaction
   useEffect(() => {
-    // Only scroll if we have new messages and it's not the initial load
-    if (messages.length > prevMessagesLengthRef.current && hasInitialScroll) {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (!hasUserInteracted) {
+        setHasUserInteracted(true);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [hasUserInteracted]);
+
+  useEffect(() => {
+    // Only auto-scroll if:
+    // 1. User has interacted with the chat (scrolled or sent a message)
+    // 2. We have new messages
+    // 3. The container is scrolled near the bottom already
+    const shouldAutoScroll = () => {
+      const container = messagesContainerRef.current;
+      if (!container) return false;
+      
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      return hasUserInteracted && messages.length > prevMessagesLengthRef.current && isNearBottom;
+    };
+
+    if (shouldAutoScroll()) {
       scrollToBottom();
     }
-    // If this is the first time we have messages, mark initial scroll as done
-    if (messages.length > 0 && !hasInitialScroll) {
-      setHasInitialScroll(true);
-    }
+    
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, hasInitialScroll]);
+  }, [messages, hasUserInteracted]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputValue.trim() && !isLoading) {
+      setHasUserInteracted(true); // Mark as interacted when user sends a message
       onSendMessage(inputValue.trim());
       setInputValue('');
     }
@@ -67,7 +92,10 @@ export default function ChatInterface({
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 mb-[76px]">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 mb-[76px]"
+      >
         {messages.map((message) => (
           <div
             key={message.id}

@@ -52,6 +52,7 @@ export default function UnifiedResultsView({
   const [isLoading, setIsLoading] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
@@ -59,6 +60,7 @@ export default function UnifiedResultsView({
     if (startContext === 'role') return 'role';
     return 'matches';
   });
+  const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<ChatMessage | null>(null);
 
@@ -133,6 +135,21 @@ export default function UnifiedResultsView({
       clearTimeout(initTimeout);
     };
   }, [sessionId]);
+
+  // Scroll to top when data is loaded
+  useEffect(() => {
+    if (!isLoading && !isInitializing && !isDataLoaded) {
+      setIsDataLoaded(true);
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        // Also scroll the container to top
+        if (containerRef.current) {
+          containerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      });
+    }
+  }, [isLoading, isInitializing, isDataLoaded]);
 
   const handleSendMessage = async (message: string) => {
     if (!sessionId || !message.trim()) return;
@@ -346,7 +363,7 @@ export default function UnifiedResultsView({
   );
 
   return (
-    <div className="flex gap-6 min-h-[600px]">
+    <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
       <div className="flex-1 max-w-[766px] bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="h-full">
