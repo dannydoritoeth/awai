@@ -9,11 +9,11 @@ interface ProfileData {
   currentRole?: string;
   department?: string;
   tenure?: string;
-  skills: Array<{
+  skills?: Array<{
     name: string;
-    level: number;
+    level?: number | null;
   }>;
-  roles: Array<{
+  roles?: Array<{
     title: string;
     company: string;
     years: number;
@@ -31,10 +31,8 @@ interface RoleData {
   department?: string;
   location?: string;
   description?: string;
-  requirements: Array<{
-    name: string;
-    level: number;
-  }>;
+  skills?: string[];
+  requirements?: string[];
 }
 
 interface UnifiedResultsViewProps {
@@ -164,11 +162,12 @@ export default function UnifiedResultsView({
     }
   };
 
-  const formatNumber = (n: number): string => {
+  const formatNumber = (n: number | undefined | null): string => {
+    if (n === undefined || n === null) return '-';
     return n.toString();
   };
 
-  const renderSkillLevel = (skill: { name: string; level: number }, index: number) => {
+  const renderSkillLevel = (skill: { name: string; level?: number | null }, index: number) => {
     return (
       <div key={index} className="flex items-center gap-2">
         <span>{skill.name}</span>
