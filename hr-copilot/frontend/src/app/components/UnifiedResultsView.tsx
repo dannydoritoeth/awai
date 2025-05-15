@@ -55,10 +55,10 @@ export default function UnifiedResultsView({
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
-  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'role'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
-    return 'matches';
+    return profileData ? 'profile' : 'role';
   });
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -356,12 +356,6 @@ export default function UnifiedResultsView({
     </div>
   );
 
-  const LoadingState = () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-gray-500">Loading...</div>
-    </div>
-  );
-
   return (
     <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
@@ -405,17 +399,6 @@ export default function UnifiedResultsView({
                 Role Details
               </button>
             )}
-
-            {/* Always show Matches tab */}
-            <button
-              className={`px-6 py-4 text-sm font-medium transition-colors relative
-                ${activeTab === 'matches'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('matches')}
-            >
-              Matches
-            </button>
           </div>
         </div>
 
@@ -423,7 +406,6 @@ export default function UnifiedResultsView({
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
-          {activeTab === 'matches' && <LoadingState />}
         </div>
       </div>
     </div>
