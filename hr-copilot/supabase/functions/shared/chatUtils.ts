@@ -3,6 +3,7 @@ import { Database } from '../database.types.ts';
 import { ChatMessage, ChatSender, ConversationSession, ChatError } from './chatTypes.ts';
 import { logAgentAction } from './agent/logAgentAction.ts';
 import { MCPMode, SemanticMatch } from './mcpTypes.ts';
+import { generateEmbedding } from './semanticSearch.ts';
 
 // Type definitions
 declare const Deno: {
@@ -54,12 +55,16 @@ export async function postUserMessage(
   message: string
 ): Promise<{ messageId: string; error?: ChatError }> {
   try {
+    // Generate embedding for the message
+    const embedding = await generateEmbedding(message);
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         session_id: sessionId,
         sender: 'user',
-        message
+        message,
+        embedding
       })
       .select('id')
       .single();
@@ -90,6 +95,9 @@ export async function logAgentResponse(
   responseData?: Record<string, any>
 ): Promise<{ messageId: string; error?: ChatError }> {
   try {
+    // Generate embedding for the message
+    const embedding = await generateEmbedding(message);
+
     // Log the message
     const { data: messageData, error: messageError } = await supabase
       .from('chat_messages')
@@ -98,7 +106,8 @@ export async function logAgentResponse(
         sender: 'assistant',
         message,
         tool_call: toolCall,
-        response_data: responseData
+        response_data: responseData,
+        embedding
       })
       .select('id')
       .single();
