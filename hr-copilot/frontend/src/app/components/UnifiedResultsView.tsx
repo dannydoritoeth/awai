@@ -170,8 +170,8 @@ export default function UnifiedResultsView({
   const renderSkillLevel = (skill: { name: string; level?: number | null }, index: number) => {
     return (
       <div key={index} className="flex items-center gap-2">
-        <span>{skill.name}</span>
-        <span className="text-gray-500">{formatNumber(skill.level)}</span>
+        <span className="text-gray-900">{skill.name}</span>
+        <span className="text-gray-700">{formatNumber(skill.level)}</span>
       </div>
     );
   };
@@ -179,8 +179,8 @@ export default function UnifiedResultsView({
   const renderRole = (role: { title: string; company: string; years: number }, index: number) => {
     return (
       <div key={index} className="mb-2">
-        <div className="font-medium">{role.title}</div>
-        <div className="text-sm text-gray-500">
+        <div className="font-medium text-gray-900">{role.title}</div>
+        <div className="text-sm text-gray-700">
           {role.company} • {role.years} years
         </div>
       </div>
@@ -199,10 +199,10 @@ export default function UnifiedResultsView({
           <h2 className="text-xl font-semibold text-gray-900">
             {profileData?.name}
           </h2>
-          <p className="text-base text-gray-600 mt-1">
+          <p className="text-base text-gray-800 mt-1">
             {profileData?.currentRole} • {profileData?.department}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-700 mt-1">
             {profileData?.tenure} tenure
           </p>
         </div>
@@ -210,7 +210,7 @@ export default function UnifiedResultsView({
 
       {profileData?.skills && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Key Skills</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Key Skills</h3>
           <div className="flex flex-wrap gap-2">
             {profileData.skills.map((skill, index) => renderSkillLevel(skill, index))}
           </div>
@@ -219,7 +219,7 @@ export default function UnifiedResultsView({
 
       {profileData?.roles && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Previous Roles</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Previous Roles</h3>
           <div className="flex flex-col gap-2">
             {profileData.roles.map((role, index) => renderRole(role, index))}
           </div>
@@ -252,7 +252,7 @@ export default function UnifiedResultsView({
                 {additionalContext || profileData?.additionalContext}
               </p>
             ) : (
-              <p className="text-sm text-gray-500 italic">
+              <p className="text-sm text-gray-600 italic">
                 No additional context provided. Click &apos;Edit&apos; to add information about career goals, specific experiences, or preferences.
               </p>
             )}
@@ -265,20 +265,20 @@ export default function UnifiedResultsView({
   const renderRoleDetails = () => (
     <div className="p-6 space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-blue-950">{roleData?.title}</h2>
-        <p className="text-base text-gray-600 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900">{roleData?.title}</h2>
+        <p className="text-base text-gray-800 mt-1">
           {roleData?.department} • {roleData?.location}
         </p>
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Description</h3>
-        <p className="text-sm text-gray-600">{roleData?.description}</p>
+        <h3 className="text-sm font-medium text-gray-900 mb-2">Description</h3>
+        <p className="text-sm text-gray-800">{roleData?.description}</p>
       </div>
 
       {roleData?.skills && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Required Skills</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Required Skills</h3>
           <div className="flex flex-wrap gap-2">
             {roleData.skills.map((skill, index) => (
               <span
@@ -294,10 +294,10 @@ export default function UnifiedResultsView({
 
       {roleData?.requirements && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Requirements</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Requirements</h3>
           <ul className="list-disc list-inside space-y-1">
             {roleData.requirements.map((req, index) => (
-              <li key={index} className="text-sm text-gray-600">{req}</li>
+              <li key={index} className="text-sm text-gray-800">{req}</li>
             ))}
           </ul>
         </div>
@@ -338,7 +338,7 @@ export default function UnifiedResultsView({
                     : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setActiveTab('profile')}
               >
-                Your Profile
+                Profile Details
               </button>
             )}
             
