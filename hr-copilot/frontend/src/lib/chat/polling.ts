@@ -117,14 +117,22 @@ export class ChatPoller {
       newMessages.forEach(msg => this.seenMessageIds.add(msg.id));
 
       if (newMessages.length > 0) {
-        this.onNewMessages(newMessages.map(msg => ({
+        const transformedMessages: ChatMessage[] = newMessages.map(msg => ({
           id: msg.id,
-          text: msg.message,
-          sender: msg.sender === 'assistant' ? 'ai' : 'user',
-          timestamp: new Date(msg.created_at),
+          sessionId: msg.session_id,
+          sender: msg.sender === 'assistant' ? 'assistant' : 'user',
+          message: msg.message,
+          timestamp: new Date(msg.created_at).toISOString(),
+          toolCall: msg.tool_call ? {
+            name: msg.tool_call.name,
+            arguments: msg.tool_call.arguments
+          } : undefined,
+          responseData: msg.response_data,
           followUpQuestion: msg.response_data?.followUpQuestion,
           semanticContext: msg.response_data?.semanticContext
-        })));
+        }));
+        
+        this.onNewMessages(transformedMessages);
       }
     } catch (error) {
       console.error('Error polling messages:', error);

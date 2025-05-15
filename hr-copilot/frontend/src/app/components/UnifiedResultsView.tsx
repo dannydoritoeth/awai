@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
 import { getSessionMessages } from '@/lib/api/chat';
-import type { ChatMessage, ResponseData } from '@/types/chat';
+import type { ChatMessage } from '@/types/chat';
 
 interface ProfileData {
   id: string;
@@ -57,7 +57,7 @@ export default function UnifiedResultsView({
     if (startContext === 'role') return 'role';
     return 'matches';
   });
-  const pollTimeoutRef = useRef<NodeJS.Timeout>();
+  const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setAdditionalContext(profileData?.additionalContext || '');
