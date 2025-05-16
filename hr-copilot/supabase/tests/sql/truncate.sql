@@ -27,6 +27,8 @@ TRUNCATE TABLE
   capability_levels,
   career_paths,
   companies,
+  conversation_sessions,
+  chat_messages,
   divisions,
   jobs,
   job_documents,
@@ -41,5 +43,7 @@ TRUNCATE TABLE
   role_documents,
   role_skills,
   roles,
-  skills
+  skills,
+  taxonomy,
+  role_taxonomy
 RESTART IDENTITY CASCADE;

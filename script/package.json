@@ -10,7 +10,8 @@
     "prepare-seed": "node scripts/prepareSeedData.js",
     "insert-seed": "node scripts/insertSeedData.js",
     "profile-seed": "node scripts/generateProfiles.js",
-    "process-documents": "node scripts/process-documents.js"
+    "process-documents": "node scripts/process-documents.js",
+    "load-nsw-capabilities": "node scripts/loadNSWCapabilities.js"
   },
   "repository": {
     "type": "git",

@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { getEmbeddings, generateEmbeddingText } from '../utils/embeddings.js';
+import { generateNSWCapabilityData } from './generateNSWCapabilities.js';
+import { generateTaxonomyData } from './generateTaxonomyData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +29,9 @@ const TABLES = {
   roleCapabilities: 'role_capabilities.json',
   roleSkills: 'role_skills.json',
   jobDocuments: 'job_documents.json',
-  roleDocuments: 'role_documents.json'
+  roleDocuments: 'role_documents.json',
+  taxonomy: 'taxonomy.json',
+  roleTaxonomies: 'role_taxonomies.json'
 };
 
 // Helper to ensure directories exist
@@ -55,254 +59,6 @@ async function writeSeedFile(fileName, data) {
   const filePath = path.join(SEED_DIR, fileName);
   await fs.writeFile(filePath, JSON.stringify(data, null, 2));
   console.log(`Written ${filePath}`);
-}
-
-// Extract unique capabilities from role data
-function extractCapabilities(roles) {
-  console.log('\nExtracting capabilities...');
-  console.log(`Total roles to process: ${roles.length}`);
-
-  const capabilities = new Map();
-  let totalCapabilities = 0;
-
-  roles.forEach(role => {
-    if (role.raw_json?.details?.documents) {
-      console.log(`\nProcessing documents for role: ${role.title}`);
-      role.raw_json.details.documents.forEach((doc, docIndex) => {
-        console.log(`\nDocument ${docIndex + 1} structure:`, JSON.stringify({
-          has_structured_data: !!doc.structuredData,
-          structured_data_keys: doc.structuredData ? Object.keys(doc.structuredData) : [],
-          focus_capabilities_raw: doc.structuredData?.focusCapabilities,
-          focus_capabilities_type: doc.structuredData?.focusCapabilities ? typeof doc.structuredData.focusCapabilities : 'undefined',
-          focus_capabilities_is_array: Array.isArray(doc.structuredData?.focusCapabilities),
-          complementary_capabilities_raw: doc.structuredData?.complementaryCapabilities,
-          complementary_capabilities_type: doc.structuredData?.complementaryCapabilities ? typeof doc.structuredData.complementaryCapabilities : 'undefined',
-          complementary_capabilities_is_array: Array.isArray(doc.structuredData?.complementaryCapabilities)
-        }, null, 2));
-
-        // Process focus capabilities
-        if (Array.isArray(doc.structuredData?.focusCapabilities)) {
-          doc.structuredData.focusCapabilities.forEach((cap, idx) => {
-            console.log(`Focus capability ${idx}:`, {
-              value: cap,
-              type: typeof cap,
-              is_string: typeof cap === 'string',
-              has_split: typeof cap === 'string' ? typeof cap.split === 'function' : false,
-              raw: JSON.stringify(cap)
-            });
-
-            let capabilityName, level;
-            if (typeof cap === 'string') {
-              [capabilityName, level] = cap.split(' - ').map(s => s.trim());
-            } else if (typeof cap === 'object' && cap !== null) {
-              // Handle object format if it exists
-              capabilityName = cap.capabilityName || cap.name || cap.capability;
-              level = cap.level;
-            } else {
-              console.log('Skipping invalid capability format:', cap);
-              return;
-            }
-
-            if (capabilityName) {
-              console.log('Processing focus capability:', { capabilityName, level });
-              
-              if (!capabilities.has(capabilityName)) {
-                capabilities.set(capabilityName, {
-                  id: uuidv4(),
-                  name: capabilityName,
-                  group_name: null,
-                  description: null,
-                  source_framework: 'NSW Capability Framework',
-                  is_occupation_specific: capabilityName.includes('Legal') || capabilityName.includes('Legislative'),
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-                totalCapabilities++;
-                console.log(`Added focus capability: ${capabilityName}`);
-              }
-            }
-          });
-        }
-
-        // Process complementary capabilities
-        if (Array.isArray(doc.structuredData?.complementaryCapabilities)) {
-          doc.structuredData.complementaryCapabilities.forEach((cap, idx) => {
-            console.log(`Complementary capability ${idx}:`, {
-              value: cap,
-              type: typeof cap,
-              is_string: typeof cap === 'string',
-              has_split: typeof cap === 'string' ? typeof cap.split === 'function' : false,
-              raw: JSON.stringify(cap)
-            });
-
-            let capabilityName, level;
-            if (typeof cap === 'string') {
-              [capabilityName, level] = cap.split(' - ').map(s => s.trim());
-            } else if (typeof cap === 'object' && cap !== null) {
-              // Handle object format if it exists
-              capabilityName = cap.capabilityName || cap.name || cap.capability;
-              level = cap.level;
-            } else {
-              console.log('Skipping invalid capability format:', cap);
-              return;
-            }
-
-            if (capabilityName) {
-              console.log('Processing complementary capability:', { capabilityName, level });
-              
-              if (!capabilities.has(capabilityName)) {
-                capabilities.set(capabilityName, {
-                  id: uuidv4(),
-                  name: capabilityName,
-                  group_name: null,
-                  description: null,
-                  source_framework: 'NSW Capability Framework',
-                  is_occupation_specific: capabilityName.includes('Legal') || capabilityName.includes('Legislative'),
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                });
-                totalCapabilities++;
-                console.log(`Added complementary capability: ${capabilityName}`);
-              }
-            }
-          });
-        }
-      });
-    }
-  });
-
-  console.log(`\nTotal unique capabilities extracted: ${totalCapabilities}`);
-  return Array.from(capabilities.values());
-}
-
-// Extract capability levels from role data
-function extractCapabilityLevels(roles, capabilities) {
-  console.log('\nExtracting capability levels...');
-  const capabilityLevels = new Map();
-  const capabilityMap = new Map(capabilities.map(c => [c.name, c.id]));
-  
-  // Debug: Log all capability IDs in a structured way
-  console.log('\nAvailable Capabilities:');
-  console.log('----------------------');
-  capabilities.forEach(c => {
-    console.log(`Name: "${c.name}"\nID: ${c.id}\n`);
-  });
-  
-  let totalLevels = 0;
-
-  roles.forEach(role => {
-    if (role.raw_json?.details?.documents) {
-      role.raw_json.details.documents.forEach(doc => {
-        // Process focus capabilities
-        if (Array.isArray(doc.structuredData?.focusCapabilities)) {
-          doc.structuredData.focusCapabilities.forEach((cap, idx) => {
-            let capabilityName, level;
-            if (typeof cap === 'string') {
-              [capabilityName, level] = cap.split(' - ').map(s => s.trim());
-            } else if (typeof cap === 'object' && cap !== null) {
-              capabilityName = cap.capabilityName || cap.name || cap.capability;
-              level = cap.level;
-            } else {
-              console.log('Skipping invalid capability format:', cap);
-              return;
-            }
-
-            if (capabilityName && level) {
-              const capabilityId = capabilityMap.get(capabilityName);
-              if (capabilityId) {
-                const levelKey = `${capabilityId}-${level}`;
-                if (!capabilityLevels.has(levelKey)) {
-                  const levelData = {
-                    id: uuidv4(),
-                    capability_id: capabilityId,
-                    level: level,
-                    summary: null,
-                    behavioral_indicators: [],
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                  };
-                  capabilityLevels.set(levelKey, levelData);
-                  totalLevels++;
-                  console.log(`\nAdded Capability Level:`);
-                  console.log(`Capability: "${capabilityName}"`);
-                  console.log(`Level: ${level}`);
-                  console.log(`Using Capability ID: ${capabilityId}`);
-                }
-              } else {
-                console.warn(`\n⚠️ WARNING: No capability ID found`);
-                console.warn(`Capability Name: "${capabilityName}"`);
-                console.warn(`Available names: ${Array.from(capabilityMap.keys()).join(', ')}`);
-              }
-            }
-          });
-        }
-
-        // Process complementary capabilities with similar debug output
-        if (Array.isArray(doc.structuredData?.complementaryCapabilities)) {
-          doc.structuredData.complementaryCapabilities.forEach((cap, idx) => {
-            let capabilityName, level;
-            if (typeof cap === 'string') {
-              [capabilityName, level] = cap.split(' - ').map(s => s.trim());
-            } else if (typeof cap === 'object' && cap !== null) {
-              capabilityName = cap.capabilityName || cap.name || cap.capability;
-              level = cap.level;
-            } else {
-              console.log('Skipping invalid capability format:', cap);
-              return;
-            }
-
-            if (capabilityName && level) {
-              const capabilityId = capabilityMap.get(capabilityName);
-              if (capabilityId) {
-                const levelKey = `${capabilityId}-${level}`;
-                if (!capabilityLevels.has(levelKey)) {
-                  const levelData = {
-                    id: uuidv4(),
-                    capability_id: capabilityId,
-                    level: level,
-                    summary: null,
-                    behavioral_indicators: [],
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                  };
-                  capabilityLevels.set(levelKey, levelData);
-                  totalLevels++;
-                  console.log(`\nAdded Capability Level:`);
-                  console.log(`Capability: "${capabilityName}"`);
-                  console.log(`Level: ${level}`);
-                  console.log(`Using Capability ID: ${capabilityId}`);
-                }
-              } else {
-                console.warn(`\n⚠️ WARNING: No capability ID found`);
-                console.warn(`Capability Name: "${capabilityName}"`);
-                console.warn(`Available names: ${Array.from(capabilityMap.keys()).join(', ')}`);
-              }
-            }
-          });
-        }
-      });
-    }
-  });
-
-  const levels = Array.from(capabilityLevels.values());
-  
-  // Debug: Show final capability level summary
-  console.log('\nCapability Levels Summary:');
-  console.log('-------------------------');
-  levels.forEach(level => {
-    console.log(`\nLevel ID: ${level.id}`);
-    console.log(`Capability ID: ${level.capability_id}`);
-    console.log(`Level: ${level.level}`);
-    // Check if this capability ID exists
-    const matchingCap = capabilities.find(c => c.id === level.capability_id);
-    if (!matchingCap) {
-      console.warn(`⚠️ WARNING: This references a non-existent capability ID!`);
-    } else {
-      console.log(`Capability Name: ${matchingCap.name}`);
-    }
-  });
-
-  return levels;
 }
 
 // Create companies seed data
@@ -567,76 +323,84 @@ function createRoleSkills(roles, skills) {
   return Array.from(roleSkillsMap.values());
 }
 
+// Helper function to generate a unique role key
+function generateRoleKey(job) {
+  return `${job.title}|${job.department || ''}|${job.gradeBand || ''}`.toLowerCase();
+}
+
 // Main processing function
 async function processSeedData() {
   try {
-    // Ensure seed directory exists
-    await ensureDir(SEED_DIR);
-    
+    console.log('Starting seed data preparation...');
+
+    // Initialize collections
+    const companies = [
+      {
+        id: uuidv4(),
+        name: 'DCCEEW',
+        description: 'Department of Climate Change, Energy, the Environment and Water',
+        website: 'https://www.dcceew.nsw.gov.au',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+
+    const divisions = new Map();
+    const roles = new Map();
+    const jobs = [];
+    const jobDocuments = [];
+    const roleDocuments = [];
+
     // Read source files
+    console.log('\nReading source files...');
     const nswgovJobs = await readJsonFile(SOURCE_PATHS.nswgovJobs);
     const seekJobs = await readJsonFile(SOURCE_PATHS.seekJobs);
     const nswgovDocs = await readJsonFile(SOURCE_PATHS.nswgovDocs);
     const seekDocs = await readJsonFile(SOURCE_PATHS.seekDocs);
-    
+
     if (!nswgovJobs || !seekJobs || !nswgovDocs || !seekDocs) {
-      throw new Error('Failed to read source files');
+      throw new Error('Failed to read one or more source files');
     }
-    
-    // Generate embeddings for companies
-    console.log('\nGenerating embeddings for companies...');
-    for (const company of companies) {
-      try {
-        const companyText = generateEmbeddingText({
-          name: company.name,
-          description: company.description,
-          type: company.type,
-          sector: company.sector
+
+    // Process divisions
+    console.log('\nProcessing divisions...');
+    // Extract from NSW Gov jobs departments
+    nswgovJobs.jobs.forEach(job => {
+      if (job.department && !divisions.has(job.department)) {
+        divisions.set(job.department, {
+          id: uuidv4(),
+          company_id: companies[0].id,
+          name: job.department,
+          cluster: job.cluster || null,
+          agency: job.agency || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
-        company.embedding = await getEmbeddings(companyText);
-        console.log(`Generated embedding for company: ${company.name}`);
-      } catch (error) {
-        console.error(`Failed to generate embedding for company ${company.name}:`, error);
-        company.embedding = null;
       }
-    }
+    });
+
+    // Extract from Seek jobs - only include DCCEEW
+    const validEmployers = [
+      'department of climate change, energy, the environment & water',
+      'department of climate change, energy, the environment and water'
+    ];
     
-    // Process divisions and generate their embeddings
-    const divisions = extractDivisions(nswgovJobs, seekJobs, companies[0].id);
-    console.log('\nGenerating embeddings for divisions...');
-    for (const division of divisions.values()) {
-      try {
-        const divisionText = generateEmbeddingText({
-          name: division.name,
-          cluster: division.cluster,
-          agency: division.agency
-        });
-        division.embedding = await getEmbeddings(divisionText);
-        console.log(`Generated embedding for division: ${division.name}`);
-      } catch (error) {
-        console.error(`Failed to generate embedding for division ${division.name}:`, error);
-        division.embedding = null;
+    seekJobs.jobs.forEach(job => {
+      if (job.company && !divisions.has(job.company)) {
+        const companyLower = job.company.toLowerCase();
+        if (validEmployers.includes(companyLower)) {
+          divisions.set(job.company, {
+            id: uuidv4(),
+            company_id: companies[0].id,
+            name: job.company,
+            cluster: null,
+            agency: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        }
       }
-    }
-    
-    // Process roles and related data
-    const roles = new Map(); // Map to store unique roles by key
-    const jobs = [];
-    const jobDocuments = [];
-    const roleDocuments = [];
-    
-    // Helper to generate a unique role key
-    function generateRoleKey(job) {
-      // Combine relevant fields to create a unique key
-      const keyParts = [
-        job.title,
-        job.department || job.company || '',
-        job.gradeBand || '',
-        job.anzscoCode || '',
-        job.pcatCode || ''
-      ];
-      return keyParts.join('|').toLowerCase();
-    }
+    });
 
     // Process NSW Gov jobs
     console.log('\nProcessing NSW Gov jobs and generating embeddings...');
@@ -752,35 +516,27 @@ async function processSeedData() {
         });
       }
     }
-    
+
     // Process Seek jobs
-    seekJobs.jobs.forEach(job => {
+    console.log('\nProcessing Seek jobs and generating embeddings...');
+    for (const job of seekJobs.jobs) {
+      const companyLower = job.company?.toLowerCase();
+      if (!validEmployers.includes(companyLower)) {
+        continue; // Skip non-DCCEEW jobs
+      }
+
       const jobId = uuidv4();
       const divisionId = job.company ? divisions.get(job.company)?.id : null;
       
-      // Skip non-DCCEEW jobs
-      const validEmployers = [
-        'department of climate change, energy, the environment & water',
-        'department of climate change, energy, the environment and water'
-      ];
-      if (!job.company || !validEmployers.includes(job.company.toLowerCase())) {
-        return;
-      }
-      
       // Find matching documents in seekDocs
       const jobDocs = seekDocs.documents.filter(doc => doc.jobId === job.jobId);
-      console.log(`\nProcessing Seek job ${job.jobId}:`, {
-        title: job.title,
-        company: job.company,
-        documents_found: jobDocs.length
-      });
       
       // Get or create role
       const roleKey = generateRoleKey(job);
       let role;
       
       if (!roles.has(roleKey)) {
-        // Create new role if it doesn't exist
+        // Create new role
         role = {
           id: uuidv4(),
           title: job.title,
@@ -803,6 +559,17 @@ async function processSeedData() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
+
+        // Generate and add embedding for role
+        try {
+          const roleText = generateEmbeddingText(role, 'role');
+          role.embedding = await getEmbeddings(roleText);
+          console.log(`Generated embedding for role: ${role.title}`);
+        } catch (error) {
+          console.error(`Failed to generate embedding for role ${role.title}:`, error);
+          role.embedding = null;
+        }
+
         roles.set(roleKey, role);
       } else {
         role = roles.get(roleKey);
@@ -815,8 +582,8 @@ async function processSeedData() {
         });
       }
       
-      // Create job
-      jobs.push({
+      // Create job with embedding
+      const jobData = {
         id: jobId,
         role_id: role.id,
         title: job.title,
@@ -833,7 +600,19 @@ async function processSeedData() {
         raw_json: job,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      });
+      };
+
+      // Generate and add embedding for job
+      try {
+        const jobText = generateEmbeddingText(jobData, 'job');
+        jobData.embedding = await getEmbeddings(jobText);
+        console.log(`Generated embedding for job: ${jobData.title}`);
+      } catch (error) {
+        console.error(`Failed to generate embedding for job ${jobData.title}:`, error);
+        jobData.embedding = null;
+      }
+
+      jobs.push(jobData);
       
       // Process documents
       if (jobDocs.length > 0) {
@@ -856,33 +635,34 @@ async function processSeedData() {
           });
         });
       }
-    });
-    
-    // Convert roles Map to array for further processing
+    }
+
+    // Process roles and related data
     const rolesArray = Array.from(roles.values());
 
-    // Extract capabilities and relationships
-    const capabilities = extractCapabilities(rolesArray);
+    // Generate NSW Capability data first
+    console.log('\nGenerating NSW Capability data...');
+    await generateNSWCapabilityData();
+
+    // Read the generated NSW capabilities
+    const capabilities = await readJsonFile(path.join(SEED_DIR, TABLES.capabilities));
+    if (!capabilities) {
+      throw new Error('Failed to read NSW capabilities');
+    }
     
-    // Debug: Log capabilities before levels
-    console.log('\nCapabilities before extracting levels:');
+    // Debug: Log capabilities
+    console.log('\nNSW Capabilities loaded:');
     capabilities.forEach(c => {
       console.log(`${c.name}: ${c.id}`);
     });
     
-    const capabilityLevels = extractCapabilityLevels(rolesArray, capabilities);
-    
-    // Debug: Verify capability IDs exist
-    console.log('\nVerifying capability IDs...');
-    const capabilityIds = new Set(capabilities.map(c => c.id));
-    const invalidLevels = capabilityLevels.filter(level => !capabilityIds.has(level.capability_id));
-    if (invalidLevels.length > 0) {
-      console.error('Found invalid capability references:', invalidLevels);
+    const capabilityLevels = await readJsonFile(path.join(SEED_DIR, TABLES.capabilityLevels));
+    if (!capabilityLevels) {
+      throw new Error('Failed to read NSW capability levels');
     }
     
-    const skills = extractSkills(rolesArray);
+    // Extract role-capability relationships using the NSW framework
     const roleCapabilities = createRoleCapabilities(rolesArray, capabilities);
-    const roleSkills = createRoleSkills(rolesArray, skills);
     
     // Generate embeddings for capabilities
     console.log('\nGenerating embeddings for capabilities...');
@@ -897,6 +677,9 @@ async function processSeedData() {
       }
     }
 
+    const skills = extractSkills(rolesArray);
+    const roleSkills = createRoleSkills(rolesArray, skills);
+    
     // Generate embeddings for skills
     console.log('\nGenerating embeddings for skills...');
     for (const skill of skills) {
@@ -909,39 +692,25 @@ async function processSeedData() {
         skill.embedding = null;
       }
     }
-    
-    // Add company_id to roles
-    rolesArray.forEach(role => {
-      role.company_id = companies[0].id;
-    });
 
-    // Add company_id to jobs
-    jobs.forEach(job => {
-      job.company_id = companies[0].id;
-    });
+    console.log('\nGenerating taxonomy classifications...');
+    const { taxonomies, taxonomyLinks } = await generateTaxonomyData(rolesArray);
 
-    // Add company_id to capabilities
-    capabilities.forEach(cap => {
-      cap.company_id = companies[0].id;
-    });
-
-    // Add company_id to skills
-    skills.forEach(skill => {
-      skill.company_id = companies[0].id;
-    });
-
-    // Write all seed files
-    await writeSeedFile(TABLES.companies, companies);
+    // Write all files
+    console.log('\nWriting seed files...');
+    await writeSeedFile(TABLES.companies, Array.from(companies.values()));
     await writeSeedFile(TABLES.divisions, Array.from(divisions.values()));
     await writeSeedFile(TABLES.roles, rolesArray);
     await writeSeedFile(TABLES.jobs, jobs);
     await writeSeedFile(TABLES.capabilities, capabilities);
     await writeSeedFile(TABLES.capabilityLevels, capabilityLevels);
-    await writeSeedFile(TABLES.skills, skills);
-    await writeSeedFile(TABLES.roleCapabilities, roleCapabilities);
-    await writeSeedFile(TABLES.roleSkills, roleSkills);
+    await writeSeedFile(TABLES.skills, Array.from(skills.values()));
+    await writeSeedFile(TABLES.roleCapabilities, Array.from(roleCapabilities.values()));
+    await writeSeedFile(TABLES.roleSkills, Array.from(roleSkills.values()));
     await writeSeedFile(TABLES.jobDocuments, jobDocuments);
     await writeSeedFile(TABLES.roleDocuments, roleDocuments);
+    await writeSeedFile(TABLES.taxonomy, taxonomies);
+    await writeSeedFile(TABLES.roleTaxonomies, taxonomyLinks);
     
     console.log('Seed data preparation completed successfully!');
     
