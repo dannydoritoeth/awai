@@ -5,6 +5,13 @@ import { logAgentAction } from '../agent/logAgentAction.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
 import { ModelId } from './promptTypes.ts';
 
+// Deno type declaration
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 // Valid scopes for analysis
 const VALID_SCOPES = ['taxonomy', 'division', 'region', 'all'] as const;
 type AnalysisScope = typeof VALID_SCOPES[number];
@@ -234,6 +241,8 @@ export async function runAnalystLoop(
 
     // Generate chat response based on the data and format
     let promptResult;
+    let chatResponse;
+    let insightData = data;
     try {
       promptResult = await buildSafePrompt(
         'openai:gpt-4o' as ModelId,
@@ -241,7 +250,15 @@ export async function runAnalystLoop(
           systemPrompt: `You are an analyst helping interpret workforce capability data. 
 The data shows capability distribution across ${input.context?.scope || 'the organization'}.
 ${input.context?.scopeValue ? `Focusing on: ${input.context.scopeValue}` : ''}
-Format your response as ${input.context?.outputFormat || 'action_plan'}.`,
+Format your response as ${input.context?.outputFormat || 'action_plan'}.
+
+IMPORTANT: Format your response in markdown, using:
+- Headers (##) for main sections
+- Lists (- or 1.) for enumerated points
+- **Bold** for emphasis on key metrics or findings
+- Tables for structured data comparisons
+- > Blockquotes for highlighting important insights
+- Code blocks (\`\`) for specific metrics or data points`,
           data: data || {},
           context: {
             scope: input.context?.scope,
@@ -250,9 +267,57 @@ Format your response as ${input.context?.outputFormat || 'action_plan'}.`,
           }
         }
       );
+
+      // Call OpenAI API
+      const apiKey = Deno.env.get('OPENAI_API_KEY');
+      if (!apiKey) {
+        throw new Error('OpenAI API key not found');
+      }
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: promptResult.system
+            },
+            {
+              role: 'user',
+              content: promptResult.user
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate insights from OpenAI API');
+      }
+
+      const responseData = await response.json();
+      chatResponse = responseData.choices?.[0]?.message?.content;
+
+      if (!chatResponse) {
+        throw new Error('Invalid response format from OpenAI API');
+      }
+
     } catch (e) {
-      console.error('Error generating analysis prompt:', e);
-      promptResult = 'I was unable to generate a detailed analysis, but I can show you the raw data.';
+      console.error('Error generating analysis:', e);
+      chatResponse = 'I was unable to generate a detailed analysis, but I can show you the raw data.';
+      promptResult = {
+        system: '',
+        user: '',
+        metadata: {
+          error: e instanceof Error ? e.message : 'Unknown error'
+        }
+      };
     }
 
     return {
@@ -260,10 +325,11 @@ Format your response as ${input.context?.outputFormat || 'action_plan'}.`,
       data: {
         matches: [],
         recommendations: [],
-        insightData: data,
+        insightData,
         chatResponse: {
-          message: promptResult,
-          followUpQuestion: 'Would you like to explore another insight or analyze this data differently?'
+          message: chatResponse,
+          followUpQuestion: 'Would you like to explore another insight or analyze this data differently?',
+          promptDetails: promptResult
         },
         actionsTaken,
         nextActions: [

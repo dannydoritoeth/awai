@@ -51,6 +51,11 @@ export interface NextAction {
 export interface ChatResponse {
   message: string;
   followUpQuestion?: string;
+  promptDetails?: {
+    system: string;
+    user: string;
+    metadata: any;
+  };
 }
 
 export interface PlannerRecommendation {
