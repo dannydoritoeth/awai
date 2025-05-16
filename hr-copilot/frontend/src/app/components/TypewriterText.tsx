@@ -19,55 +19,62 @@ export default function TypewriterText({
 }: TypewriterTextProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [isComplete, setIsComplete] = useState(false);
-  
-  // Get environment variables (with fallbacks)
-  const enableStreaming = process.env.NEXT_PUBLIC_ENABLE_MESSAGE_STREAMING !== 'false';
-  const typingSpeed = process.env.NEXT_PUBLIC_TYPEWRITER_SPEED ? 
-    parseInt(process.env.NEXT_PUBLIC_TYPEWRITER_SPEED, 10) : 
-    speed;
 
   useEffect(() => {
-    // Reset when the text changes
+    let currentIndex = 0;
+    let timer: NodeJS.Timeout;
+
+    const typeNextCharacter = () => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.substring(0, currentIndex + 1));
+        currentIndex++;
+        timer = setTimeout(typeNextCharacter, speed);
+      } else {
+        setIsComplete(true);
+        if (onComplete) {
+          onComplete();
+        }
+      }
+    };
+
+    // Reset state when text changes
     setDisplayedText('');
     setIsComplete(false);
-    
-    // If not an AI message, or streaming is disabled, display immediately
-    if (!isAI || !enableStreaming) {
-      setDisplayedText(text);
-      setIsComplete(true);
-      onComplete?.();
-      return;
-    }
-    
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i < text.length) {
-        setDisplayedText(prev => prev + text.charAt(i));
-        i++;
-      } else {
-        clearInterval(timer);
-        setIsComplete(true);
-        onComplete?.();
-      }
-    }, typingSpeed);
+    currentIndex = 0;
 
-    return () => clearInterval(timer);
-  }, [text, typingSpeed, onComplete, isAI, enableStreaming]);
+    // Start typing
+    timer = setTimeout(typeNextCharacter, speed);
+
+    // Cleanup
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [text, speed, onComplete]);
 
   // Display the markdown only when text is complete
   if (isAI) {
     return (
-      <div className={`text-sm whitespace-pre-wrap prose prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
+      <div className={`text-sm whitespace-pre-wrap prose prose-sm max-w-none overflow-x-auto prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
         {isComplete ? (
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              h1: (props) => <h1 className="text-lg font-bold" {...props} />,
-              h2: (props) => <h2 className="text-base font-bold" {...props} />,
-              h3: (props) => <h3 className="text-base font-bold" {...props} />,
-              a: (props) => <a className="underline" {...props} />,
-              ul: (props) => <ul className="list-disc list-inside" {...props} />,
-              ol: (props) => <ol className="list-decimal list-inside" {...props} />,
+              h1: (props) => <h1 className="text-lg font-bold mt-0 mb-2" {...props} />,
+              h2: (props) => <h2 className="text-base font-bold mt-0 mb-2" {...props} />,
+              h3: (props) => <h3 className="text-base font-semibold mt-0 mb-1" {...props} />,
+              p: (props) => <p className="mt-0 mb-2 last:mb-0" {...props} />,
+              ul: (props) => <ul className="list-disc list-inside mt-0 mb-2" {...props} />,
+              ol: (props) => <ol className="list-decimal list-inside mt-0 mb-2" {...props} />,
+              li: (props) => <li className="mt-0 mb-1" {...props} />,
+              a: (props) => <a className="text-blue-500 hover:text-blue-600 underline" {...props} />,
+              code: ({inline, ...props}: {inline?: boolean} & React.HTMLProps<HTMLElement>) => 
+                inline ? (
+                  <code className="bg-gray-200 rounded px-1 py-0.5 text-sm" {...props} />
+                ) : (
+                  <code className="block bg-gray-200 rounded p-2 text-sm overflow-x-auto" {...props} />
+                ),
+              pre: (props) => <pre className="bg-gray-200 rounded p-2 overflow-x-auto" {...props} />,
+              blockquote: (props) => <blockquote className="border-l-4 border-gray-300 pl-4 italic" {...props} />,
             }}
           >
             {text}
@@ -80,16 +87,26 @@ export default function TypewriterText({
   } else {
     // User messages don't need the typewriter effect
     return (
-      <div className={`text-sm whitespace-pre-wrap prose-invert prose-sm max-w-none prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
+      <div className={`text-sm whitespace-pre-wrap prose-invert prose-sm max-w-none overflow-x-auto prose-headings:mb-2 prose-headings:mt-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            h1: (props) => <h1 className="text-lg font-bold" {...props} />,
-            h2: (props) => <h2 className="text-base font-bold" {...props} />,
-            h3: (props) => <h3 className="text-base font-bold" {...props} />,
-            a: (props) => <a className="underline" {...props} />,
-            ul: (props) => <ul className="list-disc list-inside" {...props} />,
-            ol: (props) => <ol className="list-decimal list-inside" {...props} />,
+            h1: (props) => <h1 className="text-lg font-bold mt-0 mb-2" {...props} />,
+            h2: (props) => <h2 className="text-base font-bold mt-0 mb-2" {...props} />,
+            h3: (props) => <h3 className="text-base font-semibold mt-0 mb-1" {...props} />,
+            p: (props) => <p className="mt-0 mb-2 last:mb-0" {...props} />,
+            ul: (props) => <ul className="list-disc list-inside mt-0 mb-2" {...props} />,
+            ol: (props) => <ol className="list-decimal list-inside mt-0 mb-2" {...props} />,
+            li: (props) => <li className="mt-0 mb-1" {...props} />,
+            a: (props) => <a className="text-blue-500 hover:text-blue-600 underline" {...props} />,
+            code: ({inline, ...props}: {inline?: boolean} & React.HTMLProps<HTMLElement>) => 
+              inline ? (
+                <code className="bg-gray-200 rounded px-1 py-0.5 text-sm" {...props} />
+              ) : (
+                <code className="block bg-gray-200 rounded p-2 text-sm overflow-x-auto" {...props} />
+              ),
+            pre: (props) => <pre className="bg-gray-200 rounded p-2 overflow-x-auto" {...props} />,
+            blockquote: (props) => <blockquote className="border-l-4 border-gray-300 pl-4 italic" {...props} />,
           }}
         >
           {text}

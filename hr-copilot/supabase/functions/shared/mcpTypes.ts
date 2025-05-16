@@ -1,4 +1,5 @@
 import { ChatMessage } from './chatTypes.ts';
+import { AgentAction } from './agent/logAgentAction.ts';
 
 export type MCPMode = 'candidate' | 'hiring' | 'general';
 
@@ -17,11 +18,16 @@ export interface SemanticMatch {
 export interface SemanticContext {
   currentFocus?: 'role' | 'skill' | 'capability' | 'company';
   previousMatches?: SemanticMatch[];
+  previousFocus?: 'role' | 'job' | 'capability' | 'company';
+  matchingTopic?: string;
 }
 
 export interface MCPContext {
-  lastMessage?: string;
+  lastMessage: string;
   chatHistory?: ChatMessage[];
+  agentActions?: AgentAction[];
+  contextEmbedding?: number[];
+  summary?: string;
   semanticContext?: SemanticContext;
 }
 

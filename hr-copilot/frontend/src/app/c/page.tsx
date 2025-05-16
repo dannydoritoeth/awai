@@ -137,11 +137,10 @@ function ChatPageContent() {
               currentRole: selectedProfile.currentRole,
               department: selectedProfile.department,
               tenure: "N/A",
-              skills: selectedProfile.skills
+              skills: selectedProfile.skills?.map(skill => ({ name: skill }))
             }}
             startContext="profile"
             sessionId={sessionId}
-            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -157,6 +156,7 @@ function ChatPageContent() {
             roleData={{
               id: selectedRole.id,
               title: selectedRole.title,
+              company: selectedRole.department,
               department: selectedRole.department,
               location: selectedRole.location,
               description: selectedRole.description,
@@ -165,7 +165,6 @@ function ChatPageContent() {
             }}
             startContext="role"
             sessionId={sessionId}
-            setSessionId={setSessionId}
           />
         </div>
       </div>
@@ -177,8 +176,8 @@ function ChatPageContent() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <UnifiedResultsView
+          sessionId={sessionId || ''}
           startContext={context}
-          setSessionId={setSessionId}
         />
       </div>
     </div>

@@ -20,6 +20,7 @@ import { runGeneralLoop } from '../shared/mcp/general.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
+import { getConversationContext } from '../shared/context/getConversationContext.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -80,6 +81,26 @@ serve(async (req) => {
       incrementRetryCount(request.sessionId);
     }
 
+    // Get conversation context if session ID is provided
+    let conversationContext;
+    if (request.sessionId) {
+      console.log('Getting conversation context...');
+      try {
+        conversationContext = await getConversationContext(supabaseClient, request.sessionId);
+        // Merge conversation context into request context
+        request.context = {
+          ...request.context,
+          chatHistory: conversationContext.history,
+          agentActions: conversationContext.agentActions,
+          contextEmbedding: conversationContext.contextEmbedding,
+          summary: conversationContext.summary
+        };
+      } catch (error) {
+        console.error('Error getting conversation context:', error);
+        // Continue without context if there's an error
+      }
+    }
+
     // Get planner recommendations if message provided
     let plannerRecommendations = [];
     if (request.context?.lastMessage) {
@@ -92,7 +113,11 @@ serve(async (req) => {
             profileId: request.profileId,
             roleId: request.roleId,
             lastMessage: request.context.lastMessage,
-            semanticContext: request.context.semanticContext
+            semanticContext: request.context.semanticContext,
+            chatHistory: request.context.chatHistory,
+            agentActions: request.context.agentActions,
+            contextEmbedding: request.context.contextEmbedding,
+            summary: request.context.summary
           }
         );
       } catch (error) {
@@ -159,6 +184,7 @@ serve(async (req) => {
         nextActions: mcpResult.data?.nextActions || [],
         actionsTaken: [
           ...(mcpResult.data?.actionsTaken || []),
+          'Retrieved conversation context',
           'Retrieved planner recommendations',
           `Executed ${request.mode} mode processing`,
           'Applied response formatting'
