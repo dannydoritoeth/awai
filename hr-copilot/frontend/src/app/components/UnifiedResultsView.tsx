@@ -49,19 +49,37 @@ export default function UnifiedResultsView({
   startContext = 'open'
 }: UnifiedResultsViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
-  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'role'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
-    return 'matches';
+    return profileData ? 'profile' : 'role';
   });
+  const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageRef = useRef<ChatMessage | null>(null);
 
   useEffect(() => {
     setAdditionalContext(profileData?.additionalContext || '');
   }, [profileData]);
+
+  useEffect(() => {
+    // Update isWaitingForResponse based on the last message
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.sender === 'user') {
+        setIsWaitingForResponse(true);
+      } else {
+        setIsWaitingForResponse(false);
+      }
+      lastMessageRef.current = lastMessage;
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -78,12 +96,22 @@ export default function UnifiedResultsView({
           
           // Only update if we have new unique messages
           if (uniqueNewMessages.length > 0) {
+            setIsInitializing(false);
+            setIsLoading(false);
+            
+            // Check if we received an AI response
+            const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
+            if (hasNewAIMessage) {
+              setIsWaitingForResponse(false);
+            }
+            
             return [...prev, ...uniqueNewMessages] as ChatMessage[];
           }
           return prev;
         });
       } catch (error) {
         console.error('Failed to fetch messages:', error);
+        setIsLoading(false);
       }
     };
 
@@ -93,13 +121,35 @@ export default function UnifiedResultsView({
     // Set up polling
     pollTimeoutRef.current = setInterval(pollMessages, 2000);
 
+    // Set a timeout to disable initializing state if no messages arrive
+    const initTimeout = setTimeout(() => {
+      setIsInitializing(false);
+      setIsLoading(false);
+    }, 5000);
+
     // Cleanup
     return () => {
       if (pollTimeoutRef.current) {
         clearInterval(pollTimeoutRef.current);
       }
+      clearTimeout(initTimeout);
     };
   }, [sessionId]);
+
+  // Scroll to top when data is loaded
+  useEffect(() => {
+    if (!isLoading && !isInitializing && !isDataLoaded) {
+      setIsDataLoaded(true);
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        // Also scroll the container to top
+        if (containerRef.current) {
+          containerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+        }
+      });
+    }
+  }, [isLoading, isInitializing, isDataLoaded]);
 
   const handleSendMessage = async (message: string) => {
     if (!sessionId || !message.trim()) return;
@@ -115,6 +165,7 @@ export default function UnifiedResultsView({
     };
     
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
+    setIsWaitingForResponse(true); // Set waiting state when sending message
     setIsLoading(true);
 
     try {
@@ -136,7 +187,6 @@ export default function UnifiedResultsView({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Don't add AI response locally - it will come through polling
       await response.json();
       
     } catch (error) {
@@ -144,6 +194,7 @@ export default function UnifiedResultsView({
 
       // Remove the user message if the send failed
       setMessages((prev: ChatMessage[]) => prev.filter(msg => msg.id !== messageId));
+      setIsWaitingForResponse(false); // Reset waiting state on error
 
       // Show error message to user
       const errorMessageId = crypto.randomUUID();
@@ -170,8 +221,8 @@ export default function UnifiedResultsView({
   const renderSkillLevel = (skill: { name: string; level?: number | null }, index: number) => {
     return (
       <div key={index} className="flex items-center gap-2">
-        <span>{skill.name}</span>
-        <span className="text-gray-500">{formatNumber(skill.level)}</span>
+        <span className="text-gray-900">{skill.name}</span>
+        <span className="text-gray-700">{formatNumber(skill.level)}</span>
       </div>
     );
   };
@@ -179,8 +230,8 @@ export default function UnifiedResultsView({
   const renderRole = (role: { title: string; company: string; years: number }, index: number) => {
     return (
       <div key={index} className="mb-2">
-        <div className="font-medium">{role.title}</div>
-        <div className="text-sm text-gray-500">
+        <div className="font-medium text-gray-900">{role.title}</div>
+        <div className="text-sm text-gray-700">
           {role.company} • {role.years} years
         </div>
       </div>
@@ -199,10 +250,10 @@ export default function UnifiedResultsView({
           <h2 className="text-xl font-semibold text-gray-900">
             {profileData?.name}
           </h2>
-          <p className="text-base text-gray-600 mt-1">
+          <p className="text-base text-gray-800 mt-1">
             {profileData?.currentRole} • {profileData?.department}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-700 mt-1">
             {profileData?.tenure} tenure
           </p>
         </div>
@@ -210,7 +261,7 @@ export default function UnifiedResultsView({
 
       {profileData?.skills && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Key Skills</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Key Skills</h3>
           <div className="flex flex-wrap gap-2">
             {profileData.skills.map((skill, index) => renderSkillLevel(skill, index))}
           </div>
@@ -219,7 +270,7 @@ export default function UnifiedResultsView({
 
       {profileData?.roles && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Previous Roles</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Previous Roles</h3>
           <div className="flex flex-col gap-2">
             {profileData.roles.map((role, index) => renderRole(role, index))}
           </div>
@@ -252,7 +303,7 @@ export default function UnifiedResultsView({
                 {additionalContext || profileData?.additionalContext}
               </p>
             ) : (
-              <p className="text-sm text-gray-500 italic">
+              <p className="text-sm text-gray-600 italic">
                 No additional context provided. Click &apos;Edit&apos; to add information about career goals, specific experiences, or preferences.
               </p>
             )}
@@ -265,20 +316,20 @@ export default function UnifiedResultsView({
   const renderRoleDetails = () => (
     <div className="p-6 space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-blue-950">{roleData?.title}</h2>
-        <p className="text-base text-gray-600 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900">{roleData?.title}</h2>
+        <p className="text-base text-gray-800 mt-1">
           {roleData?.department} • {roleData?.location}
         </p>
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Description</h3>
-        <p className="text-sm text-gray-600">{roleData?.description}</p>
+        <h3 className="text-sm font-medium text-gray-900 mb-2">Description</h3>
+        <p className="text-sm text-gray-800">{roleData?.description}</p>
       </div>
 
       {roleData?.skills && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Required Skills</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Required Skills</h3>
           <div className="flex flex-wrap gap-2">
             {roleData.skills.map((skill, index) => (
               <span
@@ -294,10 +345,10 @@ export default function UnifiedResultsView({
 
       {roleData?.requirements && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Requirements</h3>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Requirements</h3>
           <ul className="list-disc list-inside space-y-1">
             {roleData.requirements.map((req, index) => (
-              <li key={index} className="text-sm text-gray-600">{req}</li>
+              <li key={index} className="text-sm text-gray-800">{req}</li>
             ))}
           </ul>
         </div>
@@ -305,21 +356,15 @@ export default function UnifiedResultsView({
     </div>
   );
 
-  const LoadingState = () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-gray-500">Loading...</div>
-    </div>
-  );
-
   return (
-    <div className="flex gap-6 min-h-[600px]">
+    <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
       <div className="flex-1 max-w-[766px] bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="h-full">
           <ChatInterface
             messages={messages}
             onSendMessage={handleSendMessage}
-            isLoading={isLoading}
+            isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
           />
         </div>
       </div>
@@ -338,7 +383,7 @@ export default function UnifiedResultsView({
                     : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setActiveTab('profile')}
               >
-                Your Profile
+                Profile Details
               </button>
             )}
             
@@ -354,17 +399,6 @@ export default function UnifiedResultsView({
                 Role Details
               </button>
             )}
-
-            {/* Always show Matches tab */}
-            <button
-              className={`px-6 py-4 text-sm font-medium transition-colors relative
-                ${activeTab === 'matches'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('matches')}
-            >
-              Matches
-            </button>
           </div>
         </div>
 
@@ -372,7 +406,6 @@ export default function UnifiedResultsView({
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
-          {activeTab === 'matches' && <LoadingState />}
         </div>
       </div>
     </div>
