@@ -748,16 +748,14 @@ function generateLevelId() {
   return uuidv4();
 }
 
-function generateCapabilities() {
+function generateCapabilities(companyId) {
   const capabilities = [];
-  const levels = [];
-  const timestamp = new Date().toISOString();
+  const capabilityLevels = [];
 
-  for (const [groupName, groupCapabilities] of Object.entries(frameworkStructure)) {
-    for (const capability of groupCapabilities) {
+  Object.entries(frameworkStructure).forEach(([groupName, groupCapabilities]) => {
+    groupCapabilities.forEach(capability => {
       const capabilityId = generateCapabilityId();
       
-      // Generate capability
       capabilities.push({
         id: capabilityId,
         name: capability.name,
@@ -765,41 +763,47 @@ function generateCapabilities() {
         description: capability.description,
         source_framework: 'NSW Public Sector Capability Framework',
         is_occupation_specific: false,
-        created_at: timestamp,
-        updated_at: timestamp
+        company_id: companyId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
 
       // Generate levels for this capability
       for (const [level, indicators] of Object.entries(capability.behavioralIndicators)) {
-        levels.push({
+        capabilityLevels.push({
           id: generateLevelId(),
           capability_id: capabilityId,
           level: level,
           summary: `${level} level of ${capability.name}`,
           behavioral_indicators: indicators,
-          created_at: timestamp,
-          updated_at: timestamp
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
       }
-    }
-  }
+    });
+  });
 
-  return { capabilities, levels };
+  return { capabilities, capabilityLevels };
 }
 
 async function writeToFile(data, filename) {
-  const filePath = path.join(__dirname, '../database/seed', filename);
+  const filePath = path.join(__dirname, '..', 'database/seed', filename);
   await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-  console.log(`Generated ${filename}`);
+  console.log(`Written ${filePath}`);
 }
 
-async function generateNSWCapabilityData() {
-  const { capabilities, levels } = generateCapabilities();
-  
-  await writeToFile(capabilities, 'capabilities.json');
-  await writeToFile(levels, 'capability_levels.json');
-  
-  console.log(`Generated ${capabilities.length} capabilities and ${levels.length} levels`);
-}
-
-export { generateNSWCapabilityData }; 
+export async function generateNSWCapabilityData(companyId) {
+  try {
+    console.log('Generating NSW Capability Framework data...');
+    
+    const { capabilities, capabilityLevels } = generateCapabilities(companyId);
+    
+    await writeToFile(capabilities, 'capabilities.json');
+    await writeToFile(capabilityLevels, 'capability_levels.json');
+    
+    console.log('NSW Capability Framework data generation completed!');
+  } catch (error) {
+    console.error('Error generating NSW Capability Framework data:', error);
+    throw error;
+  }
+} 

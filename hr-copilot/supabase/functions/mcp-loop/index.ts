@@ -5,7 +5,8 @@ import {
   MCPResponse, 
   BaseMCPResponse,
   HiringMCPResponse,
-  CandidateMCPResponse
+  CandidateMCPResponse,
+  AnalystMCPResponse
 } from '../shared/types/mcpTypes.ts';
 import {
   findCandidateMatches,
@@ -17,6 +18,7 @@ import {
 import { runCandidateLoop } from '../shared/mcp/candidate.ts';
 import { runHiringLoop } from '../shared/mcp/hiring.ts';
 import { runGeneralLoop } from '../shared/mcp/general.ts';
+import { runAnalystLoop } from '../shared/mcp/analyst.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
@@ -161,6 +163,12 @@ serve(async (req) => {
           plannerRecommendations
         });
         break;
+      case 'analyst':
+        mcpResult = await runAnalystLoop(supabaseClient, {
+          ...request,
+          plannerRecommendations
+        });
+        break;
       case 'general':
         mcpResult = await runGeneralLoop(supabaseClient, {
           ...request,
@@ -198,8 +206,10 @@ serve(async (req) => {
       response = mcpResult as HiringMCPResponse;
     } else if (request.mode === 'candidate') {
       response = mcpResult as CandidateMCPResponse;
+    } else if (request.mode === 'analyst') {
+      response = mcpResult as AnalystMCPResponse;
     } else {
-      response = baseResponse;
+      response = mcpResult as BaseMCPResponse;
     }
 
     // Log actions for non-general modes

@@ -1,6 +1,7 @@
 // Base MCP Response interface that all modes must implement
 export interface BaseMCPResponse {
   success: boolean;
+  error?: string;
   data: {
     matches: any[]; // Array of matching items (roles, candidates, or general matches)
     recommendations: string[]; // List of recommendations
@@ -8,7 +9,7 @@ export interface BaseMCPResponse {
       message: string;
       followUpQuestion?: string;
     };
-    nextActions: string[]; // List of next possible actions
+    nextActions: string[] | NextAction[]; // List of next possible actions
     actionsTaken: string[]; // List of actions that were taken during processing
   };
 }
@@ -42,8 +43,36 @@ export interface CandidateMCPResponse extends BaseMCPResponse {
 // General mode uses BaseMCPResponse directly
 export type GeneralMCPResponse = BaseMCPResponse;
 
+export interface NextAction {
+  type: string;
+  description: string;
+}
+
+export interface ChatResponse {
+  message: string;
+  followUpQuestion?: string;
+}
+
+export interface PlannerRecommendation {
+  tool: string;
+  reason: string;
+  confidence: number;
+  inputs: Record<string, any>;
+}
+
+export interface AnalystMCPResponse extends BaseMCPResponse {
+  data: {
+    matches: any[];
+    recommendations: string[];
+    insightData: any;
+    chatResponse: ChatResponse;
+    actionsTaken: string[];
+    nextActions: NextAction[];
+  };
+}
+
 // Union type for all possible MCP responses
-export type MCPResponse = HiringMCPResponse | CandidateMCPResponse | GeneralMCPResponse;
+export type MCPResponse = HiringMCPResponse | CandidateMCPResponse | GeneralMCPResponse | AnalystMCPResponse;
 
 // Helper type guard functions
 export const isHiringResponse = (response: MCPResponse): response is HiringMCPResponse => {
@@ -56,4 +85,6 @@ export const isCandidateResponse = (response: MCPResponse): response is Candidat
 
 export const isGeneralResponse = (response: MCPResponse): response is GeneralMCPResponse => {
   return !isHiringResponse(response) && !isCandidateResponse(response);
-}; 
+};
+
+export type MCPMode = 'hiring' | 'candidate' | 'general' | 'analyst'; 

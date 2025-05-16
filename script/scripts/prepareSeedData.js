@@ -421,6 +421,7 @@ async function processSeedData() {
           id: uuidv4(),
           title: job.title,
           division_id: divisionId,
+          company_id: companies[0].id,
           grade_band: job.gradeBand,
           location: Array.isArray(job.locations) ? job.locations[0] : job.locations,
           anzsco_code: job.anzscoCode,
@@ -541,6 +542,7 @@ async function processSeedData() {
           id: uuidv4(),
           title: job.title,
           division_id: divisionId,
+          company_id: companies[0].id,
           grade_band: job.gradeBand,
           location: Array.isArray(job.locations) ? job.locations[0] : job.locations,
           anzsco_code: job.anzscoCode,
@@ -642,7 +644,7 @@ async function processSeedData() {
 
     // Generate NSW Capability data first
     console.log('\nGenerating NSW Capability data...');
-    await generateNSWCapabilityData();
+    await generateNSWCapabilityData(companies[0].id);
 
     // Read the generated NSW capabilities
     const capabilities = await readJsonFile(path.join(SEED_DIR, TABLES.capabilities));
