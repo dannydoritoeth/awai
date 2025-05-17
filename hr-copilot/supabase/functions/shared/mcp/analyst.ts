@@ -387,32 +387,32 @@ export async function runAnalystLoop(
       promptResult = await buildSafePrompt(
         'openai:gpt-3.5-turbo' as ModelId,
         {
-          systemPrompt: `Analyze workforce capability data and provide insights.
+          systemPrompt: `Analyze workforce capability data and provide insights focused on answering the user's specific question.
 The data is organized in sections:
-1. Analysis Overview - High-level statistics
-2. Group Statistics - Per-group role and capability counts
-3. Detailed Data - CSV with headers:
-   - group: The taxonomy/division/region being analyzed
-   - capability: The specific capability being measured
-   - count: Number of roles with this capability
-   - percentage_of_group: What percentage of the group's roles have this capability
+1. Capability Heatmap - Matrix showing capability distribution across groups
+   - Rows: Groups (taxonomy/division/region/company)
+   - Columns: Individual capabilities
+   - Values: Number of roles with that capability
+2. Summary Statistics - Overall metrics
+3. Top Capabilities - Most common capabilities with their distribution
 
-Focus on:
-- Distribution patterns across groups
-- Most prevalent capabilities overall and per group
-- Notable gaps or concentrations
-- Trends that might need attention
+When analyzing:
+- Focus primarily on answering the user's specific question
+- Use the heatmap data to identify patterns, gaps, and concentrations
+- Compare capability distributions across groups
+- Highlight areas that need attention based on the user's query
+- Provide specific, actionable insights related to the question
 
 Format response in markdown using:
-- ## for sections
-- Lists for points
+- ## for main sections
+- Lists for key points
 - **Bold** for metrics
-- Tables for comparisons
-- > for insights`,
+- > for important insights or recommendations`,
           data: summarizeData(data || []),
           context: {
             type: input.insightId?.replace('generateCapabilityHeatmapBy', '')?.toLowerCase() || 'organization',
-            format: 'csv'
+            format: 'csv',
+            userQuestion: input.context?.lastMessage || 'Analyze the capability distribution'
           }
         }
       );
