@@ -3,6 +3,26 @@ import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { getEmbeddings, generateEmbeddingText } from '../utils/embeddings.js';
 
+// Add arrays of sample names
+const firstNames = [
+  'Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia', 'Mason',
+  'Isabella', 'William', 'Mia', 'James', 'Charlotte', 'Alexander', 'Amelia',
+  'Michael', 'Harper', 'Benjamin', 'Evelyn', 'Daniel', 'Abigail', 'Lucas',
+  'Emily', 'Henry', 'Elizabeth', 'Sebastian', 'Sofia', 'Jack', 'Avery', 'Owen'
+];
+
+const lastNames = [
+  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
+  'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson',
+  'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson',
+  'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson'
+];
+
+// Function to get a random item from an array
+function getRandomItem(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
 
@@ -124,11 +144,16 @@ async function generateProfiles(count) {
     const yearsOfExperience = Math.floor(Math.random() * 15) + 2; // 2-17 years
     const profileId = uuidv4();
 
-    // Create profile
+    // Generate random name
+    const firstName = getRandomItem(firstNames);
+    const lastName = getRandomItem(lastNames);
+    const fullName = `${firstName} ${lastName}`;
+
+    // Create profile with random name
     const profile = {
       id: profileId,
-      name: `Test Profile ${i + 1}`,
-      email: `testprofile${i + 1}@example.com`,
+      name: fullName,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.com`,
       role_title: relatedRoles[0]?.title || 'Professional',
       division: null, // Can be updated if needed
       last_active: new Date().toISOString(),

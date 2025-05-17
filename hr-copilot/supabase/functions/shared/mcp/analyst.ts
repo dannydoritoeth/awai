@@ -193,53 +193,7 @@ export async function runAnalystLoop(
     // Validate input parameters
     validateAnalystInput(input);
 
-    // Log user message if we have one
-    if (sessionId && input.context?.lastMessage) {
-      console.log('About to log user message. SessionId:', sessionId);
-      try {
-        // Check if the session exists
-        const { data: session, error: sessionError } = await supabase
-          .from('conversation_sessions')
-          .select('id')
-          .eq('id', sessionId)
-          .single();
-
-        if (sessionError || !session) {
-          // Create the session if it doesn't exist
-          const { error: createError } = await supabase
-            .from('conversation_sessions')
-            .insert({
-              id: sessionId,
-              mode: 'analyst',
-              status: 'active'
-            });
-
-          if (createError) {
-            console.error('Error creating conversation session:', createError);
-            throw createError;
-          }
-          console.log('Created new conversation session');
-        }
-
-        // Log the user message
-        const { error: messageError } = await supabase
-          .from('chat_messages')
-          .insert({
-            session_id: sessionId,
-            sender: 'user',
-            message: input.context.lastMessage
-          });
-
-        if (messageError) {
-          console.error('Error logging user message:', messageError);
-          throw messageError;
-        }
-        console.log('Successfully logged user message');
-      } catch (error) {
-        console.error('Error handling user message:', error);
-      }
-    }
-
+    // Skip message logging in MCP loop since it's already handled in startSession
     // Log starting analysis
     if (sessionId) {
       console.log('About to log analysis start message. SessionId:', sessionId);
