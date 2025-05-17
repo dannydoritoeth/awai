@@ -16,6 +16,7 @@ export interface ModelProfile {
  */
 export type ModelId = 
   | 'openai:gpt-4o'
+  | 'openai:gpt-3.5-turbo'
   | 'anthropic:claude-3-opus'
   | 'mistral:mixtral-8x7b';
 
@@ -61,9 +62,9 @@ export interface PromptResult {
 export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
   'openai:gpt-4o': {
     provider: 'openai',
-    maxTokens: 128000,
-    maxInputTokens: 126000,
-    buffer: 2000,
+    maxTokens: 8192,
+    maxInputTokens: 6000,
+    buffer: 500,
     preferredFormat: 'json',
     useDelimiters: true,
     tokenizer: () => 0 // Placeholder - actual implementation in promptBuilder.ts
@@ -71,7 +72,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
   'openai:gpt-3.5-turbo': {
     provider: 'openai',
     maxTokens: 16384,
-    maxInputTokens: 15384,
+    maxInputTokens: 13384,
     buffer: 1000,
     preferredFormat: 'json',
     useDelimiters: true,

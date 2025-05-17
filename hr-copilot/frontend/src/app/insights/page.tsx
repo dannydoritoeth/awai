@@ -9,25 +9,28 @@ import { events, EVENT_NAMES } from '@/lib/events';
 // Define available insights
 const insights = [
   {
-    id: 'generateCapabilityHeatmapByScope',
+    id: 'generateCapabilityHeatmapByTaxonomy',
     title: 'Capability Heatmap by Taxonomy Group',
     description: 'Visualize capability distribution across different taxonomy groups in your organization.',
-    scope: 'taxonomy',
     icon: '📊'
   },
   {
-    id: 'generateCapabilityHeatmapByScope',
+    id: 'generateCapabilityHeatmapByDivision',
     title: 'Capability Heatmap by Division',
     description: 'Analyze how capabilities are distributed across different divisions.',
-    scope: 'division',
     icon: '🏢'
   },
   {
-    id: 'generateCapabilityHeatmapByScope',
+    id: 'generateCapabilityHeatmapByRegion',
     title: 'Capability Heatmap by Region',
     description: 'Explore capability distribution across geographical regions.',
-    scope: 'region',
     icon: '🌍'
+  },
+  {
+    id: 'generateCapabilityHeatmapByCompany',
+    title: 'Organization-wide Capability Heatmap',
+    description: 'Get a comprehensive view of capability distribution across your entire organization.',
+    icon: '🎯'
   }
 ];
 
@@ -48,10 +51,9 @@ export default function InsightsPage() {
       const response = await startSession({
         action: 'startSession',
         insightId: insight.id,
-        scope: insight.scope,
         companyIds,
         browserSessionId,
-        message: `Show me the capability distribution across our ${insight.scope}s`
+        message: `Show me the capability distribution across our organization`
       });
 
       if (!response.sessionId) {

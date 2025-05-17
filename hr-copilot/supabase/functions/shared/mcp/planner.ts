@@ -155,37 +155,29 @@ const AVAILABLE_ACTIONS = {
   ],
   ANALYST_MODE: [
     {
-      tool: 'generateCapabilityHeatmapByScope',
-      description: 'Generate capability heatmap analysis by scope',
-      requiresCompanyIds: true,
-      requiresScope: true
-    },
-    {
-      tool: 'generateTopCapabilitiesByGroup',
-      description: 'List most common capabilities by taxonomy or division',
-      requiresCompanyIds: true,
-      requiresGroupType: true
-    },
-    {
-      tool: 'generateCapabilityOverlap',
-      description: 'Identify capabilities shared across role families',
+      tool: 'generateCapabilityHeatmapByTaxonomy',
+      description: 'Generate capability heatmap analysis by taxonomy groups',
       requiresCompanyIds: true
     },
     {
-      tool: 'generateProfileToRoleGapReport',
-      description: 'Show capability gaps between profile and target role',
-      requiresProfileId: true,
-      requiresRoleId: true
+      tool: 'generateCapabilityHeatmapByDivision',
+      description: 'Generate capability heatmap analysis by divisions',
+      requiresCompanyIds: true
+    },
+    {
+      tool: 'generateCapabilityHeatmapByRegion',
+      description: 'Generate capability heatmap analysis by regions',
+      requiresCompanyIds: true
+    },
+    {
+      tool: 'generateCapabilityHeatmapByCompany',
+      description: 'Generate capability heatmap analysis by company',
+      requiresCompanyIds: true
     },
     {
       tool: 'handleChatInteraction',
       description: 'Process analyst chat interactions',
       requiresChatContext: true
-    },
-    {
-      tool: 'embedContext',
-      description: 'Generate and store an embedding',
-      requiresText: true
     }
   ]
 };
@@ -273,7 +265,7 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
       excludeFields: ['metadata']
     };
 
-    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
+    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',

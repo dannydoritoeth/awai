@@ -228,7 +228,7 @@ async function generateGeneralResponse(
       excludeFields: ['metadata', 'raw_data', 'embedding']
     };
 
-    const prompt = buildSafePrompt('openai:gpt-4o', promptData, promptOptions);
+    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
 
     console.log('Prompt prepared, logging to agent actions...');
 
