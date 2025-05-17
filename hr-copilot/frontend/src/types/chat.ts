@@ -29,12 +29,13 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
-  mode: 'general' | 'hiring' | 'candidate';
+  mode: 'general' | 'hiring' | 'candidate' | 'analyst';
   entityId?: string;
   status: 'active' | 'completed' | 'error';
   createdAt: string;
   updatedAt: string;
   summary?: string;
+  title?: string;
 }
 
 export interface ChatError {

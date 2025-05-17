@@ -17,12 +17,15 @@ export const supabase = createClient(
 export interface ChatSession {
   id: string;
   created_at: string;
-  mode: 'general' | 'hiring' | 'candidate';
+  mode: 'general' | 'hiring' | 'candidate' | 'analyst';
   summary?: string | null;
   title?: string;
   context?: {
     role_id?: string;
     candidate_id?: string;
+    insight_id?: string;
+    scope?: string;
+    company_ids?: string[];
   };
 }
 
@@ -43,7 +46,8 @@ function generateTitle(session: ChatSession): string {
   const modeLabels = {
     general: 'General Chat',
     hiring: 'Hiring Discussion',
-    candidate: 'Candidate Review'
+    candidate: 'Candidate Review',
+    analyst: 'Insights Chat'
   };
 
   return `${modeLabels[session.mode]} - ${formattedDate}`;
