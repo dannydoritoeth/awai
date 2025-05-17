@@ -17,9 +17,12 @@ declare const Deno: {
  */
 export async function startChatSession(
   supabaseClient: SupabaseClient,
-  mode: 'candidate' | 'hiring' | 'general',
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst',
   entityId?: string,
-  browserSessionId?: string
+  browserSessionId?: string,
+  insightId?: string,
+  scope?: string,
+  companyIds?: string[]
 ) {
   try {
     const { data, error } = await supabaseClient

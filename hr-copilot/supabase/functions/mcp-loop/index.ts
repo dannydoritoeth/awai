@@ -166,6 +166,12 @@ serve(async (req) => {
       case 'analyst':
         mcpResult = await runAnalystLoop(supabaseClient, {
           ...request,
+          context: {
+            ...request.context,
+            companyIds: request.companyIds, // Ensure companyIds is in context
+            scope: request.scope || request.context?.scope || 'division',
+            outputFormat: request.outputFormat || request.context?.outputFormat || 'action_plan'
+          },
           plannerRecommendations
         });
         break;
