@@ -156,15 +156,6 @@ export default function Sidebar({
           <div className={`px-4 py-2 ${isMenuOpen ? 'block' : 'hidden'}`}>
             <div className="flex gap-2">
               <button
-                onClick={() => setSelectedType(selectedType === 'roles' ? null : 'roles')}
-                className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
-                  ${selectedType === 'roles' 
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
-              >
-                Roles
-              </button>
-              <button
                 onClick={() => setSelectedType(selectedType === 'candidates' ? null : 'candidates')}
                 className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
                   ${selectedType === 'candidates' 
@@ -172,6 +163,15 @@ export default function Sidebar({
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
               >
                 Profiles
+              </button>
+              <button
+                onClick={() => setSelectedType(selectedType === 'roles' ? null : 'roles')}
+                className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
+                  ${selectedType === 'roles' 
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
+              >
+                Roles
               </button>
               <button
                 onClick={() => setSelectedType(selectedType === 'insights' ? null : 'insights')}

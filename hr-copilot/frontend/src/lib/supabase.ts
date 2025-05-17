@@ -44,10 +44,10 @@ function generateTitle(session: ChatSession): string {
   }
 
   const modeLabels = {
-    general: 'General Chat',
-    hiring: 'Hiring Discussion',
-    candidate: 'Candidate Review',
-    analyst: 'Insights Chat'
+    general: 'General Discussion',
+    hiring: 'Role Discussion',
+    candidate: 'Profile Discussion',
+    analyst: 'Insight Discussion'
   };
 
   return `${modeLabels[session.mode]} - ${formattedDate}`;
