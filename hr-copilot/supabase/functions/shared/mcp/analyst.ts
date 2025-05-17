@@ -41,17 +41,31 @@ async function generateCapabilityHeatmapByTaxonomy(
     SELECT 
       t.name AS taxonomy,
       c.name AS capability,
-      COUNT(*) AS role_count,
-      co.name AS company
-    FROM role_capabilities rc
+      COUNT(DISTINCT rc.role_id) AS role_count,
+      (
+        SELECT COUNT(DISTINCT r2.id)
+        FROM roles r2
+        JOIN role_taxonomies rt2 ON rt2.role_id = r2.id
+        WHERE rt2.taxonomy_id = t.id
+        AND r2.company_id = ANY(ARRAY[${companyIdsStr}])
+      ) as total_roles,
+      co.name AS company,
+      ROUND((COUNT(DISTINCT rc.role_id)::float / (
+        SELECT COUNT(DISTINCT r2.id)
+        FROM roles r2
+        JOIN role_taxonomies rt2 ON rt2.role_id = r2.id
+        WHERE rt2.taxonomy_id = t.id
+        AND r2.company_id = ANY(ARRAY[${companyIdsStr}])
+      )::float * 100)::numeric, 1) as percentage
+    FROM taxonomy t
+    JOIN role_taxonomies rt ON rt.taxonomy_id = t.id
+    JOIN roles r ON rt.role_id = r.id
+    JOIN role_capabilities rc ON rc.role_id = r.id
     JOIN capabilities c ON rc.capability_id = c.id
-    JOIN role_taxonomies rt ON rc.role_id = rt.role_id
-    JOIN taxonomy t ON rt.taxonomy_id = t.id
-    JOIN roles r ON rc.role_id = r.id
     JOIN companies co ON r.company_id = co.id
     WHERE r.company_id = ANY(ARRAY[${companyIdsStr}])
-    GROUP BY t.name, c.name, co.name
-    ORDER BY t.name, role_count DESC`;
+    GROUP BY t.id, t.name, c.name, co.name
+    ORDER BY t.name, COUNT(DISTINCT rc.role_id) DESC`;
 
   const { data, error } = await supabase.rpc('execute_sql', { 
     sql: query.trim(),
@@ -65,7 +79,9 @@ async function generateCapabilityHeatmapByTaxonomy(
     taxonomy: row.taxonomy,
     capability: row.capability,
     role_count: parseInt(row.role_count),
-    company: row.company
+    total_roles: parseInt(row.total_roles),
+    company: row.company,
+    percentage: parseFloat(row.percentage)
   }));
 }
 
