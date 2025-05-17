@@ -72,6 +72,9 @@ export default function Home() {
               <span>🧩</span> Start with a Role – Find matching candidates from our generated talent pool
             </p>
             <p className="flex items-center justify-left gap-3">
+              <span>📊</span> Explore Insights – Analyze capability distribution and workforce trends
+            </p>
+            <p className="flex items-center justify-left gap-3">
               <span>💬</span> Chat with the Platform – Ask anything about roles, skills, or candidate fit
             </p>
           </div>
