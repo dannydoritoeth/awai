@@ -4,6 +4,7 @@ import { AnalystMCPResponse, PlannerRecommendation } from '../types/mcpTypes.ts'
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
 import { ModelId } from './promptTypes.ts';
+import { logAgentResponse } from '../chatUtils.ts';
 
 // Deno type declaration
 declare const Deno: {
@@ -23,35 +24,37 @@ type OutputFormat = typeof VALID_OUTPUT_FORMATS[number];
 interface AnalystLoopInput {
   mode: 'analyst';
   insightId?: string;
+  sessionId?: string;
   context?: {
     lastMessage?: string;
     companyIds?: string[];
     scope?: AnalysisScope;
     scopeValue?: string;
     outputFormat?: OutputFormat;
+    sessionId?: string;
   };
   plannerRecommendations: PlannerRecommendation[];
 }
 
 // Validate input parameters
 function validateAnalystInput(input: AnalystLoopInput): void {
-  // Check company IDs
-  if (!input.context?.companyIds?.length) {
-    throw new Error('At least one company ID is required');
+  // Check company IDs only if we're doing an actual analysis
+  if (input.insightId && (!input.context?.companyIds?.length)) {
+    throw new Error('At least one company ID is required for analysis');
   }
 
   // Validate scope if provided
-  if (input.context.scope && !VALID_SCOPES.includes(input.context.scope)) {
+  if (input.context?.scope && !VALID_SCOPES.includes(input.context.scope)) {
     throw new Error(`Invalid scope. Must be one of: ${VALID_SCOPES.join(', ')}`);
   }
 
   // Validate output format if provided
-  if (input.context.outputFormat && !VALID_OUTPUT_FORMATS.includes(input.context.outputFormat)) {
+  if (input.context?.outputFormat && !VALID_OUTPUT_FORMATS.includes(input.context.outputFormat)) {
     throw new Error(`Invalid output format. Must be one of: ${VALID_OUTPUT_FORMATS.join(', ')}`);
   }
 
   // Validate scope value if provided
-  if (input.context.scopeValue && !input.context.scope) {
+  if (input.context?.scopeValue && !input.context?.scope) {
     throw new Error('Scope must be specified when providing a scope value');
   }
 }
@@ -137,13 +140,13 @@ async function generateCapabilityHeatmapByScope(
       break;
   }
 
-  // Log the query for debugging
-  console.log('=== Debug Info for SQL Query ===');
-  console.log('Scope:', scope);
-  console.log('Query:', query.trim());
-  console.log('Company IDs:', companyIds);
-  console.log('Scope Value:', scopeValue);
-  console.log('=============================');
+  // // Log the query for debugging
+  // console.log('=== Debug Info for SQL Query ===');
+  // console.log('Scope:', scope);
+  // console.log('Query:', query.trim());
+  // console.log('Company IDs:', companyIds);
+  // console.log('Scope Value:', scopeValue);
+  // console.log('=============================');
 
   try {
     const { data, error } = await supabase.rpc('execute_sql', { 
@@ -185,9 +188,75 @@ export async function runAnalystLoop(
     const actionsTaken: string[] = [];
     let data = null;
     let error = null;
+    const sessionId = input.sessionId || input.context?.sessionId;
 
     // Validate input parameters
     validateAnalystInput(input);
+
+    // Log user message if we have one
+    if (sessionId && input.context?.lastMessage) {
+      console.log('About to log user message. SessionId:', sessionId);
+      try {
+        // Check if the session exists
+        const { data: session, error: sessionError } = await supabase
+          .from('conversation_sessions')
+          .select('id')
+          .eq('id', sessionId)
+          .single();
+
+        if (sessionError || !session) {
+          // Create the session if it doesn't exist
+          const { error: createError } = await supabase
+            .from('conversation_sessions')
+            .insert({
+              id: sessionId,
+              mode: 'analyst',
+              status: 'active'
+            });
+
+          if (createError) {
+            console.error('Error creating conversation session:', createError);
+            throw createError;
+          }
+          console.log('Created new conversation session');
+        }
+
+        // Log the user message
+        const { error: messageError } = await supabase
+          .from('chat_messages')
+          .insert({
+            session_id: sessionId,
+            sender: 'user',
+            message: input.context.lastMessage
+          });
+
+        if (messageError) {
+          console.error('Error logging user message:', messageError);
+          throw messageError;
+        }
+        console.log('Successfully logged user message');
+      } catch (error) {
+        console.error('Error handling user message:', error);
+      }
+    }
+
+    // Log starting analysis
+    if (sessionId) {
+      console.log('About to log analysis start message. SessionId:', sessionId);
+      try {
+        await logAgentResponse(
+          supabase,
+          sessionId,
+          "I'm analyzing the capability data and preparing insights...",
+          'mcp_analysis_start'
+        );
+        console.log('Successfully logged analysis start');
+      } catch (error) {
+        console.error('Error logging analysis start:', error);
+      }
+    } else {
+      console.log('No sessionId provided, skipping chat message logging');
+    }
 
     // Execute insight based on insightId
     if (input.insightId && input.context) {
@@ -195,6 +264,22 @@ export async function runAnalystLoop(
         case 'generateCapabilityHeatmapByScope':
           if (!input.context.scope) {
             throw new Error('Scope is required for capability heatmap');
+          }
+          
+          // Log data gathering
+          if (sessionId) {
+            console.log('About to log data gathering message. SessionId:', sessionId);
+            try {
+              await logAgentResponse(
+                supabase,
+                sessionId,
+                "I'm gathering capability data across the organization...",
+                'mcp_data_loaded'
+              );
+              console.log('Successfully logged data gathering');
+            } catch (error) {
+              console.error('Error logging data gathering:', error);
+            }
           }
           
           try {
@@ -205,37 +290,30 @@ export async function runAnalystLoop(
               input.context.scopeValue
             );
             
+            // Log data analysis
+            if (sessionId) {
+              try {
+                await logAgentResponse(
+                  supabase,
+                  sessionId,
+                  `I've analyzed the capability distribution data. Generating insights...`,
+                  'mcp_analysis_complete'
+                );
+                console.log('Successfully logged analysis completion');
+              } catch (error) {
+                console.error('Error logging analysis completion:', error);
+              }
+            }
+            
             actionsTaken.push('Generated capability heatmap');
           } catch (e) {
-            // Log specific error for debugging
             console.error('Error generating capability heatmap:', e);
             throw new Error(`Failed to generate capability heatmap: ${e instanceof Error ? e.message : 'Unknown error'}`);
           }
           break;
           
-        // Additional insights will be implemented here
         default:
           throw new Error(`Unsupported insight: ${input.insightId}`);
-      }
-    }
-
-    // Log the analyst action
-    if (input.context?.companyIds?.[0]) {
-      try {
-        await logAgentAction(supabase, {
-          entityType: 'company',
-          entityId: input.context.companyIds[0],
-          payload: {
-            action: 'analyst_insight',
-            insightId: input.insightId,
-            parameters: input.context,
-            success: true,
-            error: null
-          }
-        });
-      } catch (e) {
-        // Non-blocking error - log but continue
-        console.error('Failed to log analyst action:', e);
       }
     }
 
@@ -274,6 +352,16 @@ IMPORTANT: Format your response in markdown, using:
         throw new Error('OpenAI API key not found');
       }
 
+      // Log AI processing
+      if (sessionId) {
+        await logAgentResponse(
+          supabase,
+          sessionId,
+          "Analyzing the data patterns and generating detailed insights...",
+          'mcp_ai_processing'
+        );
+      }
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -298,14 +386,67 @@ IMPORTANT: Format your response in markdown, using:
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate insights from OpenAI API');
+        const errorData = await response.json();
+        const errorMessage = errorData.error?.message || 'Failed to generate insights from OpenAI API';
+        
+        // Log the API error to chat
+        if (sessionId) {
+          await logAgentResponse(
+            supabase,
+            sessionId,
+            `I encountered an error while analyzing the data: ${errorMessage}`,
+            'mcp_error'
+          );
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const responseData = await response.json();
       chatResponse = responseData.choices?.[0]?.message?.content;
 
       if (!chatResponse) {
-        throw new Error('Invalid response format from OpenAI API');
+        const errorMessage = 'Invalid response format from OpenAI API';
+        
+        // Log the format error to chat
+        if (sessionId) {
+          await logAgentResponse(
+            supabase,
+            sessionId,
+            `I encountered an error while processing the analysis: ${errorMessage}`,
+            'mcp_error'
+          );
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Log final response to chat
+      if (sessionId) {
+        try {
+          console.log('Attempting to log final response to chat:', {
+            sessionId: sessionId,
+            responseLength: chatResponse?.length || 0
+          });
+          
+          await logAgentResponse(
+            supabase,
+            sessionId,
+            chatResponse,
+            'mcp_final_response',
+            undefined,
+            {
+              followUpQuestion: 'Would you like to explore another insight or analyze this data differently?',
+              insightData: data || null,
+              promptDetails: promptResult
+            }
+          );
+          
+          console.log('Successfully logged final response to chat');
+        } catch (error) {
+          console.error('Error logging final response to chat:', error);
+          // Don't throw here, we still want to return the response to the user
+        }
       }
 
     } catch (e) {
@@ -318,6 +459,21 @@ IMPORTANT: Format your response in markdown, using:
           error: e instanceof Error ? e.message : 'Unknown error'
         }
       };
+
+      // Log error to chat
+      if (sessionId) {
+        try {
+          await logAgentResponse(
+            supabase,
+            sessionId,
+            chatResponse,
+            'mcp_error'
+          );
+          console.log('Successfully logged error to chat');
+        } catch (error) {
+          console.error('Error logging error message to chat:', error);
+        }
+      }
     }
 
     return {
@@ -340,39 +496,28 @@ IMPORTANT: Format your response in markdown, using:
         ]
       }
     };
-  } catch (e) {
-    // Log the error for debugging
-    console.error('Error in analyst loop:', e);
+  } catch (error) {
+    console.error('Error in analyst loop:', error);
 
-    // Log the failed action
-    if (input.context?.companyIds?.[0]) {
-      try {
-        await logAgentAction(supabase, {
-          entityType: 'company',
-          entityId: input.context.companyIds[0],
-          payload: {
-            action: 'analyst_insight',
-            insightId: input.insightId,
-            parameters: input.context,
-            success: false,
-            error: e instanceof Error ? e.message : 'Unknown error'
-          }
-        });
-      } catch (logError) {
-        console.error('Failed to log error state:', logError);
-      }
+    // Log error to chat if we have a session
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I encountered an error while analyzing the data. Let me know if you'd like to try again.",
+        'mcp_error'
+      );
     }
 
-    // Return a user-friendly error response
     return {
       success: false,
-      error: e instanceof Error ? e.message : 'Unknown error',
+      error: error instanceof Error ? error.message : 'Unknown error',
       data: {
         matches: [],
         recommendations: [],
         insightData: null,
         chatResponse: {
-          message: `I encountered an error while analyzing the data: ${e instanceof Error ? e.message : 'Unknown error'}`,
+          message: `I encountered an error while analyzing the data: ${error instanceof Error ? error.message : 'Unknown error'}`,
           followUpQuestion: 'Would you like to try a different analysis approach?'
         },
         actionsTaken: [],
