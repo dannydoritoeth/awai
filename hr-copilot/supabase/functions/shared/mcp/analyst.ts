@@ -38,11 +38,11 @@ async function generateCapabilityHeatmapByTaxonomy(
 ) {
   const companyIdsStr = companyIds.map(id => `'${id}'::uuid`).join(', ');
   const query = `
-    SELECT
+    SELECT 
       t.name AS taxonomy,
       c.name AS capability,
-      co.name AS company,
-      COUNT(*) AS role_count
+      COUNT(*) AS role_count,
+      co.name AS company
     FROM role_capabilities rc
     JOIN capabilities c ON rc.capability_id = c.id
     JOIN role_taxonomies rt ON rc.role_id = rt.role_id
@@ -59,7 +59,14 @@ async function generateCapabilityHeatmapByTaxonomy(
   });
 
   if (error) throw error;
-  return data;
+  
+  // Return data in the same structure for consistent processing
+  return data.map((row: any) => ({
+    taxonomy: row.taxonomy,
+    capability: row.capability,
+    role_count: parseInt(row.role_count),
+    company: row.company
+  }));
 }
 
 async function generateCapabilityHeatmapByDivision(
@@ -71,8 +78,15 @@ async function generateCapabilityHeatmapByDivision(
     SELECT
       d.name AS division,
       c.name AS capability,
-      co.name AS company,
-      COUNT(*) AS role_count
+      COUNT(*) AS role_count,
+      (
+        SELECT COUNT(DISTINCT r2.id)
+        FROM roles r2
+        JOIN divisions d2 ON r2.division_id = d2.id
+        WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+        AND d2.name = d.name
+      ) as total_roles,
+      co.name AS company
     FROM roles r
     JOIN divisions d ON r.division_id = d.id
     JOIN role_capabilities rc ON rc.role_id = r.id
@@ -88,7 +102,14 @@ async function generateCapabilityHeatmapByDivision(
   });
 
   if (error) throw error;
-  return data;
+  
+  return data.map((row: any) => ({
+    division: row.division,
+    capability: row.capability,
+    role_count: parseInt(row.role_count),
+    total_roles: parseInt(row.total_roles),
+    company: row.company
+  }));
 }
 
 async function generateCapabilityHeatmapByRegion(
@@ -100,8 +121,14 @@ async function generateCapabilityHeatmapByRegion(
     SELECT
       r.location AS region,
       c.name AS capability,
-      co.name AS company,
-      COUNT(*) AS role_count
+      COUNT(*) AS role_count,
+      (
+        SELECT COUNT(DISTINCT r2.id)
+        FROM roles r2
+        WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+        AND r2.location = r.location
+      ) as total_roles,
+      co.name AS company
     FROM roles r
     JOIN role_capabilities rc ON rc.role_id = r.id
     JOIN capabilities c ON rc.capability_id = c.id
@@ -116,7 +143,14 @@ async function generateCapabilityHeatmapByRegion(
   });
 
   if (error) throw error;
-  return data;
+  
+  return data.map((row: any) => ({
+    region: row.region,
+    capability: row.capability,
+    role_count: parseInt(row.role_count),
+    total_roles: parseInt(row.total_roles),
+    company: row.company
+  }));
 }
 
 async function generateCapabilityHeatmapByCompany(
@@ -126,16 +160,23 @@ async function generateCapabilityHeatmapByCompany(
   const companyIdsStr = companyIds.map(id => `'${id}'::uuid`).join(', ');
   const query = `
     SELECT
-      c.name AS capability,
       co.name AS company,
-      COUNT(*) AS role_count
+      c.name AS capability,
+      COUNT(*) AS role_count,
+      (
+        SELECT COUNT(DISTINCT r2.id)
+        FROM roles r2
+        JOIN companies co2 ON r2.company_id = co2.id
+        WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+        AND co2.name = co.name
+      ) as total_roles
     FROM role_capabilities rc
     JOIN capabilities c ON rc.capability_id = c.id
     JOIN roles r ON rc.role_id = r.id
     JOIN companies co ON r.company_id = co.id
     WHERE r.company_id = ANY(ARRAY[${companyIdsStr}])
-    GROUP BY c.name, co.name
-    ORDER BY role_count DESC`;
+    GROUP BY co.name, c.name
+    ORDER BY co.name, role_count DESC`;
 
   const { data, error } = await supabase.rpc('execute_sql', { 
     sql: query.trim(),
@@ -143,8 +184,126 @@ async function generateCapabilityHeatmapByCompany(
   });
 
   if (error) throw error;
-  return data;
+  
+  return data.map((row: any) => ({
+    company: row.company,
+    capability: row.capability,
+    role_count: parseInt(row.role_count),
+    total_roles: parseInt(row.total_roles)
+  }));
 }
+
+// Summarize data before sending to OpenAI
+const summarizeData = (data: any[]) => {
+  if (!Array.isArray(data)) return data;
+  
+  // First pass: collect all unique capabilities and groups
+  const capabilities = new Set<string>();
+  const groups = new Set<string>();
+  const groupTotals: Record<string, number> = {};
+  
+  data.forEach(item => {
+    const groupKey = item.taxonomy || item.division || item.region || item.company || 'organization';
+    groups.add(groupKey);
+    capabilities.add(item.capability);
+    groupTotals[groupKey] = item.total_roles || 0;
+  });
+
+  // Create the matrix data structure
+  const matrix: Record<string, Record<string, number>> = {};
+  groups.forEach(group => {
+    matrix[group] = {};
+    capabilities.forEach(cap => {
+      matrix[group][cap] = 0;
+    });
+  });
+
+  // Fill in the matrix with actual values
+  data.forEach(item => {
+    const groupKey = item.taxonomy || item.division || item.region || item.company || 'organization';
+    matrix[groupKey][item.capability] = item.role_count;
+  });
+
+  // Convert to CSV format
+  const allRows: string[] = [];
+  const capabilitiesArray = Array.from(capabilities);
+  
+  // Build the heatmap CSV
+  allRows.push('# Capability Heatmap');
+  allRows.push('Group,Total Roles,' + capabilitiesArray.map(cap => `"${cap}"`).join(','));
+  
+  Object.entries(matrix)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([group, capCounts]) => {
+      const rowValues = capabilitiesArray.map(cap => capCounts[cap]);
+      const safeGroup = group.includes(',') ? `"${group}"` : group;
+      allRows.push(`${safeGroup},${groupTotals[group]},${rowValues.join(',')}`);
+    });
+
+  // Calculate summary statistics
+  let totalRoles = 0;
+  const capabilityStats = new Map<string, { total: number, groups: number }>();
+  
+  Object.entries(matrix).forEach(([group, capCounts]) => {
+    totalRoles += groupTotals[group];
+    Object.entries(capCounts).forEach(([cap, count]) => {
+      if (!capabilityStats.has(cap)) {
+        capabilityStats.set(cap, { total: 0, groups: 0 });
+      }
+      const stats = capabilityStats.get(cap)!;
+      if (count > 0) {
+        stats.total += count;
+        stats.groups += 1;
+      }
+    });
+  });
+
+  // Add summary section
+  allRows.push('');
+  allRows.push('# Summary Statistics');
+  allRows.push(`Total Roles Analyzed: ${totalRoles}`);
+  allRows.push(`Total Groups: ${groups.size}`);
+  allRows.push(`Total Unique Capabilities: ${capabilities.size}`);
+  allRows.push('');
+  
+  // Add top capabilities section
+  allRows.push('# Top Capabilities');
+  allRows.push('capability,total_occurrences,groups_present,average_per_group');
+  
+  Array.from(capabilityStats.entries())
+    .sort(([,a], [,b]) => b.total - a.total)
+    .slice(0, 10)  // Top 10 capabilities
+    .forEach(([cap, stats]) => {
+      const avgPerGroup = (stats.total / stats.groups).toFixed(1);
+      allRows.push(`"${cap}",${stats.total},${stats.groups},${avgPerGroup}`);
+    });
+
+  return {
+    csv_data: allRows.join('\n'),
+    summary: {
+      total_roles: totalRoles,
+      total_capabilities: capabilities.size,
+      total_groups: groups.size,
+      matrix_dimensions: {
+        rows: groups.size,
+        columns: capabilities.size
+      },
+      groups: Array.from(groups).map(name => ({
+        name,
+        total_roles: groupTotals[name],
+        unique_capabilities: Object.values(matrix[name]).filter(v => v > 0).length,
+        top_capabilities: Object.entries(matrix[name])
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 5)
+          .map(([cap, count]) => ({
+            name: cap,
+            count,
+            percentage: ((count / groupTotals[name]) * 100).toFixed(1)
+          }))
+      }))
+    }
+  };
+};
 
 export async function runAnalystLoop(
   supabase: SupabaseClient<Database>,
@@ -225,50 +384,35 @@ export async function runAnalystLoop(
     let insightData = data;
 
     try {
-      // Summarize data before sending to OpenAI
-      const summarizeData = (data: any[]) => {
-        if (!Array.isArray(data)) return data;
-        
-        // Group by taxonomy/division/region and capability
-        const summary: Record<string, Record<string, number>> = data.reduce((acc, item) => {
-          const groupKey = item.taxonomy || item.division || item.region || 'company';
-          const capabilityKey = item.capability;
-          
-          if (!acc[groupKey]) {
-            acc[groupKey] = {};
-          }
-          if (!acc[groupKey][capabilityKey]) {
-            acc[groupKey][capabilityKey] = 0;
-          }
-          acc[groupKey][capabilityKey] += parseInt(item.role_count);
-          return acc;
-        }, {} as Record<string, Record<string, number>>);
-
-        // Convert to array format
-        return Object.entries(summary).map(([group, capabilities]) => ({
-          group,
-          capabilities: Object.entries(capabilities)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 5) // Only take top 5 capabilities per group
-            .map(([name, count]) => ({ name, count }))
-        }));
-      };
-
       promptResult = await buildSafePrompt(
         'openai:gpt-3.5-turbo' as ModelId,
         {
           systemPrompt: `Analyze workforce capability data and provide insights.
-Format in markdown using:
+The data is organized in sections:
+1. Analysis Overview - High-level statistics
+2. Group Statistics - Per-group role and capability counts
+3. Detailed Data - CSV with headers:
+   - group: The taxonomy/division/region being analyzed
+   - capability: The specific capability being measured
+   - count: Number of roles with this capability
+   - percentage_of_group: What percentage of the group's roles have this capability
+
+Focus on:
+- Distribution patterns across groups
+- Most prevalent capabilities overall and per group
+- Notable gaps or concentrations
+- Trends that might need attention
+
+Format response in markdown using:
 - ## for sections
 - Lists for points
-- **Bold** for key metrics
+- **Bold** for metrics
 - Tables for comparisons
-- > for key insights
-- \`\` for metrics`,
+- > for insights`,
           data: summarizeData(data || []),
           context: {
-            insightType: input.insightId,
-            analysisType: input.insightId?.replace('generateCapabilityHeatmapBy', '')?.toLowerCase() || 'organization'
+            type: input.insightId?.replace('generateCapabilityHeatmapBy', '')?.toLowerCase() || 'organization',
+            format: 'csv'
           }
         }
       );
