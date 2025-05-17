@@ -17,9 +17,12 @@ declare const Deno: {
  */
 export async function startChatSession(
   supabaseClient: SupabaseClient,
-  mode: 'candidate' | 'hiring' | 'general',
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst',
   entityId?: string,
-  browserSessionId?: string
+  browserSessionId?: string,
+  insightId?: string,
+  scope?: string,
+  companyIds?: string[]
 ) {
   try {
     const { data, error } = await supabaseClient
@@ -99,8 +102,11 @@ export async function logAgentResponse(
   responseData?: Record<string, any>
 ): Promise<{ messageId: string; error?: ChatError }> {
   try {
+    console.log('logAgentResponse called with:', { sessionId, message, actionType });
+    
     // Generate embedding for the message
     const embedding = await generateEmbedding(message);
+    console.log('Generated embedding for message');
 
     // Log the message
     const { data: messageData, error: messageError } = await supabase
@@ -116,10 +122,15 @@ export async function logAgentResponse(
       .select('id')
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error inserting chat message:', messageError);
+      throw messageError;
+    }
+    console.log('Successfully inserted chat message with ID:', messageData?.id);
 
     // If there's an action type, log it to agent_actions
     if (actionType) {
+      console.log('Logging action to agent_actions:', actionType);
       const { data: session } = await supabase
         .from('conversation_sessions')
         .select('profile_id')
@@ -137,11 +148,13 @@ export async function logAgentResponse(
             responseData
           }
         });
+        console.log('Successfully logged agent action');
       }
     }
 
     return { messageId: messageData.id };
   } catch (error) {
+    console.error('Full error in logAgentResponse:', error);
     return {
       messageId: '',
       error: {

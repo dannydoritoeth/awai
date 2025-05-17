@@ -16,7 +16,15 @@ const supabaseClient = createClient(
 );
 
 // Helper to call MCP loop
-async function callMCPLoop(sessionId: string, message: string, mode: 'candidate' | 'hiring' | 'general', entityId?: string) {
+async function callMCPLoop(
+  sessionId: string, 
+  message: string, 
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst', 
+  entityId?: string,
+  insightId?: string,
+  scope?: string,
+  companyIds?: string[]
+) {
   const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
     method: 'POST',
     headers: {
@@ -26,25 +34,38 @@ async function callMCPLoop(sessionId: string, message: string, mode: 'candidate'
     body: JSON.stringify({
       mode,
       sessionId,
-      // Only include profileId/roleId if not in general mode
+      // Only include profileId/roleId/companyIds if not in general mode
       ...(mode === 'candidate' && entityId ? { profileId: entityId } : {}),
       ...(mode === 'hiring' && entityId ? { roleId: entityId } : {}),
+      ...(mode === 'analyst' ? { 
+        insightId,
+        companyIds: companyIds || [entityId],
+        context: {
+          lastMessage: message,
+          companyIds: companyIds || [entityId],
+          scope: scope || 'division',
+          outputFormat: 'action_plan',
+          sessionId,
+          mode: 'analyst',
+          chatHistory: [],
+          agentActions: [],
+          summary: '',
+          semanticContext: {
+            previousMatches: []
+          },
+          contextEmbedding: []
+        },
+        plannerRecommendations: []
+      } : {}),
       context: {
         lastMessage: message,
         mode,
-        // Initialize empty arrays for history and actions to prevent undefined errors
         chatHistory: [],
         agentActions: [],
-        // Add a default empty summary
         summary: '',
-        // Initialize semantic context for general mode
         semanticContext: {
-          currentFocus: undefined,
-          previousMatches: [],
-          previousFocus: undefined,
-          matchingTopic: undefined
+          previousMatches: []
         },
-        // Initialize an empty contextEmbedding array
         contextEmbedding: []
       }
     })
@@ -152,10 +173,13 @@ async function processInitialMessage(
  */
 async function startSession(
   supabaseClient: SupabaseClient,
-  mode: 'candidate' | 'hiring' | 'general',
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst',
   entityId?: string,
   browserSessionId?: string,
-  initialMessage?: string
+  initialMessage?: string,
+  insightId?: string,
+  scope?: string,
+  companyIds?: string[]
 ): Promise<{ sessionId: string | null; error: ChatError | null }> {
   try {
     // Create new session
@@ -163,7 +187,10 @@ async function startSession(
       supabaseClient,
       mode,
       entityId,
-      browserSessionId
+      browserSessionId,
+      insightId,
+      scope,
+      companyIds
     );
 
     if (sessionError || !session) {
@@ -189,22 +216,35 @@ async function startSession(
           sessionId,
           ...(mode === 'candidate' ? { profileId: entityId } : {}),
           ...(mode === 'hiring' ? { roleId: entityId } : {}),
+          ...(mode === 'analyst' ? { 
+            insightId,
+            companyIds: companyIds || [entityId],
+            context: {
+              lastMessage: initialMessage,
+              companyIds: companyIds || [entityId],
+              scope: scope || 'division',
+              outputFormat: 'action_plan',
+              sessionId,
+              mode: 'analyst',
+              chatHistory: [],
+              agentActions: [],
+              summary: '',
+              semanticContext: {
+                previousMatches: []
+              },
+              contextEmbedding: []
+            },
+            plannerRecommendations: []
+          } : {}),
           context: {
             lastMessage: initialMessage,
             mode,
-            // Initialize empty arrays for history and actions to prevent undefined errors
             chatHistory: [],
             agentActions: [],
-            // Add a default empty summary
             summary: '',
-            // Initialize semantic context for general mode
             semanticContext: {
-              currentFocus: undefined,
-              previousMatches: [],
-              previousFocus: undefined,
-              matchingTopic: undefined
+              previousMatches: []
             },
-            // Initialize an empty contextEmbedding array
             contextEmbedding: []
           }
         })
@@ -247,8 +287,31 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { action, sessionId, message, profileId, roleId, browserSessionId, messageId: requestMessageId } = requestBody;
-    console.log('Received request:', { action, sessionId, message, profileId, roleId, browserSessionId });
+    const { 
+      action, 
+      sessionId, 
+      message, 
+      profileId, 
+      roleId, 
+      companyId, 
+      browserSessionId, 
+      messageId: requestMessageId,
+      insightId,
+      scope,
+      companyIds 
+    } = requestBody;
+    console.log('Received request:', { 
+      action, 
+      sessionId, 
+      message, 
+      profileId, 
+      roleId, 
+      companyId, 
+      browserSessionId,
+      insightId,
+      scope,
+      companyIds 
+    });
 
     // Validate required fields
     if (!action) {
@@ -257,7 +320,16 @@ serve(async (req) => {
 
     switch (action) {
       case 'startSession': {
-        console.log('Starting new session with params:', { profileId, roleId, message, browserSessionId });
+        console.log('Starting new session with params:', { 
+          profileId, 
+          roleId, 
+          companyId, 
+          message, 
+          browserSessionId,
+          insightId,
+          scope,
+          companyIds 
+        });
         
         // Require browserSessionId for anonymous users
         if (!browserSessionId) {
@@ -265,11 +337,12 @@ serve(async (req) => {
         }
 
         // Allow starting a general session with no IDs
-        if (profileId && roleId) {
-          throw new Error('Cannot provide both Profile ID and Role ID - choose one mode');
+        if ((profileId && roleId) || (profileId && companyId) || (roleId && companyId)) {
+          throw new Error('Cannot provide multiple IDs - choose one mode');
         }
 
-        let mode: 'candidate' | 'hiring' | 'general';
+        // Determine mode based on request
+        let mode: 'candidate' | 'hiring' | 'general' | 'analyst';
         let entityId: string | undefined;
 
         if (profileId) {
@@ -278,6 +351,9 @@ serve(async (req) => {
         } else if (roleId) {
           mode = 'hiring';
           entityId = roleId;
+        } else if (companyId || companyIds?.length > 0) {
+          mode = 'analyst';
+          entityId = companyId;
         } else {
           mode = 'general';
           entityId = undefined; // Ensure entity_id is null for general mode
@@ -292,7 +368,10 @@ serve(async (req) => {
             mode,
             entityId,
             browserSessionId,
-            message
+            message,
+            insightId,
+            scope,
+            companyIds || [companyId]
           );
           
           console.log('Chat session created:', { newSessionId, startError });
@@ -317,7 +396,7 @@ serve(async (req) => {
               initialResponse = {
                 messageId: lastMessage.id,
                 reply: lastMessage.message,
-                followUpQuestion: null
+                followUpQuestion: lastMessage.responseData?.followUpQuestion
               };
             }
           }
@@ -381,7 +460,7 @@ serve(async (req) => {
             message,
             messageId // Pass the messageId to use for logging
           );
-          
+
           if (postError) {
             console.error('Error posting user message:', postError);
             throw postError;
@@ -393,7 +472,10 @@ serve(async (req) => {
             sessionId,
             message,
             session.mode,
-            session.entity_id || undefined
+            session.entity_id || undefined,
+            insightId,
+            scope,
+            companyIds
           );
           
           if (!mcpResult.success) {

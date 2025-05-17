@@ -152,11 +152,46 @@ const AVAILABLE_ACTIONS = {
       description: 'Generate and store an embedding',
       requiresText: true
     }
+  ],
+  ANALYST_MODE: [
+    {
+      tool: 'generateCapabilityHeatmapByScope',
+      description: 'Generate capability heatmap analysis by scope',
+      requiresCompanyIds: true,
+      requiresScope: true
+    },
+    {
+      tool: 'generateTopCapabilitiesByGroup',
+      description: 'List most common capabilities by taxonomy or division',
+      requiresCompanyIds: true,
+      requiresGroupType: true
+    },
+    {
+      tool: 'generateCapabilityOverlap',
+      description: 'Identify capabilities shared across role families',
+      requiresCompanyIds: true
+    },
+    {
+      tool: 'generateProfileToRoleGapReport',
+      description: 'Show capability gaps between profile and target role',
+      requiresProfileId: true,
+      requiresRoleId: true
+    },
+    {
+      tool: 'handleChatInteraction',
+      description: 'Process analyst chat interactions',
+      requiresChatContext: true
+    },
+    {
+      tool: 'embedContext',
+      description: 'Generate and store an embedding',
+      requiresText: true
+    }
   ]
 };
 
 interface PlannerContext {
-  mode: 'candidate' | 'hiring' | 'general';
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst';
   profileId?: string;
   roleId?: string;
   jobId?: string;
@@ -178,7 +213,7 @@ interface PlannerContext {
  */
 async function getAIRecommendations(
   context: PlannerContext,
-  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE
+  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE | typeof AVAILABLE_ACTIONS.ANALYST_MODE
 ): Promise<PlannerRecommendation[]> {
   try {
     const systemPrompt = `You are an AI career planning assistant that helps select the most appropriate actions to take based on user context and available tools.
@@ -247,9 +282,12 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4',
         messages: [
-          { role: 'system', content: prompt.system },
+          { 
+            role: 'system', 
+            content: `${prompt.system}\n\nIMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.`
+          },
           { role: 'user', content: prompt.user }
         ],
         temperature: 0.2
@@ -257,13 +295,25 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
     });
 
     const data = await response.json();
-    const recommendations = JSON.parse(data.choices[0].message.content);
-
-    if (!Array.isArray(recommendations)) {
-      throw new Error('Invalid AI response format - expected array');
+    
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid AI response format - missing content');
     }
 
-    return recommendations;
+    try {
+      const content = data.choices[0].message.content.trim();
+      const recommendations = JSON.parse(content);
+
+      if (!Array.isArray(recommendations)) {
+        throw new Error('Invalid AI response format - expected array');
+      }
+
+      return recommendations;
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+      console.error('Raw response:', data.choices[0].message.content);
+      return [];
+    }
   } catch (error) {
     console.error('Error getting AI recommendations:', error);
     return [];
@@ -275,7 +325,7 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
  */
 function validateRecommendation(
   recommendation: any,
-  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE
+  availableActions: typeof AVAILABLE_ACTIONS.CANDIDATE_MODE | typeof AVAILABLE_ACTIONS.HIRING_MODE | typeof AVAILABLE_ACTIONS.GENERAL_MODE | typeof AVAILABLE_ACTIONS.ANALYST_MODE
 ): PlannerRecommendation {
   const actionDef = availableActions.find(a => a.tool === recommendation.tool);
   if (!actionDef) {
@@ -424,15 +474,17 @@ export async function getPlannerRecommendation(
       ? AVAILABLE_ACTIONS.CANDIDATE_MODE 
       : mode === 'hiring' 
         ? AVAILABLE_ACTIONS.HIRING_MODE 
-        : AVAILABLE_ACTIONS.GENERAL_MODE;
+        : mode === 'analyst' 
+          ? AVAILABLE_ACTIONS.ANALYST_MODE 
+          : AVAILABLE_ACTIONS.GENERAL_MODE;
 
     // Get recommendations from AI
     const recommendations = await getAIRecommendations(context, availableActions);
 
     // Log the planner's recommendations
     await logAgentAction(supabase, {
-      entityType: mode === 'candidate' ? 'profile' : mode === 'hiring' ? 'role' : 'general',
-      entityId: mode === 'candidate' ? context.profileId! : mode === 'hiring' ? context.roleId! : undefined,
+      entityType: mode === 'candidate' ? 'profile' : mode === 'hiring' ? 'role' : mode === 'analyst' ? 'company' : 'general',
+      entityId: mode === 'candidate' ? context.profileId! : mode === 'hiring' ? context.roleId! : mode === 'analyst' ? context.profileId! : undefined,
       payload: {
         action: 'planner_recommendation',
         recommendations,

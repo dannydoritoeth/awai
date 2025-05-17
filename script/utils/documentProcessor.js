@@ -198,7 +198,7 @@ Document URL: ${metadata.sourceUrl}
 Return only the JSON object with the extracted data. If a field cannot be determined from the content, omit it from the JSON rather than including null or empty values. For the skills array, be comprehensive and extract all relevant skills mentioned throughout the document, including those implied by the responsibilities and requirements.`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",

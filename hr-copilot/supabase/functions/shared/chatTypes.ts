@@ -16,7 +16,7 @@ export interface ConversationSession {
   id: string;
   profileId?: string;
   browserSessionId?: string;
-  mode: 'candidate' | 'hiring' | 'general';
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst';
   entityId?: string;
   status: string;
   createdAt: string;

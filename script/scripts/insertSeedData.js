@@ -38,7 +38,9 @@ const TABLES = {
   roleCapabilities: 'role_capabilities.json',
   roleSkills: 'role_skills.json',
   jobDocuments: 'job_documents.json',
-  roleDocuments: 'role_documents.json'
+  roleDocuments: 'role_documents.json',
+  taxonomy: 'taxonomy.json',
+  roleTaxonomies: 'role_taxonomies.json'
 };
 
 // Helper to read JSON file
@@ -152,6 +154,17 @@ async function insertWithDuplicateHandling(tableName, data) {
         hasTimestamps: false,
         hasId: false,
         fields: ['profile_id', 'action_id']
+      },
+      'taxonomy': {
+        onConflict: 'id',
+        hasTimestamps: true,
+        hasId: true
+      },
+      'role_taxonomies': {
+        onConflict: 'role_id,taxonomy_id',
+        hasTimestamps: true,
+        hasId: false,
+        fields: ['role_id', 'taxonomy_id']
       }
     };
 
@@ -276,9 +289,23 @@ async function insertSeedData() {
       console.log(`Role Documents: ${result.inserted} inserted, ${result.skipped} skipped`);
     }
 
+    // 12. Insert taxonomies
+    const taxonomies = await readSeedFile(TABLES.taxonomy);
+    if (taxonomies) {
+      const result = await insertWithDuplicateHandling('taxonomy', taxonomies);
+      console.log(`Taxonomies: ${result.inserted} inserted, ${result.skipped} skipped`);
+    }
+
+    // 13. Insert role taxonomy links
+    const roleTaxonomies = await readSeedFile(TABLES.roleTaxonomies);
+    if (roleTaxonomies) {
+      const result = await insertWithDuplicateHandling('role_taxonomies', roleTaxonomies);
+      console.log(`Role Taxonomies: ${result.inserted} inserted, ${result.skipped} skipped`);
+    }
+
     console.log('Seed data insertion completed successfully!');
   } catch (error) {
-    console.error('Error inserting seed data:', error);
+    console.error('Error during seed data insertion:', error);
     process.exit(1);
   }
 }
