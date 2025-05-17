@@ -351,9 +351,9 @@ serve(async (req) => {
         } else if (roleId) {
           mode = 'hiring';
           entityId = roleId;
-        } else if (companyId || companyIds?.length > 0) {
+        } else if (companyIds?.length > 0) {
           mode = 'analyst';
-          entityId = companyId;
+          entityId = companyIds[0]; // Use first company ID as the primary entity ID
         } else {
           mode = 'general';
           entityId = undefined; // Ensure entity_id is null for general mode
@@ -371,7 +371,7 @@ serve(async (req) => {
             message,
             insightId,
             scope,
-            companyIds || [companyId]
+            companyIds
           );
           
           console.log('Chat session created:', { newSessionId, startError });

@@ -190,17 +190,16 @@ ORDER BY role_count DESC;
 * Create new page that lists available insights:
 
   * Capability Heatmap by Taxonomy Group
-  * (placeholder slots for future insights)
-* Each insight row includes: title, description, \[View] button
+  * (see list above)
+  * Each insight row includes: title, description, \[View] button
 
-### 📌 Step 3.3: Insight View + Discussion (`/insights/:id`)
+### 📌 Step 3.3: Insight View + Discussion (`starts chat session & navigates`)
 
 * When a user clicks an insight, do the following:
 
   1. Create a new chat session with role = `Analyst`, insightId = `id`
-  2. Navigate to `/insights/:id`
-  3. Render the visualized result of the SQL query at the top
-  4. Below the result, mount the chat window for discussion
+  2. Navigate to `/c/:id`
+
 
 ---
 

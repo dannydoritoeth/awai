@@ -4,11 +4,15 @@ interface StartSessionRequest {
   roleId?: string;
   message: string;
   browserSessionId: string;
+  mode?: 'candidate' | 'hiring' | 'general' | 'analyst';
+  insightId?: string;
+  scope?: string;
+  companyIds?: string[];
 }
 
 interface StartSessionResponse {
   sessionId: string;
-  mode: 'candidate' | 'hiring' | 'general';
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst';
   entityId?: string;
   error?: string;
 }
