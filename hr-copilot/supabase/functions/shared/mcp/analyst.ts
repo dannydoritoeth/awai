@@ -646,5 +646,6 @@ export {
   generateCapabilityHeatmapByTaxonomy,
   generateCapabilityHeatmapByDivision,
   generateCapabilityHeatmapByRegion,
-  generateCapabilityHeatmapByCompany
+  generateCapabilityHeatmapByCompany,
+  summarizeData
 }; 

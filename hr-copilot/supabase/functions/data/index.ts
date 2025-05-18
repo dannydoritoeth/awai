@@ -5,7 +5,8 @@ import {
   generateCapabilityHeatmapByTaxonomy,
   generateCapabilityHeatmapByDivision,
   generateCapabilityHeatmapByRegion,
-  generateCapabilityHeatmapByCompany
+  generateCapabilityHeatmapByCompany,
+  summarizeData
 } from '../shared/mcp/analyst.ts';
 
 interface DataRequest {
@@ -57,11 +58,17 @@ serve(async (req) => {
         throw new Error(`Unsupported insight: ${input.insightId}`);
     }
 
+    // Get both raw and summarized data
+    const summarizedData = summarizeData(data);
+
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        data,
+        data: {
+          raw: data,
+          summarized: summarizedData
+        },
         error: null
       }),
       {
