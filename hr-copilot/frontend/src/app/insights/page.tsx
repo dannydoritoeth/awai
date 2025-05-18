@@ -53,7 +53,7 @@ export default function InsightsPage() {
         insightId: insight.id,
         companyIds,
         browserSessionId,
-        message: `Show me the capability distribution across our organization`
+        message: `Provide analysis for the following heatmap: ${insight.title}`
       });
 
       if (!response.sessionId) {
