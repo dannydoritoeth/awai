@@ -6,6 +6,38 @@ Create a frontend component in a Next.js application that visually presents a he
 
 ---
 
+## When Requesting Messages 
+export async function getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/chat_messages?session_id=eq.${sessionId}&order=timestamp.asc`, {
+    headers: {
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch messages: ${response.statusText}`);
+  }
+
+  return response.json();
+} 
+
+The response_data column with have the body of the request that was sent to the AI to process 
+
+eg.
+{"mode": "analyst", "context": {"mode": "analyst", "scope": "division", "summary": "", "companyIds": ["98071d5d-02a0-4f0e-b13c-01cc61e5e6b4"], "chatHistory": [], "lastMessage": "Provide analysis for the following heatmap: Capability Heatmap by Taxonomy Group", "agentActions": [], "outputFormat": "action_plan", "semanticContext": {"previousMatches": []}, "contextEmbedding": []}, "insightId": "generateCapabilityHeatmapByTaxonomy", "sessionId": "41220243-56ca-4ea2-b154-afdd773ff110", "companyIds": ["98071d5d-02a0-4f0e-b13c-01cc61e5e6b4"], "plannerRecommendations": []}
+
+## Data Request 
+ const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/data?session_id=eq.${sessionId}&order=timestamp.asc`, {
+    headers: {
+      'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    }
+  });
+  { body from above }
+
+See at the very bottom of this work request for an example of the response of the data request. 
+
 ## Data Input
 
 * The backend provides summarized data in the following format:
@@ -83,7 +115,7 @@ Finance,1,1,1,...,1
 
 Let me know if you’d like help with CSV preprocessing or backend image generation instead of React rendering.
 
-
+## Data Request Response Format 
 
 {
     "success": true,
