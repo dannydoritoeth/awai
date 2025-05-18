@@ -128,6 +128,7 @@ export async function testJobMatching(
     });
 
     debug.timings.total = Date.now() - startTime;
+    debug.matches = matches;
     console.log('Job matching completed:', debug);
 
     return { 
