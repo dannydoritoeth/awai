@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
+import MatchesPanel from './MatchesPanel';
 import { getSessionMessages } from '@/lib/api/chat';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, Match as ApiMatch, ResponseData } from '@/types/chat';
+
+interface Match {
+  name: string;
+  matchPercentage: number;
+  matchStatus: string;
+}
 
 interface ProfileData {
   id: string;
@@ -55,11 +62,12 @@ export default function UnifiedResultsView({
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
-  const [activeTab, setActiveTab] = useState<'profile' | 'role'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
     return profileData ? 'profile' : 'role';
   });
+  const [matches, setMatches] = useState<Match[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<ChatMessage | null>(null);
@@ -104,9 +112,29 @@ export default function UnifiedResultsView({
             const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
             if (hasNewAIMessage) {
               setIsWaitingForResponse(false);
+
+              // Update matches from the latest assistant message with matches data
+              const latestAssistantMessage = uniqueNewMessages
+                .filter(m => {
+                  if (m.sender !== 'assistant' || !m.response_data) return false;
+                  const data = m.response_data as ResponseData;
+                  return !!data.matches;
+                })
+                .pop();
+
+              if (latestAssistantMessage?.response_data) {
+                const data = latestAssistantMessage.response_data as ResponseData;
+                if (data.matches) {
+                  setMatches(data.matches.map((match: ApiMatch) => ({
+                    name: match.name,
+                    matchPercentage: match.match_percentage,
+                    matchStatus: match.match_status || 'now'
+                  })));
+                }
+              }
             }
             
-            return [...prev, ...uniqueNewMessages] as ChatMessage[];
+            return [...prev, ...uniqueNewMessages];
           }
           return prev;
         });
@@ -161,12 +189,11 @@ export default function UnifiedResultsView({
     const userMessage: ChatMessage = {
       id: messageId,
       message: message,
-      sender: 'user',
-      timestamp: new Date().toISOString()
+      sender: 'user'
     };
     
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    setIsWaitingForResponse(true); // Set waiting state when sending message
+    setIsWaitingForResponse(true);
     setIsLoading(true);
 
     try {
@@ -195,22 +222,7 @@ export default function UnifiedResultsView({
 
       // Remove the user message if the send failed
       setMessages((prev: ChatMessage[]) => prev.filter(msg => msg.id !== messageId));
-      setIsWaitingForResponse(false); // Reset waiting state on error
-
-      // Show error message to user
-      const errorMessageId = crypto.randomUUID();
-      const errorMessage: ChatMessage = {
-        id: errorMessageId,
-        message: error instanceof Error 
-          ? `Error: ${error.message}` 
-          : 'Sorry, I encountered an error. Please try again.',
-        sender: 'assistant',
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      setIsWaitingForResponse(false);
     }
   };
 
@@ -357,6 +369,22 @@ export default function UnifiedResultsView({
     </div>
   );
 
+  const handleExplainMatch = (name: string) => {
+    handleSendMessage(`Explain why ${name} is a good fit for this role`);
+  };
+
+  const handleDevelopmentPath = (name: string) => {
+    handleSendMessage(`What would ${name} need to work on to succeed in this role?`);
+  };
+
+  const handleCompare = (name: string) => {
+    // For now, just compare with the next person in the list
+    const otherMatch = matches.find(m => m.name !== name);
+    if (otherMatch) {
+      handleSendMessage(`Compare ${name} to ${otherMatch.name} for this role`);
+    }
+  };
+
   return (
     <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
@@ -400,6 +428,19 @@ export default function UnifiedResultsView({
                 Role Details
               </button>
             )}
+
+            {/* Show Matches tab if we have matches */}
+            {matches.length > 0 && (
+              <button
+                className={`px-6 py-4 text-sm font-medium transition-colors relative
+                  ${activeTab === 'matches'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('matches')}
+              >
+                Matches
+              </button>
+            )}
           </div>
         </div>
 
@@ -407,6 +448,14 @@ export default function UnifiedResultsView({
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
+          {activeTab === 'matches' && matches.length > 0 && (
+            <MatchesPanel
+              matches={matches}
+              onExplainMatch={handleExplainMatch}
+              onDevelopmentPath={handleDevelopmentPath}
+              onCompare={handleCompare}
+            />
+          )}
         </div>
       </div>
     </div>

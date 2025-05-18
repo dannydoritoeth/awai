@@ -2,47 +2,26 @@ export type ChatSender = 'user' | 'assistant' | 'system';
 
 export interface HeatmapRequestData {
   mode: string;
-  context: {
-    mode: string;
-    scope: string;
-    summary: string;
-    companyIds: string[];
-    chatHistory: any[];
-    lastMessage: string;
-    agentActions: any[];
-    outputFormat: string;
-    semanticContext: {
-      previousMatches: any[];
-    };
-    contextEmbedding: any[];
-  };
   insightId: string;
   sessionId: string;
   companyIds: string[];
-  plannerRecommendations: any[];
 }
 
 export interface ResponseData {
-  followUpQuestion?: string;
-  semanticContext?: {
-    relevantText?: string;
-    confidence?: number;
+  matches?: Match[];
+  raw?: unknown[];
+  summarized?: {
+    csv_data?: string;
+    summary?: unknown;
   };
-  [key: string]: unknown;
+  error?: string | null;
 }
 
 export interface ChatMessage {
   id: string;
-  sessionId?: string;
-  sender: 'user' | 'assistant';
   message: string;
-  timestamp: string;
-  toolCall?: {
-    name: string;
-    arguments: Record<string, unknown>;
-  };
-  responseData?: ResponseData;
-  response_data?: ResponseData | HeatmapRequestData;
+  sender: 'user' | 'assistant';
+  responseData?: ResponseData | HeatmapRequestData;
   followUpQuestion?: string;
   semanticContext?: {
     relevantText?: string;
@@ -71,4 +50,10 @@ export interface CapabilityData {
   taxonomy: string;
   capability: string;
   percentage: number;
+}
+
+export interface Match {
+  name: string;
+  match_percentage: number;
+  match_status?: string;
 } 

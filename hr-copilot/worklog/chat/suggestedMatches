@@ -1,0 +1,70 @@
+# 🧠 Work Request: Add Right Panel Match Explorer to Chat View
+
+## Objective
+
+Enable users to interactively explore, compare, and discuss matched candidate profiles and roles when they are suggested by the ai. This enhancement adds a right-hand panel for match exploration within the chat session, with actionable AI tools.
+
+Currently there is Profile or Role Details. There should be a new tab next to it: "Matches"
+
+---
+
+## ✅ Part 1: Chat Panel UI (Frontend)
+
+### 📌 Step 1.1: Identifying Matches to Display
+
+* When loading chat_messages the messages where user = assistant and response_data != null are what we need to check 
+* This has the records that we need to display and then will use to prompt the for questions about it
+
+### 📌 Step 1.2: Add Right-Side “Matches” Panel
+
+* Display match panel beside the ongoing chat session
+* It can be either roles or profiles
+* Show list with:
+  * Name
+  * Match percentage
+  * Mini tags (e.g., “Ready now”, “Development needed”)
+  * Relevant Buttons for Profile or Role: `Explain Match`, `Development Path`, `Compare`
+
+### 📌 Step 2.2: Action Buttons — Trigger Chat Prompts
+
+* When a user clicks an action button:
+
+  * Send a post request to the chat edge function with the  structured prompt into chat as system message and any additional context in the body of the request:
+    * **Explain Match** → “Explain why \[Name] is a good fit for \[Role Title]”
+    * **Development Path** → “What would \[Name] need to work on to succeed in this role?”
+    * **Compare** → “Compare \[Name A] to \[Name B] for \[Role Title]”
+* AI returns reasoning based on capability overlap/gaps
+
+---
+
+## ✅ Part 3: Backend Support (Supabase Edge Function - `mcp-loop`)
+
+### 📌 Step 3.1: Extend Role Actions
+
+* Add support for the following actions:
+
+  * `explainProfileRoleMatch(profile_id, role_id)`
+  * `generateDevelopmentPlan(profile_id, role_id)`
+  * `compareProfilesForRole(profile_a, profile_b, role_id)`
+
+### 📌 Step 3.2: Provide Prompt Templates
+
+* Each action should use a consistent prompt structure:
+
+**System Prompt:**
+
+> You are a workforce analyst helping assess candidate fit for roles based on capabilities. Always refer to the NSW Capability Framework.
+
+**User Prompts:**
+
+* “Explain why \[Name] is a good fit for \[Role Title].”
+* “What would \[Name] need to improve to succeed in \[Role Title]?”
+* “Compare \[Name A] and \[Name B] for \[Role Title].”
+
+---
+
+## ✅ Output
+
+* Match exploration and AI discussion are co-located
+* Matches are actionable, not just listed
+* Encourages deeper workforce decisions through natural language + structure

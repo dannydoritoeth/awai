@@ -143,8 +143,8 @@ export default function ChatInterface({
     console.log('Checking message for heatmap:', {
       messageId: message.id,
       sender: message.sender,
-      hasResponseData: !!message.response_data,
-      responseData: message.response_data
+      hasResponseData: !!message.responseData,
+      responseData: message.responseData
     });
 
     if (message.sender !== 'user') {
@@ -152,13 +152,13 @@ export default function ChatInterface({
       return false;
     }
 
-    if (!message.response_data) {
+    if (!message.responseData) {
       console.log('Not showing heatmap - no response data');
       return false;
     }
 
     // Check if this is a heatmap request message
-    const data = message.response_data as HeatmapRequestData;
+    const data = message.responseData as HeatmapRequestData;
     const heatmapTypes = [
       'generateCapabilityHeatmapByTaxonomy',
       'generateCapabilityHeatmapByDivision',
@@ -203,7 +203,7 @@ export default function ChatInterface({
   const closeHeatmapModal = () => setActiveHeatmapModal(null);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full">
       {/* Messages Area */}
       <div 
         ref={messagesContainerRef}
@@ -279,7 +279,7 @@ export default function ChatInterface({
                   isOpen={true}
                   onClose={closeHeatmapModal}
                   data={heatmapData[message.id]}
-                  groupBy={getHeatmapGrouping((message.response_data as HeatmapRequestData).insightId)}
+                  groupBy={getHeatmapGrouping((message.responseData as HeatmapRequestData).insightId)}
                 />
               )}
 
@@ -316,7 +316,7 @@ export default function ChatInterface({
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed max-w-[766px] bottom-0 left-1/2 -translate-x-1/2 right-0 border-t border-gray-200 p-4 bg-white rounded-b-2xl" style={{ width: 'inherit' }}>
+      <div className="fixed max-w-[766px] bottom-0 left-0 right-0 border-t border-gray-200 p-4 bg-white rounded-b-2xl">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <div className="flex-1 relative">
             <textarea
