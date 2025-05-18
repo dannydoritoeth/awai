@@ -35,6 +35,7 @@ export default function ChatInterface({
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
+  const [loadingHeatmaps, setLoadingHeatmaps] = useState<{[key: string]: boolean}>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
@@ -109,6 +110,7 @@ export default function ChatInterface({
   };
 
   const fetchHeatmapData = async (messageId: string, params: HeatmapRequestParams) => {
+    setLoadingHeatmaps(prev => ({ ...prev, [messageId]: true }));
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
         method: 'POST',
@@ -136,23 +138,14 @@ export default function ChatInterface({
       }
     } catch (error) {
       console.error('Error fetching heatmap data:', error);
+    } finally {
+      setLoadingHeatmaps(prev => ({ ...prev, [messageId]: false }));
     }
   };
 
-  const shouldShowHeatmap = (message: ChatMessage) => {
-    console.log('Checking message for heatmap:', {
-      messageId: message.id,
-      sender: message.sender,
-      hasResponseData: !!message.response_data,
-      responseData: message.response_data
-    });
-
-    if (!message.response_data) {
-      console.log('Not showing heatmap - no response data');
-      return false;
-    }
-
-    // Check if this is a heatmap request message
+  const isHeatmapMessage = (message: ChatMessage) => {
+    if (!message.response_data) return false;
+    
     const data = message.response_data as HeatmapRequestData;
     const heatmapTypes = [
       'generateCapabilityHeatmapByTaxonomy',
@@ -161,23 +154,20 @@ export default function ChatInterface({
       'generateCapabilityHeatmapByCompany'
     ];
 
-    if (heatmapTypes.includes(data.insightId)) {
-      // If we haven't fetched the data yet, fetch it
-      if (!heatmapData[message.id]) {
-        console.log('Fetching heatmap data for message:', message.id);
-        fetchHeatmapData(message.id, {
-          mode: data.mode,
-          insightId: data.insightId,
-          sessionId: data.sessionId,
-          companyIds: data.companyIds
-        });
-      }
-      
-      // Return true if we have the data
-      return !!heatmapData[message.id];
-    }
+    return heatmapTypes.includes(data.insightId);
+  };
 
-    return false;
+  const handleHeatmapClick = (message: ChatMessage) => {
+    const data = message.response_data as HeatmapRequestData;
+    if (!heatmapData[message.id]) {
+      fetchHeatmapData(message.id, {
+        mode: data.mode,
+        insightId: data.insightId,
+        sessionId: data.sessionId,
+        companyIds: data.companyIds
+      });
+    }
+    setActiveHeatmapModal(message.id);
   };
 
   const getHeatmapGrouping = (insightId: string) => {
@@ -250,30 +240,43 @@ export default function ChatInterface({
                 </ReactMarkdown>
               </div>
 
-              {shouldShowHeatmap(message) && (
+              {isHeatmapMessage(message) && (
                 <div className="mt-4 flex items-center gap-2">
                   <button
-                    onClick={() => setActiveHeatmapModal(message.id)}
+                    onClick={() => handleHeatmapClick(message)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                       message.sender === 'user'
                         ? 'bg-blue-700 hover:bg-blue-800 text-white'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
                     }`}
+                    disabled={loadingHeatmaps[message.id]}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    View Capability Heatmap
+                    {loadingHeatmaps[message.id] ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading Heatmap...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        View Capability Heatmap
+                      </>
+                    )}
                   </button>
                 </div>
               )}
 
               {/* Heatmap Modal */}
-              {activeHeatmapModal === message.id && heatmapData[message.id] && (
+              {activeHeatmapModal === message.id && (
                 <HeatmapModal
                   isOpen={true}
                   onClose={closeHeatmapModal}
-                  data={heatmapData[message.id]}
+                  data={heatmapData[message.id] || []}
                   groupBy={getHeatmapGrouping((message.response_data as HeatmapRequestData).insightId)}
                 />
               )}
