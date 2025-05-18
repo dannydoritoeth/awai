@@ -316,7 +316,7 @@ export default function ChatInterface({
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed max-w-[766px] bottom-0 left-0 right-0 border-t border-gray-200 p-4 bg-white rounded-b-2xl">
+      <div className="fixed max-w-[766px] bottom-0 left-1/2 -translate-x-1/2 right-0 border-t border-gray-200 p-4 bg-white rounded-b-2xl" style={{ width: 'inherit' }}>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <div className="flex-1 relative">
             <textarea
