@@ -189,6 +189,7 @@ async function startSession(
       mode,
       entityId,
       browserSessionId,
+      initialMessage,
       insightId,
       scope,
       companyIds

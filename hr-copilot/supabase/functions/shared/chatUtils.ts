@@ -20,18 +20,54 @@ export async function startChatSession(
   mode: 'candidate' | 'hiring' | 'general' | 'analyst',
   entityId?: string,
   browserSessionId?: string,
+  initialMessage?: string,
   insightId?: string,
   scope?: string,
   companyIds?: string[]
 ) {
   try {
+    // Get the summary based on mode
+    let summary: string | null = null;
+
+    if (mode === 'hiring' && entityId) {
+      // Get role name
+      const { data: role } = await supabaseClient
+        .from('roles')
+        .select('title')
+        .eq('id', entityId)
+        .single();
+      summary = role?.title || null;
+    } else if (mode === 'candidate' && entityId) {
+      // Get profile name
+      const { data: profile } = await supabaseClient
+        .from('profiles')
+        .select('name')
+        .eq('id', entityId)
+        .single();
+      summary = profile?.name || null;
+    } else if (mode === 'analyst' && insightId) {
+      // For analyst mode, use the predefined insight title
+      const insights = {
+        generateCapabilityHeatmapByTaxonomy: 'Capability Heatmap by Taxonomy Group',
+        generateCapabilityHeatmapByDivision: 'Capability Heatmap by Division',
+        generateCapabilityHeatmapByRegion: 'Capability Heatmap by Region',
+        generateCapabilityHeatmapByCompany: 'Organization-wide Capability Heatmap'
+      };
+      summary = insights[insightId as keyof typeof insights] || null;
+    } else if (mode === 'general' && initialMessage) {
+      // For general mode, use the first 50 characters of the message
+      summary = initialMessage.length > 50 ? `${initialMessage.substring(0, 47)}...` : initialMessage;
+    }
+
+    // Create the session with summary
     const { data, error } = await supabaseClient
       .from('conversation_sessions')
       .insert({
         mode,
         entity_id: mode === 'general' ? null : entityId,
         browser_session_id: browserSessionId,
-        status: 'active'
+        status: 'active',
+        summary
       })
       .select('id')
       .single();
