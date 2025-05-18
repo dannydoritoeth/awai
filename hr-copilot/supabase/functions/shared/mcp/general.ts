@@ -262,7 +262,7 @@ async function generateGeneralResponse(
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-3.5-turbo',
         messages: [
           {
             role: 'system',
@@ -301,7 +301,7 @@ async function generateGeneralResponse(
         stage: 'chatgpt_response',
         message: chatResponse,
         metadata: {
-          model: 'gpt-4o',
+          model: 'gpt-3.5-turbo',
           temperature: 0.7,
           timestamp: new Date().toISOString(),
           responseStatus: response.status,
