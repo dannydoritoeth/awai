@@ -56,4 +56,10 @@ export interface Match {
   name: string;
   match_percentage: number;
   match_status?: string;
+}
+
+export interface ApiMatch {
+  name: string;
+  match_percentage: number;
+  match_status?: string;
 } 

@@ -95,13 +95,14 @@ export default function UnifiedResultsView({
     const pollMessages = async () => {
       try {
         const newMessages = await getSessionMessages(sessionId);
-        console.log('newMessages', newMessages);
+        console.log('All messages from API:', newMessages);
         setMessages(prev => {
           // Create a Set of existing message IDs for efficient lookup
           const existingIds = new Set(prev.map(msg => msg.id));
           
           // Filter out messages we already have
           const uniqueNewMessages = newMessages.filter(msg => !existingIds.has(msg.id));
+          console.log('Unique new messages:', uniqueNewMessages);
           
           // Only update if we have new unique messages
           if (uniqueNewMessages.length > 0) {
@@ -110,27 +111,41 @@ export default function UnifiedResultsView({
             
             // Check if we received an AI response
             const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
+            console.log('Has new AI message:', hasNewAIMessage);
+            
             if (hasNewAIMessage) {
               setIsWaitingForResponse(false);
 
-              // Update matches from the latest assistant message with matches data
-              const latestAssistantMessage = uniqueNewMessages
+              // Get all assistant messages with matches
+              const assistantMessagesWithMatches = uniqueNewMessages
                 .filter(m => {
                   if (m.sender !== 'assistant' || !m.response_data) return false;
                   const data = m.response_data as ResponseData;
+                  console.log('Checking message for matches:', m.id, data);
                   return !!data.matches;
-                })
-                .pop();
+                });
 
-              if (latestAssistantMessage?.response_data) {
-                const data = latestAssistantMessage.response_data as ResponseData;
-                if (data.matches) {
-                  setMatches(data.matches.map((match: ApiMatch) => ({
+              console.log('Assistant messages with matches:', assistantMessagesWithMatches);
+
+              // Accumulate all matches from all messages
+              const allMatches = assistantMessagesWithMatches.reduce((acc: ApiMatch[], message) => {
+                const data = message.response_data as ResponseData;
+                console.log('Adding matches from message:', message.id, data.matches);
+                return [...acc, ...(data.matches || [])];
+              }, []);
+
+              console.log('All accumulated matches:', allMatches);
+
+              if (allMatches.length > 0) {
+                setMatches(allMatches.map((match: ApiMatch) => {
+                  const transformed = {
                     name: match.name,
                     matchPercentage: match.match_percentage,
                     matchStatus: match.match_status || 'now'
-                  })));
-                }
+                  };
+                  console.log('Transformed match:', transformed);
+                  return transformed;
+                }));
               }
             }
             
@@ -139,7 +154,7 @@ export default function UnifiedResultsView({
           return prev;
         });
       } catch (error) {
-        console.error('Failed to fetch messages:', error);
+        console.error('Error polling messages:', error);
         setIsLoading(false);
       }
     };
@@ -438,7 +453,7 @@ export default function UnifiedResultsView({
                     : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => setActiveTab('matches')}
               >
-                Matches
+                Matches ({matches.length})
               </button>
             )}
           </div>
