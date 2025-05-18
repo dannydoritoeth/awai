@@ -143,22 +143,17 @@ export default function ChatInterface({
     console.log('Checking message for heatmap:', {
       messageId: message.id,
       sender: message.sender,
-      hasResponseData: !!message.responseData,
-      responseData: message.responseData
+      hasResponseData: !!message.response_data,
+      responseData: message.response_data
     });
 
-    if (message.sender !== 'user') {
-      console.log('Not showing heatmap - message is not from user');
-      return false;
-    }
-
-    if (!message.responseData) {
+    if (!message.response_data) {
       console.log('Not showing heatmap - no response data');
       return false;
     }
 
     // Check if this is a heatmap request message
-    const data = message.responseData as HeatmapRequestData;
+    const data = message.response_data as HeatmapRequestData;
     const heatmapTypes = [
       'generateCapabilityHeatmapByTaxonomy',
       'generateCapabilityHeatmapByDivision',
@@ -279,7 +274,7 @@ export default function ChatInterface({
                   isOpen={true}
                   onClose={closeHeatmapModal}
                   data={heatmapData[message.id]}
-                  groupBy={getHeatmapGrouping((message.responseData as HeatmapRequestData).insightId)}
+                  groupBy={getHeatmapGrouping((message.response_data as HeatmapRequestData).insightId)}
                 />
               )}
 

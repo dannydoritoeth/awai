@@ -21,7 +21,7 @@ export interface ChatMessage {
   id: string;
   message: string;
   sender: 'user' | 'assistant';
-  responseData?: ResponseData | HeatmapRequestData;
+  response_data?: ResponseData | HeatmapRequestData;
   followUpQuestion?: string;
   semanticContext?: {
     relevantText?: string;

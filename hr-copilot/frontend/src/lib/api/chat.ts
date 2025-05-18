@@ -1,3 +1,5 @@
+import type { ResponseData as ChatResponseData, HeatmapRequestData } from '@/types/chat';
+
 interface StartSessionRequest {
   action: 'startSession';
   profileId?: string;
@@ -22,10 +24,7 @@ interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
-interface ResponseData {
-  content?: string;
-  metadata?: Record<string, unknown>;
-}
+type ResponseData = ChatResponseData | HeatmapRequestData;
 
 interface ChatMessage {
   id: string;
@@ -34,7 +33,7 @@ interface ChatMessage {
   message: string;
   timestamp: string;
   toolCall?: ToolCall;
-  responseData?: ResponseData;
+  response_data?: ResponseData;
 }
 
 export async function startSession(req: StartSessionRequest): Promise<StartSessionResponse> {
