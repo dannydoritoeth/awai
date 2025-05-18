@@ -1,6 +1,7 @@
 'use client';
 
 interface Match {
+  id: string;
   name: string;
   matchPercentage: number;
   matchStatus: string;
@@ -22,9 +23,9 @@ export default function MatchesPanel({
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto">
-        {matches.map((match, index) => (
+        {matches.map((match) => (
           <div 
-            key={`${match.name}-${index}`}
+            key={match.id}
             className="p-4 border-b last:border-b-0 hover:bg-gray-50"
           >
             <div className="flex justify-between items-start mb-2">

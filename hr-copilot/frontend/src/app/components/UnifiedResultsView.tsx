@@ -137,8 +137,29 @@ export default function UnifiedResultsView({
               console.log('All accumulated matches:', allMatches);
 
               if (allMatches.length > 0) {
-                setMatches(allMatches.map((match: ApiMatch) => {
+                // Create a Map to deduplicate matches by ID while keeping the highest match percentage
+                const matchMap = new Map<string, ApiMatch>();
+                
+                allMatches.forEach((match) => {
+                  if (!match.id) {
+                    console.warn('Match missing ID:', match);
+                    return;
+                  }
+                  const existing = matchMap.get(match.id);
+                  if (!existing || existing.match_percentage < match.match_percentage) {
+                    matchMap.set(match.id, match);
+                  }
+                });
+
+                // Convert back to array and sort by match percentage descending
+                const uniqueSortedMatches = Array.from(matchMap.values())
+                  .sort((a, b) => b.match_percentage - a.match_percentage);
+
+                console.log('Unique sorted matches:', uniqueSortedMatches);
+
+                setMatches(uniqueSortedMatches.map((match: ApiMatch) => {
                   const transformed = {
+                    id: match.id,
                     name: match.name,
                     matchPercentage: match.match_percentage,
                     matchStatus: match.match_status || 'now'

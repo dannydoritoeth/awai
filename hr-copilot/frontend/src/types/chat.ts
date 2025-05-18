@@ -53,12 +53,14 @@ export interface CapabilityData {
 }
 
 export interface Match {
+  id: string;
   name: string;
   match_percentage: number;
   match_status?: string;
 }
 
 export interface ApiMatch {
+  id: string;
   name: string;
   match_percentage: number;
   match_status?: string;
