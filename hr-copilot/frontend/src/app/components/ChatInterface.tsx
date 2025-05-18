@@ -159,7 +159,14 @@ export default function ChatInterface({
 
     // Check if this is a heatmap request message
     const data = message.response_data as HeatmapRequestData;
-    if (data.insightId === 'generateCapabilityHeatmapByTaxonomy') {
+    const heatmapTypes = [
+      'generateCapabilityHeatmapByTaxonomy',
+      'generateCapabilityHeatmapByDivision',
+      'generateCapabilityHeatmapByRegion',
+      'generateCapabilityHeatmapByCompany'
+    ];
+
+    if (heatmapTypes.includes(data.insightId)) {
       // If we haven't fetched the data yet, fetch it
       if (!heatmapData[message.id]) {
         console.log('Fetching heatmap data for message:', message.id);
@@ -176,6 +183,21 @@ export default function ChatInterface({
     }
 
     return false;
+  };
+
+  const getHeatmapGrouping = (insightId: string) => {
+    switch (insightId) {
+      case 'generateCapabilityHeatmapByTaxonomy':
+        return 'taxonomy';
+      case 'generateCapabilityHeatmapByDivision':
+        return 'division';
+      case 'generateCapabilityHeatmapByRegion':
+        return 'region';
+      case 'generateCapabilityHeatmapByCompany':
+        return 'company';
+      default:
+        return 'taxonomy';
+    }
   };
 
   const closeHeatmapModal = () => setActiveHeatmapModal(null);
@@ -257,6 +279,7 @@ export default function ChatInterface({
                   isOpen={true}
                   onClose={closeHeatmapModal}
                   data={heatmapData[message.id]}
+                  groupBy={getHeatmapGrouping((message.response_data as HeatmapRequestData).insightId)}
                 />
               )}
 

@@ -8,9 +8,10 @@ interface HeatmapModalProps {
   isOpen: boolean;
   onClose: () => void;
   data: CapabilityData[];
+  groupBy: 'taxonomy' | 'division' | 'region' | 'company';
 }
 
-export default function HeatmapModal({ isOpen, onClose, data }: HeatmapModalProps) {
+export default function HeatmapModal({ isOpen, onClose, data, groupBy }: HeatmapModalProps) {
   // Handle escape key to close modal
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -62,6 +63,7 @@ export default function HeatmapModal({ isOpen, onClose, data }: HeatmapModalProp
           <CapabilityHeatmap
             data={data}
             isExpanded={true}
+            groupBy={groupBy}
           />
         </div>
       </div>

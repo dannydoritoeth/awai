@@ -3,30 +3,37 @@
 import { ResponsiveHeatMap } from '@nivo/heatmap';
 
 export interface CapabilityData {
-  taxonomy: string;
+  taxonomy?: string;
+  division?: string;
+  region?: string;
+  company?: string;
   capability: string;
-  percentage: number;
+  role_count: number;
+  total_roles: number;
 }
 
 interface CapabilityHeatmapProps {
   data: CapabilityData[];
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  groupBy: 'taxonomy' | 'division' | 'region' | 'company';
 }
 
-export default function CapabilityHeatmap({ data, isExpanded = false }: CapabilityHeatmapProps) {
+export default function CapabilityHeatmap({ data, isExpanded = false, groupBy }: CapabilityHeatmapProps) {
   // Process data into format needed for heatmap
   const processData = () => {
-    const taxonomies = Array.from(new Set(data.map(d => d.taxonomy)));
+    // Get the unique groups based on the groupBy field
+    const groups = Array.from(new Set(data.map(d => d[groupBy] || 'Unknown')));
     const capabilities = Array.from(new Set(data.map(d => d.capability)));
     
-    return taxonomies.map(taxonomy => ({
-      id: taxonomy,
+    return groups.map(group => ({
+      id: group,
       data: capabilities.map(capability => {
-        const match = data.find(d => d.taxonomy === taxonomy && d.capability === capability);
+        const match = data.find(d => d[groupBy] === group && d.capability === capability);
+        const percentage = match ? (match.role_count / match.total_roles) * 100 : 0;
         return {
           x: capability,
-          y: match ? match.percentage : 0
+          y: percentage
         };
       })
     }));
@@ -34,6 +41,22 @@ export default function CapabilityHeatmap({ data, isExpanded = false }: Capabili
 
   const heatmapData = processData();
   const height = isExpanded ? '100%' : 200;
+
+  // Get appropriate title based on grouping
+  const getLegendTitle = () => {
+    switch (groupBy) {
+      case 'taxonomy':
+        return 'Taxonomy Coverage %';
+      case 'division':
+        return 'Division Coverage %';
+      case 'region':
+        return 'Regional Coverage %';
+      case 'company':
+        return 'Company Coverage %';
+      default:
+        return 'Coverage %';
+    }
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
@@ -81,53 +104,29 @@ export default function CapabilityHeatmap({ data, isExpanded = false }: Capabili
               tickSize: 3,
               tickSpacing: 4,
               tickOverlap: false,
-              title: 'Coverage %',
+              title: getLegendTitle(),
               titleAlign: 'start',
               titleOffset: 4
             }
           ]}
           theme={{
-            fontSize: 12,
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            textColor: '#333333',
-            axis: {
-              domain: {
-                line: {
-                  stroke: '#dddddd',
-                  strokeWidth: 1
-                }
-              },
-              ticks: {
-                line: {
-                  stroke: '#777777',
-                  strokeWidth: 1
-                },
-                text: {
-                  fill: '#333333'
-                }
-              }
+            text: {
+              fontSize: 12,
+              fontFamily: 'system-ui, -apple-system, sans-serif'
             },
-            grid: {
-              line: {
-                stroke: '#dddddd',
-                strokeWidth: 1
+            axis: {
+              ticks: {
+                text: {
+                  fontSize: 12
+                }
               }
             },
             legends: {
               text: {
-                fill: '#333333'
+                fontSize: 12
               },
               title: {
-                fill: '#333333'
-              },
-              ticks: {
-                line: {
-                  stroke: '#777777',
-                  strokeWidth: 1
-                },
-                text: {
-                  fill: '#333333'
-                }
+                fontSize: 13
               }
             }
           }}
