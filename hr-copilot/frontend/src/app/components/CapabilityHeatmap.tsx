@@ -14,7 +14,7 @@ interface CapabilityHeatmapProps {
   onToggleExpand?: () => void;
 }
 
-export default function CapabilityHeatmap({ data, isExpanded = false, onToggleExpand }: CapabilityHeatmapProps) {
+export default function CapabilityHeatmap({ data, isExpanded = false }: CapabilityHeatmapProps) {
   // Process data into format needed for heatmap
   const processData = () => {
     const taxonomies = Array.from(new Set(data.map(d => d.taxonomy)));
@@ -33,73 +33,114 @@ export default function CapabilityHeatmap({ data, isExpanded = false, onToggleEx
   };
 
   const heatmapData = processData();
-  const height = isExpanded ? 400 : 200;
+  const height = isExpanded ? '100%' : 200;
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Capability Coverage</h3>
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="text-blue-600 hover:text-blue-800"
-            >
-              {isExpanded ? 'Minimize' : 'Expand'}
-            </button>
-          )}
-        </div>
-        
-        <div style={{ height }} className="w-full">
-          <ResponsiveHeatMap
-            data={heatmapData}
-            margin={{ top: 60, right: 90, bottom: 60, left: 90 }}
-            valueFormat=">-.2s"
-            axisTop={{
-              tickSize: 5,
-              tickPadding: 5,
-              tickRotation: -45,
-              legend: '',
-              legendOffset: 46
-            }}
-            axisBottom={{
-              tickSize: 5,
-              tickPadding: 5,
-              tickRotation: -45,
-              legend: '',
-              legendOffset: 46
-            }}
-            axisLeft={{
-              tickSize: 5,
-              tickPadding: 5,
-              tickRotation: 0,
-              legend: '',
-              legendOffset: -72
-            }}
-            colors={{
-              type: 'sequential',
-              scheme: 'blues'
-            }}
-            emptyColor="#f8f9fa"
-            legends={[
-              {
-                anchor: 'bottom',
-                translateX: 0,
-                translateY: 30,
-                length: 400,
-                thickness: 8,
-                direction: 'row',
-                tickPosition: 'after',
-                tickSize: 3,
-                tickSpacing: 4,
-                tickOverlap: false,
-                title: 'Coverage %',
-                titleAlign: 'start',
-                titleOffset: 4
+      <div style={{ height }} className="w-full min-h-[700px]">
+        <ResponsiveHeatMap
+          data={heatmapData}
+          margin={{ top: 160, right: 180, bottom: 160, left: 180 }}
+          valueFormat=">-.2s"
+          axisTop={{
+            tickSize: 5,
+            tickPadding: 20,
+            tickRotation: -45,
+            legend: '',
+            legendOffset: 80
+          }}
+          axisBottom={{
+            tickSize: 5,
+            tickPadding: 20,
+            tickRotation: -45,
+            legend: '',
+            legendOffset: 80
+          }}
+          axisLeft={{
+            tickSize: 5,
+            tickPadding: 20,
+            tickRotation: 0,
+            legend: '',
+            legendPosition: 'middle',
+            legendOffset: -100
+          }}
+          colors={{
+            type: 'sequential',
+            scheme: 'blues'
+          }}
+          emptyColor="#f8f9fa"
+          legends={[
+            {
+              anchor: 'bottom',
+              translateX: 0,
+              translateY: 140,
+              length: 400,
+              thickness: 12,
+              direction: 'row',
+              tickPosition: 'after',
+              tickSize: 3,
+              tickSpacing: 4,
+              tickOverlap: false,
+              title: 'Coverage %',
+              titleAlign: 'start',
+              titleOffset: 4
+            }
+          ]}
+          theme={{
+            fontSize: 12,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            textColor: '#333333',
+            axis: {
+              domain: {
+                line: {
+                  stroke: '#dddddd',
+                  strokeWidth: 1
+                }
+              },
+              ticks: {
+                line: {
+                  stroke: '#777777',
+                  strokeWidth: 1
+                },
+                text: {
+                  fill: '#333333'
+                }
               }
-            ]}
-          />
-        </div>
+            },
+            grid: {
+              line: {
+                stroke: '#dddddd',
+                strokeWidth: 1
+              }
+            },
+            legends: {
+              text: {
+                fill: '#333333'
+              },
+              title: {
+                fill: '#333333'
+              },
+              ticks: {
+                line: {
+                  stroke: '#777777',
+                  strokeWidth: 1
+                },
+                text: {
+                  fill: '#333333'
+                }
+              }
+            }
+          }}
+          labelTextColor={{
+            from: 'color',
+            modifiers: [['darker', 3]]
+          }}
+          hoverTarget="cell"
+          enableLabels={true}
+          label={datum => datum.value !== null ? `${Math.round(datum.value)}%` : '0%'}
+          animate={true}
+          motionConfig="gentle"
+        />
       </div>
     </div>
   );
