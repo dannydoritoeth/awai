@@ -124,4 +124,32 @@ export async function getRolesData(
   });
 
   return roleData;
+}
+
+function cleanAIPrompt(prompt: string, profileData: any, matches: any[]): string {
+  // Extract just the essential profile data
+  const cleanProfile = {
+    skills: profileData.skills.map(s => ({
+      id: s.id,
+      name: s.name,
+      level: s.level || 0
+    })),
+    capabilities: profileData.capabilities.map(c => ({
+      id: c.id,
+      name: c.name,
+      level: c.level || 0
+    }))
+  };
+
+  // Extract just the essential match data
+  const cleanMatches = matches.map(m => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    similarity: m.similarity,
+    summary: m.summary || ''
+  }));
+
+  // Construct clean prompt
+  return `${prompt} <context>{"profile":${JSON.stringify(cleanProfile)},"matches":${JSON.stringify(cleanMatches)}}</context>`;
 } 
