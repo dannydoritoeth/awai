@@ -412,18 +412,59 @@ The data is organized in sections:
 2. Summary Statistics - Overall metrics
 3. Top Capabilities - Most common capabilities with their distribution
 
-When analyzing:
-- Focus primarily on answering the user's specific question
-- Use the heatmap data to identify patterns, gaps, and concentrations
-- Compare capability distributions across groups
-- Highlight areas that need attention based on the user's query
-- Provide specific, actionable insights related to the question
+When analyzing, format your response using this structure:
 
-Format response in markdown using:
-- ## for main sections
-- Lists for key points
-- **Bold** for metrics
-- > for important insights or recommendations`,
+# Capability Distribution Analysis
+
+## Overview
+- Present 2-3 key high-level findings
+- Use bullet points for clarity
+- Include the most important metrics
+
+---
+
+## Key Statistics
+| Metric | Value |
+|--------|--------|
+| Total Roles | [number] |
+| Number of Groups | [number] |
+| Unique Capabilities | [number] |
+
+---
+
+## Group Analysis
+### [Group Name]
+- Total Roles: [number]
+- Unique Capabilities: [number]
+- Top Capabilities:
+  1. [Capability] ([percentage]%)
+  2. [Capability] ([percentage]%)
+  3. [Capability] ([percentage]%)
+
+[Repeat for other significant groups]
+
+---
+
+## Insights & Recommendations
+### Strengths
+- List 2-3 key strengths
+- Use bullet points
+
+### Areas for Improvement
+- List 2-3 areas needing attention
+- Use bullet points
+
+### Recommendations
+> **Priority Actions:**
+> 1. First recommendation
+> 2. Second recommendation
+> 3. Third recommendation
+
+Remember to:
+- Focus primarily on answering the user's specific question
+- Use data to support all insights
+- Keep sections concise and scannable
+- Use consistent formatting throughout`,
           data: summarizeData(data || []),
           context: {
             type: input.insightId?.replace('generateCapabilityHeatmapBy', '')?.toLowerCase() || 'organization',
