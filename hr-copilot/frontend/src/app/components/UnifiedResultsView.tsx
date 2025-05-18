@@ -87,6 +87,7 @@ export default function UnifiedResultsView({
     const pollMessages = async () => {
       try {
         const newMessages = await getSessionMessages(sessionId);
+        console.log('newMessages', newMessages);
         setMessages(prev => {
           // Create a Set of existing message IDs for efficient lookup
           const existingIds = new Set(prev.map(msg => msg.id));

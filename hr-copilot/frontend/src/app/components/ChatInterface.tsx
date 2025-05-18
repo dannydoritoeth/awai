@@ -3,7 +3,23 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChatMessage } from '@/types/chat';
+import { ChatMessage, HeatmapRequestData } from '@/types/chat';
+import CapabilityHeatmap, { CapabilityData } from './CapabilityHeatmap';
+
+interface HeatmapRequestParams {
+  mode: string;
+  insightId: string;
+  sessionId: string;
+  companyIds: string[];
+}
+
+interface HeatmapResponse {
+  success: boolean;
+  data: {
+    raw: CapabilityData[];
+  };
+  error: string | null;
+}
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -17,11 +33,13 @@ export default function ChatInterface({
   isLoading
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
+  const [expandedHeatmaps, setExpandedHeatmaps] = useState<{[key: string]: boolean}>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [heatmapData, setHeatmapData] = useState<{[key: string]: CapabilityData[]}>({});
 
   // Auto-resize textarea
   useEffect(() => {
@@ -89,6 +107,83 @@ export default function ChatInterface({
     }
   };
 
+  const fetchHeatmapData = async (messageId: string, params: HeatmapRequestParams) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch heatmap data: ${response.statusText}`);
+      }
+
+      const result: HeatmapResponse = await response.json();
+      
+      if (result.success && result.data.raw) {
+        setHeatmapData(prev => ({
+          ...prev,
+          [messageId]: result.data.raw
+        }));
+      } else if (result.error) {
+        console.error('Error fetching heatmap data:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching heatmap data:', error);
+    }
+  };
+
+  const shouldShowHeatmap = (message: ChatMessage) => {
+    console.log('Checking message for heatmap:', {
+      messageId: message.id,
+      sender: message.sender,
+      hasResponseData: !!message.response_data,
+      responseData: message.response_data
+    });
+
+    if (message.sender !== 'user') {
+      console.log('Not showing heatmap - message is not from user');
+      return false;
+    }
+
+    if (!message.response_data) {
+      console.log('Not showing heatmap - no response data');
+      return false;
+    }
+
+    // Check if this is a heatmap request message
+    const data = message.response_data as HeatmapRequestData;
+    if (data.insightId === 'generateCapabilityHeatmapByTaxonomy') {
+      // If we haven't fetched the data yet, fetch it
+      if (!heatmapData[message.id]) {
+        console.log('Fetching heatmap data for message:', message.id);
+        fetchHeatmapData(message.id, {
+          mode: data.mode,
+          insightId: data.insightId,
+          sessionId: data.sessionId,
+          companyIds: data.companyIds
+        });
+      }
+      
+      // Return true if we have the data
+      return !!heatmapData[message.id];
+    }
+
+    return false;
+  };
+
+  const toggleHeatmap = (messageId: string) => {
+    setExpandedHeatmaps(prev => ({
+      ...prev,
+      [messageId]: !prev[messageId]
+    }));
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
@@ -141,6 +236,17 @@ export default function ChatInterface({
                   {message.message}
                 </ReactMarkdown>
               </div>
+
+              {shouldShowHeatmap(message) && (
+                <div className="mt-4">
+                  <CapabilityHeatmap
+                    data={heatmapData[message.id]}
+                    isExpanded={expandedHeatmaps[message.id] || false}
+                    onToggleExpand={() => toggleHeatmap(message.id)}
+                  />
+                </div>
+              )}
+
               {message.followUpQuestion && (
                 <div className={`mt-3 pt-3 border-t ${message.sender === 'user' ? 'border-white/30' : 'border-gray-200'}`}>
                   <p className={`text-sm ${message.sender === 'user' ? 'text-white/90' : 'text-gray-600'}`}>{message.followUpQuestion}</p>
