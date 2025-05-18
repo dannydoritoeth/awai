@@ -598,4 +598,12 @@ Format response in markdown using:
       error: errorMessage
     };
   }
-} 
+}
+
+// Export the capability heatmap functions
+export {
+  generateCapabilityHeatmapByTaxonomy,
+  generateCapabilityHeatmapByDivision,
+  generateCapabilityHeatmapByRegion,
+  generateCapabilityHeatmapByCompany
+}; 
