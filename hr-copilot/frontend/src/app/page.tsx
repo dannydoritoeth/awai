@@ -72,6 +72,9 @@ export default function Home() {
               <span>🧩</span> Start with a Role – Find matching candidates from our generated talent pool
             </p>
             <p className="flex items-center justify-left gap-3">
+              <span>📊</span> Explore Insights – Analyze capability distribution and workforce trends
+            </p>
+            <p className="flex items-center justify-left gap-3">
               <span>💬</span> Chat with the Platform – Ask anything about roles, skills, or candidate fit
             </p>
           </div>
@@ -84,7 +87,7 @@ export default function Home() {
 
       {/* Main Menu */}
       <div className="max-w-3xl mx-auto">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 mb-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3 mb-8">
           <Link 
             href="/c?context=profile"
             className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-transparent hover:border-blue-500"
@@ -119,6 +122,25 @@ export default function Home() {
               </h2>
               <p className="text-gray-600">
                 Find suitable candidates for a specific role
+              </p>
+            </div>
+          </Link>
+
+          <Link 
+            href="/insights"
+            className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-transparent hover:border-purple-500"
+          >
+            <div className="text-center">
+              <div className="bg-purple-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center group-hover:bg-purple-200 transition-colors duration-300">
+                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                Explore Insights
+              </h2>
+              <p className="text-gray-600">
+                Analyze organizational capabilities and trends
               </p>
             </div>
           </Link>

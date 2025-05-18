@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import ChatInterface from './ChatInterface';
+import MatchesPanel from './MatchesPanel';
 import { getSessionMessages } from '@/lib/api/chat';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, Match as ApiMatch, ResponseData } from '@/types/chat';
+
+interface Match {
+  name: string;
+  matchPercentage: number;
+  matchStatus: string;
+}
 
 interface ProfileData {
   id: string;
@@ -55,11 +62,12 @@ export default function UnifiedResultsView({
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
-  const [activeTab, setActiveTab] = useState<'profile' | 'role'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
     return profileData ? 'profile' : 'role';
   });
+  const [matches, setMatches] = useState<Match[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<ChatMessage | null>(null);
@@ -87,12 +95,14 @@ export default function UnifiedResultsView({
     const pollMessages = async () => {
       try {
         const newMessages = await getSessionMessages(sessionId);
+        console.log('All messages from API:', newMessages);
         setMessages(prev => {
           // Create a Set of existing message IDs for efficient lookup
           const existingIds = new Set(prev.map(msg => msg.id));
           
           // Filter out messages we already have
           const uniqueNewMessages = newMessages.filter(msg => !existingIds.has(msg.id));
+          console.log('Unique new messages:', uniqueNewMessages);
           
           // Only update if we have new unique messages
           if (uniqueNewMessages.length > 0) {
@@ -101,16 +111,71 @@ export default function UnifiedResultsView({
             
             // Check if we received an AI response
             const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
+            console.log('Has new AI message:', hasNewAIMessage);
+            
             if (hasNewAIMessage) {
               setIsWaitingForResponse(false);
+
+              // Get all assistant messages with matches
+              const assistantMessagesWithMatches = uniqueNewMessages
+                .filter(m => {
+                  if (m.sender !== 'assistant' || !m.response_data) return false;
+                  const data = m.response_data as ResponseData;
+                  console.log('Checking message for matches:', m.id, data);
+                  return !!data.matches;
+                });
+
+              console.log('Assistant messages with matches:', assistantMessagesWithMatches);
+
+              // Accumulate all matches from all messages
+              const allMatches = assistantMessagesWithMatches.reduce((acc: ApiMatch[], message) => {
+                const data = message.response_data as ResponseData;
+                console.log('Adding matches from message:', message.id, data.matches);
+                return [...acc, ...(data.matches || [])];
+              }, []);
+
+              console.log('All accumulated matches:', allMatches);
+
+              if (allMatches.length > 0) {
+                // Create a Map to deduplicate matches by ID while keeping the highest match percentage
+                const matchMap = new Map<string, ApiMatch>();
+                
+                allMatches.forEach((match) => {
+                  if (!match.id) {
+                    console.warn('Match missing ID:', match);
+                    return;
+                  }
+                  const existing = matchMap.get(match.id);
+                  if (!existing || existing.match_percentage < match.match_percentage) {
+                    matchMap.set(match.id, match);
+                  }
+                });
+
+                // Convert back to array and sort by match percentage descending
+                const uniqueSortedMatches = Array.from(matchMap.values())
+                  .sort((a, b) => b.match_percentage - a.match_percentage);
+
+                console.log('Unique sorted matches:', uniqueSortedMatches);
+
+                setMatches(uniqueSortedMatches.map((match: ApiMatch) => {
+                  const transformed = {
+                    id: match.id,
+                    name: match.name,
+                    matchPercentage: match.match_percentage,
+                    matchStatus: match.match_status || 'now'
+                  };
+                  console.log('Transformed match:', transformed);
+                  return transformed;
+                }));
+              }
             }
             
-            return [...prev, ...uniqueNewMessages] as ChatMessage[];
+            return [...prev, ...uniqueNewMessages];
           }
           return prev;
         });
       } catch (error) {
-        console.error('Failed to fetch messages:', error);
+        console.error('Error polling messages:', error);
         setIsLoading(false);
       }
     };
@@ -160,12 +225,11 @@ export default function UnifiedResultsView({
     const userMessage: ChatMessage = {
       id: messageId,
       message: message,
-      sender: 'user',
-      timestamp: new Date().toISOString()
+      sender: 'user'
     };
     
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    setIsWaitingForResponse(true); // Set waiting state when sending message
+    setIsWaitingForResponse(true);
     setIsLoading(true);
 
     try {
@@ -194,22 +258,7 @@ export default function UnifiedResultsView({
 
       // Remove the user message if the send failed
       setMessages((prev: ChatMessage[]) => prev.filter(msg => msg.id !== messageId));
-      setIsWaitingForResponse(false); // Reset waiting state on error
-
-      // Show error message to user
-      const errorMessageId = crypto.randomUUID();
-      const errorMessage: ChatMessage = {
-        id: errorMessageId,
-        message: error instanceof Error 
-          ? `Error: ${error.message}` 
-          : 'Sorry, I encountered an error. Please try again.',
-        sender: 'assistant',
-        timestamp: new Date().toISOString()
-      };
-      
-      setMessages((prev: ChatMessage[]) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      setIsWaitingForResponse(false);
     }
   };
 
@@ -356,6 +405,22 @@ export default function UnifiedResultsView({
     </div>
   );
 
+  const handleExplainMatch = (name: string) => {
+    handleSendMessage(`Explain why ${name} is a good fit for this role`);
+  };
+
+  const handleDevelopmentPath = (name: string) => {
+    handleSendMessage(`What would ${name} need to work on to succeed in this role?`);
+  };
+
+  const handleCompare = (name: string) => {
+    // For now, just compare with the next person in the list
+    const otherMatch = matches.find(m => m.name !== name);
+    if (otherMatch) {
+      handleSendMessage(`Compare ${name} to ${otherMatch.name} for this role`);
+    }
+  };
+
   return (
     <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
@@ -399,6 +464,19 @@ export default function UnifiedResultsView({
                 Role Details
               </button>
             )}
+
+            {/* Show Matches tab if we have matches */}
+            {matches.length > 0 && (
+              <button
+                className={`px-6 py-4 text-sm font-medium transition-colors relative
+                  ${activeTab === 'matches'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('matches')}
+              >
+                Matches ({matches.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -406,6 +484,14 @@ export default function UnifiedResultsView({
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'profile' && profileData && renderProfile()}
           {activeTab === 'role' && roleData && renderRoleDetails()}
+          {activeTab === 'matches' && matches.length > 0 && (
+            <MatchesPanel
+              matches={matches}
+              onExplainMatch={handleExplainMatch}
+              onDevelopmentPath={handleDevelopmentPath}
+              onCompare={handleCompare}
+            />
+          )}
         </div>
       </div>
     </div>

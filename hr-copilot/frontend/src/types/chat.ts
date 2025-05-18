@@ -1,25 +1,27 @@
 export type ChatSender = 'user' | 'assistant' | 'system';
 
+export interface HeatmapRequestData {
+  mode: string;
+  insightId: string;
+  sessionId: string;
+  companyIds: string[];
+}
+
 export interface ResponseData {
-  followUpQuestion?: string;
-  semanticContext?: {
-    relevantText?: string;
-    confidence?: number;
+  matches?: Match[];
+  raw?: unknown[];
+  summarized?: {
+    csv_data?: string;
+    summary?: unknown;
   };
-  [key: string]: unknown;
+  error?: string | null;
 }
 
 export interface ChatMessage {
   id: string;
-  sessionId?: string;
-  sender: 'user' | 'assistant';
   message: string;
-  timestamp: string;
-  toolCall?: {
-    name: string;
-    arguments: Record<string, unknown>;
-  };
-  responseData?: ResponseData;
+  sender: 'user' | 'assistant';
+  response_data?: ResponseData | HeatmapRequestData;
   followUpQuestion?: string;
   semanticContext?: {
     relevantText?: string;
@@ -29,16 +31,37 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
-  mode: 'general' | 'hiring' | 'candidate';
+  mode: 'general' | 'hiring' | 'candidate' | 'analyst';
   entityId?: string;
   status: 'active' | 'completed' | 'error';
   createdAt: string;
   updatedAt: string;
   summary?: string;
+  title?: string;
 }
 
 export interface ChatError {
   type: 'DATABASE_ERROR' | 'VALIDATION_ERROR' | 'PROCESSING_ERROR' | 'INTERNAL_ERROR';
   message: string;
   details?: unknown;
+}
+
+export interface CapabilityData {
+  taxonomy: string;
+  capability: string;
+  percentage: number;
+}
+
+export interface Match {
+  id: string;
+  name: string;
+  match_percentage: number;
+  match_status?: string;
+}
+
+export interface ApiMatch {
+  id: string;
+  name: string;
+  match_percentage: number;
+  match_status?: string;
 } 

@@ -10,7 +10,7 @@ interface HistoryItem extends ChatSession {
   path: string;
 }
 
-type ItemType = 'roles' | 'candidates' | null;
+type ItemType = 'roles' | 'candidates' | 'insights' | null;
 
 const STORAGE_KEYS = {
   MENU_OPEN: 'hr_copilot_menu_open',
@@ -106,9 +106,18 @@ export default function Sidebar({
   }, [isClient, isMenuOpen]);
 
   const filteredItems = selectedType 
-    ? historyItems.filter(item => 
-        selectedType === 'roles' ? item.mode === 'hiring' : item.mode === 'candidate'
-      )
+    ? historyItems.filter(item => {
+        switch (selectedType) {
+          case 'roles':
+            return item.mode === 'hiring';
+          case 'candidates':
+            return item.mode === 'candidate';
+          case 'insights':
+            return item.mode === 'analyst';
+          default:
+            return true;
+        }
+      })
     : historyItems;
   
   const groupedItems = groupItemsByDate(filteredItems);
@@ -147,8 +156,17 @@ export default function Sidebar({
           <div className={`px-4 py-2 ${isMenuOpen ? 'block' : 'hidden'}`}>
             <div className="flex gap-2">
               <button
+                onClick={() => setSelectedType(selectedType === 'candidates' ? null : 'candidates')}
+                className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
+                  ${selectedType === 'candidates' 
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
+              >
+                Profiles
+              </button>
+              <button
                 onClick={() => setSelectedType(selectedType === 'roles' ? null : 'roles')}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
                   ${selectedType === 'roles' 
                     ? 'bg-blue-50 text-blue-700 border border-blue-200' 
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
@@ -156,13 +174,13 @@ export default function Sidebar({
                 Roles
               </button>
               <button
-                onClick={() => setSelectedType(selectedType === 'candidates' ? null : 'candidates')}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${selectedType === 'candidates' 
+                onClick={() => setSelectedType(selectedType === 'insights' ? null : 'insights')}
+                className={`flex-1 px-1 py-1 rounded-lg text-sm font-medium transition-colors
+                  ${selectedType === 'insights' 
                     ? 'bg-blue-50 text-blue-700 border border-blue-200' 
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}`}
               >
-                Profiles
+                Insights
               </button>
             </div>
           </div>
@@ -184,7 +202,15 @@ export default function Sidebar({
                       {groupedItems.today.map((item) => (
                         <Link
                           key={item.id}
-                          href={`${item.path}?context=${item.mode === 'candidate' ? 'profile' : item.mode === 'hiring' ? 'role' : 'open'}`}
+                          href={`${item.path}?context=${
+                            item.mode === 'candidate' 
+                              ? 'profile' 
+                              : item.mode === 'hiring' 
+                                ? 'role' 
+                                : item.mode === 'analyst'
+                                  ? 'insight'
+                                  : 'open'
+                          }`}
                           className={`block w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors ${
                             pathname === item.path ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
                           }`}
