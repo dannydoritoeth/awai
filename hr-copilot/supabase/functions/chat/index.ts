@@ -8,6 +8,7 @@ import {
   getChatHistory
 } from '../shared/chatUtils.ts';
 import { ChatError } from '../shared/chatTypes.ts';
+import { createMCPLoopBody } from '../shared/chatUtils.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -201,8 +202,19 @@ async function startSession(
 
     // If there's an initial message, log it and trigger MCP asynchronously
     if (initialMessage) {
-      // Log the initial message
-      await postUserMessage(supabaseClient, sessionId, initialMessage);
+      // Create the MCP loop body
+      const mcpLoopBody = createMCPLoopBody(
+        mode,
+        sessionId,
+        initialMessage,
+        entityId,
+        insightId,
+        scope,
+        companyIds
+      );
+
+      // Log the initial message with the MCP loop body
+      await postUserMessage(supabaseClient, sessionId, initialMessage, undefined, mcpLoopBody);
 
       // Trigger MCP loop asynchronously
       fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
@@ -211,43 +223,7 @@ async function startSession(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
         },
-        body: JSON.stringify({
-          mode,
-          sessionId,
-          ...(mode === 'candidate' ? { profileId: entityId } : {}),
-          ...(mode === 'hiring' ? { roleId: entityId } : {}),
-          ...(mode === 'analyst' ? { 
-            insightId,
-            companyIds: companyIds || [entityId],
-            context: {
-              lastMessage: initialMessage,
-              companyIds: companyIds || [entityId],
-              scope: scope || 'division',
-              outputFormat: 'action_plan',
-              sessionId,
-              mode: 'analyst',
-              chatHistory: [],
-              agentActions: [],
-              summary: '',
-              semanticContext: {
-                previousMatches: []
-              },
-              contextEmbedding: []
-            },
-            plannerRecommendations: []
-          } : {}),
-          context: {
-            lastMessage: initialMessage,
-            mode,
-            chatHistory: [],
-            agentActions: [],
-            summary: '',
-            semanticContext: {
-              previousMatches: []
-            },
-            contextEmbedding: []
-          }
-        })
+        body: JSON.stringify(mcpLoopBody)
       }).catch(error => {
         console.error('Async MCP call failed:', error);
         // Log the error but don't block the response
@@ -450,6 +426,14 @@ serve(async (req) => {
             throw new Error('Invalid session ID or session not found');
           }
 
+          // Create the MCP loop body
+          const mcpLoopBody = createMCPLoopBody(
+            session.mode,
+            sessionId,
+            message,
+            session.entity_id
+          );
+
           // Always log the user message with the provided messageId or generate a new one
           let messageId = requestMessageId || crypto.randomUUID();
           console.log('Logging user message with ID:', messageId);
@@ -458,7 +442,8 @@ serve(async (req) => {
             supabaseClient,
             sessionId,
             message,
-            messageId // Pass the messageId to use for logging
+            messageId,
+            mcpLoopBody // Pass the MCP loop body
           );
 
           if (postError) {
@@ -472,10 +457,7 @@ serve(async (req) => {
             sessionId,
             message,
             session.mode,
-            session.entity_id || undefined,
-            insightId,
-            scope,
-            companyIds
+            session.entity_id || undefined
           );
           
           if (!mcpResult.success) {

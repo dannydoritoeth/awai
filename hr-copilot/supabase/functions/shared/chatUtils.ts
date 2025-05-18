@@ -58,7 +58,8 @@ export async function postUserMessage(
   supabase: SupabaseClient<Database>,
   sessionId: string,
   message: string,
-  messageId?: string
+  messageId?: string,
+  mcpLoopBody?: Record<string, any>
 ): Promise<{ messageId: string; error?: ChatError }> {
   try {
     // Generate embedding for the message
@@ -71,7 +72,8 @@ export async function postUserMessage(
         session_id: sessionId,
         sender: 'user',
         message,
-        embedding
+        embedding,
+        response_data: mcpLoopBody // Store the MCP loop body in response_data
       })
       .select('id')
       .single();
@@ -373,4 +375,55 @@ export function getProgressMessage(
     default:
       return "Processing your request...";
   }
+}
+
+/**
+ * Create the MCP loop request body
+ */
+export function createMCPLoopBody(
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst',
+  sessionId: string,
+  message: string,
+  entityId?: string,
+  insightId?: string,
+  scope?: string,
+  companyIds?: string[]
+) {
+  const baseContext = {
+    lastMessage: message,
+    mode,
+    chatHistory: [],
+    agentActions: [],
+    summary: '',
+    semanticContext: {
+      previousMatches: []
+    },
+    contextEmbedding: []
+  };
+
+  const body = {
+    mode,
+    sessionId,
+    ...(mode === 'candidate' ? { profileId: entityId } : {}),
+    ...(mode === 'hiring' ? { roleId: entityId } : {}),
+    context: baseContext
+  };
+
+  // Add analyst-specific fields if in analyst mode
+  if (mode === 'analyst') {
+    return {
+      ...body,
+      insightId,
+      companyIds: companyIds || [entityId],
+      context: {
+        ...baseContext,
+        companyIds: companyIds || [entityId],
+        scope: scope || 'division',
+        outputFormat: 'action_plan'
+      },
+      plannerRecommendations: []
+    };
+  }
+
+  return body;
 } 
