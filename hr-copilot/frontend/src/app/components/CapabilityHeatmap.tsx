@@ -126,7 +126,9 @@ export default function CapabilityHeatmap({ data, isExpanded = false, groupBy }:
                 fontSize: 12
               },
               title: {
-                fontSize: 13
+                text: {
+                  fontSize: 13
+                }
               }
             }
           }}

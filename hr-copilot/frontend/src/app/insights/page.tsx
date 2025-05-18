@@ -85,7 +85,7 @@ export default function InsightsPage() {
         <div className="grid gap-6">
           {insights.map((insight) => (
             <div
-              key={`${insight.id}-${insight.scope}`}
+              key={insight.id}
               className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <div className="flex items-start gap-4">
