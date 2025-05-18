@@ -5,6 +5,7 @@ import { getSessionMessages } from '@/lib/api/chat';
 import type { ChatMessage, Match as ApiMatch, ResponseData } from '@/types/chat';
 
 interface Match {
+  id: string;
   name: string;
   matchPercentage: number;
   matchStatus: string;
