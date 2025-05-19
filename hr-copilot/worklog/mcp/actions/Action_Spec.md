@@ -63,7 +63,7 @@ This spec defines the implementation guidelines for each MCP Action. It ensures 
 
 ## 🧪 Testing Guidance
 
-- Include a `test.ts` file for:
+- Include a Deno + supabase compatible `test.ts` file for:
   - Snapshot testing of `buildPromptInput()`
   - Verifying output structure of the action
 - Ensure graceful handling of:
