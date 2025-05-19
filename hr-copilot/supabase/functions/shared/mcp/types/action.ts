@@ -5,6 +5,10 @@ export interface MCPActionMetadata {
   applicableRoles: string[]; // e.g. ['analyst', 'candidate']
   capabilityTags: string[];  // e.g. ['Workforce Planning', 'Succession']
   requiredInputs: string[];  // e.g. ['profileId', 'roleId']
+  tags?: string[];  // e.g. ['gap_analysis', 'tactical', 'strategic']
+  recommendedAfter?: string[];  // Actions that should precede this one
+  recommendedBefore?: string[];  // Actions that should follow this one
+  usesAI?: boolean;  // Whether this action uses AI for processing
 }
 
 export interface MCPRequest {

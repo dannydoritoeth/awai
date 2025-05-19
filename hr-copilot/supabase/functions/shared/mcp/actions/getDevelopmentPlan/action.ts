@@ -1,14 +1,65 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+/**
+ * @fileoverview Generates a detailed development plan for a profile to reach a target role
+ * 
+ * Related Actions:
+ * - getCapabilityGaps: Used to analyze current gaps that need to be addressed
+ * - getSkillGaps: Used to identify specific skill improvements needed
+ * - getMatchingRolesForPerson: Can suggest intermediate roles on career path
+ */
+
+import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../../../../database.types.ts';
 import { getCapabilityGaps } from '../getCapabilityGaps/action.ts';
 import { getSkillGaps } from '../../../profile/getSkillGaps.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
 import { getRoleDetail } from '../../../role/getRoleDetail.ts';
-import { buildSafePrompt } from '../../promptBuilder.ts';
 import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
 import type { Tables } from '../../../embeddings.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
+import { logAgentAction } from '../../../agent/logAgentAction.ts';
+import { logAgentResponse } from '../../../chatUtils.ts';
+import { buildDevelopmentPlanPrompt } from './buildPrompt.ts';
+import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
+
+// Types for internal context vs AI context separation
+interface ActionContext {
+  profileData: any;
+  roleData: any;
+  capabilityGaps: any;
+  skillGaps: any;
+  mentorMatches: any[];
+  sessionId?: string;
+}
+
+interface AIContext {
+  profile: {
+    skills: Array<{
+      name: string;
+      currentLevel: number;
+      years: number;
+    }>;
+    capabilities: Array<{
+      name: string;
+      currentLevel: number;
+    }>;
+  };
+  targetRole: {
+    title: string;
+    requirements: string[];
+  };
+  gaps: {
+    capabilities: any[];
+    skills: any[];
+  };
+  potentialMentors: Array<{
+    id: string;
+    name: string;
+    title?: string;
+    expertise?: string[];
+    similarity: number;
+  }>;
+}
 
 export interface DevelopmentPlan {
   recommendedSkills: Array<{
@@ -43,26 +94,91 @@ export interface DevelopmentPlan {
     longTerm: string[];
   };
   estimatedTimeToReadiness: string;
+  explanation: string;
 }
 
-// Create the base function
-async function getDevelopmentPlanBase(ctx: Record<string, any>): Promise<MCPResponse<DevelopmentPlan>> {
-  const request = ctx as MCPRequest;
+/**
+ * Prepares minimal context needed for AI processing
+ */
+function prepareAIContext(context: ActionContext): AIContext {
+  return {
+    profile: {
+      skills: context.profileData.skills.map(s => ({
+        name: s.name,
+        currentLevel: Number(s.level) || 0,
+        years: Number(s.years) || 0
+      })),
+      capabilities: context.profileData.capabilities.map(c => ({
+        name: c.name,
+        currentLevel: Number(c.level) || 0
+      }))
+    },
+    targetRole: {
+      title: context.roleData.title || context.roleData.name || 'Target Role',
+      requirements: context.roleData.requirements || []
+    },
+    gaps: {
+      capabilities: context.capabilityGaps.data || [],
+      skills: context.skillGaps.data || []
+    },
+    potentialMentors: context.mentorMatches.map(match => ({
+      id: match.id,
+      name: match.name || '',
+      title: match.metadata?.title,
+      expertise: match.metadata?.expertise,
+      similarity: match.similarity
+    }))
+  };
+}
+
+/**
+ * Main action function that implements the MCPActionV2 interface
+ */
+async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<DevelopmentPlan>> {
   const supabase = request.supabase as SupabaseClient<Database>;
-  const { profileId, roleId } = request;
+  const { profileId, roleId, sessionId } = request;
 
   try {
-    // 1. Get profile and role data
+    // Validate inputs
+    if (!profileId || !roleId) {
+      return {
+        success: false,
+        error: {
+          type: 'INVALID_INPUT',
+          message: 'Both profileId and roleId are required'
+        }
+      };
+    }
+
+    // Phase 1: Load profile and role data
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "Loading profile and role data to create your development plan...",
+        'data_loading'
+      );
+    }
+
     const [profileData, roleData] = await Promise.all([
-      getProfileData(supabase, profileId!),
-      getRoleDetail(supabase, roleId!)
+      getProfileData(supabase, profileId),
+      getRoleDetail(supabase, roleId)
     ]);
 
     if (!profileData || !roleData) {
       throw new Error('Could not fetch profile or role data');
     }
 
-    // 2. Get capability and skill gaps
+    // Phase 2: Analyze gaps
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "Analyzing your current capabilities and skills compared to the role requirements...",
+        'gap_analysis'
+      );
+    }
+
     const [capabilityGaps, skillGaps] = await Promise.all([
       getCapabilityGaps.actionFn({
         supabase,
@@ -71,76 +187,65 @@ async function getDevelopmentPlanBase(ctx: Record<string, any>): Promise<MCPResp
         mode: 'candidate',
         context: {}
       }),
-      getSkillGaps(supabase, profileId!, roleId!)
+      getSkillGaps(supabase, profileId, roleId)
     ]);
 
     if (!capabilityGaps.success || !capabilityGaps.data) {
       throw new Error('Could not analyze capability gaps');
     }
 
-    // 3. Find potential mentors using semantic search
+    // Phase 3: Find potential mentors
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "Finding potential mentors who can guide your development...",
+        'finding_mentors'
+      );
+    }
+
     const mentorMatches = await getSemanticMatches(
       supabase,
-      { id: roleId!, table: 'roles' as Tables },
+      { id: roleId, table: 'roles' as Tables },
       'profiles',
       5,
       0.7
     );
 
-    // 4. Prepare data for AI analysis
-    const promptData = {
-      systemPrompt: `You are an expert career development advisor. Your task is to create a detailed development plan to help an employee progress toward a target role. Focus on actionable steps and realistic timelines.
-
-The plan should include:
-1. Prioritized skill development recommendations
-2. Relevant training modules and resources
-3. Suggested interim roles for gaining experience
-4. Potential mentors from the available matches
-5. A timeline with short, medium, and long-term goals
-
-Format your response as a JSON object matching the DevelopmentPlan interface.`,
-      userMessage: 'Please create a development plan based on the provided data.',
-      data: {
-        profile: {
-          skills: profileData.skills.map(s => ({
-            name: s.name,
-            currentLevel: s.level,
-            years: s.years
-          })),
-          capabilities: profileData.capabilities.map(c => ({
-            name: c.name,
-            currentLevel: c.level
-          }))
-        },
-        targetRole: roleData,
-        gaps: {
-          capabilities: capabilityGaps.data || [],
-          skills: skillGaps.data || []
-        },
-        potentialMentors: mentorMatches.map(match => ({
-          id: match.id,
-          name: match.name || '',
-          title: match.metadata?.title,
-          expertise: match.metadata?.expertise,
-          similarity: match.similarity
-        }))
-      }
+    // Prepare contexts
+    const context: ActionContext = {
+      profileData,
+      roleData,
+      capabilityGaps,
+      skillGaps,
+      mentorMatches,
+      sessionId
     };
 
-    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
-      maxItems: 10,
-      maxFieldLength: 200
-    });
+    const aiContext = prepareAIContext(context);
 
-    // 5. Generate development plan using AI
+    // Phase 4: Generate development plan
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "Creating your personalized development plan...",
+        'generating_plan'
+      );
+    }
+
+    const prompt = buildDevelopmentPlanPrompt(aiContext);
+    const safePrompt = buildSafePrompt(prompt);
+
     const aiResponse = await invokeChatModel(
       {
-        system: prompt.system,
-        user: prompt.user
+        system: safePrompt.system,
+        user: safePrompt.user
       },
       {
         model: 'openai:gpt-3.5-turbo',
-        temperature: 0.2
+        temperature: 0.2,
+        max_tokens: 1500
       }
     );
 
@@ -148,35 +253,72 @@ Format your response as a JSON object matching the DevelopmentPlan interface.`,
       throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    // 6. Parse and validate the AI response
+    // Phase 5: Parse and validate the plan
     const developmentPlan = JSON.parse(aiResponse.output);
+    developmentPlan.explanation = `AI generated a personalized development plan with ${developmentPlan.recommendedSkills.length} skill recommendations, ${developmentPlan.interimRoles.length} suggested interim roles, and ${developmentPlan.suggestedMentors.length} potential mentors to support the journey.`;
 
-    // 7. Return the development plan with proper MCPResponse structure
+    // Phase 6: Log completion and results
+    await logAgentAction(supabase, {
+      entityType: 'profile',
+      entityId: profileId,
+      payload: {
+        action: 'development_plan_generated',
+        planSummary: {
+          skillCount: developmentPlan.recommendedSkills.length,
+          interimRoleCount: developmentPlan.interimRoles.length,
+          mentorCount: developmentPlan.suggestedMentors.length,
+          timeToReadiness: developmentPlan.estimatedTimeToReadiness
+        },
+        prompt: safePrompt,
+        aiResponse: {
+          summary: developmentPlan.explanation,
+          raw: aiResponse.output
+        }
+      },
+      semanticMetrics: {
+        similarityScores: {
+          roleMatch: 0.8,
+          skillAlignment: 0.7,
+          capabilityAlignment: 0.75
+        },
+        matchingStrategy: 'hybrid',
+        confidenceScore: 0.9
+      }
+    });
+
     return {
       success: true,
       data: developmentPlan,
       actionsTaken: [
         {
           tool: 'getProfileData',
-          reason: 'Retrieved profile data',
+          reason: 'Retrieved profile and role data',
           result: 'success',
           confidence: 1.0,
-          inputs: { profileId },
+          inputs: { profileId, roleId },
           timestamp: new Date().toISOString()
         },
         {
-          tool: 'getCapabilityGaps',
-          reason: 'Analyzed capability gaps',
+          tool: 'analyzeGaps',
+          reason: 'Analyzed capability and skill gaps',
           result: 'success',
           confidence: 0.9,
           inputs: { profileId, roleId },
           timestamp: new Date().toISOString()
         },
         {
-          tool: 'generateDevelopmentPlan',
-          reason: 'Generated AI-powered development plan',
+          tool: 'findMentors',
+          reason: 'Found potential mentors',
           result: 'success',
           confidence: 0.8,
+          inputs: { roleId },
+          timestamp: new Date().toISOString()
+        },
+        {
+          tool: 'generatePlan',
+          reason: 'Generated AI-powered development plan',
+          result: 'success',
+          confidence: 0.85,
           inputs: { profileId, roleId },
           timestamp: new Date().toISOString()
         }
@@ -201,7 +343,15 @@ Format your response as a JSON object matching the DevelopmentPlan interface.`,
     };
 
   } catch (error) {
-    console.error('Error in getDevelopmentPlan:', error);
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "I encountered an error while creating your development plan. Let me know if you'd like to try again.",
+        'plan_error'
+      );
+    }
+
     return {
       success: false,
       error: {
@@ -221,5 +371,9 @@ export const getDevelopmentPlan: MCPActionV2 = {
   applicableRoles: ['candidate', 'manager'],
   capabilityTags: ['Career Development', 'Skill Development', 'Mentoring'],
   requiredInputs: ['profileId', 'roleId'],
-  actionFn: getDevelopmentPlanBase
+  tags: ['development', 'tactical', 'strategic'],
+  recommendedAfter: ['getCapabilityGaps', 'getSemanticSkillRecommendations'],
+  recommendedBefore: ['logPlannedTransitions'],
+  usesAI: true,
+  actionFn: (ctx: Record<string, any>) => getDevelopmentPlanBase(ctx as MCPRequest)
 }; 

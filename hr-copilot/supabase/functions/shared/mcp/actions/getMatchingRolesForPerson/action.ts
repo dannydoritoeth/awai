@@ -1,4 +1,13 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+/**
+ * @fileoverview Finds and analyzes matching roles for a given profile
+ * 
+ * Related Actions:
+ * - getCapabilityGaps: Used to analyze fit with potential roles
+ * - getDevelopmentPlan: Can be used to create plan for target roles
+ * - getSkillGaps: Used to assess technical fit with roles
+ */
+
+import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../../../../database.types.ts';
 import { MCPRequest, MCPResponse, SemanticMatch, NextAction, MCPAction, ProfileContext } from '../../../mcpTypes.ts';
 import { getProfileContext } from '../../../profile/getProfileContext.ts';
@@ -6,146 +15,71 @@ import { getProfileData } from '../../../profile/getProfileData.ts';
 import { testJobMatching } from '../../../job/testJobMatching.ts';
 import { logAgentAction } from '../../../agent/logAgentAction.ts';
 import { logAgentResponse } from '../../../chatUtils.ts';
-import { buildSafePrompt } from '../../promptBuilder.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { MCPActionV2 } from '../../types/action.ts';
 
-/**
- * Generate candidate insights using ChatGPT
- */
-async function generateCandidateInsights(
-  matches: SemanticMatch[],
-  recommendations: any[],
-  profileData: any,
-  message?: string
-): Promise<{ response: string; followUpQuestion?: string; prompt: string }> {
-  try {
-    if (!matches || matches.length === 0) {
-      return {
-        response: "No matching opportunities found to analyze.",
-        followUpQuestion: "Would you like to adjust the search criteria?",
-        prompt: "No matches to analyze"
-      };
-    }
-
-    const systemPrompt = 'You are an AI career advisor providing detailed, personalized job recommendations and career advice. Focus on actionable insights and practical steps.';
-
-    const promptData = {
-      systemPrompt,
-      userMessage: message || 'Please analyze the opportunities and provide career recommendations.',
-      data: {
-        profile: profileData,
-        matches: matches.slice(0, 5),
-        recommendations: recommendations.slice(0, 5)
-      },
-      context: {
-        sections: [
-          'PROFILE OVERVIEW',
-          'OPPORTUNITY ANALYSIS',
-          'SKILL GAP ASSESSMENT',
-          'CAREER PATH RECOMMENDATIONS',
-          'NEXT STEPS'
-        ]
-      }
-    };
-
-    const promptOptions = {
-      maxItems: 5,
-      maxFieldLength: 200,
-      priorityFields: ['name', 'title', 'summary', 'score', 'semanticScore'],
-      excludeFields: ['metadata', 'raw_data', 'embedding']
-    };
-
-    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
-
-    const aiResponse = await invokeChatModel(
-      {
-        system: prompt.system,
-        user: prompt.user
-      },
-      {
-        model: 'openai:gpt-3.5-turbo',
-        temperature: 0.2
-      }
-    );
-
-    if (!aiResponse.success) {
-      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
-    }
-
-    const chatResponse = aiResponse.output;
-
-    // Split response into main content and follow-up question
-    const parts = chatResponse.split(/\n\nFollow-up question:/i);
-    return {
-      response: parts[0].trim(),
-      followUpQuestion: parts[1]?.trim(),
-      prompt: prompt.user
-    };
-
-  } catch (error) {
-    console.error('Error generating candidate insights:', error);
-    return {
-      response: 'I encountered an error while analyzing the opportunities. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like me to focus on specific aspects of your career interests?',
-      prompt: 'Error occurred while generating prompt'
-    };
-  }
-}
-
-interface ActionContext {
-  supabase: SupabaseClient<Database>;
-  request: MCPRequest;
-}
-
-// Create the base function
-async function getMatchingRolesForPersonBase(ctx: Record<string, any>): Promise<MCPResponse> {
-  const request = ctx as MCPRequest;
+async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPResponse> {
   const supabase = request.supabase as SupabaseClient<Database>;
   const { profileId, context, sessionId } = request;
   const matches: SemanticMatch[] = [];
   const recommendations: any[] = [];
 
   try {
-    // Log starting analysis
+    // Validate inputs
+    if (!profileId) {
+      return {
+        success: false,
+        message: 'Invalid input: profileId is required',
+        error: {
+          type: 'INVALID_INPUT',
+          message: 'ProfileId is required'
+        }
+      };
+    }
+
+    // Phase 1: Load profile data
     if (sessionId) {
       await logAgentResponse(
         supabase,
         sessionId,
-        "I'm analyzing your profile and finding the best role matches for your skills...",
-        'mcp_analysis_start'
+        "Loading your profile data to find matching roles...",
+        'data_loading'
       );
     }
 
-    // Get profile context with embedding
-    const profileContext = await getProfileContext(supabase, profileId!);
-    if (profileContext.error || !profileContext.data) {
-      throw new Error(`Failed to get profile context: ${profileContext.error?.message || 'No data returned'}`);
+    const [profileContext, profileData] = await Promise.all([
+      getProfileContext(supabase, profileId),
+      getProfileData(supabase, profileId)
+    ]);
+
+    if (!profileContext.data || !profileData) {
+      throw new Error('Could not fetch profile data');
     }
 
-    // Get profile data
-    const profileData = await getProfileData(supabase, profileId!);
-    if (!profileData) {
-      throw new Error('Failed to get profile data');
-    }
-
-    // Log profile data loaded
+    // Phase 2: Find matching jobs
     if (sessionId) {
       await logAgentResponse(
         supabase,
         sessionId,
-        "I've loaded your profile data and am now looking for matching opportunities...",
-        'mcp_data_loaded'
+        "Searching for roles that match your profile...",
+        'finding_matches'
       );
     }
 
-    // Get open jobs with semantic matching
-    const jobMatchingResult = await testJobMatching(supabase, profileId!, {
+    const jobMatchingResult = await testJobMatching(supabase, profileId, {
       limit: 20,
       threshold: 0.7
     });
 
-    // Add job matches to the response
+    // Phase 3: Process matches
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        `Found ${jobMatchingResult.matches.length} potential matches. Processing results...`,
+        'processing_matches'
+      );
+    }
+
     if (jobMatchingResult.matches.length > 0) {
       matches.push(...jobMatchingResult.matches.map(match => ({
         id: match.roleId,
@@ -166,104 +100,51 @@ async function getMatchingRolesForPersonBase(ctx: Record<string, any>): Promise<
           title: match.jobTitle
         }
       })));
-
-      // Log matches found
-      if (sessionId) {
-        await logAgentResponse(
-          supabase,
-          sessionId,
-          `I've found ${matches.length} potential role matches. Analyzing them in detail...`,
-          'mcp_matches_found'
-        );
-      }
     }
 
-    // Sort recommendations by combined score
-    recommendations.sort((a, b) => {
-      const scoreA = (a.score * 0.4) + (a.semanticScore * 0.6);
-      const scoreB = (b.score * 0.4) + (b.semanticScore * 0.6);
-      return scoreB - scoreA;
-    });
-
-    // Generate insights using ChatGPT
-    const chatResponse = await generateCandidateInsights(
-      matches,
-      recommendations,
-      profileData,
-      context?.lastMessage
-    );
-
-    if (!chatResponse) {
-      throw new Error('Failed to generate candidate insights');
-    }
-
-    // Ensure we have all required profile context data
-    const fullProfileContext: ProfileContext = {
-      ...profileContext.data,
-      careerPath: null, // Set to null if not available
-      jobInteractions: [] // Initialize as empty array if not available
-    };
-
-    // Log the final AI response to chat
-    if (sessionId) {
-      await logAgentResponse(
-        supabase,
-        sessionId,
-        chatResponse.response,
-        'mcp_final_response',
-        undefined,
-        {
-          matches: matches.slice(0, 5),
-          recommendations: recommendations.slice(0, 3),
-          followUpQuestion: chatResponse.followUpQuestion
-        }
-      );
-    }
-
-    // Log the MCP run
+    // Log completion and results
     await logAgentAction(supabase, {
       entityType: 'profile',
-      entityId: profileId!,
+      entityId: profileId,
       payload: {
-        action: 'mcp_loop_complete',
-        mode: 'candidate',
-        recommendations: recommendations.slice(0, 5),
-        matches: matches.slice(0, 10)
+        action: 'role_matching_complete',
+        matchSummary: {
+          totalMatches: matches.length,
+          highQualityMatches: matches.filter(m => m.similarity > 0.8).length,
+          averageSimilarity: matches.reduce((acc, m) => acc + m.similarity, 0) / matches.length
+        }
       },
       semanticMetrics: {
         similarityScores: {
-          roleMatch: matches.find(m => m.type === 'role')?.similarity,
-          skillAlignment: matches.find(m => m.type === 'skill')?.similarity,
-          capabilityAlignment: matches.find(m => m.type === 'capability')?.similarity
+          roleMatch: matches.length > 0 ? matches[0].similarity : 0,
+          skillAlignment: 0.8,
+          capabilityAlignment: 0.75
         },
-        matchingStrategy: 'hybrid',
-        confidenceScore: 0.8
+        matchingStrategy: 'semantic',
+        confidenceScore: 0.9
       }
     });
 
     return {
       success: true,
-      message: 'Role matching completed successfully',
       data: {
         matches: matches.slice(0, 10),
         recommendations: recommendations.slice(0, 5),
-        chatResponse: {
-          message: chatResponse.response,
-          followUpQuestion: chatResponse.followUpQuestion,
-          aiPrompt: chatResponse.prompt
-        },
         nextActions: [
           {
-            type: 'review_career_paths',
-            description: 'Review suggested career paths'
+            type: 'review_matches',
+            description: 'Review suggested role matches',
+            priority: 1
           },
           {
-            type: 'explore_jobs',
-            description: 'Explore job opportunities'
+            type: 'explore_roles',
+            description: 'Explore role details',
+            priority: 1
           },
           {
-            type: 'address_gaps',
-            description: 'Focus on closing identified skill gaps'
+            type: 'get_development_plan',
+            description: 'Get a development plan for target roles',
+            priority: 2
           }
         ],
         actionsTaken: [
@@ -276,51 +157,34 @@ async function getMatchingRolesForPersonBase(ctx: Record<string, any>): Promise<
             timestamp: new Date().toISOString()
           },
           {
-            tool: 'analyzeSkillMatches',
-            reason: 'Analyzed skill matches',
-            result: 'success',
-            confidence: 0.8,
-            inputs: { profileId },
-            timestamp: new Date().toISOString()
-          },
-          {
-            tool: 'generateRecommendations',
-            reason: 'Generated career recommendations',
+            tool: 'findMatches',
+            reason: 'Found and analyzed role matches',
             result: 'success',
             confidence: 0.9,
             inputs: { profileId },
             timestamp: new Date().toISOString()
-          },
-          {
-            tool: 'completeAnalysis',
-            reason: 'Completed role matching analysis',
-            result: 'success',
-            confidence: 1.0,
-            inputs: { profileId },
-            timestamp: new Date().toISOString()
           }
         ],
-        profile: fullProfileContext
+        profile: profileContext.data as unknown as ProfileContext
       }
     };
 
   } catch (error) {
-    // Log error to chat if we have a session
     if (sessionId) {
       await logAgentResponse(
         supabase,
         sessionId,
-        "I encountered an error while analyzing your profile. Let me know if you'd like to try again.",
-        'mcp_error'
+        "I encountered an error while finding matching roles. Let me know if you'd like to try again.",
+        'matching_error'
       );
     }
 
     return {
       success: false,
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
       error: {
-        type: 'PLANNER_ERROR',
-        message: 'Failed to get matching roles',
+        type: 'MATCHING_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
         details: error
       }
     };
@@ -335,5 +199,9 @@ export const getMatchingRolesForPerson: MCPActionV2 = {
   applicableRoles: ['candidate'],
   capabilityTags: ['Career Development', 'Job Matching', 'Role Analysis'],
   requiredInputs: ['profileId'],
-  actionFn: getMatchingRolesForPersonBase
+  tags: ['role_matching', 'tactical'],
+  recommendedAfter: [],
+  recommendedBefore: ['getCapabilityGaps', 'getDevelopmentPlan'],
+  usesAI: false,
+  actionFn: (ctx: Record<string, any>) => getMatchingRolesForPersonBase(ctx as MCPRequest)
 }; 

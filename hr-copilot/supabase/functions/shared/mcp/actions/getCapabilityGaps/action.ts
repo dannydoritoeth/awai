@@ -1,12 +1,21 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+/**
+ * @fileoverview Analyzes capability gaps between a profile and a target role
+ * 
+ * Related Actions:
+ * - getDevelopmentPlan: Uses gap analysis to create development recommendations
+ * - getSkillGaps: Complementary analysis focusing on technical skills
+ * - getMatchingRolesForPerson: Uses capability matching for role recommendations
+ */
+
+import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../../../../database.types.ts';
 import { DatabaseResponse, CapabilityGap } from '../../../types.ts';
 import { getLevelValue } from '../../../utils.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
-import { buildSafePrompt } from '../../promptBuilder.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { logAgentAction } from '../../../agent/logAgentAction.ts';
 import { logAgentResponse } from '../../../chatUtils.ts';
+import { getProfileData } from '../../../profile/getProfileData.ts';
+import { getRoleDetail } from '../../../role/getRoleDetail.ts';
 
 interface CapabilityAnalysis {
   gaps: CapabilityGap[];
@@ -17,10 +26,6 @@ interface CapabilityAnalysis {
     overallReadiness: number;
     recommendations: string[];
   };
-  aiInsights: {
-    message: string;
-    followUpQuestion?: string;
-  };
 }
 
 interface ProfileCapability {
@@ -29,62 +34,15 @@ interface ProfileCapability {
   groupName: string;
 }
 
-async function analyzeCapabilityGaps(
-  gaps: CapabilityGap[],
-  profileName: string,
-  roleName: string
-): Promise<{ message: string; followUpQuestion?: string }> {
-  const promptData = {
-    systemPrompt: `You are an expert career advisor analyzing capability gaps between a person and a role. 
-    Provide actionable insights and recommendations based on the gap analysis.
-    Focus on both strengths and areas for development.
-    Be encouraging but realistic about development needs.`,
-    userMessage: `Please analyze the capability gaps between ${profileName} and the ${roleName} role.`,
-    data: {
-      gaps: gaps.map(gap => ({
-        capability: gap.name,
-        group: gap.groupName,
-        type: gap.gapType,
-        severity: gap.severity,
-        currentLevel: gap.profileLevel,
-        requiredLevel: gap.requiredLevel
-      }))
-    }
-  };
-
-  const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
-    maxItems: 10,
-    maxFieldLength: 200
-  });
-
-  const aiResponse = await invokeChatModel(
-    {
-      system: prompt.system,
-      user: prompt.user
-    },
-    {
-      model: 'openai:gpt-3.5-turbo',
-      temperature: 0.2
-    }
-  );
-
-  if (!aiResponse.success || !aiResponse.output) {
-    throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
-  }
-
-  const parts = aiResponse.output.split(/\n\nFollow-up question:/i);
-  return {
-    message: parts[0].trim(),
-    followUpQuestion: parts[1]?.trim()
-  };
-}
-
-// Define the base function that implements the MCPActionV2 actionFn signature
+/**
+ * Main action function that implements the MCPActionV2 interface
+ */
 async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<CapabilityAnalysis>> {
   const supabase = request.supabase as SupabaseClient<Database>;
   const { profileId, roleId, sessionId } = request;
 
   try {
+    // Validate inputs
     if (!profileId || !roleId) {
       return {
         success: false,
@@ -95,23 +53,35 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }
 
-    // Log starting analysis
+    // Phase 1: Load profile and role data
     if (sessionId) {
       await logAgentResponse(
         supabase,
         sessionId,
-        "I'm analyzing the capability gaps between your profile and the target role...",
-        'capability_analysis_start'
+        "Loading profile and role data to analyze capability gaps...",
+        'data_loading'
       );
     }
 
-    // Get role and profile details for context
-    const [roleDetails, profileDetails] = await Promise.all([
-      supabase.from('roles').select('name, title').eq('id', roleId).single(),
-      supabase.from('profiles').select('name').eq('id', profileId).single()
+    const [profileData, roleData] = await Promise.all([
+      getProfileData(supabase, profileId),
+      getRoleDetail(supabase, roleId)
     ]);
 
-    // Get role capabilities with a single query joining necessary tables
+    if (!profileData || !roleData) {
+      throw new Error('Could not fetch profile or role data');
+    }
+
+    // Phase 2: Load capabilities data
+    if (sessionId) {
+      await logAgentResponse(
+        supabase,
+        sessionId,
+        "Loading capability requirements for the role...",
+        'loading_capabilities'
+      );
+    }
+
     const { data: roleCapabilities, error: roleError } = await supabase
       .from('role_capabilities')
       .select(`
@@ -136,17 +106,16 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }
 
-    // Log role data loaded
+    // Phase 3: Get profile capabilities
     if (sessionId) {
       await logAgentResponse(
         supabase,
         sessionId,
-        "I've loaded the role requirements, now checking your capabilities...",
-        'role_data_loaded'
+        "Comparing your capabilities to the role requirements...",
+        'comparing_capabilities'
       );
     }
 
-    // Get profile capabilities
     const { data: profileCapabilities, error: profileError } = await supabase
       .from('profile_capabilities')
       .select(`
@@ -171,7 +140,7 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }
 
-    // Create a map of profile capabilities for easy lookup
+    // Phase 4: Analyze gaps
     const profileCapMap = new Map<string, ProfileCapability>(
       profileCapabilities?.map(pc => [pc.capability_id, {
         level: pc.level,
@@ -180,7 +149,6 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       }]) || []
     );
 
-    // Analyze gaps
     const gaps: CapabilityGap[] = roleCapabilities?.map(rc => {
       const profileCap: ProfileCapability = profileCapMap.get(rc.capability_id) || { 
         level: undefined,
@@ -190,9 +158,8 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       const requiredLevel = rc.level;
       const profileLevel = profileCap.level;
 
-      // Calculate gap type and severity
       let gapType: 'missing' | 'insufficient' | 'met' = 'missing';
-      let severity = 100; // Default to max severity for missing capabilities
+      let severity = 100;
 
       if (profileLevel) {
         const requiredValue = getLevelValue(requiredLevel);
@@ -203,7 +170,6 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
           severity = 0;
         } else {
           gapType = 'insufficient';
-          // Calculate severity as a percentage of the gap
           severity = ((requiredValue - profileValue) / requiredValue) * 100;
         }
       }
@@ -219,7 +185,7 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }) || [];
 
-    // Sort gaps by severity (highest first) and then by group name
+    // Sort gaps by severity
     gaps.sort((a, b) => {
       const severityA = a.severity ?? 0;
       const severityB = b.severity ?? 0;
@@ -229,7 +195,7 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       return (a.groupName || '').localeCompare(b.groupName || '');
     });
 
-    // Calculate summary statistics
+    // Generate summary
     const summary = {
       criticalGaps: gaps.filter(g => (g.severity ?? 0) > 70).length,
       minorGaps: gaps.filter(g => (g.severity ?? 0) > 0 && (g.severity ?? 0) <= 70).length,
@@ -238,47 +204,25 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       recommendations: []
     };
 
-    // Get AI analysis
-    const aiInsights = await analyzeCapabilityGaps(
-      gaps,
-      profileDetails?.data?.name || 'the profile',
-      roleDetails?.data?.title || 'the role'
-    );
-
-    // Log analysis completion
-    if (sessionId) {
-      await logAgentResponse(
-        supabase,
-        sessionId,
-        aiInsights.message,
-        'capability_analysis_complete',
-        undefined,
-        {
-          gaps: gaps.slice(0, 5),
-          summary,
-          followUpQuestion: aiInsights.followUpQuestion
-        }
-      );
-    }
-
-    // Log the analysis details
+    // Log completion
     await logAgentAction(supabase, {
       entityType: 'profile',
       entityId: profileId,
       payload: {
-        action: 'capability_gap_analysis',
+        action: 'capability_gaps_analyzed',
         roleId,
-        summary,
-        gapCount: gaps.length,
-        criticalGapsCount: summary.criticalGaps
+        gapSummary: {
+          totalGaps: gaps.length,
+          criticalGaps: gaps.filter(g => g.severity > 70).length,
+          averageGapSize: gaps.reduce((acc, g) => acc + g.severity, 0) / gaps.length
+        }
       },
       semanticMetrics: {
         similarityScores: {
           roleMatch: 0.8,
-          skillAlignment: 0.7,
           capabilityAlignment: 0.75
         },
-        matchingStrategy: 'hybrid',
+        matchingStrategy: 'data_processing',
         confidenceScore: 0.9
       }
     });
@@ -287,16 +231,15 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       success: true,
       data: {
         gaps,
-        summary,
-        aiInsights
+        summary
       },
       actionsTaken: [
         {
           tool: 'getProfileData',
-          reason: 'Retrieved profile data',
+          reason: 'Retrieved profile and role data',
           result: 'success',
           confidence: 1.0,
-          inputs: { profileId },
+          inputs: { profileId, roleId },
           timestamp: new Date().toISOString()
         },
         {
@@ -323,7 +266,6 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
     };
 
   } catch (error) {
-    // Log error to chat if we have a session
     if (sessionId) {
       await logAgentResponse(
         supabase,
@@ -352,5 +294,9 @@ export const getCapabilityGaps: MCPActionV2 = {
   applicableRoles: ['candidate', 'manager', 'analyst'],
   capabilityTags: ['Career Development', 'Skill Assessment', 'Gap Analysis'],
   requiredInputs: ['profileId', 'roleId'],
+  tags: ['gap_analysis', 'tactical', 'strategic'],
+  recommendedAfter: ['getMatchingRolesForPerson', 'getSuggestedCareerPaths'],
+  recommendedBefore: ['getDevelopmentPlan', 'getSemanticSkillRecommendations'],
+  usesAI: false,
   actionFn: (ctx: Record<string, any>) => getCapabilityGapsBase(ctx as MCPRequest)
 }; 
