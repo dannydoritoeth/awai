@@ -12,13 +12,13 @@ export interface ModelProfile {
 }
 
 /**
- * Model ID type
+ * Valid model IDs for AI services
  */
 export type ModelId = 
-  | 'openai:gpt-4o'
   | 'openai:gpt-3.5-turbo'
-  | 'anthropic:claude-3-opus'
-  | 'mistral:mixtral-8x7b';
+  | 'openai:gpt-4'
+  | 'anthropic:claude-2'
+  | 'azure:gpt-4';
 
 /**
  * Prompt data interface
@@ -41,26 +41,64 @@ export interface PromptOptions {
 }
 
 /**
- * Prompt result interface
+ * Result from prompt building
  */
 export interface PromptResult {
   system: string;
   user: string;
-  metadata: {
-    tokens: number;
-    truncated: boolean;
-    provider: string;
-    model: string;
-    originalDataSize?: number;
-    truncatedDataSize?: number;
+  metadata?: {
+    sections?: string[];
+    itemCount?: number;
+    truncated?: boolean;
   };
+}
+
+/**
+ * Configuration for prompt building
+ */
+export interface PromptConfig {
+  maxItems?: number;
+  maxFieldLength?: number;
+  priorityFields?: string[];
+  excludeFields?: string[];
+  format?: 'json' | 'markdown' | 'csv';
+}
+
+/**
+ * Data context for prompt building
+ */
+export interface PromptContext {
+  type?: string;
+  format?: 'json' | 'markdown' | 'csv';
+  userQuestion?: string;
+  sections?: string[];
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Input for prompt building
+ */
+export interface PromptInput {
+  systemPrompt: string;
+  data: any;
+  context?: PromptContext;
+  config?: PromptConfig;
+}
+
+/**
+ * Error from prompt building
+ */
+export interface PromptError {
+  type: 'VALIDATION_ERROR' | 'PROCESSING_ERROR';
+  message: string;
+  details?: any;
 }
 
 /**
  * Model profiles configuration
  */
 export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
-  'openai:gpt-4o': {
+  'openai:gpt-4': {
     provider: 'openai',
     maxTokens: 8192,
     maxInputTokens: 6000,
@@ -78,7 +116,7 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     useDelimiters: true,
     tokenizer: () => 0
   },
-  'anthropic:claude-3-opus': {
+  'anthropic:claude-2': {
     provider: 'anthropic',
     maxTokens: 200000,
     maxInputTokens: 198000,
@@ -87,8 +125,8 @@ export const MODEL_PROFILES: Record<ModelId, ModelProfile> = {
     useDelimiters: false,
     tokenizer: () => 0
   },
-  'mistral:mixtral-8x7b': {
-    provider: 'mistral',
+  'azure:gpt-4': {
+    provider: 'openai',
     maxTokens: 32768,
     maxInputTokens: 31768,
     buffer: 1000,
