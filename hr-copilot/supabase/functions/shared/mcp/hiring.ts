@@ -11,6 +11,7 @@ import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
 import { logAgentResponse } from '../chatUtils.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
+import { loadRoleDataForPrompt } from './utils/roleDataLoader.ts';
 
 // Type definitions
 declare const Deno: {
@@ -86,7 +87,11 @@ interface HiringMatchDetails {
   };
 }
 
-interface HiringMatch extends HiringMatch {
+interface ProcessedHiringMatch {
+  profileId: string;
+  name: string;
+  score: number;
+  semanticScore: number;
   details: HiringMatchDetails;
 }
 
@@ -97,7 +102,7 @@ async function processHiringMatches(
   supabase: SupabaseClient<Database>,
   roleId: string,
   options = { limit: 20, threshold: 0.7 }
-): Promise<{ matches: HiringMatch[], debug: any }> {
+): Promise<{ matches: ProcessedHiringMatch[], debug: any }> {
   const debug: any = {
     timings: {},
     counts: {},
@@ -108,11 +113,11 @@ async function processHiringMatches(
   try {
     console.log('Starting hiring matches processing...');
     
-    // 1. Get role data first
+    // Get complete role data including skills and capabilities
     console.log('Loading role data...');
     const roleDataStartTime = Date.now();
-    const roleData = await getRolesData(supabase, [roleId]);
-    if (!roleData || !roleData[roleId]) {
+    const roleData = await loadRoleDataForPrompt(supabase, roleId);
+    if (!roleData) {
       throw new Error('Failed to load role data');
     }
     debug.timings.getRoleData = Date.now() - roleDataStartTime;
@@ -150,7 +155,7 @@ async function processHiringMatches(
 
     // 4. Process matches
     console.log('Processing matches...');
-    const matches: HiringMatch[] = [];
+    const matches: ProcessedHiringMatch[] = [];
     const processStartTime = Date.now();
 
     // Score all profiles in batch
@@ -188,16 +193,17 @@ async function processHiringMatches(
         getSkillGaps(supabase, profileId, roleId)
       ]);
 
-      const capabilityDetails = {
-        matched: capabilityGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-        missing: capabilityGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-        insufficient: capabilityGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
-      };
-
-      const skillDetails = {
-        matched: skillGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-        missing: skillGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-        insufficient: skillGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+      const details: HiringMatchDetails = {
+        capabilities: {
+          matched: capabilityGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
+          missing: capabilityGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
+          insufficient: capabilityGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+        },
+        skills: {
+          matched: skillGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
+          missing: skillGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
+          insufficient: skillGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+        }
       };
 
       matches.push({
@@ -205,16 +211,9 @@ async function processHiringMatches(
         name: profileData.name,
         score: resultData.score,
         semanticScore: semanticMatch.similarity,
-        summary: resultData.matchSummary || `Profile match score: ${resultData.score}%`,
-        details: {
-          capabilities: capabilityDetails,
-          skills: skillDetails
-        }
+        details
       });
     }
-
-    debug.timings.processing = Date.now() - processStartTime;
-    debug.counts.finalMatches = matches.length;
 
     // 5. Sort by combined score
     matches.sort((a, b) => {
@@ -223,8 +222,8 @@ async function processHiringMatches(
       return scoreB - scoreA;
     });
 
-    debug.timings.total = Date.now() - startTime;
-    console.log('Hiring matches processing completed:', debug);
+    debug.timings.processing = Date.now() - processStartTime;
+    debug.counts.finalMatches = matches.length;
 
     return {
       matches: matches.slice(0, options.limit),
@@ -361,10 +360,10 @@ export async function runHiringLoop(
       );
     }
 
-    // Get role details
-    const roleDetail = await getRoleDetail(supabase, roleId);
-    if (!roleDetail) {
-      throw new Error('Failed to load role details');
+    // Get complete role data including skills and capabilities
+    const roleData = await loadRoleDataForPrompt(supabase, roleId);
+    if (!roleData) {
+      throw new Error('Failed to load role data');
     }
 
     // Log role data loaded
@@ -454,10 +453,10 @@ export async function runHiringLoop(
       };
     });
 
-    // Generate insights using ChatGPT
+    // Generate insights using ChatGPT with complete role data
     const chatResponse = await generateHiringInsights(
       processedMatches || [],
-      roleDetail,
+      roleData,
       request.context?.lastMessage
     );
 
@@ -477,7 +476,7 @@ export async function runHiringLoop(
       );
     }
 
-    // Return response with linked matches, recommendations, and role details
+    // Return response with linked matches, recommendations, and complete role data
     return {
       success: true,
       message: 'Hiring loop completed successfully',
@@ -505,7 +504,7 @@ export async function runHiringLoop(
           aiPrompt: null
         },
         actionsTaken: [
-          'Retrieved role data',
+          'Retrieved complete role data',
           'Analyzed candidate matches',
           'Generated hiring recommendations',
           chatResponse ? 'Generated hiring insights' : 'Attempted to generate hiring insights',
@@ -522,9 +521,9 @@ export async function runHiringLoop(
               'Review role requirements',
               'Consider alternative roles'
             ],
-        role: roleDetail
+        role: roleData
       }
-    } as HiringMCPResponse;
+    };
 
   } catch (error) {
     console.error('Error in hiring loop:', error);
@@ -541,6 +540,7 @@ export async function runHiringLoop(
 
     return {
       success: false,
+      message: 'Error in hiring loop',
       error: {
         type: 'HIRING_LOOP_ERROR',
         message: error.message,

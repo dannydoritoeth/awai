@@ -1,9 +1,38 @@
 import { PROMPT_CONFIGS } from '../promptConfigs.ts';
+import { formatJsonData, formatRoleData, formatCandidatesData, formatSectionsData } from './dataFormatter.ts';
 
 // Deno type declaration
 declare const Deno: {
   readTextFile(path: string): Promise<string>;
 };
+
+/**
+ * Format data for prompt template
+ */
+function formatDataForPrompt(data: Record<string, any>): Record<string, string> {
+  const formattedData: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    switch (key) {
+      case 'roleData':
+        formattedData[key] = formatRoleData(value);
+        break;
+      case 'candidatesData':
+        formattedData[key] = formatCandidatesData(value);
+        break;
+      case 'sections':
+        formattedData[key] = formatSectionsData();
+        break;
+      default:
+        // For other data, just format as JSON if it's an object
+        formattedData[key] = typeof value === 'object' ? 
+          formatJsonData(value) : 
+          String(value);
+    }
+  }
+
+  return formattedData;
+}
 
 /**
  * Load a prompt from either configurations or file
@@ -35,12 +64,13 @@ export async function loadPrompt(
     }
   }
 
-  // Replace any template variables in the prompts
+  // Replace any template variables in the prompts with formatted data
   if (data) {
-    for (const [key, value] of Object.entries(data)) {
+    const formattedData = formatDataForPrompt(data);
+    for (const [key, value] of Object.entries(formattedData)) {
       const placeholder = `{{${key}}}`;
-      systemPrompt = systemPrompt.replace(new RegExp(placeholder, 'g'), String(value));
-      userMessage = userMessage.replace(new RegExp(placeholder, 'g'), String(value));
+      systemPrompt = systemPrompt.replace(new RegExp(placeholder, 'g'), value);
+      userMessage = userMessage.replace(new RegExp(placeholder, 'g'), value);
     }
   }
 

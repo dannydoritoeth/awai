@@ -3,11 +3,13 @@ Focus on both technical skills and potential for growth.
 Consider team dynamics and organizational culture.
 Be objective and data-driven in your analysis.
 
-Role Requirements:
-{{roleRequirements}}
+Which candidates are most suited to this role and why?
 
-Talent Pool Candidates:
-{{candidates}}
+{{roleData}}
+
+{{candidatesData}}
+
+{{sections}}
 
 For each candidate, please analyze:
 1. Overall fit score (0-100)
