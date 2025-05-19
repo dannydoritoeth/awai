@@ -16,6 +16,7 @@ import { calculateJobReadiness, generateJobSummary } from '../job/jobReadiness.t
 import { testJobMatching } from '../job/testJobMatching.ts';
 import { logAgentResponse } from '../chatUtils.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
 
 /**
  * Generate candidate insights using ChatGPT
@@ -65,46 +66,23 @@ async function generateCandidateInsights(
 
     const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
 
-    // Call ChatGPT API
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+    const aiResponse = await invokeChatModel(
+      {
+        system: prompt.system,
+        user: prompt.user
       },
-      body: JSON.stringify({
+      {
         model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: prompt.system
-          },
-          {
-            role: 'user',
-            content: prompt.user
-          }
-        ],
         temperature: 0.7,
         max_tokens: 1000
-      })
-    });
+      }
+    );
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`ChatGPT API error: ${error.error?.message || 'Unknown error'}`);
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    const data = await response.json();
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from ChatGPT API');
-    }
-
-    const chatResponse = data.choices[0].message.content;
+    const chatResponse = aiResponse.output;
 
     // Split response into main content and follow-up question
     const parts = chatResponse.split(/\n\nFollow-up question:/i);

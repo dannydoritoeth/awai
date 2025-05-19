@@ -12,6 +12,7 @@ import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
 import { logAgentResponse } from '../chatUtils.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
 import { loadRoleDataForPrompt } from './utils/roleDataLoader.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
 
 // Type definitions
 declare const Deno: {
@@ -251,82 +252,50 @@ async function generateHiringInsights(
       return {
         response: "No matching candidates found to analyze.",
         followUpQuestion: "Would you like to adjust the search criteria?",
-        prompt: "No candidates to analyze"
+        prompt: "No matches to analyze"
       };
     }
 
-    const systemPrompt = 'You are an experienced technical hiring advisor helping a hiring manager evaluate candidates. Focus on providing clear, actionable insights based on candidate skills, capabilities, and potential. Be direct about both strengths and concerns.';
-
     const promptData = {
-      systemPrompt,
-      userMessage: message || 'Please analyze the candidates for this role and provide hiring recommendations.',
+      systemPrompt: 'You are an AI hiring advisor helping to analyze candidate matches for a role.',
+      userMessage: message || 'Please analyze the candidates and provide hiring recommendations.',
       data: {
         role: roleData,
-        candidates: matches.slice(0, 5)
-      },
-      context: {
-        sections: [
-          'ROLE REQUIREMENTS OVERVIEW',
-          'CANDIDATE POOL QUALITY',
-          'INDIVIDUAL CANDIDATE ASSESSMENTS',
-          'INTERVIEW RECOMMENDATIONS',
-          'HIRING RECOMMENDATIONS'
-        ]
+        matches: matches.slice(0, 5).map(match => ({
+          name: match.name,
+          score: match.score,
+          semanticScore: match.semanticScore,
+          capabilities: match.details.capabilities,
+          skills: match.details.skills
+        }))
       }
     };
 
-    const promptOptions = {
+    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
       maxItems: 5,
-      maxFieldLength: 200,
-      priorityFields: ['name', 'score', 'semanticScore', 'summary', 'matched', 'missing', 'insufficient'],
-      excludeFields: ['metadata', 'raw_data', 'embedding']
-    };
-
-    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
-
-    // Call ChatGPT API
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: prompt.system
-          },
-          {
-            role: 'user',
-            content: prompt.user
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
+      maxFieldLength: 200
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate insights from OpenAI API');
+    const aiResponse = await invokeChatModel(
+      {
+        system: prompt.system,
+        user: prompt.user
+      },
+      {
+        model: 'gpt-3.5-turbo',
+        temperature: 0.7,
+        max_tokens: 1000
+      }
+    );
+
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    const data = await response.json();
-    const chatResponse = data.choices?.[0]?.message?.content;
-
-    if (!chatResponse) {
-      throw new Error('Invalid response format from OpenAI API');
-    }
-
+    const parts = (aiResponse.output || '').split(/\n\nFollow-up question:/i);
     return {
-      response: chatResponse,
-      followUpQuestion: "Would you like to focus on any specific aspects of these candidates?",
+      response: parts[0].trim(),
+      followUpQuestion: parts[1]?.trim(),
       prompt: prompt.user
     };
 
@@ -334,7 +303,7 @@ async function generateHiringInsights(
     console.error('Error generating hiring insights:', error);
     return {
       response: 'I encountered an error while analyzing the candidates. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates\' qualifications?',
+      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates?',
       prompt: 'Error occurred while generating prompt'
     };
   }

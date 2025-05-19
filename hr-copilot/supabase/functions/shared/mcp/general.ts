@@ -7,6 +7,7 @@ import { getSemanticMatches, generateEmbedding } from '../semanticSearch.ts';
 import { getPlannerRecommendation } from './planner.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
 
 declare const Deno: {
   env: {
@@ -176,171 +177,55 @@ async function generateGeneralResponse(
       };
     }
 
-    // Log match statistics
-    try {
-      console.log('Processing matches for response:', {
-        totalMatches: matches.length,
+    // Prepare data for response generation
+    const promptData = {
+      systemPrompt: 'You are an AI assistant helping to analyze and explain matches and recommendations.',
+      userMessage: message,
+      data: {
+        matches: formatMatchesForPrompt(matches),
+        recommendations: formatRecommendationsForPrompt(recommendations),
         matchesByType: Object.entries(matchesByType).map(([type, matches]) => ({
           type,
           count: matches.length,
-          avgSimilarity: matches.reduce((sum, m) => sum + m.similarity, 0) / matches.length,
-          sampleMatch: matches[0] ? {
-            id: matches[0].id,
-            name: matches[0].name,
-            similarity: matches[0].similarity
-          } : null
+          avgSimilarity: matches.reduce((sum, m) => sum + m.similarity, 0) / matches.length
         }))
-      });
-    } catch (statsError) {
-      console.error('Error processing match statistics:', statsError);
-    }
-
-    // Prepare data for response generation
-    console.log('Preparing ChatGPT prompt...');
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const systemPrompt = 'You are an experienced advisor helping users understand workforce trends and opportunities. Focus on providing clear, actionable insights based on data analysis.';
-
-    const promptData = {
-      systemPrompt,
-      userMessage: message,
-      data: {
-        matches: matches.slice(0, 5),
-        recommendations: recommendations.slice(0, 5)
-      },
-      context: {
-        sections: [
-          'CLEAR ANSWER TO USER QUESTION',
-          'SPECIFIC INSIGHTS FROM MATCHES',
-          'ACTIONABLE RECOMMENDATIONS',
-          'RELEVANT FOLLOW-UP'
-        ]
       }
     };
 
-    const promptOptions = {
+    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
       maxItems: 5,
-      maxFieldLength: 200,
-      priorityFields: ['name', 'type', 'similarity', 'summary'],
-      excludeFields: ['metadata', 'raw_data', 'embedding']
-    };
-
-    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
-
-    console.log('Prompt prepared, logging to agent actions...');
-
-    // Log the prompt being sent to ChatGPT
-    await logAgentAction(supabase, {
-      entityType: 'chat',
-      entityId: loggingId,
-      payload: {
-        stage: 'chatgpt_prompt',
-        message: prompt.user,
-        metadata: {
-          matchCount: matches.length,
-          matchesByType: Object.fromEntries(
-            Object.entries(matchesByType).map(([type, matches]) => [type, matches.length])
-          ),
-          recommendationCount: recommendations.length,
-          truncatedMatchCount: Math.min(matches.length, 5),
-          truncatedRecommendationCount: Math.min(recommendations.length, 5),
-          timestamp: new Date().toISOString(),
-          promptMetadata: prompt.metadata
-        }
-      }
+      maxFieldLength: 200
     });
 
-    console.log('Making ChatGPT API call...');
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+    const aiResponse = await invokeChatModel(
+      {
+        system: prompt.system,
+        user: prompt.user
       },
-      body: JSON.stringify({
+      {
         model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: prompt.system
-          },
-          {
-            role: 'user',
-            content: prompt.user
-          }
-        ],
         temperature: 0.7,
         max_tokens: 1000
-      })
-    });
-
-    console.log('ChatGPT API response received, status:', response.status);
-    
-    const data = await response.json();
-    
-    // Validate the response data
-    if (!response.ok) {
-      throw new Error(`ChatGPT API error: ${data.error?.message || 'Unknown error'}`);
-    }
-    
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response format from ChatGPT API');
-    }
-
-    const chatResponse = data.choices[0].message.content;
-
-    // Log the ChatGPT response
-    await logAgentAction(supabase, {
-      entityType: 'chat',
-      entityId: loggingId,
-      payload: {
-        stage: 'chatgpt_response',
-        message: chatResponse,
-        metadata: {
-          model: 'gpt-3.5-turbo',
-          temperature: 0.7,
-          timestamp: new Date().toISOString(),
-          responseStatus: response.status,
-          responseOk: response.ok
-        }
       }
-    });
+    );
 
-    // Split response into main content and follow-up question
-    const parts = chatResponse.split(/\n\nFollow-up question:/i);
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    const parts = (aiResponse.output || '').split(/\n\nFollow-up question:/i);
     return {
       response: parts[0].trim(),
       followUpQuestion: parts[1]?.trim(),
       prompt: prompt.user
     };
+
   } catch (error) {
     console.error('Error in generateGeneralResponse:', error);
-    
-    // Log the error with full context
-    await logAgentAction(supabase, {
-      entityType: 'chat',
-      entityId: loggingId,
-      payload: {
-        stage: 'error',
-        error: error.message,
-        metadata: {
-          timestamp: new Date().toISOString(),
-          errorStack: error.stack,
-          matchCount: matches?.length,
-          recommendationCount: recommendations?.length,
-          errorDetails: error
-        }
-      }
-    });
-    
     return {
-      response: "I've analyzed the data but encountered an error generating a detailed response. The analysis shows some relevant matches and recommendations that could be helpful for your query. Would you like me to focus on a specific aspect of the findings?",
-      followUpQuestion: undefined,
-      prompt: ''
+      response: "I encountered an error while analyzing the data. Let me know if you'd like to try a different approach.",
+      followUpQuestion: "Would you like me to focus on a specific aspect of your query?",
+      prompt: 'Error occurred while generating response'
     };
   }
 }
