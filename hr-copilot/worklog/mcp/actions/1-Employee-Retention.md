@@ -1,10 +1,22 @@
-## 🎯 Metric 1: Employee Retention (Temporary Staff)
+## 🎯 Metric 1: Employee Retention (All Staff)
 
 ### 🌐 Workflow Goal
 
-Proactively identify and match temporary employees to new internal roles to reduce avoidable turnover.
+Proactively identify and support at-risk or disengaged employees (including temporary, ongoing, and high-potential staff) to improve retention and internal mobility across the workforce.
 
 ### 🧩 Actions & Descriptions
+
+#### `getDevelopmentPlan` *(New - Required)*
+
+* **Purpose:** Convert capability gaps into a development roadmap
+* **Input:** `profileId`, `roleId`
+* **Output:** Structured development plan including:
+
+  * Recommended skills to develop
+  * Relevant training/learning modules
+  * Interim roles to build experience
+  * Suggested mentors from internal workforce
+* **Used by:** Learning & development, candidate dashboards, career planning tools
 
 #### `getShortlistedRolesForPerson` (Implemented in hiring.ts)
 
@@ -41,13 +53,66 @@ Proactively identify and match temporary employees to new internal roles to redu
 * **Output:** Confirmation with ability to update, delete, or mark complete
 * **Used by:** Talent acquisition team, workforce mobility planning
 
+### 👥 Users
+
+* People & Culture
+* People Leaders / Managers
+* Career Coaches / Internal Mobility Leads
+* Individual Employees (Self-Service)
+
+### ⚡ Triggers
+
+* Contract approaching end (temporary staff)
+* Manager flags exit risk or disengagement
+* Employee interest in change or development
+* Underutilisation or career stagnation risk
+
 ### 🔗 Combined Workflow Logic
 
 1. Detect high-turnover risk: Temp contract end, no pipeline, flagged by manager
 2. Call `getSuggestedCareerPaths` to suggest possible directions
 3. For top matches, run `getCapabilityGaps`
 4. Use `getSemanticSkillRecommendations` to recommend development
-5. Record outcome with `logPlannedTransitions`
+5. Call `getDevelopmentPlan` to generate a concrete plan
+6. Record outcome with `logPlannedTransitions`
+
+### 🤖 Autonomous Agent Workflow (Optional Add-On)
+
+#### 🎯 Goal
+
+Automatically monitor for signals of disengagement or retention risk and activate internal mobility support without manual initiation.
+
+#### 🧠 Triggers (Agent Monitored)
+
+* Drop in engagement metrics or survey responses
+* No recent internal applications or development activity
+* Time in role exceeds typical progression window
+* Underutilisation or skill mismatch with current role
+* High performer at risk (based on known patterns)
+
+#### 🔄 Agent Workflow Logic
+
+1. Agent identifies at-risk profile via defined rules or ML model
+2. Call `getSuggestedCareerPaths` to generate mobility options
+3. Run `getShortlistedRolesForPerson` and `getCapabilityGaps`
+4. Call `getSemanticSkillRecommendations` for tailored advice
+5. Generate `getDevelopmentPlan`
+6. Notify manager or P\&C, optionally pre-fill `logPlannedTransitions`
+
+#### 📌 Notes
+
+* This workflow supplements the user-driven one
+* Requires telemetry and integration with engagement/activity systems
+* Could trigger nudges to the employee or manager dashboard
+
+### 📊 KPIs for Success
+
+* % of at-risk employees successfully redeployed
+* Reduction in voluntary turnover (especially post-probation and end-of-contract)
+* Increase in internal moves before contract end
+* Time from risk detection to transition planned
+* % of development plans executed within 90 days
+* Manager satisfaction with internal redeployment experience
 
 ### ✅ Outcome
 
