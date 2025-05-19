@@ -1,3 +1,5 @@
+import type { ModelId } from '../mcp/promptTypes.ts';
+
 interface ChatPrompt {
   system: string;
   user: string;
@@ -17,8 +19,8 @@ interface AIResponse {
 
 export async function invokeChatModel(
   prompt: ChatPrompt,
-  options?: {
-    model?: string;
+  options: {
+    model: ModelId;
     temperature?: number;
     max_tokens?: number;
   }
@@ -34,8 +36,11 @@ export async function invokeChatModel(
     };
   }
 
+  // Extract the actual model name from the ModelId format (provider:model-name)
+  const actualModel = options.model.split(':')[1];
+
   const payload = {
-    model: options?.model || 'gpt-3.5-turbo',
+    model: actualModel,
     messages: prompt.messages || [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user }

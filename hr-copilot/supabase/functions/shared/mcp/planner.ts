@@ -274,7 +274,7 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
         user: prompt.user
       },
       {
-        model: 'gpt-4',
+        model: 'openai:gpt-3.5-turbo',
         temperature: 0.2
       }
     );

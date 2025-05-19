@@ -184,10 +184,8 @@ ${JSON.stringify(data, null, 2)}`;
         user: prompt
       },
       {
-        model,
-        temperature,
-        max_tokens: maxTokens,
-        response_format: { type: 'json_object' }
+        model: 'openai:gpt-3.5-turbo',
+        temperature: 0.2
       }
     );
 
