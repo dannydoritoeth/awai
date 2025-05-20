@@ -1,5 +1,7 @@
 import { ChatMessage } from './chatTypes.ts';
 import { AgentAction } from './agent/logAgentAction.ts';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Database } from '../database.types.ts';
 
 export type MCPMode = 'candidate' | 'hiring' | 'general';
 
@@ -39,22 +41,26 @@ export interface PlannerRecommendation {
 }
 
 export interface MCPAction {
-  tool: string;
-  reason: string;
-  result: any;
-  confidence: number;
-  inputs: Record<string, any>;
-  timestamp: string;
+  id: string;
+  title: string;
+  description: string;
+  applicableRoles: string[];
+  capabilityTags: string[];
+  requiredInputs: string[];
+  tags: string[];
+  recommendedAfter: string[];
+  recommendedBefore: string[];
+  usesAI: boolean;
+  actionFn: (request: MCPRequest) => Promise<MCPResponse>;
 }
 
 export interface MCPRequest {
   profileId?: string;
   roleId?: string;
-  companyId?: string;
-  mode: MCPMode;
+  context?: Record<string, any>;
   sessionId?: string;
-  context?: MCPContext;
-  plannerRecommendations?: PlannerRecommendation[];
+  mode?: string;
+  supabase: SupabaseClient<Database>;
 }
 
 /**
@@ -64,19 +70,11 @@ export interface MCPResponse {
   success: boolean;
   message: string;
   data?: {
-    matches?: Array<SemanticMatch | HiringMatch>;
+    matches?: any[];
     recommendations?: any[];
-    chatResponse?: {
-      message: string;
-      followUpQuestion?: string;
-      aiPrompt?: string;
-      promptDetails?: any;
-    };
-    nextActions?: NextAction[];
-    actionsTaken?: MCPAction[];
-    role?: RoleContext | null;
-    profile?: ProfileContext | null;
-    insightData?: any;
+    nextActions?: any[];
+    actionsTaken?: any[];
+    profile?: ProfileContext;
   };
   error?: {
     type: string;
@@ -125,13 +123,12 @@ export interface ProfileContext {
     id: string;
     name: string;
     email: string;
-    embedding: number[];
+    embedding?: number[];
     skills: Array<{
       id: string;
       name: string;
       category: string;
       level: number;
-      years_experience: number;
     }>;
     capabilities: Array<{
       id: string;
@@ -205,8 +202,7 @@ export interface RoleContext {
 export interface NextAction {
   type: string;
   description: string;
-  priority?: number;
-  metadata?: any;
+  priority: number;
 }
 
 /**

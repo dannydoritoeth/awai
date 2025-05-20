@@ -51,7 +51,7 @@ export async function getConversationContextV2(
     .from('chat_messages')
     .select('*')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: false })
+    .order('timestamp', { ascending: false })
     .limit(messageLimit);
 
   if (messagesError) {
@@ -64,7 +64,7 @@ export async function getConversationContextV2(
     .from('agent_actions')
     .select('*')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: false })
+    .order('timestamp', { ascending: false })
     .limit(actionLimit);
 
   if (actionsError) {
@@ -95,7 +95,7 @@ export async function getConversationContextV2(
       id: m.id,
       content: m.message,
       role: m.sender === 'assistant' ? 'assistant' : 'user',
-      timestamp: m.created_at
+      timestamp: m.timestamp
     })) || [],
     agentActions: actions || [],
     summary: summary?.summary || '',

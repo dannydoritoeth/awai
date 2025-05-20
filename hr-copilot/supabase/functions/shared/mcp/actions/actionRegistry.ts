@@ -56,19 +56,6 @@ export class ActionV2Registry {
     this.tools.set(tool.name, tool);
   }
 
-  /**
-   * Get a tool by name
-   */
-  static getTool(name: string): ToolMetadataV2 | undefined {
-    return this.tools.get(name);
-  }
-
-  /**
-   * Get all registered tools
-   */
-  static getToolMetadataList(): ToolMetadataV2[] {
-    return Array.from(this.tools.values());
-  }
 
   /**
    * Clear all registered tools (mainly for testing)

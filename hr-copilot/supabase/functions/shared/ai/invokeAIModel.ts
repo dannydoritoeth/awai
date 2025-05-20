@@ -1,3 +1,6 @@
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Database } from '../../database.types.ts';
+import { logAgentAction } from '../agent/logAgentAction.ts';
 import type { ModelId } from '../mcp/promptTypes.ts';
 
 interface ChatPrompt {
@@ -23,6 +26,9 @@ export async function invokeChatModel(
     model: ModelId;
     temperature?: number;
     max_tokens?: number;
+    supabase?: SupabaseClient<Database>;
+    entityType?: 'profile' | 'role' | 'job' | 'company' | 'division' | 'chat';
+    entityId?: string;
   }
 ): Promise<AIResponse> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
@@ -63,7 +69,7 @@ export async function invokeChatModel(
     const data = await response.json();
 
     if (!response.ok) {
-      return {
+      const error = {
         success: false,
         status: response.status,
         error: {
@@ -71,9 +77,50 @@ export async function invokeChatModel(
           message: data?.error?.message || 'Unexpected error from OpenAI'
         }
       };
+
+      // Log error if supabase client is provided
+      if (options.supabase && options.entityType && options.entityId) {
+        await logAgentAction(options.supabase, {
+          entityType: options.entityType,
+          entityId: options.entityId,
+          payload: {
+            action: 'ai_model_invocation',
+            status: 'error',
+            model: actualModel,
+            prompt: {
+              system: prompt.system,
+              user: prompt.user
+            },
+            error: error.error
+          }
+        });
+      }
+
+      return error;
     }
 
     const message = data.choices?.[0]?.message?.content || '';
+
+    // Log successful response if supabase client is provided
+    if (options.supabase && options.entityType && options.entityId) {
+      await logAgentAction(options.supabase, {
+        entityType: options.entityType,
+        entityId: options.entityId,
+        payload: {
+          action: 'ai_model_invocation',
+          status: 'success',
+          model: actualModel,
+          prompt: {
+            system: prompt.system,
+            user: prompt.user
+          },
+          response: {
+            message,
+            usage: data.usage
+          }
+        }
+      });
+    }
 
     return {
       success: true,
@@ -83,12 +130,32 @@ export async function invokeChatModel(
     };
 
   } catch (err) {
-    return {
+    const error = {
       success: false,
       error: {
         type: 'NETWORK_ERROR',
         message: err.message
       }
     };
+
+    // Log error if supabase client is provided
+    if (options.supabase && options.entityType && options.entityId) {
+      await logAgentAction(options.supabase, {
+        entityType: options.entityType,
+        entityId: options.entityId,
+        payload: {
+          action: 'ai_model_invocation',
+          status: 'error',
+          model: actualModel,
+          prompt: {
+            system: prompt.system,
+            user: prompt.user
+          },
+          error: error.error
+        }
+      });
+    }
+
+    return error;
   }
 } 

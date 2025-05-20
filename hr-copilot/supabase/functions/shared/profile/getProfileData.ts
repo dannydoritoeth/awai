@@ -46,6 +46,11 @@ export async function getProfileData(
 ): Promise<ProfileData> {
   console.log('Getting profile data for:', profileId);
 
+  if (!profileId) {
+    console.error('Invalid profileId provided');
+    return { skills: [], capabilities: [] };
+  }
+
   try {
     const [skillsResult, capabilitiesResult] = await Promise.all([
       supabase
@@ -88,19 +93,19 @@ export async function getProfileData(
     console.log('Raw capabilities data:', capabilitiesResult.data);
 
     const skills = (skillsResult.data || [])
-      .filter(s => s.skills && s.skill_id) // Only include records with valid skills data
+      .filter(s => s?.skills && s?.skill_id) // Add null check for skills object
       .map(s => ({
         id: s.skill_id,
-        name: s.skills.name,
+        name: s.skills?.name || 'Unknown Skill', // Add fallback for name
         level: parseLevel(s.rating),
         years: 0 // Default since we don't track years
       }));
 
     const capabilities = (capabilitiesResult.data || [])
-      .filter(c => c.capabilities && c.capability_id) // Only include records with valid capabilities data
+      .filter(c => c?.capabilities && c?.capability_id) // Add null check for capabilities object
       .map(c => ({
         id: c.capability_id,
-        name: c.capabilities.name,
+        name: c.capabilities?.name || 'Unknown Capability', // Add fallback for name
         level: parseLevel(c.level)
       }));
 

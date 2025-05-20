@@ -128,6 +128,17 @@ export async function postUserMessage(
   }
 }
 
+// Messages that don't need embeddings (simple status updates or processing steps)
+const SKIP_EMBEDDING_MESSAGES = [
+  'Applied response formatting',
+  'Retrieved planner recommendations',
+  'Retrieved conversation context',
+  'Executed candidate mode processing',
+  'MCP Processing Step V2',
+  'Tool Execution',
+  'Processing Step'
+];
+
 /**
  * Log an agent response to a chat session
  */
@@ -142,9 +153,19 @@ export async function logAgentResponse(
   try {
     console.log('logAgentResponse called with:', { sessionId, message, actionType });
     
-    // Generate embedding for the message
-    const embedding = await generateEmbedding(message);
-    console.log('Generated embedding for message');
+    // Check if this is a simple status update or processing step
+    const shouldSkipEmbedding = SKIP_EMBEDDING_MESSAGES.some(skipMessage => 
+      message.includes(skipMessage) || 
+      actionType?.includes(skipMessage) ||
+      toolCall?.reason?.includes(skipMessage)
+    );
+
+    let embedding = null;
+    if (!shouldSkipEmbedding) {
+      // Generate embedding for the message
+      embedding = await generateEmbedding(message);
+      console.log('Generated embedding for message');
+    }
 
     // Log the message
     const { data: messageData, error: messageError } = await supabase

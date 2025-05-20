@@ -1,43 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { DatabaseResponse, Profile } from '../types.ts';
-
-export interface ProfileContext {
-  profile: Profile & {
-    embedding?: number[];
-  };
-  skills: Array<{
-    id: string;
-    name: string;
-    category: string;
-    rating: string;
-    evidence: string;
-  }>;
-  capabilities: Array<{
-    id: string;
-    name: string;
-    group_name: string;
-    level: string;
-  }>;
-  career_paths: Array<{
-    id: string;
-    source_role: {
-      id: string;
-      title: string;
-    };
-    target_role: {
-      id: string;
-      title: string;
-    };
-    path_type: string;
-    skill_gap_summary: string;
-  }>;
-  recent_job_interactions: Array<{
-    job_id: string;
-    job_title: string;
-    interaction_type: string;
-    timestamp: string;
-  }>;
-}
+import { DatabaseResponse } from '../types.ts';
+import { ProfileContext } from '../mcpTypes.ts';
 
 export async function getProfileContext(
   supabase: SupabaseClient,
@@ -54,108 +17,79 @@ export async function getProfileContext(
       }
     }
 
-    // Get profile data
+    // Get profile data with skills and capabilities
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        id,
+        name,
+        email,
+        embedding,
+        profile_skills (
+          skill_id,
+          rating,
+          skills (
+            id,
+            name,
+            category
+          )
+        ),
+        profile_capabilities (
+          capability_id,
+          level,
+          capabilities (
+            id,
+            name,
+            group_name
+          )
+        )
+      `)
       .eq('id', profileId)
-      .single()
+      .single();
 
     if (profileError || !profile) {
       return {
         data: null,
         error: {
           type: 'NOT_FOUND',
-          message: 'Profile not found:' + profileId,
+          message: 'Profile not found: ' + profileId,
           details: profileError
         }
       }
     }
 
-    // Get profile skills with skill details
-    const { data: skills, error: skillsError } = await supabase
-      .from('profile_skills')
-      .select(`
-        rating,
-        evidence,
-        skills (
-          id,
-          name,
-          category
-        )
-      `)
-      .eq('profile_id', profileId)
-
-    if (skillsError) {
-      return {
-        data: null,
-        error: {
-          type: 'DATABASE_ERROR',
-          message: 'Error fetching skills',
-          details: skillsError
-        }
-      }
-    }
-
-    // Get profile capabilities with capability details
-    const { data: capabilities, error: capabilitiesError } = await supabase
-      .from('profile_capabilities')
-      .select(`
-        level,
-        capabilities (
-          id,
-          name,
-          group_name
-        )
-      `)
-      .eq('profile_id', profileId)
-
-    if (capabilitiesError) {
-      return {
-        data: null,
-        error: {
-          type: 'DATABASE_ERROR',
-          message: 'Error fetching capabilities',
-          details: capabilitiesError
-        }
-      }
-    }
-
-    // Get career paths
-    const { data: careerPaths, error: careerPathsError } = await supabase
+    // Get career path data
+    const { data: careerPaths, error: careerPathError } = await supabase
       .from('profile_career_paths')
       .select(`
         career_paths (
           id,
+          source_role_id,
+          target_role_id,
           path_type,
-          skill_gap_summary,
-          source_role:roles!career_paths_source_role_id_fkey (
-            id,
-            title
-          ),
-          target_role:roles!career_paths_target_role_id_fkey (
-            id,
-            title
-          )
+          skill_gap_summary
         )
       `)
       .eq('profile_id', profileId)
+      .limit(1)
+      .single();
 
-    if (careerPathsError) {
+    if (careerPathError && careerPathError.code !== 'PGRST116') {
       return {
         data: null,
         error: {
           type: 'DATABASE_ERROR',
-          message: 'Error fetching career paths',
-          details: careerPathsError
+          message: 'Error fetching career path',
+          details: careerPathError
         }
       }
     }
 
-    // Get recent job interactions
+    // Get job interactions
     const { data: jobInteractions, error: jobInteractionsError } = await supabase
       .from('profile_job_interactions')
       .select(`
+        job_id,
         interaction_type,
         timestamp,
         jobs (
@@ -165,7 +99,7 @@ export async function getProfileContext(
       `)
       .eq('profile_id', profileId)
       .order('timestamp', { ascending: false })
-      .limit(5)
+      .limit(5);
 
     if (jobInteractionsError) {
       return {
@@ -178,41 +112,66 @@ export async function getProfileContext(
       }
     }
 
-    // Format the response
-    const profileContext: ProfileContext = {
-      profile,
-      skills: skills?.map(s => ({
-        id: s.skills.id,
-        name: s.skills.name,
-        category: s.skills.category,
-        rating: s.rating,
-        evidence: s.evidence
-      })) || [],
-      capabilities: capabilities?.map(c => ({
-        id: c.capabilities.id,
-        name: c.capabilities.name,
-        group_name: c.capabilities.group_name,
-        level: c.level
-      })) || [],
-      career_paths: careerPaths?.map(cp => ({
-        id: cp.career_paths.id,
-        source_role: cp.career_paths.source_role,
-        target_role: cp.career_paths.target_role,
-        path_type: cp.career_paths.path_type,
-        skill_gap_summary: cp.career_paths.skill_gap_summary
-      })) || [],
-      recent_job_interactions: jobInteractions?.map(ji => ({
-        job_id: ji.jobs.id,
-        job_title: ji.jobs.title,
-        interaction_type: ji.interaction_type,
-        timestamp: ji.timestamp
-      })) || []
+    // Format skills and capabilities
+    const skills = profile.profile_skills?.map(ps => ({
+      id: ps.skill_id,
+      name: ps.skills.name,
+      category: ps.skills.category,
+      level: parseLevel(ps.rating)
+    })) || [];
+
+    const capabilities = profile.profile_capabilities?.map(pc => ({
+      id: pc.capability_id,
+      name: pc.capabilities.name,
+      group_name: pc.capabilities.group_name,
+      level: parseLevel(pc.level)
+    })) || [];
+
+    // Get source and target role titles for career path
+    let careerPath: ProfileContext['careerPath'] = null;
+    if (careerPaths?.career_paths) {
+      const cp = careerPaths.career_paths;
+      const [sourceRole, targetRole] = await Promise.all([
+        cp.source_role_id ? supabase.from('roles').select('title').eq('id', cp.source_role_id).single() : null,
+        cp.target_role_id ? supabase.from('roles').select('title').eq('id', cp.target_role_id).single() : null
+      ]);
+
+      careerPath = {
+        id: cp.id,
+        current_role: sourceRole?.data?.title || '',
+        target_role: targetRole?.data?.title || '',
+        status: cp.path_type || '',
+        progress: 0 // This field doesn't exist in schema, defaulting to 0
+      };
     }
+
+    // Format job interactions
+    const formattedJobInteractions = (jobInteractions || []).map(ji => ({
+      id: ji.jobs.id,
+      job_id: ji.job_id,
+      status: ji.interaction_type,
+      applied_date: ji.timestamp,
+      feedback: '' // This field doesn't exist in schema
+    }));
+
+    // Construct the profile context
+    const profileContext: ProfileContext = {
+      profile: {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        embedding: profile.embedding,
+        skills,
+        capabilities
+      },
+      careerPath,
+      jobInteractions: formattedJobInteractions
+    };
 
     return {
       data: profileContext,
       error: null
-    }
+    };
 
   } catch (error) {
     return {
@@ -223,5 +182,29 @@ export async function getProfileContext(
         details: error
       }
     }
+  }
+}
+
+function parseLevel(level: string | null): number {
+  if (!level) return 0;
+  const num = Number(level);
+  if (!isNaN(num)) return num;
+  
+  switch(level.toLowerCase()) {
+    case 'expert':
+    case 'high':
+      return 5;
+    case 'advanced':
+      return 4;
+    case 'intermediate':
+      return 3;
+    case 'basic':
+    case 'low':
+      return 2;
+    case 'novice':
+    case 'none':
+      return 1;
+    default:
+      return 0;
   }
 } 

@@ -102,39 +102,65 @@ export class McpLoopRunner {
     // Generate embedding for the latest message
     const embeddedMessage = await this.deps.generateEmbedding(latestMessage);
 
-    // Get conversation context
-    const conversationContext = await this.deps.getConversationContext(
-      this.supabase,
-      this.request.sessionId,
-      {
-        messageLimit: 10,
-        actionLimit: 5,
-        embeddingAverageCount: 3
-      }
-    );
-
-    // Update context with all necessary information
+    // Initialize base context with request-specific fields
     this.context = {
       ...this.context,
       embeddedMessage,
-      recentMessages: conversationContext.history || [],
-      agentActions: conversationContext.agentActions || [],
-      summary: conversationContext.summary,
-      contextEmbedding: conversationContext.contextEmbedding,
-      sessionId: this.request.sessionId,
       mode: this.request.mode,
       messages: this.request.messages || [],
-      latestMessage
+      latestMessage,
+      // Add request-specific fields
+      profileId: this.request.profileId,
+      roleId: this.request.roleId,
+      // Preserve any existing context fields
+      ...(this.request.context || {})
     };
 
-    // Log context loading
-    console.log('Context loaded:', {
-      sessionId: this.request.sessionId,
-      mode: this.request.mode,
-      messageCount: this.request.messages?.length || 0,
-      historyCount: conversationContext.history?.length || 0,
-      actionsCount: conversationContext.agentActions?.length || 0
-    });
+    // Only load conversation context if session ID is provided
+    if (this.request.sessionId) {
+      console.log('Loading conversation context for session:', this.request.sessionId);
+      try {
+        const conversationContext = await this.deps.getConversationContext(
+          this.supabase,
+          this.request.sessionId,
+          {
+            messageLimit: 10,
+            actionLimit: 5,
+            embeddingAverageCount: 3
+          }
+        );
+
+        // Update context with conversation history
+        this.context = {
+          ...this.context,
+          recentMessages: conversationContext.history || [],
+          agentActions: conversationContext.agentActions || [],
+          summary: conversationContext.summary,
+          contextEmbedding: conversationContext.contextEmbedding,
+          sessionId: this.request.sessionId
+        };
+
+        // Log context loading with history
+        console.log('Context loaded with history:', {
+          sessionId: this.request.sessionId,
+          mode: this.request.mode,
+          messageCount: this.request.messages?.length || 0,
+          historyCount: conversationContext.history?.length || 0,
+          actionsCount: conversationContext.agentActions?.length || 0
+        });
+      } catch (error) {
+        console.warn('Failed to load conversation context:', error);
+        // Continue without conversation context
+      }
+    } else {
+      // Log context loading without history
+      console.log('Context loaded without session history:', {
+        mode: this.request.mode,
+        messageCount: this.request.messages?.length || 0,
+        profileId: this.context.profileId,
+        roleId: this.context.roleId
+      });
+    }
   }
 
   /**
@@ -185,7 +211,14 @@ ${JSON.stringify(tools.map(t => ({
     }, {
       model: 'openai:gpt-3.5-turbo',
       temperature: 0.2,
-      max_tokens: 1000
+      max_tokens: 1000,
+      supabase: this.supabase,
+      entityType: this.context.profileId ? 'profile' : 
+                 this.context.roleId ? 'role' : 
+                 this.context.sessionId ? 'chat' : undefined,
+      entityId: this.context.profileId || 
+                this.context.roleId || 
+                this.context.sessionId
     });
 
     if (!aiResponse.success || !aiResponse.output) {
@@ -237,9 +270,38 @@ ${JSON.stringify(tools.map(t => ({
           throw new Error(`Tool not found: ${action.tool}`);
         }
 
+        // Log detailed execution context
+        console.log(`Executing tool ${action.tool} with:`, {
+          args: action.args,
+          contextKeys: Object.keys(this.context),
+          contextValues: {
+            profileId: this.context.profileId,
+            roleId: this.context.roleId,
+            mode: this.context.mode,
+            // Add other relevant context values
+          },
+          toolRequirements: {
+            requiredContext: tool.requiredContext || [],
+            hasArgsSchema: !!tool.argsSchema
+          }
+        });
+
+        // Include supabase client in the execution context
+        const executionContext = {
+          ...this.context,
+          supabase: this.supabase
+        };
+
         const result = await tool.run({
-          context: this.context,
+          context: executionContext,
           args: action.args
+        });
+
+        // Log successful execution
+        console.log(`Tool ${action.tool} executed successfully:`, {
+          inputArgs: action.args,
+          resultKeys: result ? Object.keys(result) : [],
+          success: true
         });
 
         // Store result
@@ -254,7 +316,18 @@ ${JSON.stringify(tools.map(t => ({
         this.context[action.tool] = result;
 
       } catch (error) {
-        console.error(`Action ${action.tool} failed:`, error);
+        console.error(`Action ${action.tool} failed:`, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          args: action.args,
+          contextKeys: Object.keys(this.context),
+          contextValues: {
+            profileId: this.context.profileId,
+            roleId: this.context.roleId,
+            mode: this.context.mode
+          }
+        });
+        
         this.intermediateResults.push({
           tool: action.tool,
           input: action.args,
@@ -269,7 +342,12 @@ ${JSON.stringify(tools.map(t => ({
     console.log('Actions executed:', {
       total: this.plan.length,
       successful: this.intermediateResults.filter(r => r.success).length,
-      failed: this.intermediateResults.filter(r => !r.success).length
+      failed: this.intermediateResults.filter(r => !r.success).length,
+      results: this.intermediateResults.map(r => ({
+        tool: r.tool,
+        success: r.success,
+        error: r.error
+      }))
     });
   }
 

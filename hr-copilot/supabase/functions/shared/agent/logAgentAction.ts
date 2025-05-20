@@ -12,6 +12,17 @@ export interface AgentAction {
   semanticMetrics?: SemanticMetrics;
 }
 
+// Actions that don't need embeddings (simple status updates or processing steps)
+const SKIP_EMBEDDING_ACTIONS = [
+  'Applied response formatting',
+  'Retrieved planner recommendations',
+  'Retrieved conversation context',
+  'Executed candidate mode processing',
+  'MCP Processing Step V2',
+  'Tool Execution',
+  'Processing Step'
+];
+
 /**
  * Log an agent action with optional semantic metrics
  */
@@ -20,9 +31,19 @@ export async function logAgentAction(
   action: AgentAction
 ): Promise<void> {
   try {
-    // Generate a summary of the action for embedding
-    const actionSummary = `${action.entityType} ${action.payload.type || action.payload.stage || 'action'}: ${JSON.stringify(action.payload)}`;
-    const embedding = await generateEmbedding(actionSummary);
+    // Check if this is a simple status update or processing step
+    const actionType = action.payload.type || action.payload.action || action.payload.stage;
+    const shouldSkipEmbedding = SKIP_EMBEDDING_ACTIONS.some(skipAction => 
+      actionType?.includes(skipAction) || 
+      action.payload.reason?.includes(skipAction)
+    );
+
+    let embedding = null;
+    if (!shouldSkipEmbedding) {
+      // Generate a summary of the action for embedding
+      const actionSummary = `${action.entityType} ${actionType}: ${JSON.stringify(action.payload)}`;
+      embedding = await generateEmbedding(actionSummary);
+    }
 
     const { error } = await supabase
       .from('agent_actions')
