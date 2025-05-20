@@ -16,6 +16,8 @@ import { testJobMatching } from '../../../job/testJobMatching.ts';
 import { logAgentAction } from '../../../agent/logAgentAction.ts';
 import { logAgentResponse } from '../../../chatUtils.ts';
 import { MCPActionV2 } from '../../types/action.ts';
+import { getRolesMatching } from '../../../role/getRolesMatching.ts';
+import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButton.ts';
 
 async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPResponse> {
   const supabase = request.supabase as SupabaseClient<Database>;
@@ -102,7 +104,7 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
       };
     }
 
-    // Phase 2: Find matching jobs with enhanced logging
+    // Phase 2: Find matching roles with enhanced logging
     if (sessionId) {
       await logAgentResponse(
         supabase,
@@ -116,13 +118,14 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
     const recommendations: any[] = [];
 
     try {
-      const jobMatchingResult = await testJobMatching(supabase, profileId, {
+      const roleMatchingResult = await getRolesMatching(supabase, profileId, {
         limit: 20,
-        threshold: 0.7
+        threshold: 0.7,
+        includeDetails: true
       });
 
-      console.log('Job matching completed:', {
-        matchCount: jobMatchingResult.matches.length,
+      console.log('Role matching completed:', {
+        matchCount: roleMatchingResult.matches.length,
         threshold: 0.7
       });
 
@@ -131,29 +134,31 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
         await logAgentResponse(
           supabase,
           sessionId,
-          `Found ${jobMatchingResult.matches.length} potential matches. Processing results...`,
+          `Found ${roleMatchingResult.matches.length} potential matches. Processing results...`,
           'processing_matches'
         );
       }
 
-      if (jobMatchingResult.matches.length > 0) {
-        matches.push(...jobMatchingResult.matches.map(match => ({
+      if (roleMatchingResult.matches.length > 0) {
+        matches.push(...roleMatchingResult.matches.map(match => ({
           id: match.roleId,
-          name: match.jobTitle,
+          name: match.title,
           similarity: match.semanticScore,
           type: 'role' as const,
           summary: match.summary
         })));
 
-        recommendations.push(...jobMatchingResult.matches.map(match => ({
-          type: 'job_opportunity',
-          score: match.score,
+        recommendations.push(...roleMatchingResult.matches.map(match => ({
+          type: 'role_match',
+          score: match.semanticScore,
           semanticScore: match.semanticScore,
           summary: match.summary,
           details: {
-            jobId: match.jobId,
             roleId: match.roleId,
-            title: match.jobTitle
+            title: match.title,
+            department: match.details?.department,
+            location: match.details?.location,
+            matchedSkills: match.details?.matchedSkills
           }
         })));
 
@@ -166,10 +171,13 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
 
           const matchesMarkdown = `### 🎯 Top Matching Roles
 
-${jobMatchingResult.matches.slice(0, 5).map((match, index) => `${index + 1}. **${match.jobTitle}** (${(match.semanticScore * 100).toFixed(0)}% match)
-   ${truncateSummary(match.summary)}`).join('\n\n')}
+${roleMatchingResult.matches.slice(0, 5).map((match, index) => `**${index + 1}. ${match.title}** (${(match.semanticScore * 100).toFixed(0)}% match)
+   ${truncateSummary(match.summary)}
+   ${match.details?.department ? `📍 ${match.details.department}` : ''}
 
-Reply with a number to learn more about that role, or ask about skill gaps or development plans.`;
+${ActionButtons.roleExplorationSet(profileId, match.roleId, match.title)}`).join('\n\n')}
+
+Select an action above to learn more about any role.`;
 
           await logAgentResponse(
             supabase,
@@ -178,17 +186,16 @@ Reply with a number to learn more about that role, or ask about skill gaps or de
             'matches_found'
           );
         }
-
       }
 
     } catch (matchError) {
-      console.error('Error during job matching:', matchError);
+      console.error('Error during role matching:', matchError);
       return {
         success: false,
         message: 'Failed to find matching roles',
         error: {
           type: 'MATCHING_ERROR',
-          message: 'Error during job matching process',
+          message: 'Error during role matching process',
           details: matchError
         }
       };
@@ -211,8 +218,8 @@ Reply with a number to learn more about that role, or ask about skill gaps or de
       semanticMetrics: {
         similarityScores: {
           roleMatch: matches.length > 0 ? matches[0].similarity : 0,
-          skillAlignment: 0.8,
-          capabilityAlignment: 0.75
+          skillAlignment: matches.length > 0 ? matches[0].similarity : 0,
+          capabilityAlignment: matches.length > 0 ? matches[0].similarity : 0
         },
         matchingStrategy: 'semantic',
         confidenceScore: 0.9
@@ -221,6 +228,7 @@ Reply with a number to learn more about that role, or ask about skill gaps or de
 
     return {
       success: true,
+      message: `Found ${matches.length} matching roles`,
       data: {
         matches: matches.slice(0, 10),
         recommendations: recommendations.slice(0, 5),
