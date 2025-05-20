@@ -1,4 +1,4 @@
-import { AIPromptInput, SafePromptConfig, SafePrompt } from './types';
+import { AIPromptInput, SafePromptConfig, SafePrompt } from './types.ts';
 
 const DEFAULT_CONFIG: SafePromptConfig = {
   maxLength: 4000,

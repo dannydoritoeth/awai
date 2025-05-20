@@ -18,13 +18,13 @@
  * - Ensure required inputs are present and valid
  */
 
-import { z } from "https://esm.sh/zod@3.22.4";
+import { z } from "https://deno.land/x/zod/mod.ts";
 import { getCapabilityGaps } from './getCapabilityGaps/action.ts';
 import { getDevelopmentPlan } from './getDevelopmentPlan/action.ts';
 import { getMatchingRolesForPerson } from './getMatchingRolesForPerson/action.ts';
 import { getSemanticSkillRecommendations } from './getSemanticSkillRecommendations/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
-import { MCPActionV2 } from '../types/action.ts';
+import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
 
 const capabilityGapsSchema = z.object({
@@ -40,86 +40,144 @@ const actions: MCPActionV2[] = [
 //   getSuggestedCareerPaths
 ];
 
-export const ActionV2Registry = {
+/**
+ * Registry for MCP V2 actions/tools
+ */
+export class ActionV2Registry {
+  private static tools: Map<string, ToolMetadataV2> = new Map();
 
-    /**
-     * Returns a full prompt including descriptions and recommended order
-     * for use by the planner model.
-     */
-    buildPlannerPromptWithPathways: (): string => {
-      return [
-        'Available Actions:',
-        ...actions.map(a => {
-          const after = a.recommendedAfter?.length ? a.recommendedAfter.join(', ') : 'none';
-          const before = a.recommendedBefore?.length ? a.recommendedBefore.join(', ') : 'none';
-          return `- ${a.id}: ${a.description}\n  Recommended After: ${after}\n  Recommended Before: ${before}`;
-        })
-      ].join('\n\n');
-    },
-  
-    /**
-     * Returns only metadata used for listing actions in tools format (e.g. for tool calling)
-     */
-    getToolMetadataList: (): { name: string; description: string; argsSchema: z.ZodTypeAny; run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any> }[] => {
-      return actions.map(a => ({
-        name: a.id,
-        description: a.description ?? '',
-        argsSchema: a.argsSchema ?? z.object({}),
-        run: async ({ context, args }) => a.actionFn({ ...context, ...args })
-      }));
-    },
-  
-    /**
-     * Returns all actions that include a given tag.
-     */
-    getByTag: (tag: string): MCPActionV2[] =>
-      actions.filter(a => a.tags?.includes(tag) ?? false),
-  
-    /**
-     * Returns all registered actions.
-     */
-    list: (): MCPActionV2[] => actions,
-  
-    /**
-     * Returns an action by ID.
-     */
-    get: (id: string): MCPActionV2 | undefined =>
-      actions.find((a) => a.id === id),
-  
-    /**
-     * Returns true if the action ID is registered.
-     */
-    has: (id: string): boolean =>
-      actions.some((a) => a.id === id),
-  
-    /**
-     * Filters actions by their applicable role types.
-     */
-    getApplicable: (role: string): MCPActionV2[] =>
-      actions.filter((a) => a.applicableRoles.includes(role)),
-  
-    /**
-     * Simple prompt description (no ordering).
-     */
-    getDescriptionsForPlannerPrompt: (): string =>
-      actions.map((a) => `- ${a.id}: ${a.description}`).join('\n'),
-  
-    /**
-     * Validates inputs using Zod if available, otherwise falls back to checking required keys.
-     */
-    validateInputs: (id: string, ctx: Record<string, any>): { valid: boolean; missing: string[] } => {
-      const action = ActionV2Registry.get(id);
-      if (!action) return { valid: false, missing: ['Action not found'] };
-  
-      if (action.argsSchema) {
-        const result = action.argsSchema.safeParse(ctx);
-        return {
-          valid: result.success,
-          missing: result.success ? [] : result.error.errors.map(e => e.path.join('.'))
-        };
-      }
-  
-      const missing = action.requiredInputs.filter((key) => ctx[key] === undefined);
-      return { valid: missing.length === 0, missing };
+  /**
+   * Register a new tool
+   */
+  static register(tool: ToolMetadataV2) {
+    if (this.tools.has(tool.name)) {
+      throw new Error(`Tool ${tool.name} is already registered`);
     }
-  };
+    this.tools.set(tool.name, tool);
+  }
+
+  /**
+   * Get a tool by name
+   */
+  static getTool(name: string): ToolMetadataV2 | undefined {
+    return this.tools.get(name);
+  }
+
+  /**
+   * Get all registered tools
+   */
+  static getToolMetadataList(): ToolMetadataV2[] {
+    return Array.from(this.tools.values());
+  }
+
+  /**
+   * Clear all registered tools (mainly for testing)
+   */
+  static clear() {
+    this.tools.clear();
+  }
+
+  /**
+   * Returns a full prompt including descriptions and recommended order
+   * for use by the planner model.
+   */
+  static buildPlannerPromptWithPathways(): string {
+    return [
+      'Available Actions:',
+      ...actions.map(a => {
+        const after = a.recommendedAfter?.length ? a.recommendedAfter.join(', ') : 'none';
+        const before = a.recommendedBefore?.length ? a.recommendedBefore.join(', ') : 'none';
+        return `- ${a.id}: ${a.description}\n  Recommended After: ${after}\n  Recommended Before: ${before}`;
+      })
+    ].join('\n\n');
+  }
+
+  /**
+   * Returns only metadata used for listing actions in tools format (e.g. for tool calling)
+   */
+  static getToolMetadataList(): { name: string; description: string; argsSchema: z.ZodTypeAny; run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any> }[] {
+    return actions.map(a => ({
+      name: a.id,
+      description: a.description ?? '',
+      argsSchema: a.argsSchema ?? z.object({}),
+      run: async ({ context, args }) => a.actionFn({ ...context, ...args })
+    }));
+  }
+
+  /**
+   * Returns all actions that include a given tag.
+   */
+  static getByTag(tag: string): MCPActionV2[] {
+    return actions.filter(a => a.tags?.includes(tag) ?? false);
+  }
+
+  /**
+   * Returns all registered actions.
+   */
+  static list(): MCPActionV2[] {
+    return actions;
+  }
+
+  /**
+   * Returns an action by ID.
+   */
+  static get(id: string): MCPActionV2 | undefined {
+    return actions.find((a) => a.id === id);
+  }
+
+  /**
+   * Returns true if the action ID is registered.
+   */
+  static has(id: string): boolean {
+    return actions.some((a) => a.id === id);
+  }
+
+  /**
+   * Filters actions by their applicable role types.
+   */
+  static getApplicable(role: string): MCPActionV2[] {
+    return actions.filter((a) => a.applicableRoles.includes(role));
+  }
+
+  /**
+   * Simple prompt description (no ordering).
+   */
+  static getDescriptionsForPlannerPrompt(): string {
+    return actions.map((a) => `- ${a.id}: ${a.description}`).join('\n');
+  }
+
+  /**
+   * Validates inputs using Zod if available, otherwise falls back to checking required keys.
+   */
+  static validateInputs(id: string, ctx: Record<string, any>): { valid: boolean; missing: string[] } {
+    const action = ActionV2Registry.get(id);
+    if (!action) return { valid: false, missing: ['Action not found'] };
+
+    if (action.argsSchema) {
+      const result = action.argsSchema.safeParse(ctx);
+      return {
+        valid: result.success,
+        missing: result.success ? [] : result.error.errors.map(e => e.path.join('.'))
+      };
+    }
+
+    const missing = action.requiredInputs.filter((key) => ctx[key] === undefined);
+    return { valid: missing.length === 0, missing };
+  }
+
+  /**
+   * Returns a tool by name in the tool metadata format
+   */
+  static getTool(name: string): { name: string; description: string; argsSchema: z.ZodTypeAny; run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any>; requiredContext?: string[] } | undefined {
+    const action = actions.find(a => a.id === name);
+    if (!action) return undefined;
+
+    return {
+      name: action.id,
+      description: action.description ?? '',
+      argsSchema: action.argsSchema ?? z.object({}),
+      run: async ({ context, args }) => action.actionFn({ ...context, ...args }),
+      requiredContext: action.requiredInputs
+    };
+  }
+}

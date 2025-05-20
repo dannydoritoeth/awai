@@ -1,3 +1,6 @@
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js';
+import type { Database } from '../../../database.types.ts';
+
 export interface MCPActionMetadata {
   id: string;
   title: string;
@@ -16,11 +19,14 @@ export interface MCPRequest {
   roleId?: string;
   companyId?: string;
   mode: 'candidate' | 'hiring' | 'analyst' | 'general';
-  sessionId?: string;
+  sessionId: string;
+  messages: ChatMessage[];
   context?: {
     lastMessage?: string;
     [key: string]: any;
   };
+  plannerRecommendations?: any[];
+  availableTools?: ToolMetadata[];
   supabase: any; // Type will be SupabaseClient<Database>
 }
 
@@ -63,4 +69,102 @@ export interface MCPResponse<T = any> {
 
 export interface MCPActionV2 extends MCPActionMetadata {
   actionFn: (ctx: Record<string, any>) => Promise<any>; // replace with better typing if needed
+  argsSchema?: any; // Will be replaced with ZodSchema when we add Zod
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  toolCall?: {
+    tool: string;
+    args: Record<string, any>;
+  };
+}
+
+export interface ToolMetadata {
+  name: string;
+  description: string;
+  argsSchema: any; // Will be replaced with ZodSchema when we add Zod
+  run: (params: { context: any; args: Record<string, any> }) => Promise<any>;
+}
+
+export interface PlannedAction {
+  tool: string;
+  args: Record<string, any>;
+}
+
+export interface ActionResult {
+  tool: string;
+  input: any;
+  output: any;
+  success: boolean;
+  error?: string;
+}
+
+export interface ChatMessageV2 {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant' | 'system';
+  timestamp: string;
+  toolCall?: {
+    tool: string;
+    args: Record<string, any>;
+  };
+}
+
+export interface MCPRequestV2 {
+  mode: string;
+  sessionId?: string;
+  profileId?: string;
+  roleId?: string;
+  messages?: ChatMessageV2[];
+  context?: Record<string, any>;
+}
+
+export interface ActionResultV2 {
+  tool: string;
+  input: Record<string, any>;
+  output: any;
+  success: boolean;
+  error?: string;
+}
+
+export interface PlannedActionV2 {
+  tool: string;
+  args: Record<string, any>;
+}
+
+export interface MCPResponseV2 {
+  success: boolean;
+  error?: {
+    type: string;
+    message: string;
+    details?: any;
+  };
+  data?: {
+    context: Record<string, any>;
+    intermediateResults: ActionResultV2[];
+    plan: PlannedActionV2[];
+    semanticMatches?: any[];
+    summaryMessage?: string;
+    // Base MCP fields
+    matches?: any[];
+    recommendations?: string[];
+    chatResponse?: {
+      message: string;
+      followUpQuestion?: string;
+    };
+    nextActions?: string[];
+    actionsTaken?: string[];
+  };
+}
+
+export interface ToolMetadataV2 {
+  name: string;
+  description: string;
+  argsSchema: {
+    safeParse: (args: Record<string, any>) => { success: boolean; error?: { issues: string[] } };
+  };
+  requiredContext?: string[];
+  run: (params: { context: Record<string, any>; args: Record<string, any> }) => Promise<any>;
 } 

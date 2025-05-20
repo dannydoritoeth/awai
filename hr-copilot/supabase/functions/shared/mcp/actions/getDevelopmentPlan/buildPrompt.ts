@@ -1,4 +1,4 @@
-import { AIPromptInput } from '../../../ai/types';
+import { AIPromptInput } from '../../../ai/types.ts';
 
 interface AIContext {
   profile: {

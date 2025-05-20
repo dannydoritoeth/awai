@@ -7,7 +7,7 @@
  * - getMatchingRolesForPerson: Can suggest intermediate roles on career path
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { getCapabilityGaps } from '../getCapabilityGaps/action.ts';
 import { getSkillGaps } from '../../../profile/getSkillGaps.ts';

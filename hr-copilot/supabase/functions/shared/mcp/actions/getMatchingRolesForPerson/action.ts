@@ -7,7 +7,7 @@
  * - getSkillGaps: Used to assess technical fit with roles
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { MCPRequest, MCPResponse, SemanticMatch, NextAction, MCPAction, ProfileContext } from '../../../mcpTypes.ts';
 import { getProfileContext } from '../../../profile/getProfileContext.ts';

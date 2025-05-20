@@ -14,7 +14,7 @@
  * - getDevelopmentPlan: Uses these recommendations in planning
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';

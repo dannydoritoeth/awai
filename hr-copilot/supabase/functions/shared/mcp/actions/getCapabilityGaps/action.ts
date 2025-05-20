@@ -7,7 +7,7 @@
  * - getMatchingRolesForPerson: Uses capability matching for role recommendations
  */
 
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { DatabaseResponse, CapabilityGap } from '../../../types.ts';
 import { getLevelValue } from '../../../utils.ts';
