@@ -141,7 +141,8 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       success: true,
       data: {
         role: roleDetailResponse.data,
-        analysis: aiResponse.success ? aiResponse.output : 'Failed to analyze role details'
+        analysis: aiResponse.success ? aiResponse.output : 'Failed to analyze role details',
+        aiResponse: aiResponse
       },
     };
 
