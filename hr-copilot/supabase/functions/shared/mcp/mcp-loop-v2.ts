@@ -108,7 +108,6 @@ export class McpLoopRunner {
       // Fix common typos and ensure proper field mapping
       roleId: this.request.roleId || 
              this.request.context?.roleId || 
-             this.request.context?.roldId || // Handle typo
              this.request.context?.role_id,
       profileId: this.request.profileId || 
                 this.request.context?.profileId || 

@@ -298,5 +298,9 @@ export const getCapabilityGaps: MCPActionV2 = {
   recommendedAfter: ['getMatchingRolesForPerson', 'getSuggestedCareerPaths'],
   recommendedBefore: ['getDevelopmentPlan', 'getSemanticSkillRecommendations'],
   usesAI: false,
-  actionFn: (ctx: Record<string, any>) => getCapabilityGapsBase(ctx as MCPRequest)
+  actionFn: (ctx: Record<string, any>) => getCapabilityGapsBase(ctx as MCPRequest),
+  getDefaultArgs: (context: Record<string, any>) => ({
+    profileId: context.profileId,
+    roleId: context.roleId
+  })
 }; 

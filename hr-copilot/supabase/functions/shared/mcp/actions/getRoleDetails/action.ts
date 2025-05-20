@@ -199,7 +199,6 @@ export const getRoleDetails: MCPActionV2 = {
     console.log('getRoleDetails getDefaultArgs called with:', {
       contextKeys: Object.keys(context),
       roleId: context.roleId,
-      roldId: context.roldId, // Check for typo
       context: context.context
     });
     return {
