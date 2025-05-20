@@ -156,6 +156,29 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
             title: match.jobTitle
           }
         })));
+
+        // Format matches as markdown and log to chat
+        if (sessionId) {
+          const truncateSummary = (summary: string) => {
+            const firstSentence = summary.split('.')[0];
+            return firstSentence.length > 100 ? `${firstSentence.substring(0, 97)}...` : firstSentence;
+          };
+
+          const matchesMarkdown = `### 🎯 Top Matching Roles
+
+${jobMatchingResult.matches.slice(0, 5).map((match, index) => `${index + 1}. **${match.jobTitle}** (${(match.semanticScore * 100).toFixed(0)}% match)
+   ${truncateSummary(match.summary)}`).join('\n\n')}
+
+Reply with a number to learn more about that role, or ask about skill gaps or development plans.`;
+
+          await logAgentResponse(
+            supabase,
+            sessionId,
+            matchesMarkdown,
+            'matches_found'
+          );
+        }
+
       }
 
     } catch (matchError) {
@@ -276,5 +299,8 @@ export const getMatchingRolesForPerson: MCPActionV2 = {
   recommendedAfter: [],
   recommendedBefore: ['getCapabilityGaps', 'getDevelopmentPlan'],
   usesAI: false,
-  actionFn: (ctx: Record<string, any>) => getMatchingRolesForPersonBase(ctx as MCPRequest)
+  actionFn: (ctx: Record<string, any>) => getMatchingRolesForPersonBase(ctx as MCPRequest),
+  getDefaultArgs: (context: Record<string, any>) => ({
+    profileId: context.profileId
+  })
 }; 

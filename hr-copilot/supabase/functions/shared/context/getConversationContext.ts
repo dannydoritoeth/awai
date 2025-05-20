@@ -74,9 +74,9 @@ export async function getConversationContextV2(
 
   // Get conversation summary
   const { data: summary, error: summaryError } = await supabase
-    .from('conversation_summaries')
+    .from('conversation_sessions')
     .select('summary')
-    .eq('session_id', sessionId)
+    .eq('id', sessionId)
     .single();
 
   if (summaryError && summaryError.code !== 'PGRST116') {

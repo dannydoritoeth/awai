@@ -26,7 +26,12 @@ async function callMCPLoop(
   scope?: string,
   companyIds?: string[]
 ) {
-  const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
+  // Determine the endpoint based on mode
+  const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+  console.log('Calling MCP loop with endpoint:', endpoint);
+  console.log('endpoint', endpoint);
+  
+  const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -99,8 +104,13 @@ async function processInitialMessage(
     );
     if (messageError) throw messageError;
 
-    // Call MCP loop and wait for response
-    const mcpResponse = await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/mcp-loop', {
+
+    // Determine the endpoint based on mode
+    const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+    console.log('Calling MCP loop with endpoint:', endpoint);
+    console.log('endpoint', endpoint);
+    
+    const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -218,7 +228,13 @@ async function startSession(
       await postUserMessage(supabaseClient, sessionId, initialMessage, undefined, mcpLoopBody);
 
       // Trigger MCP loop asynchronously
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-loop`, {
+      // Determine the endpoint based on mode
+      const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+      console.log('Calling MCP loop with endpoint:', endpoint);
+      console.log('endpoint', endpoint);
+  
+
+      fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

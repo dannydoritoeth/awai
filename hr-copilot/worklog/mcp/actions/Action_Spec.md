@@ -59,7 +59,13 @@ This spec defines the implementation guidelines for each MCP Action. It ensures 
   - AI model config
   - AI response (summary and raw)
 
----
+## 📜 Get Default Args
+
+ - Implement a function to return the default arguments to call with the parameters from the context:
+   - implement getDefaultArgs?: (context: Record<string, any>) => Record<string, any>
+   - pass in the current context
+   - returns what args this action would need to be passed
+   - Used by the planner to get what actions are recommended next
 
 ## 🧪 Testing Guidance
 

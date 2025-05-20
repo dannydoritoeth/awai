@@ -54,9 +54,6 @@ Proactively identify and support at-risk or disengaged employees (including temp
 
 ## ⚙️ Action Descriptions
 
-### `getDevelopmentPlan` *(New - Required)*
-- Purpose-built for use after identifying gaps and recommended skills. Consolidates input from `getCapabilityGaps` and `getSemanticSkillRecommendations` to generate a personal development roadmap.
-
 ### `getMatchingRolesForPerson`
 - Finds internal roles where the employee already meets a high percentage of requirements.
 
@@ -71,6 +68,10 @@ Proactively identify and support at-risk or disengaged employees (including temp
 
 ### `logPlannedTransitions` *(New - Required)*
 - Stores a structured record of an intended internal move, optionally linked to a development plan.
+
+### `getDevelopmentPlan` *(New - Required)*
+- Purpose-built for use after identifying gaps and recommended skills. Consolidates input from `getCapabilityGaps` and `getSemanticSkillRecommendations` to generate a personal development roadmap.
+
 
 ---
 
@@ -116,6 +117,13 @@ Automatically trigger the tactical or strategic workflow when retention risk sig
 
 ## 🛠 Action Reference
 
+#### `getMatchingRolesForPerson` (Implemented in hiring.ts) 📊 Data Processing
+
+* **Purpose:** Identify internal roles with 70%+ fit
+* **Input:** `profileId`, optional filters (location, interests)
+* **Output:** Ranked list of suitable internal roles
+* **Used by:** Self-service portals, workforce planning
+
 #### `getSuggestedCareerPaths` (Enhanced – candidate.ts) 🔮 Uses AI
 
 * **Purpose:** Highlight logical next roles or career pivots, optionally guided by user-entered goals or interests.
@@ -131,13 +139,6 @@ Automatically trigger the tactical or strategic workflow when retention risk sig
   * P&C teams
   * Career support chatbots
   * Self-service dashboards and development planners
-
-#### `getMatchingRolesForPerson` (Implemented in hiring.ts) 📊 Data Processing
-
-* **Purpose:** Identify internal roles with 70%+ fit
-* **Input:** `profileId`, optional filters (location, interests)
-* **Output:** Ranked list of suitable internal roles
-* **Used by:** Self-service portals, workforce planning
 
 #### `getCapabilityGaps` (Implemented in candidate.ts) 📊 Data Processing
 

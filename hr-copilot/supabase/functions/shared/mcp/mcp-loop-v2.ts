@@ -176,22 +176,20 @@ export class McpLoopRunner {
 
 Follow this process:
 1. Read the context carefully to understand what has already been done and what the user wants.
-2. Select 1–5 tools that will help solve the user's request.
-3. Order the tools logically, ensuring each step has the required inputs.
+2. Select 1 tool that will help solve the user's request.
 4. Output your answer as a JSON array only.
 
 IMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.
 
 Each tool call must follow this format:
 [
-  { "tool": "tool_id", "args": { key: value } },
   { "tool": "tool_id", "args": { key: value } }
 ]
 
 If any required argument is unknown, skip that tool.
 
-Here is the current user context:
-${JSON.stringify(this.context, null, 2)}
+Here is the current user query:
+${JSON.stringify(this.context.content, null, 2)}
 
 Available tools:
 ${JSON.stringify(tools.map(t => ({
@@ -234,13 +232,29 @@ ${JSON.stringify(tools.map(t => ({
 
       // Validate each action
       this.plan = plan.map((action: any) => {
-        if (!action.tool || !action.args) {
-          throw new Error('Each action must have tool and args properties');
+        if (!action.tool) {
+          throw new Error('Each action must have a tool property');
         }
-        if (!tools.find(t => t.name === action.tool)) {
+
+        const tool = tools.find(t => t.name === action.tool);
+        if (!tool) {
           throw new Error(`Unknown tool: ${action.tool}`);
         }
-        return action as PlannedActionV2;
+
+        // Get the action implementation to access getDefaultArgs
+        const actionImpl = ActionV2Registry.get(action.tool);
+        
+        // Get default args if available and merge with provided args
+        const defaultArgs = actionImpl?.getDefaultArgs?.(this.context) || {};
+        const mergedArgs = {
+          ...defaultArgs,
+          ...(action.args || {}) // Provided args override defaults
+        };
+
+        return {
+          tool: action.tool,
+          args: mergedArgs
+        } as PlannedActionV2;
       });
 
       // Log plan

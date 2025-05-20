@@ -70,6 +70,7 @@ export interface MCPResponse<T = any> {
 export interface MCPActionV2 extends MCPActionMetadata {
   actionFn: (ctx: Record<string, any>) => Promise<any>; // replace with better typing if needed
   argsSchema?: any; // Will be replaced with ZodSchema when we add Zod
+  getDefaultArgs?: (context: Record<string, any>) => Record<string, any>; // Function to get default arguments for the action with context
 }
 
 export interface ChatMessage {
