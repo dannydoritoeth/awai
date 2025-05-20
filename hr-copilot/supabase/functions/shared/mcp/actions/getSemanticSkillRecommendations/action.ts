@@ -23,6 +23,7 @@ import { logAgentAction } from '../../../agent/logAgentAction.ts';
 import { logAgentResponse } from '../../../chatUtils.ts';
 import { buildSkillRecommendationsPrompt } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
+import { getLevelValue } from '../../../utils.ts';
 
 // Types for internal context vs AI context separation
 interface ActionContext {
@@ -136,19 +137,59 @@ async function getSemanticSkillRecommendationsBase(
       );
     }
 
-    const [profileSkills, roleSkills] = await Promise.all([
+    console.log('Fetching skills data:', { profileId, roleId });
+
+    const [profileSkillsResult, roleSkillsResult] = await Promise.all([
       supabase
         .from('profile_skills')
-        .select('id, name, level')
+        .select(`
+          skill_id,
+          rating,
+          evidence,
+          skills!inner (
+            id,
+            name,
+            category
+          )
+        `)
         .eq('profile_id', profileId),
       supabase
         .from('role_skills')
-        .select('id, name, required_level')
+        .select(`
+          skill_id,
+          skills!inner (
+            id,
+            name,
+            category
+          )
+        `)
         .eq('role_id', roleId)
     ]);
 
-    if (profileSkills.error || roleSkills.error) {
-      throw new Error('Failed to fetch skills data');
+    console.log('Skills data fetch results:', {
+      profileSkills: {
+        error: profileSkillsResult.error,
+        count: profileSkillsResult.data?.length || 0,
+        data: profileSkillsResult.data?.[0]
+      },
+      roleSkills: {
+        error: roleSkillsResult.error,
+        count: roleSkillsResult.data?.length || 0,
+        data: roleSkillsResult.data?.[0]
+      }
+    });
+
+    if (profileSkillsResult.error) {
+      throw new Error(`Failed to fetch profile skills: ${profileSkillsResult.error.message}`);
+    }
+
+    if (roleSkillsResult.error) {
+      throw new Error(`Failed to fetch role skills: ${roleSkillsResult.error.message}`);
+    }
+
+    // Even if no error, check if we got data
+    if (!profileSkillsResult.data || !roleSkillsResult.data) {
+      throw new Error('No skills data returned from database');
     }
 
     // Phase 2: Get semantic matches
@@ -173,8 +214,16 @@ async function getSemanticSkillRecommendationsBase(
     const context: ActionContext = {
       profileId,
       roleId,
-      profileSkills: profileSkills.data || [],
-      roleSkills: roleSkills.data || [],
+      profileSkills: profileSkillsResult.data.map(ps => ({
+        id: ps.skill_id,
+        name: ps.skills.name,
+        level: getLevelValue(ps.rating)
+      })),
+      roleSkills: roleSkillsResult.data.map(rs => ({
+        id: rs.skill_id,
+        name: rs.skills.name,
+        required_level: 3 // Default to intermediate since schema doesn't store level
+      })),
       semanticMatches,
       sessionId
     };
