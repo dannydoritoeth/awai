@@ -102,19 +102,35 @@ export class McpLoopRunner {
     // Generate embedding for the latest message
     const embeddedMessage = await this.deps.generateEmbedding(latestMessage);
 
+    // Normalize context fields and handle common typos
+    const normalizedContext = {
+      ...(this.request.context || {}),
+      // Fix common typos and ensure proper field mapping
+      roleId: this.request.roleId || 
+             this.request.context?.roleId || 
+             this.request.context?.roldId || // Handle typo
+             this.request.context?.role_id,
+      profileId: this.request.profileId || 
+                this.request.context?.profileId || 
+                this.request.context?.profile_id
+    };
+
     // Initialize base context with request-specific fields
     this.context = {
-      ...this.context,
+      ...normalizedContext,
       embeddedMessage,
       mode: this.request.mode,
       messages: this.request.messages || [],
       latestMessage,
-      // Add request-specific fields
-      profileId: this.request.profileId,
-      roleId: this.request.roleId,
-      // Preserve any existing context fields
-      ...(this.request.context || {})
     };
+
+    // Log normalized context for debugging
+    console.log('Normalized context:', {
+      roleId: this.context.roleId,
+      profileId: this.context.profileId,
+      mode: this.context.mode,
+      messageCount: this.context.messages.length
+    });
 
     // Only load conversation context if session ID is provided
     if (this.request.sessionId) {
@@ -189,7 +205,7 @@ Each tool call must follow this format:
 If any required argument is unknown, skip that tool.
 
 Here is the current user query:
-${JSON.stringify(this.context.content, null, 2)}
+${JSON.stringify(this.context, null, 2)}
 
 Available tools:
 ${JSON.stringify(tools.map(t => ({
@@ -236,24 +252,14 @@ ${JSON.stringify(tools.map(t => ({
           throw new Error('Each action must have a tool property');
         }
 
-        const tool = tools.find(t => t.name === action.tool);
-        if (!tool) {
+        const loadedTool = ActionV2Registry.loadToolWithArgs(action.tool, this.context, action.args);
+        if (!loadedTool) {
           throw new Error(`Unknown tool: ${action.tool}`);
         }
 
-        // Get the action implementation to access getDefaultArgs
-        const actionImpl = ActionV2Registry.get(action.tool);
-        
-        // Get default args if available and merge with provided args
-        const defaultArgs = actionImpl?.getDefaultArgs?.(this.context) || {};
-        const mergedArgs = {
-          ...defaultArgs,
-          ...(action.args || {}) // Provided args override defaults
-        };
-
         return {
           tool: action.tool,
-          args: mergedArgs
+          args: loadedTool.args
         } as PlannedActionV2;
       });
 
@@ -279,14 +285,14 @@ ${JSON.stringify(tools.map(t => ({
         // Validate action before execution
         await this.validateAction(action);
 
-        const tool = ActionV2Registry.getTool(action.tool);
-        if (!tool) {
+        const loadedTool = ActionV2Registry.loadToolWithArgs(action.tool, this.context, action.args);
+        if (!loadedTool) {
           throw new Error(`Tool not found: ${action.tool}`);
         }
 
         // Log detailed execution context
         console.log(`Executing tool ${action.tool} with:`, {
-          args: action.args,
+          args: loadedTool.args,
           contextKeys: Object.keys(this.context),
           contextValues: {
             profileId: this.context.profileId,
@@ -295,8 +301,8 @@ ${JSON.stringify(tools.map(t => ({
             // Add other relevant context values
           },
           toolRequirements: {
-            requiredContext: tool.requiredContext || [],
-            hasArgsSchema: !!tool.argsSchema
+            requiredContext: loadedTool.tool.requiredContext || [],
+            hasArgsSchema: !!loadedTool.tool.argsSchema
           }
         });
 
@@ -306,14 +312,14 @@ ${JSON.stringify(tools.map(t => ({
           supabase: this.supabase
         };
 
-        const result = await tool.run({
+        const result = await loadedTool.tool.run({
           context: executionContext,
-          args: action.args
+          args: loadedTool.args
         });
 
         // Log successful execution
         console.log(`Tool ${action.tool} executed successfully:`, {
-          inputArgs: action.args,
+          inputArgs: loadedTool.args,
           resultKeys: result ? Object.keys(result) : [],
           success: true
         });
@@ -321,7 +327,7 @@ ${JSON.stringify(tools.map(t => ({
         // Store result
         this.intermediateResults.push({
           tool: action.tool,
-          input: action.args,
+          input: loadedTool.args,
           output: result,
           success: true
         });
@@ -369,20 +375,20 @@ ${JSON.stringify(tools.map(t => ({
    * Validates an action's arguments against its schema
    */
   private async validateAction(action: PlannedActionV2): Promise<void> {
-    const tool = ActionV2Registry.getTool(action.tool);
-    if (!tool) {
+    const loadedTool = ActionV2Registry.loadToolWithArgs(action.tool, this.context, action.args);
+    if (!loadedTool) {
       throw new Error(`Tool not found: ${action.tool}`);
     }
 
-    if (tool.argsSchema) {
-      const parseResult = tool.argsSchema.safeParse(action.args);
+    if (loadedTool.tool.argsSchema) {
+      const parseResult = loadedTool.tool.argsSchema.safeParse(loadedTool.args);
       if (!parseResult.success) {
         throw new Error(`Invalid arguments for ${action.tool}: ${JSON.stringify(parseResult.error.issues)}`);
       }
     }
 
     // Validate required context is available
-    const requiredContext = tool.requiredContext || [];
+    const requiredContext = loadedTool.tool.requiredContext || [];
     for (const key of requiredContext) {
       if (!(key in this.context)) {
         throw new Error(`Missing required context for ${action.tool}: ${key}`);

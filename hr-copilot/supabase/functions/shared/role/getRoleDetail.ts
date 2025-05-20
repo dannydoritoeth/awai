@@ -19,6 +19,51 @@ export interface RoleDetail {
   }[];
 }
 
+/**
+ * Find a role by title using fuzzy matching
+ */
+export async function findRoleByTitle(
+  supabase: SupabaseClient,
+  title: string
+): Promise<DatabaseResponse<{ id: string; title: string }>> {
+  try {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('id, title')
+      .ilike('title', `%${title}%`)
+      .limit(1)
+      .single();
+
+    if (error) {
+      return {
+        data: null,
+        error: {
+          type: 'NOT_FOUND',
+          message: 'Role not found',
+          details: error
+        }
+      };
+    }
+
+    return {
+      data: {
+        id: data.id,
+        title: data.title
+      },
+      error: null
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        type: 'DATABASE_ERROR',
+        message: 'Failed to search for role',
+        details: error
+      }
+    };
+  }
+}
+
 export async function getRoleDetail(
   supabase: SupabaseClient,
   roleId: string

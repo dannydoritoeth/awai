@@ -23,6 +23,7 @@ import { getCapabilityGaps } from './getCapabilityGaps/action.ts';
 import { getDevelopmentPlan } from './getDevelopmentPlan/action.ts';
 import { getMatchingRolesForPerson } from './getMatchingRolesForPerson/action.ts';
 import { getSemanticSkillRecommendations } from './getSemanticSkillRecommendations/action.ts';
+import { getRoleDetails } from './getRoleDetails/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -36,7 +37,8 @@ const actions: MCPActionV2[] = [
   getCapabilityGaps,
   getDevelopmentPlan,
   getMatchingRolesForPerson,
-  getSemanticSkillRecommendations
+  getSemanticSkillRecommendations,
+  getRoleDetails
 //   getSuggestedCareerPaths
 ];
 
@@ -165,6 +167,39 @@ export class ActionV2Registry {
       argsSchema: action.argsSchema ?? z.object({}),
       run: async ({ context, args }) => action.actionFn({ ...context, ...args }),
       requiredContext: action.requiredInputs
+    };
+  }
+
+  /**
+   * Loads a tool with its metadata and merged default args
+   */
+  static loadToolWithArgs(name: string, context: Record<string, any>, providedArgs?: Record<string, any>): { 
+    tool: { 
+      name: string; 
+      description: string; 
+      argsSchema: z.ZodTypeAny; 
+      run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any>;
+      requiredContext?: string[];
+    }; 
+    args: Record<string, any>;
+  } | undefined {
+    // Get tool metadata
+    const tool = this.getTool(name);
+    if (!tool) return undefined;
+
+    // Get action implementation for default args
+    const actionImpl = this.get(name);
+    const defaultArgs = actionImpl?.getDefaultArgs?.(context) || {};
+
+    // Merge args with defaults
+    const mergedArgs = {
+      ...defaultArgs,
+      ...(providedArgs || {}) // Provided args override defaults
+    };
+
+    return {
+      tool,
+      args: mergedArgs
     };
   }
 }
