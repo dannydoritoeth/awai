@@ -13,6 +13,18 @@ export interface ActionButtonProps {
   variant?: 'primary' | 'secondary' | 'outline';
   /** Optional size for the button (default is 'medium') */
   size?: 'small' | 'medium' | 'large';
+  /** Optional group ID to group related actions */
+  groupId?: string;
+}
+
+/**
+ * Interface for a group of related actions
+ */
+export interface ActionButtonGroup {
+  /** Unique identifier for the group */
+  groupId: string;
+  /** Actions in this group */
+  actions: ActionButtonProps[];
 }
 
 /**
@@ -36,14 +48,16 @@ export function renderMarkdownActionButton({
   actionId,
   params,
   variant = 'primary',
-  size = 'medium'
+  size = 'medium',
+  groupId
 }: ActionButtonProps): string {
   const actionBlock = {
     label,
     actionId,
     params,
     variant,
-    size
+    size,
+    ...(groupId && { groupId })
   };
 
   return `\`\`\`action
@@ -59,6 +73,27 @@ export function renderMarkdownActionButtons(buttons: ActionButtonProps[]): strin
 }
 
 /**
+ * Helper function to render a group of related actions as a dropdown
+ */
+export function renderMarkdownActionGroup(group: ActionButtonGroup): string {
+  const actionsWithGroup = group.actions.map(action => ({
+    ...action,
+    groupId: group.groupId
+  }));
+
+  return `\`\`\`action
+${JSON.stringify(actionsWithGroup, null, 2)}
+\`\`\``;
+}
+
+/**
+ * Helper function to render multiple action groups
+ */
+export function renderMarkdownActionGroups(groups: ActionButtonGroup[]): string {
+  return groups.map(group => renderMarkdownActionGroup(group)).join('\n\n');
+}
+
+/**
  * Helper function to render common action patterns
  */
 export const ActionButtons = {
@@ -68,7 +103,7 @@ export const ActionButtons = {
   learnMoreAboutRole: (roleId: string, roleTitle: string) => renderMarkdownActionButton({
     label: `Learn More About ${roleTitle}`,
     actionId: 'getRoleDetails',
-    params: { roleId },
+    params: { roleId, roleTitle },
     variant: 'primary',
     size: 'medium'
   }),
@@ -76,10 +111,10 @@ export const ActionButtons = {
   /**
    * Renders a "View Capability Gaps" button for a profile and role
    */
-  viewCapabilityGaps: (profileId: string, roleId: string) => renderMarkdownActionButton({
+  viewCapabilityGaps: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionButton({
     label: 'View Capability Gaps',
     actionId: 'getCapabilityGaps',
-    params: { profileId, roleId },
+    params: { profileId, roleId, roleTitle },
     variant: 'primary',
     size: 'medium'
   }),
@@ -87,38 +122,68 @@ export const ActionButtons = {
   /**
    * Renders a "Get Development Plan" button for a profile and role
    */
-  getDevelopmentPlan: (profileId: string, roleId: string) => renderMarkdownActionButton({
+  getDevelopmentPlan: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionButton({
     label: 'Get Development Plan',
     actionId: 'getDevelopmentPlan',
-    params: { profileId, roleId },
+    params: { profileId, roleId, roleTitle },
     variant: 'primary',
     size: 'medium'
   }),
 
   /**
-   * Renders a set of common role exploration buttons
+   * Renders a set of common role exploration buttons as individual buttons
    */
   roleExplorationSet: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionButtons([
     {
       label: `Learn More About ${roleTitle}`,
       actionId: 'getRoleDetails',
-      params: { roleId },
+      params: { roleId, roleTitle },
       variant: 'primary',
       size: 'medium'
     },
     {
       label: 'View Capability Gaps',
       actionId: 'getCapabilityGaps',
-      params: { profileId, roleId },
+      params: { profileId, roleId, roleTitle },
       variant: 'secondary',
       size: 'medium'
     },
     {
       label: 'Get Development Plan',
       actionId: 'getDevelopmentPlan',
-      params: { profileId, roleId },
+      params: { profileId, roleId, roleTitle },
       variant: 'outline',
       size: 'medium'
     }
-  ])
+  ]),
+
+  /**
+   * Renders a set of common role exploration buttons as a grouped dropdown
+   */
+  roleExplorationGroup: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionGroup({
+    groupId: `role_${roleId}`,
+    actions: [
+      {
+        label: `Learn More About ${roleTitle}`,
+        actionId: 'getRoleDetails',
+        params: { roleId, roleTitle },
+        variant: 'primary',
+        size: 'medium'
+      },
+      {
+        label: 'View Capability Gaps',
+        actionId: 'getCapabilityGaps',
+        params: { profileId, roleId, roleTitle },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'Get Development Plan',
+        actionId: 'getDevelopmentPlan',
+        params: { profileId, roleId, roleTitle },
+        variant: 'outline',
+        size: 'medium'
+      }
+    ]
+  })
 }; 

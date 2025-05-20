@@ -174,8 +174,7 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
 ${roleMatchingResult.matches.slice(0, 5).map((match, index) => `**${index + 1}. ${match.title}** (${(match.semanticScore * 100).toFixed(0)}% match)
    ${truncateSummary(match.summary)}
    ${match.details?.department ? `📍 ${match.details.department}` : ''}
-
-${ActionButtons.roleExplorationSet(profileId, match.roleId, match.title)}`).join('\n\n')}
+${ActionButtons.roleExplorationGroup(profileId, match.roleId, match.title)}`).join('\n\n')}
 
 Select an action above to learn more about any role.`;
 

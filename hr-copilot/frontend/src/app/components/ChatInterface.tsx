@@ -6,6 +6,22 @@ import remarkGfm from 'remark-gfm';
 import { ChatMessage, HeatmapRequestData } from '@/types/chat';
 import { CapabilityData } from './CapabilityHeatmap';
 import HeatmapModal from './HeatmapModal';
+import { createPortal } from 'react-dom';
+
+interface ActionButtonData {
+  label: string;
+  actionId: string;
+  params: Record<string, unknown>;
+  variant?: 'primary' | 'secondary' | 'outline';
+  size?: 'small' | 'medium' | 'large';
+  groupId?: string;
+}
+
+interface ActionButtonGroupData {
+  groupId: string;
+  title: string;
+  actions: ActionButtonData[];
+}
 
 interface HeatmapRequestParams {
   mode: string;
@@ -187,10 +203,198 @@ export default function ChatInterface({
 
   const closeHeatmapModal = () => setActiveHeatmapModal(null);
 
+  const handleActionButtonClick = async (actionData: ActionButtonData) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/actions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          actionId: actionData.actionId,
+          params: actionData.params
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to execute action: ${response.statusText}`);
+      }
+
+      await response.json();
+      
+      // Send the action result as a user message to continue the conversation
+      onSendMessage(`Executed action: ${actionData.label}`);
+      
+    } catch (error) {
+      console.error('Error executing action:', error);
+      // Optionally show an error message to the user
+    }
+  };
+
+  const ActionButton = ({ data, isUserMessage }: { data: ActionButtonData; isUserMessage: boolean }) => {
+    const baseClasses = "px-4 py-2 rounded-lg font-medium text-sm transition-colors";
+    const variantClasses = {
+      primary: isUserMessage 
+        ? "bg-blue-700 hover:bg-blue-800 text-white" 
+        : "bg-blue-600 hover:bg-blue-700 text-white",
+      secondary: isUserMessage
+        ? "bg-blue-200 hover:bg-blue-300 text-blue-900"
+        : "bg-blue-100 hover:bg-blue-200 text-blue-800",
+      outline: isUserMessage
+        ? "border-2 border-blue-400 hover:bg-blue-100 text-blue-700"
+        : "border-2 border-blue-500 hover:bg-blue-50 text-blue-600"
+    };
+    const sizeClasses = {
+      small: "px-3 py-1 text-sm",
+      medium: "px-4 py-2",
+      large: "px-6 py-3 text-lg"
+    };
+
+    return (
+      <button
+        onClick={() => handleActionButtonClick(data)}
+        className={`${baseClasses} ${variantClasses[data.variant || 'primary']} ${sizeClasses[data.size || 'medium']}`}
+      >
+        {data.label}
+      </button>
+    );
+  };
+
+  const ActionButtonGroup = ({ data, isUserMessage }: { data: ActionButtonGroupData; isUserMessage: boolean }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
+    // Update dropdown position when opening
+    useEffect(() => {
+      if (isOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 8, // 8px gap
+          left: rect.left + window.scrollX
+        });
+      }
+    }, [isOpen]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+            buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+          setIsOpen(false);
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const baseButtonClasses = "px-4 py-2 font-medium text-sm transition-colors";
+    const mainButtonClasses = isUserMessage 
+      ? "bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+      : "bg-blue-500 hover:bg-blue-600 text-white rounded-lg";
+    const dropdownItemClasses = isUserMessage
+      ? "hover:bg-blue-50 text-gray-700"
+      : "hover:bg-gray-50 text-gray-700";
+
+    return (
+      <div className="relative inline-block text-left">
+        <button
+          ref={buttonRef}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`${baseButtonClasses} ${mainButtonClasses} flex items-center justify-between gap-2 min-w-[200px]`}
+        >
+          <span>{data.title}</span>
+          <svg 
+            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {isOpen && (
+          <Portal>
+            <div
+              ref={dropdownRef}
+              style={{
+                position: 'fixed',
+                top: `${dropdownPosition.top}px`,
+                left: `${dropdownPosition.left}px`,
+              }}
+              className="z-[9999] w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100"
+            >
+              <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                {data.actions.map((action) => (
+                  <button
+                    key={action.actionId}
+                    onClick={() => {
+                      handleActionButtonClick(action);
+                      setIsOpen(false);
+                    }}
+                    className={`${baseButtonClasses} ${dropdownItemClasses} w-full text-left flex items-center`}
+                    role="menuitem"
+                  >
+                    {/* Add appropriate icon based on action type */}
+                    {action.actionId === 'getRoleDetails' && (
+                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    {action.actionId === 'getCapabilityGaps' && (
+                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    )}
+                    {action.actionId === 'getDevelopmentPlan' && (
+                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    )}
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Portal>
+        )}
+      </div>
+    );
+  };
+
+  // Add Portal component at the top of the file
+  const Portal = ({ children }: { children: React.ReactNode }) => {
+    const [mounted, setMounted] = useState(false);
+    const portalRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+      const portalRoot = document.createElement('div');
+      portalRoot.setAttribute('id', 'dropdown-portal');
+      document.body.appendChild(portalRoot);
+      portalRef.current = portalRoot;
+      setMounted(true);
+
+      return () => {
+        if (portalRoot.parentElement) {
+          portalRoot.parentElement.removeChild(portalRoot);
+        }
+      };
+    }, []);
+
+    if (!mounted || !portalRef.current) return null;
+    return createPortal(children, portalRef.current);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Messages Area */}
       <div 
+        data-chat-container
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 mb-[76px]"
       >
@@ -226,12 +430,60 @@ export default function ChatInterface({
                     td: (props) => <td className={`p-3 ${message.sender === 'user' ? 'text-white border-white/30' : 'text-gray-700 border-gray-300'}`} {...props} />,
                     hr: (props) => <hr className={`my-6 border-t ${message.sender === 'user' ? 'border-white/30' : 'border-gray-200'}`} {...props} />,
                     a: (props) => <a className={message.sender === 'user' ? 'text-white hover:text-blue-100 underline' : 'text-blue-600 hover:text-blue-800 underline'} {...props} />,
-                    code: ({inline, ...props}: {inline?: boolean} & React.HTMLProps<HTMLElement>) => 
-                      inline ? (
-                        <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props} />
+                    code: ({inline, className, children, ...props}: {inline?: boolean; className?: string; children?: React.ReactNode} & React.HTMLProps<HTMLElement>) => {
+                      const content = String(children || '').trim();
+                      
+                      if (className === 'language-action') {
+                        try {
+                          const actionData = JSON.parse(content);
+                          
+                          // Check if it's a group of actions
+                          if (Array.isArray(actionData) && actionData.length > 0 && actionData[0].groupId) {
+                            // Group actions by groupId
+                            const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
+                              const groupId = action.groupId || 'default';
+                              if (!groups[groupId]) {
+                                groups[groupId] = [];
+                              }
+                              groups[groupId].push(action);
+                              return groups;
+                            }, {});
+
+                            // Render each group
+                            return (
+                              <div className="space-y-2">
+                                {Object.entries(groupedActions).map(([groupId, actions]) => (
+                                  <ActionButtonGroup
+                                    key={groupId}
+                                    data={{
+                                      groupId: String(groupId),
+                                      title: String(actions[0].params.roleTitle || 'Actions'),
+                                      actions
+                                    }}
+                                    isUserMessage={message.sender === 'user'}
+                                  />
+                                ))}
+                              </div>
+                            );
+                          }
+                          
+                          // Single action button (fallback for backward compatibility)
+                          return <ActionButton data={actionData} isUserMessage={message.sender === 'user'} />;
+                        } catch (error) {
+                          console.error('Failed to parse action button data:', error);
+                          return <code {...props}>{children}</code>;
+                        }
+                      }
+                      return inline ? (
+                        <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props}>
+                          {children}
+                        </code>
                       ) : (
-                        <code className={`block rounded p-3 text-sm font-mono overflow-x-auto ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props} />
-                      ),
+                        <code className={`block rounded p-3 text-sm font-mono overflow-x-auto ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
                     pre: (props) => <pre className={`rounded p-3 overflow-x-auto font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100'}`} {...props} />,
                     blockquote: (props) => <blockquote className={`border-l-4 p-4 my-4 ${message.sender === 'user' ? 'border-white/50 bg-blue-700 text-white' : 'border-blue-500 bg-blue-50 text-gray-700'}`} {...props} />,
                   }}
