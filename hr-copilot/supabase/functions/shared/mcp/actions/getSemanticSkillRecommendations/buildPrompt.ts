@@ -47,13 +47,18 @@ to provide actionable skill development recommendations.
 Focus on practical, high-impact recommendations that will help the person progress toward their target role.
 Consider both direct skill gaps and semantically related skills that could provide value.
 
+CRITICAL INSTRUCTIONS FOR RESPONSE FORMAT:
+1. Respond ONLY with a valid JSON object
+2. DO NOT include any markdown formatting (no \`\`\`json or \`\`\`)
+3. DO NOT include any explanatory text before or after the JSON
+4. Ensure all JSON properties exactly match the specified interface
+5. Use proper JSON syntax (double quotes for strings, no trailing commas)
+
 For each recommendation, provide:
 1. Clear priority level (high/medium/low)
 2. Current and target skill levels
 3. Specific learning path with resources
-4. Brief explanation of why this skill is important
-
-Format the response as a JSON object matching the SkillRecommendations interface.`;
+4. Brief explanation of why this skill is important`;
 
   const user = `Please analyze the following context and provide skill recommendations:
 
@@ -66,29 +71,28 @@ ${roleSkillsList}
 SEMANTIC RECOMMENDATIONS:
 ${semanticRecommendationsList}
 
-Please provide:
-1. Prioritized list of skill recommendations
-2. Learning path for each skill
-3. Overall explanation of recommendations
-
-Format as JSON with:
+RESPONSE REQUIREMENTS:
+1. Return ONLY a JSON object with this exact structure:
 {
   "recommendations": [{
-    "name": string,
-    "priority": "high" | "medium" | "low",
-    "relevance": number,
-    "currentLevel": number | undefined,
-    "targetLevel": number,
+    "name": string,           // Name of the skill
+    "priority": string,       // Must be exactly "high", "medium", or "low"
+    "relevance": number,      // Number between 0 and 1
+    "currentLevel": number,   // Current skill level (1-5) or null if not present
+    "targetLevel": number,    // Target skill level (1-5)
     "learningPath": [{
-      "resource": string,
-      "type": string,
-      "duration": string,
-      "provider": string
+      "resource": string,     // Name or URL of the resource
+      "type": string,        // e.g., "course", "book", "workshop"
+      "duration": string,    // e.g., "2 weeks", "3 months"
+      "provider": string     // Organization providing the resource
     }],
-    "explanation": string
+    "explanation": string    // Why this skill is important
   }],
-  "explanation": string
-}`;
+  "explanation": string      // Overall explanation of recommendations
+}
+
+2. Ensure the response is a single, valid JSON object
+3. Do not include any text or formatting outside the JSON object`;
 
   return {
     system,

@@ -269,7 +269,24 @@ async function getSemanticSkillRecommendationsBase(
     }
 
     // Phase 4: Process and validate recommendations
-    const recommendations = JSON.parse(aiResponse.output) as SkillRecommendations;
+    // Strip markdown code block markers if present
+    const cleanOutput = aiResponse.output
+      .replace(/^```json\n/, '')  // Remove opening code block
+      .replace(/\n```$/, '')      // Remove closing code block
+      .trim();                    // Clean up whitespace
+
+    console.log('Parsing AI response:', {
+      originalOutput: aiResponse.output,
+      cleanOutput
+    });
+
+    let recommendations: SkillRecommendations;
+    try {
+      recommendations = JSON.parse(cleanOutput) as SkillRecommendations;
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError);
+      throw new Error(`Failed to parse AI recommendations: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
+    }
 
     if (sessionId) {
       await logAgentResponse(
