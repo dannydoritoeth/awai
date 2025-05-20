@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { ChatMessage, HeatmapRequestData } from '@/types/chat';
 import { CapabilityData } from './CapabilityHeatmap';
 import HeatmapModal from './HeatmapModal';
-import { createPortal } from 'react-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 interface ActionButtonData {
   label: string;
@@ -263,35 +263,6 @@ export default function ChatInterface({
   };
 
   const ActionButtonGroup = ({ data, isUserMessage }: { data: ActionButtonGroupData; isUserMessage: boolean }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const buttonRef = useRef<HTMLButtonElement>(null);
-    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-
-    // Update dropdown position when opening
-    useEffect(() => {
-      if (isOpen && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + window.scrollY + 8, // 8px gap
-          left: rect.left + window.scrollX
-        });
-      }
-    }, [isOpen]);
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-            buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
-          setIsOpen(false);
-        }
-      };
-
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
     const baseButtonClasses = "px-4 py-2 font-medium text-sm transition-colors";
     const mainButtonClasses = isUserMessage 
       ? "bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
@@ -301,93 +272,56 @@ export default function ChatInterface({
       : "hover:bg-gray-50 text-gray-700";
 
     return (
-      <div className="relative inline-block text-left">
-        <button
-          ref={buttonRef}
-          onClick={() => setIsOpen(!isOpen)}
-          className={`${baseButtonClasses} ${mainButtonClasses} flex items-center justify-between gap-2 min-w-[200px]`}
-        >
-          <span>{data.title}</span>
-          <svg 
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className={`${baseButtonClasses} ${mainButtonClasses} flex items-center justify-between gap-2 min-w-[200px]`}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        
-        {isOpen && (
-          <Portal>
-            <div
-              ref={dropdownRef}
-              style={{
-                position: 'fixed',
-                top: `${dropdownPosition.top}px`,
-                left: `${dropdownPosition.left}px`,
-              }}
-              className="z-[9999] w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100"
+            <span>{data.title}</span>
+            <svg 
+              className="w-4 h-4 transition-transform" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
             >
-              <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                {data.actions.map((action) => (
-                  <button
-                    key={action.actionId}
-                    onClick={() => {
-                      handleActionButtonClick(action);
-                      setIsOpen(false);
-                    }}
-                    className={`${baseButtonClasses} ${dropdownItemClasses} w-full text-left flex items-center`}
-                    role="menuitem"
-                  >
-                    {/* Add appropriate icon based on action type */}
-                    {action.actionId === 'getRoleDetails' && (
-                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                    {action.actionId === 'getCapabilityGaps' && (
-                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    )}
-                    {action.actionId === 'getDevelopmentPlan' && (
-                      <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    )}
-                    <span>{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Portal>
-        )}
-      </div>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </DropdownMenu.Trigger>
+
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="z-[9999] w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100"
+            sideOffset={5}
+          >
+            {data.actions.map((action) => (
+              <DropdownMenu.Item
+                key={action.actionId}
+                onSelect={() => handleActionButtonClick(action)}
+                className={`${baseButtonClasses} ${dropdownItemClasses} w-full text-left flex items-center outline-none cursor-pointer`}
+              >
+                {action.actionId === 'getRoleDetails' && (
+                  <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                {action.actionId === 'getCapabilityGaps' && (
+                  <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                )}
+                {action.actionId === 'getDevelopmentPlan' && (
+                  <svg className="mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                )}
+                <span>{action.label}</span>
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     );
-  };
-
-  // Add Portal component at the top of the file
-  const Portal = ({ children }: { children: React.ReactNode }) => {
-    const [mounted, setMounted] = useState(false);
-    const portalRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-      const portalRoot = document.createElement('div');
-      portalRoot.setAttribute('id', 'dropdown-portal');
-      document.body.appendChild(portalRoot);
-      portalRef.current = portalRoot;
-      setMounted(true);
-
-      return () => {
-        if (portalRoot.parentElement) {
-          portalRoot.parentElement.removeChild(portalRoot);
-        }
-      };
-    }, []);
-
-    if (!mounted || !portalRef.current) return null;
-    return createPortal(children, portalRef.current);
   };
 
   return (
