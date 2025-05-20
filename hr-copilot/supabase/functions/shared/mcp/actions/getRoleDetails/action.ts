@@ -1,10 +1,10 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
-import { getRoleDetail, RoleDetail } from '../../../role/getRoleDetail.ts';
+import { getRoleDetail } from '../../../role/getRoleDetail.ts';
 import { buildPromptInput } from './buildPrompt.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
+import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { logAgentAction } from '../../../agent/logAgentAction.ts';
 import { logAgentResponse } from '../../../chatUtils.ts';
 
@@ -27,13 +27,14 @@ import { logAgentResponse } from '../../../chatUtils.ts';
  * - getDevelopmentPlan
  */
 
-interface GetRoleDetailsArgs {
+interface GetRoleDetailsArgs extends MCPRequest {
   roleId: string;
 }
 
 async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
   try {
     const args = request as GetRoleDetailsArgs;
+    const supabase = request.supabase as SupabaseClient<Database>;
     
     // Debug logging for incoming request
     console.log('getRoleDetails request:', {
@@ -62,14 +63,20 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     }
 
     // Log data gathering step
-    logAgentResponse(request.sessionId, 'data_gathered', 'Fetching role details...');
+    await logAgentResponse(
+      supabase,
+      request.sessionId,
+      'Fetching role details...',
+      'data_gathered'
+    );
+
     console.log('Fetching role details for:', {
       roleId: args.roleId,
       sessionId: request.sessionId
     });
 
     // Get role details from database
-    const roleDetailResponse = await getRoleDetail(request.supabase as SupabaseClient<Database>, args.roleId);
+    const roleDetailResponse = await getRoleDetail(supabase, args.roleId);
     
     if (roleDetailResponse.error || !roleDetailResponse.data) {
       console.error('getRoleDetails database error:', {
@@ -92,38 +99,62 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     };
 
     // Build AI prompt
-    logAgentResponse(request.sessionId, 'prompt_built', 'Analyzing role details...');
+    await logAgentResponse(
+      supabase,
+      request.sessionId,
+      'Analyzing role details...',
+      'prompt_built'
+    );
+
     const promptInput = buildPromptInput(context);
     const safePrompt = buildSafePrompt(promptInput);
 
     // Invoke AI
-    logAgentResponse(request.sessionId, 'ai_invoked', 'Generating role insights...');
+    await logAgentResponse(
+      supabase,
+      request.sessionId,
+      'Generating role insights...',
+      'ai_invoked'
+    );
+
     const aiResponse = await invokeChatModel({
       system: safePrompt.system,
       user: safePrompt.user
     }, {
       model: 'openai:gpt-3.5-turbo',
       temperature: 0.2,
-      max_tokens: 1500
+      max_tokens: 1500,
+      supabase,
+      entityType: 'role',
+      entityId: args.roleId
     });
 
-    logAgentResponse(request.sessionId, 'response_received', 'Processing role analysis...');
+    await logAgentResponse(
+      supabase,
+      request.sessionId,
+      'Processing role analysis...',
+      'response_received'
+    );
 
     // Structure the final response
     const response: MCPResponse = {
       success: true,
       data: {
         role: roleDetailResponse.data,
-        analysis: aiResponse.choices[0].message.content
+        analysis: aiResponse.success ? aiResponse.output : 'Failed to analyze role details'
       },
     };
 
     // Log the action
-    await logAgentAction(request.supabase, {
-      type: 'getRoleDetails',
-      data: context,
-      prompt: safePrompt,
-      result: aiResponse
+    await logAgentAction(supabase, {
+      entityType: 'role',
+      entityId: args.roleId,
+      payload: {
+        action: 'getRoleDetails',
+        data: context,
+        prompt: safePrompt,
+        result: aiResponse
+      }
     });
 
     return response;
