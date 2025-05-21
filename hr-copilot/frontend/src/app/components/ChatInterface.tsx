@@ -11,7 +11,12 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 interface ActionButtonData {
   label: string;
   actionId: string;
-  params: Record<string, unknown>;
+  params: {
+    profileId?: string;
+    roleId?: string;
+    roleTitle?: string;
+    [key: string]: unknown;
+  };
   variant?: 'primary' | 'secondary' | 'outline';
   size?: 'small' | 'medium' | 'large';
   groupId?: string;
@@ -43,13 +48,15 @@ interface ChatInterfaceProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   sessionId: string;
+  profileId?: string;
 }
 
 export default function ChatInterface({
   messages,
   onSendMessage,
   isLoading,
-  sessionId
+  sessionId,
+  profileId
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
@@ -227,6 +234,13 @@ export default function ChatInterface({
 
   const handleActionButtonClick = async (actionData: ActionButtonData) => {
     try {
+      // Log the incoming action data
+      console.log('Action button clicked with data:', {
+        actionId: actionData.actionId,
+        params: actionData.params,
+        profileId: actionData.params.profileId
+      });
+
       // Generate natural language message based on action type
       let message = '';
       const roleTitle = actionData.params.roleTitle || 'this role';
@@ -257,10 +271,16 @@ export default function ChatInterface({
         sessionId,
         message,
         actionId: actionData.actionId,
-        ...actionData.params
+        roleId: actionData.params.roleId,
+        roleTitle: actionData.params.roleTitle,
+        ...(profileId && { profileId })
       };
 
-      console.log('Sending action request:', requestBody);
+      console.log('Sending action request with full details:', {
+        requestBody,
+        hasProfileId: !!profileId,
+        profileIdValue: profileId
+      });
 
       // Execute the action through chat endpoint
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {

@@ -74,6 +74,11 @@ export default function UnifiedResultsView({
   const lastMessageRef = useRef<ChatMessage | null>(null);
 
   useEffect(() => {
+    console.log('ProfileData changed:', {
+      hasProfileData: !!profileData,
+      profileId: profileData?.id,
+      name: profileData?.name
+    });
     setAdditionalContext(profileData?.additionalContext || '');
   }, [profileData]);
 
@@ -222,6 +227,15 @@ export default function UnifiedResultsView({
 
     const messageId = crypto.randomUUID();
     
+    // Log the current state
+    console.log('Preparing to send message with context:', {
+      sessionId,
+      messageId,
+      hasProfileData: !!profileData,
+      profileId: profileData?.id,
+      message
+    });
+    
     // Add user message to local state
     const userMessage: ChatMessage = {
       id: messageId,
@@ -234,18 +248,27 @@ export default function UnifiedResultsView({
     setIsLoading(true);
 
     try {
+      const requestBody = {
+        action: 'postMessage',
+        sessionId,
+        messageId,
+        message,
+        ...(profileData?.id && { profileId: profileData.id })
+      };
+
+      console.log('Sending chat request with full details:', {
+        requestBody,
+        hasProfileId: !!profileData?.id,
+        profileIdValue: profileData?.id
+      });
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
         },
-        body: JSON.stringify({
-          action: 'postMessage',
-          sessionId,
-          messageId,
-          message
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -432,6 +455,7 @@ export default function UnifiedResultsView({
             onSendMessage={handleSendMessage}
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
             sessionId={sessionId}
+            profileId={profileData?.id}
           />
         </div>
       </div>
