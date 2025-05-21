@@ -445,6 +445,33 @@ export default function UnifiedResultsView({
     }
   };
 
+  // Add a function to handle new role matches
+  const handleRoleMatchFound = (match: Match) => {
+    setMatches(prevMatches => {
+      // Check if we already have this match
+      const existingMatchIndex = prevMatches.findIndex(m => m.id === match.id);
+      
+      if (existingMatchIndex >= 0) {
+        // If the match exists and has a higher percentage, update it
+        if (match.matchPercentage > prevMatches[existingMatchIndex].matchPercentage) {
+          const updatedMatches = [...prevMatches];
+          updatedMatches[existingMatchIndex] = match;
+          return updatedMatches;
+        }
+        return prevMatches;
+      }
+      
+      // Add new match and sort by match percentage
+      const newMatches = [...prevMatches, match].sort((a, b) => b.matchPercentage - a.matchPercentage);
+      return newMatches;
+    });
+
+    // If we have matches and matches tab isn't showing, show the matches tab
+    if (activeTab !== 'matches' && profileData) {
+      setActiveTab('matches');
+    }
+  };
+
   return (
     <div ref={containerRef} className="flex gap-6 min-h-[600px]">
       {/* Left Panel - Chat Interface */}
@@ -456,6 +483,7 @@ export default function UnifiedResultsView({
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
             sessionId={sessionId}
             profileId={profileData?.id}
+            onRoleMatchFound={handleRoleMatchFound}
           />
         </div>
       </div>
@@ -516,6 +544,8 @@ export default function UnifiedResultsView({
               onExplainMatch={handleExplainMatch}
               onDevelopmentPath={handleDevelopmentPath}
               onCompare={handleCompare}
+              sessionId={sessionId}
+              profileId={profileData?.id}
             />
           )}
         </div>

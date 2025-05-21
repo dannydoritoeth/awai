@@ -15,6 +15,8 @@ interface ActionButtonData {
     profileId?: string;
     roleId?: string;
     roleTitle?: string;
+    matchPercentage?: number;
+    matchStatus?: string;
     [key: string]: unknown;
   };
   variant?: 'primary' | 'secondary' | 'outline';
@@ -49,6 +51,12 @@ interface ChatInterfaceProps {
   isLoading: boolean;
   sessionId: string;
   profileId?: string;
+  onRoleMatchFound?: (match: {
+    id: string;
+    name: string;
+    matchPercentage: number;
+    matchStatus: string;
+  }) => void;
 }
 
 export default function ChatInterface({
@@ -56,7 +64,8 @@ export default function ChatInterface({
   onSendMessage,
   isLoading,
   sessionId,
-  profileId
+  profileId,
+  onRoleMatchFound
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
@@ -297,6 +306,15 @@ export default function ChatInterface({
       }
 
       await response.json();
+
+      if (actionData.params.roleId && actionData.params.roleTitle) {
+        onRoleMatchFound?.({
+          id: actionData.params.roleId,
+          name: actionData.params.roleTitle,
+          matchPercentage: actionData.params.matchPercentage || 0,
+          matchStatus: actionData.params.matchStatus || 'now'
+        });
+      }
     } catch (error) {
       console.error('Error executing action:', error);
       // Optionally show an error message to the user
@@ -399,6 +417,39 @@ export default function ChatInterface({
     );
   };
 
+  const processActionButtons = (content: string) => {
+    try {
+      const actionData = JSON.parse(content);
+      
+      // If it's an array of actions, process each one
+      if (Array.isArray(actionData)) {
+        actionData.forEach(action => {
+          if (action.params.roleId && action.params.roleTitle) {
+            onRoleMatchFound?.({
+              id: action.params.roleId,
+              name: action.params.roleTitle,
+              matchPercentage: action.params.matchPercentage || 0,
+              matchStatus: action.params.matchStatus || 'now'
+            });
+          }
+        });
+      } 
+      // If it's a single action
+      else if (actionData.params?.roleId && actionData.params?.roleTitle) {
+        onRoleMatchFound?.({
+          id: actionData.params.roleId,
+          name: actionData.params.roleTitle,
+          matchPercentage: actionData.params.matchPercentage || 0,
+          matchStatus: actionData.params.matchStatus || 'now'
+        });
+      }
+      return actionData;
+    } catch (error) {
+      console.error('Failed to parse action button data:', error);
+      return null;
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Messages Area */}
@@ -443,45 +494,41 @@ export default function ChatInterface({
                       const content = String(children || '').trim();
                       
                       if (className === 'language-action') {
-                        try {
-                          const actionData = JSON.parse(content);
-                          
-                          // Check if it's a group of actions
-                          if (Array.isArray(actionData) && actionData.length > 0 && actionData[0].groupId) {
-                            // Group actions by groupId
-                            const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
-                              const groupId = action.groupId || 'default';
-                              if (!groups[groupId]) {
-                                groups[groupId] = [];
-                              }
-                              groups[groupId].push(action);
-                              return groups;
-                            }, {});
+                        const actionData = processActionButtons(content);
+                        if (!actionData) return <code {...props}>{children}</code>;
+                        
+                        // Check if it's a group of actions
+                        if (Array.isArray(actionData) && actionData.length > 0 && actionData[0].groupId) {
+                          // Group actions by groupId
+                          const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
+                            const groupId = action.groupId || 'default';
+                            if (!groups[groupId]) {
+                              groups[groupId] = [];
+                            }
+                            groups[groupId].push(action);
+                            return groups;
+                          }, {});
 
-                            // Render each group
-                            return (
-                              <div className="space-y-2">
-                                {Object.entries(groupedActions).map(([groupId, actions]) => (
-                                  <ActionButtonGroup
-                                    key={groupId}
-                                    data={{
-                                      groupId: String(groupId),
-                                      title: String(actions[0].params.roleTitle || 'Actions'),
-                                      actions
-                                    }}
-                                    isUserMessage={message.sender === 'user'}
-                                  />
-                                ))}
-                              </div>
-                            );
-                          }
-                          
-                          // Single action button (fallback for backward compatibility)
-                          return <ActionButton data={actionData} isUserMessage={message.sender === 'user'} />;
-                        } catch (error) {
-                          console.error('Failed to parse action button data:', error);
-                          return <code {...props}>{children}</code>;
+                          // Render each group
+                          return (
+                            <div className="space-y-2">
+                              {Object.entries(groupedActions).map(([groupId, actions]) => (
+                                <ActionButtonGroup
+                                  key={groupId}
+                                  data={{
+                                    groupId: String(groupId),
+                                    title: String(actions[0].params.roleTitle || 'Actions'),
+                                    actions
+                                  }}
+                                  isUserMessage={message.sender === 'user'}
+                                />
+                              ))}
+                            </div>
+                          );
                         }
+                        
+                        // Single action button
+                        return <ActionButton data={actionData} isUserMessage={message.sender === 'user'} />;
                       }
                       return inline ? (
                         <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props}>
