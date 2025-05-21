@@ -87,14 +87,100 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }
 
-    // Analyze gaps and generate summary
+    // Get profile capabilities
+    const { data: profileCapabilities, error: profileError } = await supabase
+      .from('profile_capabilities')
+      .select(`
+        capability_id,
+        level,
+        capabilities (
+          id,
+          name,
+          group_name
+        )
+      `)
+      .eq('profile_id', profileId);
+
+    if (profileError) {
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR',
+          message: 'Error fetching profile capabilities',
+          details: profileError
+        }
+      };
+    }
+
+    // Create map of profile capabilities for quick lookup
+    const profileCapMap = new Map<string, ProfileCapability>(
+      profileCapabilities?.map(pc => [pc.capability_id, {
+        level: pc.level,
+        name: pc.capabilities.name,
+        groupName: pc.capabilities.group_name
+      }]) || []
+    );
+
+    // Analyze gaps
+    const gaps: CapabilityGap[] = roleCapabilities?.map(rc => {
+      const profileCap = profileCapMap.get(rc.capability_id) || {
+        level: undefined,
+        name: rc.capabilities.name,
+        groupName: rc.capabilities.group_name
+      };
+
+      const requiredLevel = rc.level;
+      const currentLevel = profileCap.level;
+
+      let gapType: 'missing' | 'insufficient' | 'met' = 'missing';
+      let severity = 100;
+      let description = '';
+
+      if (currentLevel) {
+        const requiredValue = getLevelValue(requiredLevel);
+        const profileValue = getLevelValue(currentLevel);
+
+        if (profileValue >= requiredValue) {
+          gapType = 'met';
+          severity = 0;
+          description = `You meet or exceed the required level (${requiredLevel}) for this capability.`;
+        } else {
+          gapType = 'insufficient';
+          severity = ((requiredValue - profileValue) / requiredValue) * 100;
+          description = `Your current level (${currentLevel}) is below the required level (${requiredLevel}). Focus on developing this capability further.`;
+        }
+      } else {
+        description = `This capability is required at level ${requiredLevel} but not found in your profile. Consider developing this capability.`;
+      }
+
+      return {
+        capabilityId: rc.capability_id,
+        name: rc.capabilities.name,
+        groupName: rc.capabilities.group_name,
+        level: currentLevel,
+        requiredLevel,
+        gapType,
+        severity,
+        description
+      };
+    }) || [];
+
+    // Sort gaps by severity
+    gaps.sort((a, b) => {
+      if (a.severity !== b.severity) {
+        return b.severity - a.severity;
+      }
+      return (a.groupName || '').localeCompare(b.groupName || '');
+    });
+
+    // Generate summary
     const analysis = {
-      gaps: [], // Your gap analysis logic here
+      gaps,
       summary: {
-        criticalGaps: 0,
-        minorGaps: 0,
-        metRequirements: 0,
-        overallReadiness: 0,
+        criticalGaps: gaps.filter(g => g.severity > 70).length,
+        minorGaps: gaps.filter(g => g.severity > 0 && g.severity <= 70).length,
+        metRequirements: gaps.filter(g => g.severity === 0).length,
+        overallReadiness: 100 - (gaps.reduce((acc, g) => acc + g.severity, 0) / gaps.length),
         recommendations: []
       }
     };
@@ -103,10 +189,10 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
     if (sessionId && analysis.gaps.length > 0) {
       const gapsMarkdown = `### 📊 Capability Gap Analysis
 
-${analysis.gaps.map(gap => `**${gap.name}**: ${gap.level} → ${gap.requiredLevel}
+${analysis.gaps.map(gap => `**${gap.name}**: ${gap.level || 'Not Present'} → ${gap.requiredLevel}
 ${gap.description}`).join('\n\n')}
 
-Overall Readiness: ${analysis.summary.overallReadiness}%
+Overall Readiness: ${analysis.summary.overallReadiness.toFixed(1)}%
 Critical Gaps: ${analysis.summary.criticalGaps}
 Minor Gaps: ${analysis.summary.minorGaps}
 Met Requirements: ${analysis.summary.metRequirements}`;
