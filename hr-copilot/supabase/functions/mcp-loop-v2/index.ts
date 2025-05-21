@@ -14,6 +14,8 @@ import { generateEmbedding } from '../shared/semanticSearch.ts';
 import { getConversationContextV2 } from '../shared/context/getConversationContext.ts';
 import { invokeChatModel } from '../shared/ai/invokeAIModel.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
+import { logAgentProgress } from '../shared/chatUtils.ts';
+import { generateRequestHash } from '../shared/utils/generateRequestHash.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -24,6 +26,7 @@ const supabaseClient = createClient(
 // Constants for retry and error handling
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
+const CACHE_DURATION_MS = 1440 * 60 * 1000; // 1 day
 
 // Track retries per session to prevent endless loops
 const retryTracker = new Map<string, number>();
@@ -43,6 +46,71 @@ function clearRetryCount(sessionId: string): void {
   retryTracker.delete(sessionId);
 }
 
+// Helper to check for existing action result
+async function findExistingActionResult(supabase: any, actionType: string, requestHash: string): Promise<any> {
+  console.log('Checking for existing action result:', { actionType, requestHash });
+  
+  const { data, error } = await supabase
+    .from('agent_actions')
+    .select('*')
+    .eq('action_type', actionType)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error checking for existing action:', error);
+    return null;
+  }
+
+  if (!data) {
+    console.log('No existing result found for:', { actionType, requestHash });
+    return null;
+  }
+
+  // Check if the result is still valid (within cache duration)
+  const createdAt = new Date(data.created_at).getTime();
+  const now = Date.now();
+  if (now - createdAt > CACHE_DURATION_MS) {
+    console.log('Found cached result but it is expired:', {
+      actionType,
+      requestHash,
+      age: now - createdAt,
+      maxAge: CACHE_DURATION_MS
+    });
+    return null;
+  }
+
+  // Validate that we have a proper response
+  if (!data.response || typeof data.response !== 'object') {
+    console.log('Found result but response is invalid:', {
+      actionType,
+      requestHash,
+      responseType: typeof data.response
+    });
+    return null;
+  }
+
+  // Check if the response indicates success
+  if (!data.response.success) {
+    console.log('Found result but it was not successful:', {
+      actionType,
+      requestHash,
+      responseStatus: data.response.success
+    });
+    return null;
+  }
+
+  console.log('Found valid cached result:', {
+    actionType,
+    requestHash,
+    age: now - createdAt,
+    responseStatus: data.response.success
+  });
+
+  return data;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -51,6 +119,10 @@ serve(async (req) => {
   try {
     const request = await req.json();
     console.log('MCP Loop V2 Request:', request);
+
+    // Generate request hash
+    const requestHash = generateRequestHash(request);
+    console.log('Generated request hash:', requestHash);
 
     // Validate request
     if (!request.mode) {
@@ -90,10 +162,14 @@ serve(async (req) => {
     }
 
     // Initialize McpLoopRunner with dependencies
-    const runner = new McpLoopRunner(supabaseClient, request, {
+    const runner = new McpLoopRunner(supabaseClient, {
+      ...request,
+      requestHash // Pass the hash to the runner
+    }, {
       generateEmbedding,
       getConversationContext: getConversationContextV2,
-      invokeChatModel
+      invokeChatModel,
+      findExistingActionResult // Pass the helper function
     });
 
     // Run the MCP loop
@@ -163,45 +239,52 @@ serve(async (req) => {
 
     // Log actions for non-general modes
     if (response.success && response.data?.actionsTaken && request.mode !== 'general') {
+      // Log progress updates for each action
       for (const action of response.data.actionsTaken) {
         if (typeof action === 'string') {
-          await logAgentAction(supabaseClient, {
-            entityType: request.mode === 'candidate' ? 'profile' : 'role',
-            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-            payload: {
-              action,
-              reason: 'MCP Processing Step V2',
-              result: null
-            }
+          await logAgentProgress(supabaseClient, request.sessionId!, action, {
+            phase: 'processing',
+            step: action
           });
         } else {
           const nextAction = action as NextAction;
-          await logAgentAction(supabaseClient, {
-            entityType: request.mode === 'candidate' ? 'profile' : 'role',
-            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-            payload: {
-              action: nextAction.action,
-              reason: nextAction.reason,
-              result: nextAction.confidence
-            }
+          await logAgentProgress(supabaseClient, request.sessionId!, nextAction.reason, {
+            phase: 'processing',
+            step: nextAction.action,
+            confidence: nextAction.confidence
           });
         }
       }
 
-      // Also log intermediate results from V2
+      // Log intermediate results as progress updates
       if (mcpResult.data?.intermediateResults) {
         for (const result of mcpResult.data.intermediateResults) {
-          await logAgentAction(supabaseClient, {
-            entityType: request.mode === 'candidate' ? 'profile' : 'role',
-            entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-            payload: {
-              action: result.tool,
-              reason: 'MCP V2 Tool Execution',
-              result: result.success ? result.output : result.error
-            }
+          await logAgentProgress(supabaseClient, request.sessionId!, 
+            result.success ? `Completed ${result.tool}` : `Error in ${result.tool}`, {
+            phase: 'tool_execution',
+            step: result.tool,
+            error: result.success ? undefined : result.error
           });
         }
       }
+
+      // Log final action result with request hash
+      await logAgentAction(supabaseClient, {
+        entityType: request.mode === 'candidate' ? 'profile' : 'role',
+        entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
+        payload: {
+          action: 'mcp_v2_execution',
+          reason: 'Completed MCP loop V2 processing',
+          result: {
+            success: response.success,
+            actionCount: response.data.actionsTaken.length,
+            intermediateResultCount: mcpResult.data?.intermediateResults?.length || 0,
+            mode: request.mode
+          }
+        },
+        requestHash,
+        actionType: 'mcp_v2'
+      });
     }
 
     // Clear retry count on success
@@ -215,6 +298,15 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in MCP loop V2:', error);
+    
+    // Log error progress
+    if (request?.sessionId) {
+      await logAgentProgress(supabaseClient, request.sessionId, 'Error in MCP loop V2', {
+        phase: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+    
     return new Response(JSON.stringify({
       success: false,
       error: error.message

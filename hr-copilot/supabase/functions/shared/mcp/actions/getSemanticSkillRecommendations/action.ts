@@ -19,8 +19,7 @@ import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
 import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
-import { logAgentAction } from '../../../agent/logAgentAction.ts';
-import { logAgentResponse } from '../../../chatUtils.ts';
+import { logAgentProgress } from '../../../chatUtils.ts';
 import { buildSkillRecommendationsPrompt } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
 import { getLevelValue } from '../../../utils.ts';
@@ -129,11 +128,11 @@ async function getSemanticSkillRecommendationsBase(
 
     // Phase 1: Load profile and role skills
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Loading current skills and role requirements...",
-        'data_gathered'
+        { phase: 'data_gathering' }
       );
     }
 
@@ -194,11 +193,11 @@ async function getSemanticSkillRecommendationsBase(
 
     // Phase 2: Get semantic matches
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Finding semantically related skills...",
-        'data_gathered'
+        { phase: 'semantic_matching' }
       );
     }
 
@@ -232,11 +231,11 @@ async function getSemanticSkillRecommendationsBase(
 
     // Phase 3: Generate recommendations
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Analyzing skills and generating recommendations...",
-        'prompt_built'
+        { phase: 'prompt_building' }
       );
     }
 
@@ -244,11 +243,11 @@ async function getSemanticSkillRecommendationsBase(
     const safePrompt = buildSafePrompt(prompt);
 
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Generating AI-powered skill recommendations...",
-        'ai_invoked'
+        { phase: 'ai_generation' }
       );
     }
 
@@ -289,39 +288,13 @@ async function getSemanticSkillRecommendationsBase(
     }
 
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Finalizing skill recommendations...",
-        'response_received'
+        { phase: 'finalizing' }
       );
     }
-
-    // Log completion
-    await logAgentAction(supabase, {
-      entityType: 'profile',
-      entityId: profileId,
-      payload: {
-        action: 'skill_recommendations_generated',
-        summary: {
-          totalRecommendations: recommendations.recommendations.length,
-          highPriorityCount: recommendations.recommendations.filter(r => r.priority === 'high').length
-        },
-        prompt: safePrompt,
-        aiResponse: {
-          summary: recommendations.explanation,
-          raw: aiResponse.output
-        }
-      },
-      semanticMetrics: {
-        similarityScores: {
-          roleMatch: 0.8,
-          skillAlignment: semanticMatches.length > 0 ? semanticMatches[0].similarity : 0
-        },
-        matchingStrategy: 'semantic',
-        confidenceScore: 0.9
-      }
-    });
 
     return {
       success: true,
@@ -372,11 +345,11 @@ async function getSemanticSkillRecommendationsBase(
 
   } catch (error) {
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "I encountered an error while generating skill recommendations. Let me know if you'd like to try again.",
-        'recommendation_error'
+        { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
     }
 

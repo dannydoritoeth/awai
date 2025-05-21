@@ -12,8 +12,7 @@ import { Database } from '../../../../database.types.ts';
 import { DatabaseResponse, CapabilityGap } from '../../../types.ts';
 import { getLevelValue } from '../../../utils.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
-import { logAgentAction } from '../../../agent/logAgentAction.ts';
-import { logAgentResponse } from '../../../chatUtils.ts';
+import { logAgentProgress } from '../../../chatUtils.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
 import { getRoleDetail } from '../../../role/getRoleDetail.ts';
 
@@ -55,11 +54,11 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
 
     // Phase 1: Load profile and role data
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Loading profile and role data to analyze capability gaps...",
-        'data_loading'
+        { phase: 'data_loading' }
       );
     }
 
@@ -74,11 +73,11 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
 
     // Phase 2: Load capabilities data
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Loading capability requirements for the role...",
-        'loading_capabilities'
+        { phase: 'loading_capabilities' }
       );
     }
 
@@ -108,11 +107,11 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
 
     // Phase 3: Get profile capabilities
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Comparing your capabilities to the role requirements...",
-        'comparing_capabilities'
+        { phase: 'comparing_capabilities' }
       );
     }
 
@@ -204,29 +203,6 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       recommendations: []
     };
 
-    // Log completion
-    await logAgentAction(supabase, {
-      entityType: 'profile',
-      entityId: profileId,
-      payload: {
-        action: 'capability_gaps_analyzed',
-        roleId,
-        gapSummary: {
-          totalGaps: gaps.length,
-          criticalGaps: gaps.filter(g => g.severity > 70).length,
-          averageGapSize: gaps.reduce((acc, g) => acc + g.severity, 0) / gaps.length
-        }
-      },
-      semanticMetrics: {
-        similarityScores: {
-          roleMatch: 0.8,
-          capabilityAlignment: 0.75
-        },
-        matchingStrategy: 'data_processing',
-        confidenceScore: 0.9
-      }
-    });
-
     return {
       success: true,
       data: {
@@ -267,11 +243,11 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
 
   } catch (error) {
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "I encountered an error while analyzing capability gaps. Let me know if you'd like to try again.",
-        'capability_analysis_error'
+        { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
     }
 

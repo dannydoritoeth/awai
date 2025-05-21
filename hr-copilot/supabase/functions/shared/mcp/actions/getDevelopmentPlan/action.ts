@@ -17,8 +17,7 @@ import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
 import type { Tables } from '../../../embeddings.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
-import { logAgentAction } from '../../../agent/logAgentAction.ts';
-import { logAgentResponse } from '../../../chatUtils.ts';
+import { logAgentProgress } from '../../../chatUtils.ts';
 import { buildDevelopmentPlanPrompt } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
 
@@ -152,11 +151,11 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
     // Phase 1: Load profile and role data
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Loading profile and role data to create your development plan...",
-        'data_loading'
+        { phase: 'data_loading' }
       );
     }
 
@@ -171,11 +170,11 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
     // Phase 2: Analyze gaps
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Analyzing your current capabilities and skills compared to the role requirements...",
-        'gap_analysis'
+        { phase: 'gap_analysis' }
       );
     }
 
@@ -196,11 +195,11 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
     // Phase 3: Find potential mentors
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Finding potential mentors who can guide your development...",
-        'finding_mentors'
+        { phase: 'finding_mentors' }
       );
     }
 
@@ -226,11 +225,11 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
     // Phase 4: Generate development plan
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Creating your personalized development plan...",
-        'generating_plan'
+        { phase: 'generating_plan' }
       );
     }
 
@@ -257,34 +256,27 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
     const developmentPlan = JSON.parse(aiResponse.output);
     developmentPlan.explanation = `AI generated a personalized development plan with ${developmentPlan.recommendedSkills.length} skill recommendations, ${developmentPlan.interimRoles.length} suggested interim roles, and ${developmentPlan.suggestedMentors.length} potential mentors to support the journey.`;
 
-    // Phase 6: Log completion and results
-    await logAgentAction(supabase, {
-      entityType: 'profile',
-      entityId: profileId,
-      payload: {
-        action: 'development_plan_generated',
-        planSummary: {
-          skillCount: developmentPlan.recommendedSkills.length,
-          interimRoleCount: developmentPlan.interimRoles.length,
-          mentorCount: developmentPlan.suggestedMentors.length,
-          timeToReadiness: developmentPlan.estimatedTimeToReadiness
-        },
-        prompt: safePrompt,
-        aiResponse: {
-          summary: developmentPlan.explanation,
-          raw: aiResponse.output
-        }
-      },
-      semanticMetrics: {
-        similarityScores: {
-          roleMatch: 0.8,
-          skillAlignment: 0.7,
-          capabilityAlignment: 0.75
-        },
-        matchingStrategy: 'hybrid',
-        confidenceScore: 0.9
-      }
-    });
+    // // Phase 6: Log completion and results
+    // await logAgentAction(supabase, {
+    //   entityType: 'profile',
+    //   entityId: profileId,
+    //   payload: {
+    //     action: 'development_plan_created',
+    //     summary: {
+    //       totalRecommendations: developmentPlan.recommendedSkills.length,
+    //       highPriorityCount: developmentPlan.recommendedSkills.filter(r => r.priority === 'high').length,
+    //       timeframe: developmentPlan.estimatedTimeToReadiness
+    //     }
+    //   },
+    //   semanticMetrics: {
+    //     similarityScores: {
+    //       roleMatch: 0.8,
+    //       skillAlignment: 0.75
+    //     },
+    //     matchingStrategy: 'hybrid',
+    //     confidenceScore: 0.9
+    //   }
+    // });
 
     return {
       success: true,
@@ -344,11 +336,11 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
   } catch (error) {
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "I encountered an error while creating your development plan. Let me know if you'd like to try again.",
-        'plan_error'
+        { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
     }
 

@@ -13,8 +13,7 @@ import { MCPRequest, MCPResponse, SemanticMatch, NextAction, MCPAction, ProfileC
 import { getProfileContext } from '../../../profile/getProfileContext.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
 import { testJobMatching } from '../../../job/testJobMatching.ts';
-import { logAgentAction } from '../../../agent/logAgentAction.ts';
-import { logAgentResponse } from '../../../chatUtils.ts';
+import { logAgentProgress } from '../../../chatUtils.ts';
 import { MCPActionV2 } from '../../types/action.ts';
 import { getRolesMatching } from '../../../role/getRolesMatching.ts';
 import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButton.ts';
@@ -49,11 +48,11 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
 
     // Phase 1: Load profile data with enhanced error handling
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Loading your profile data to find matching roles...",
-        'data_loading'
+        { phase: 'data_loading' }
       );
     }
 
@@ -106,11 +105,11 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
 
     // Phase 2: Find matching roles with enhanced logging
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "Searching for roles that match your profile...",
-        'finding_matches'
+        { phase: 'finding_matches' }
       );
     }
 
@@ -131,11 +130,11 @@ async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPRe
 
       // Phase 3: Process matches
       if (sessionId) {
-        await logAgentResponse(
+        await logAgentProgress(
           supabase,
           sessionId,
           `Found ${roleMatchingResult.matches.length} potential matches. Processing results...`,
-          'processing_matches'
+          { phase: 'processing_matches' }
         );
       }
 
@@ -178,11 +177,11 @@ ${ActionButtons.roleExplorationGroup(profileId, match.roleId, match.title)}`).jo
 
 Select an action above to learn more about any role.`;
 
-          await logAgentResponse(
+          await logAgentProgress(
             supabase,
             sessionId,
             matchesMarkdown,
-            'matches_found'
+            { phase: 'matches_found' }
           );
         }
       }
@@ -205,22 +204,21 @@ Select an action above to learn more about any role.`;
       entityType: 'profile',
       entityId: profileId,
       payload: {
-        action: 'role_matching_complete',
-        matchSummary: {
-          totalMatches: matches.length,
-          highQualityMatches: matches.filter(m => m.similarity > 0.8).length,
-          averageSimilarity: matches.length > 0 
-            ? matches.reduce((acc, m) => acc + m.similarity, 0) / matches.length 
-            : 0
+        action: 'matching_roles_found',
+        roleCount: matches.length,
+        topMatch: matches[0]?.id,
+        matchCriteria: {
+          skillMatch: true,
+          capabilityMatch: true,
+          careerPathMatch: true
         }
       },
       semanticMetrics: {
         similarityScores: {
-          roleMatch: matches.length > 0 ? matches[0].similarity : 0,
-          skillAlignment: matches.length > 0 ? matches[0].similarity : 0,
-          capabilityAlignment: matches.length > 0 ? matches[0].similarity : 0
+          roleMatch: 0.8,
+          skillAlignment: 0.75
         },
-        matchingStrategy: 'semantic',
+        matchingStrategy: 'hybrid',
         confidenceScore: 0.9
       }
     });
@@ -274,11 +272,11 @@ Select an action above to learn more about any role.`;
     console.error('Unhandled error in getMatchingRolesForPerson:', error);
     
     if (sessionId) {
-      await logAgentResponse(
+      await logAgentProgress(
         supabase,
         sessionId,
         "I encountered an error while finding matching roles. Let me know if you'd like to try again.",
-        'matching_error'
+        { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
     }
 

@@ -140,7 +140,7 @@ const SKIP_EMBEDDING_MESSAGES = [
 ];
 
 /**
- * Log an agent response to a chat session
+ * @deprecated Use logAgentProgress instead. This function will be removed once MCP loop v2 handles all agent action logging.
  */
 export async function logAgentResponse(
   supabase: SupabaseClient<Database>,
@@ -150,13 +150,26 @@ export async function logAgentResponse(
   toolCall?: Record<string, any>,
   responseData?: Record<string, any>
 ): Promise<{ messageId: string; error?: ChatError }> {
+  console.warn('logAgentResponse is deprecated. Please use logAgentProgress instead.');
+  return logAgentProgress(supabase, sessionId, message, toolCall);
+}
+
+/**
+ * Log a progress update message to the chat session only
+ * This is the preferred way to log progress updates from actions since MCP loop v2 handles agent_actions logging
+ */
+export async function logAgentProgress(
+  supabase: SupabaseClient<Database>,
+  sessionId: string,
+  message: string,
+  toolCall?: Record<string, any>
+): Promise<{ messageId: string; error?: ChatError }> {
   try {
-    console.log('logAgentResponse called with:', { sessionId, message, actionType });
+    console.log('logAgentProgress called with:', { sessionId, message });
     
     // Check if this is a simple status update or processing step
     const shouldSkipEmbedding = SKIP_EMBEDDING_MESSAGES.some(skipMessage => 
       message.includes(skipMessage) || 
-      actionType?.includes(skipMessage) ||
       toolCall?.reason?.includes(skipMessage)
     );
 
@@ -167,7 +180,7 @@ export async function logAgentResponse(
       console.log('Generated embedding for message');
     }
 
-    // Log the message
+    // Log the message to chat_messages only
     const { data: messageData, error: messageError } = await supabase
       .from('chat_messages')
       .insert({
@@ -175,7 +188,6 @@ export async function logAgentResponse(
         sender: 'assistant',
         message,
         tool_call: toolCall,
-        response_data: responseData,
         embedding
       })
       .select('id')
@@ -187,38 +199,14 @@ export async function logAgentResponse(
     }
     console.log('Successfully inserted chat message with ID:', messageData?.id);
 
-    // If there's an action type, log it to agent_actions
-    if (actionType) {
-      console.log('Logging action to agent_actions:', actionType);
-      const { data: session } = await supabase
-        .from('conversation_sessions')
-        .select('profile_id')
-        .eq('id', sessionId)
-        .single();
-
-      if (session) {
-        await logAgentAction(supabase, {
-          entityType: 'profile',
-          entityId: session.profile_id,
-          payload: {
-            type: actionType,
-            message,
-            toolCall,
-            responseData
-          }
-        });
-        console.log('Successfully logged agent action');
-      }
-    }
-
     return { messageId: messageData.id };
   } catch (error) {
-    console.error('Full error in logAgentResponse:', error);
+    console.error('Full error in logAgentProgress:', error);
     return {
       messageId: '',
       error: {
         type: 'DATABASE_ERROR',
-        message: 'Failed to log agent response',
+        message: 'Failed to log agent progress',
         details: error
       }
     };

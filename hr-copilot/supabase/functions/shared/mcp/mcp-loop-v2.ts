@@ -4,6 +4,7 @@ import { generateEmbedding } from '../semanticSearch.ts';
 import { getConversationContextV2, ConversationContextV2 } from '../context/getConversationContext.ts';
 import { invokeChatModel } from '../ai/invokeAIModel.ts';
 import { ActionV2Registry } from './actions/actionRegistry.ts';
+import { createHash } from 'https://deno.land/std@0.110.0/hash/mod.ts';
 import { 
   MCPRequestV2, 
   MCPResponseV2, 
@@ -19,6 +20,27 @@ interface DependenciesV2 {
 }
 
 /**
+ * Generates a deterministic hash for request deduplication
+ */
+function generateRequestHash(request: Record<string, any>): string {
+  const ordered = Object.keys(request)
+    .sort()
+    .reduce((acc: Record<string, any>, key) => {
+      acc[key] = request[key];
+      return acc;
+    }, {});
+  return createHash('sha256').update(JSON.stringify(ordered)).digest('hex');
+}
+
+/**
+ * Checks if a cached result is still valid
+ */
+function isResultStillValid(result: any): boolean {
+  // Add any validation logic here (e.g., time-based expiry)
+  return true;
+}
+
+/**
  * MCP Loop V2 Runner
  * Implements a more dynamic action processing loop with better context management
  */
@@ -30,6 +52,7 @@ export class McpLoopRunner {
   private plan: PlannedActionV2[];
   private summaryMessage?: string;
   private deps: DependenciesV2;
+  private stepIndex: number;
 
   constructor(supabase: SupabaseClient<Database>, request: MCPRequestV2, deps: Partial<DependenciesV2> = {}) {
     this.supabase = supabase;
@@ -37,12 +60,116 @@ export class McpLoopRunner {
     this.context = request.context || {};
     this.intermediateResults = [];
     this.plan = [];
+    this.stepIndex = 0;
     this.deps = {
       generateEmbedding,
       getConversationContext: getConversationContextV2,
       invokeChatModel,
       ...deps
     };
+  }
+
+  /**
+   * Logs an MCP step to agent_actions with deduplication support
+   */
+  private async logMcpStep(action: PlannedActionV2, result: any, requestHash: string): Promise<void> {
+    try {
+      const { data: embedding } = await this.deps.generateEmbedding(
+        `${action.tool} ${JSON.stringify(action.args)}`
+      );
+
+      await this.supabase.from('agent_actions').insert({
+        agent_name: 'mcp_v2',
+        action_type: action.tool,
+        target_type: this.context.profileId ? 'profile' : 
+                    this.context.roleId ? 'role' : 
+                    this.context.sessionId ? 'chat' : undefined,
+        target_id: this.context.profileId || 
+                  this.context.roleId || 
+                  this.context.sessionId,
+        request: action.args,
+        request_hash: requestHash,
+        response: result,
+        outcome: result.success ? 'success' : 'error',
+        confidence_score: result.confidence || null,
+        session_id: this.request.sessionId,
+        step_index: this.stepIndex++,
+        embedding
+      });
+    } catch (error) {
+      console.error('Failed to log MCP step:', error);
+    }
+  }
+
+  /**
+   * Checks for existing action results that match the current request
+   */
+  private async findExistingActionResult(
+    action: PlannedActionV2,
+    requestHash: string
+  ): Promise<ActionResultV2 | null> {
+    if (!this.request.sessionId) return null;
+
+
+    console.log('Finding xxx existing action result for:', {
+      session_id: this.request.sessionId,
+      action_type: action.tool,
+      request_hash: requestHash
+    });
+
+    const { data } = await this.supabase
+      .from('agent_actions')
+      .select('response, outcome')
+      .match({
+        session_id: this.request.sessionId,
+        action_type: action.tool
+      })
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Don't rehydrate if there's no data
+    if (!data?.response) return null;
+
+    // Don't rehydrate failed responses
+    if (
+      data.outcome === 'error' || 
+      data.response.success === false ||
+      data.response.error
+    ) {
+      console.log(`Skipping rehydration of failed result for ${action.tool}:`, {
+        outcome: data.outcome,
+        error: data.response.error
+      });
+      return null;
+    }
+
+    // Validate the response has required fields
+    if (!this.isValidActionResult(data.response)) {
+      console.log(`Invalid cached result for ${action.tool}, will re-execute`);
+      return null;
+    }
+
+    return data.response;
+  }
+
+  /**
+   * Validates that a cached result has the required fields and structure
+   */
+  private isValidActionResult(response: any): boolean {
+    // Basic structure check
+    if (!response || typeof response !== 'object') return false;
+
+    // Must have success flag
+    if (typeof response.success !== 'boolean') return false;
+
+    // If success is true, must have data
+    if (response.success && !response.data) return false;
+
+    // If success is false, must have error info
+    if (!response.success && !response.error) return false;
+
+    return true;
   }
 
   /**
@@ -204,7 +331,9 @@ Each tool call must follow this format:
 If any required argument is unknown, skip that tool.
 
 Here is the current user query:
-${JSON.stringify(this.context, null, 2)}
+${JSON.stringify({
+  latestMessage: this.context.lastMessage
+}, null, 2)}
 
 Available tools:
 ${JSON.stringify(tools.map(t => ({
@@ -289,21 +418,23 @@ ${JSON.stringify(tools.map(t => ({
           throw new Error(`Tool not found: ${action.tool}`);
         }
 
-        // Log detailed execution context
-        console.log(`Executing tool ${action.tool} with:`, {
-          args: loadedTool.args,
-          contextKeys: Object.keys(this.context),
-          contextValues: {
-            profileId: this.context.profileId,
-            roleId: this.context.roleId,
-            mode: this.context.mode,
-            // Add other relevant context values
-          },
-          toolRequirements: {
-            requiredContext: loadedTool.tool.requiredContext || [],
-            hasArgsSchema: !!loadedTool.tool.argsSchema
-          }
-        });
+        // Generate request hash for deduplication
+        const requestHash = generateRequestHash(loadedTool.args);
+
+        // Check for existing results
+        const existingResult = await this.findExistingActionResult(action, requestHash);
+        if (existingResult && isResultStillValid(existingResult)) {
+          console.log(`Reusing cached result for ${action.tool}`);
+          this.intermediateResults.push({
+            tool: action.tool,
+            input: loadedTool.args,
+            output: existingResult,
+            success: true,
+            reused: true
+          });
+          this.context[action.tool] = existingResult;
+          continue;
+        }
 
         // Include supabase client in the execution context
         const executionContext = {
@@ -316,12 +447,8 @@ ${JSON.stringify(tools.map(t => ({
           args: loadedTool.args
         });
 
-        // Log successful execution
-        console.log(`Tool ${action.tool} executed successfully:`, {
-          inputArgs: loadedTool.args,
-          resultKeys: result ? Object.keys(result) : [],
-          success: true
-        });
+        // Log action and result
+        await this.logMcpStep(action, result, requestHash);
 
         // Store result
         this.intermediateResults.push({
@@ -335,17 +462,7 @@ ${JSON.stringify(tools.map(t => ({
         this.context[action.tool] = result;
 
       } catch (error) {
-        console.error(`Action ${action.tool} failed:`, {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
-          args: action.args,
-          contextKeys: Object.keys(this.context),
-          contextValues: {
-            profileId: this.context.profileId,
-            roleId: this.context.roleId,
-            mode: this.context.mode
-          }
-        });
+        console.error(`Action ${action.tool} failed:`, error);
         
         this.intermediateResults.push({
           tool: action.tool,

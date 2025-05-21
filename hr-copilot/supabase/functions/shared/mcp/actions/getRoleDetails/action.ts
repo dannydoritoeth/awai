@@ -5,8 +5,7 @@ import { getRoleDetail } from '../../../role/getRoleDetail.ts';
 import { buildPromptInput } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
 import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
-import { logAgentAction } from '../../../agent/logAgentAction.ts';
-import { logAgentResponse } from '../../../chatUtils.ts';
+import { logAgentProgress } from '../../../chatUtils.ts';
 
 /**
  * getRoleDetails Action
@@ -63,11 +62,11 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     }
 
     // Log data gathering step
-    await logAgentResponse(
+    await logAgentProgress(
       supabase,
       request.sessionId,
       'Fetching role details...',
-      'data_gathered'
+      { phase: 'data_gathering' }
     );
 
     console.log('Fetching role details for:', {
@@ -98,23 +97,26 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       roleDetail: roleDetailResponse.data
     };
 
-    // Build AI prompt
-    await logAgentResponse(
-      supabase,
-      request.sessionId,
-      'Analyzing role details...',
-      'prompt_built'
-    );
+    // Log AI processing step
+    if (request.sessionId) {
+      await logAgentProgress(
+        supabase,
+        request.sessionId,
+        'Analyzing role details and generating summary...',
+        { phase: 'ai_processing' }
+      );
+    }
 
+    // Build AI prompt
     const promptInput = buildPromptInput(context);
     const safePrompt = buildSafePrompt(promptInput);
 
     // Invoke AI
-    await logAgentResponse(
+    await logAgentProgress(
       supabase,
       request.sessionId,
       'Generating role insights...',
-      'ai_invoked'
+      { phase: 'ai_invoked' }
     );
 
     const aiResponse = await invokeChatModel({
@@ -129,11 +131,11 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       entityId: args.roleId
     });
 
-    await logAgentResponse(
+    await logAgentProgress(
       supabase,
       request.sessionId,
       'Processing role analysis...',
-      'response_received'
+      { phase: 'response_received' }
     );
 
     // Structure the final response
@@ -146,27 +148,23 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       },
     };
 
-    // Log the action
-    await logAgentAction(supabase, {
-      entityType: 'role',
-      entityId: args.roleId,
-      payload: {
-        action: 'getRoleDetails',
-        data: context,
-        prompt: safePrompt,
-        result: aiResponse
-      }
-    });
-
     return response;
 
   } catch (error) {
-    console.error('getRoleDetails unexpected error:', error);
+    if (request.sessionId) {
+      await logAgentProgress(
+        supabase,
+        request.sessionId,
+        'Error retrieving role details. Please try again.',
+        { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+    }
+
     return {
       success: false,
       error: {
-        type: 'ACTION_ERROR',
-        message: 'Failed to get role details',
+        type: 'PROCESSING_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
         details: error
       }
     };
