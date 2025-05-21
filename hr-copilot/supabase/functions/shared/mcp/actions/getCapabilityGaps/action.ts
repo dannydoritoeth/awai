@@ -192,7 +192,7 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
         minorGaps: gaps.filter(g => g.severity > 0 && g.severity <= 70).length,
         metRequirements: gaps.filter(g => g.severity === 0).length,
         overallReadiness: 100 - (gaps.reduce((acc, g) => acc + g.severity, 0) / gaps.length),
-        recommendations: []
+      recommendations: []
       }
     };
 

@@ -24,57 +24,37 @@ async function callMCPLoop(
   entityId?: string,
   insightId?: string,
   scope?: string,
-  companyIds?: string[]
+  companyIds?: string[],
+  actionData?: {
+    actionId: string;
+    params: Record<string, any>;
+  }
 ) {
   // Determine the endpoint based on mode
   const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
   console.log('Calling MCP loop with endpoint:', endpoint);
-  console.log('endpoint', endpoint);
   
+  // Create the MCP loop body using the shared utility
+  const mcpLoopBody = createMCPLoopBody(
+    mode,
+    sessionId,
+    message,
+    entityId,
+    insightId,
+    scope,
+    companyIds,
+    actionData
+  );
+
+  console.log('MCP Loop Request Body:', JSON.stringify(mcpLoopBody, null, 2));
+
   const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
     },
-    body: JSON.stringify({
-      mode,
-      sessionId,
-      // Only include profileId/roleId/companyIds if not in general mode
-      ...(mode === 'candidate' && entityId ? { profileId: entityId } : {}),
-      ...(mode === 'hiring' && entityId ? { roleId: entityId } : {}),
-      ...(mode === 'analyst' ? { 
-        insightId,
-        companyIds: companyIds || [entityId],
-        context: {
-          lastMessage: message,
-          companyIds: companyIds || [entityId],
-          scope: scope || 'division',
-          outputFormat: 'action_plan',
-          sessionId,
-          mode: 'analyst',
-          chatHistory: [],
-          agentActions: [],
-          summary: '',
-          semanticContext: {
-            previousMatches: []
-          },
-          contextEmbedding: []
-        },
-        plannerRecommendations: []
-      } : {}),
-      context: {
-        lastMessage: message,
-        mode,
-        chatHistory: [],
-        agentActions: [],
-        summary: '',
-        semanticContext: {
-          previousMatches: []
-        },
-        contextEmbedding: []
-      }
-    })
+    body: JSON.stringify(mcpLoopBody)
   });
 
   if (!mcpResponse.ok) {
@@ -104,6 +84,13 @@ async function processInitialMessage(
     );
     if (messageError) throw messageError;
 
+    // Create the MCP loop body using the shared utility
+    const mcpLoopBody = createMCPLoopBody(
+      mode,
+      sessionId,
+      message,
+      entityId || undefined
+    );
 
     // Determine the endpoint based on mode
     const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
@@ -116,30 +103,7 @@ async function processInitialMessage(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
       },
-      body: JSON.stringify({
-        mode,
-        profileId: mode === 'candidate' ? entityId : undefined,
-        roleId: mode === 'hiring' ? entityId : undefined,
-        sessionId,
-        context: {
-          lastMessage: message,
-          mode,
-          // Initialize empty arrays for history and actions to prevent undefined errors
-          chatHistory: [],
-          agentActions: [],
-          // Add a default empty summary
-          summary: '',
-          // Initialize semantic context for general mode
-          semanticContext: {
-            currentFocus: undefined,
-            previousMatches: [],
-            previousFocus: undefined,
-            matchingTopic: undefined
-          },
-          // Initialize an empty contextEmbedding array
-          contextEmbedding: []
-        }
-      })
+      body: JSON.stringify(mcpLoopBody)
     });
 
     if (!mcpResponse.ok) {
@@ -282,10 +246,12 @@ serve(async (req) => {
     const requestBody = await req.json();
     const { 
       action, 
-      sessionId, 
+      sessionId,
       message, 
       profileId, 
-      roleId, 
+      roleId,
+      actionId,
+      roleTitle,
       companyId, 
       browserSessionId, 
       messageId: requestMessageId,
@@ -293,12 +259,20 @@ serve(async (req) => {
       scope,
       companyIds 
     } = requestBody;
+
+    // For non-startSession actions, require sessionId in body
+    if (action !== 'startSession' && !sessionId) {
+      throw new Error('Session ID is required in request body for existing sessions');
+    }
+
     console.log('Received request:', { 
-      action, 
-      sessionId, 
+      action,
+      sessionId,
       message, 
       profileId, 
-      roleId, 
+      roleId,
+      actionId,
+      roleTitle, 
       companyId, 
       browserSessionId,
       insightId,
@@ -416,15 +390,24 @@ serve(async (req) => {
       }
 
       case 'postMessage': {
-        // Session ID and message are required
-        if (!sessionId) {
-          throw new Error('Session ID is required');
-        }
+        // Message is required
         if (!message) {
           throw new Error('Message is required');
         }
 
-        console.log('Processing postMessage:', { sessionId, requestMessageId, message });
+        // Log the complete request with all available parameters
+        const requestLog = {
+          action,
+          sessionId,
+          message,
+          ...(actionId && { actionId }),
+          ...(roleId && { roleId }),
+          ...(profileId && { profileId }),
+          ...(roleTitle && { roleTitle }),
+          ...requestBody
+        };
+
+        console.log('Chat Endpoint Received Request:', JSON.stringify(requestLog, null, 2));
 
         try {
           // Get session details to determine mode and entity ID
@@ -440,82 +423,44 @@ serve(async (req) => {
           }
 
           if (!session) {
-            throw new Error('Invalid session ID or session not found');
+            throw new Error('Invalid session ID');
           }
 
-          // Create the MCP loop body
-          const mcpLoopBody = createMCPLoopBody(
-            session.mode,
-            sessionId,
-            message,
-            session.entity_id
-          );
-
-          // Always log the user message with the provided messageId or generate a new one
-          let messageId = requestMessageId || crypto.randomUUID();
-          console.log('Logging user message with ID:', messageId);
-          
-          const { error: postError } = await postUserMessage(
-            supabaseClient,
-            sessionId,
-            message,
-            messageId,
-            mcpLoopBody // Pass the MCP loop body
-          );
-
-          if (postError) {
-            console.error('Error posting user message:', postError);
-            throw postError;
-          }
-
-          // Call MCP loop with session context
-          console.log('Calling MCP loop');
-          const mcpResult = await callMCPLoop(
-            sessionId,
-            message,
-            session.mode,
-            session.entity_id || undefined
-          );
-          
-          if (!mcpResult.success) {
-            console.error('MCP loop failed:', mcpResult);
-            throw new Error('Failed to get response from MCP loop');
-          }
-
-          if (!mcpResult.data?.chatResponse) {
-            console.error('Invalid MCP response:', mcpResult);
-            throw new Error('Invalid response format from MCP loop');
-          }
-
-          // Generate a unique ID for the AI response
-          const aiResponseId = crypto.randomUUID();
-          console.log('Generated AI response ID:', aiResponseId);
-
-          // Return the response with consistent IDs
-          const response = {
-            messageId,
-            aiMessageId: aiResponseId,
-            reply: mcpResult.data.chatResponse.message,
-            followUpQuestion: mcpResult.data.chatResponse.followUpQuestion
-          };
-          console.log('Sending response:', response);
-
-          return new Response(
-            JSON.stringify(response), 
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          // Create action data if actionId is present
+          const actionData = actionId ? {
+            actionId,
+            params: {
+              roleId,
+              roleTitle,
+              profileId,
+              ...requestBody
             }
+          } : undefined;
+
+          // Call MCP loop with all parameters
+          const mcpResponse = await callMCPLoop(
+            sessionId,
+            message,
+            session.mode,
+            session.entity_id,
+            undefined,
+            undefined,
+            undefined,
+            actionData
           );
+
+          console.log('Chat Endpoint Received from MCP Loop V2:', JSON.stringify(mcpResponse, null, 2));
+
+          return new Response(JSON.stringify(mcpResponse), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
         } catch (error) {
-          console.error('Error in postMessage handler:', error);
-          throw error; // Let the main error handler format the response
+          console.error('Error in postMessage:', error);
+          throw error;
         }
       }
 
       case 'getHistory':
-        if (!sessionId) {
-          throw new Error('Session ID is required');
-        }
         const { history, error: historyError } = await getChatHistory(
           supabaseClient,
           sessionId

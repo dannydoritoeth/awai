@@ -431,6 +431,7 @@ export default function UnifiedResultsView({
             messages={messages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
+            sessionId={sessionId}
           />
         </div>
       </div>

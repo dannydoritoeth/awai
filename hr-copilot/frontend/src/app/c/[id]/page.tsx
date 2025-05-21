@@ -1,15 +1,9 @@
 'use client';
 
-import { use, useEffect, Suspense, useState } from 'react';
+import { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import UnifiedResultsView from '@/app/components/UnifiedResultsView';
 import { supabase } from '@/lib/supabase';
-
-interface PageProps {
-  params: Promise<{
-    id: string;
-  }>;
-}
 
 interface RoleData {
   id: string;
@@ -242,11 +236,10 @@ function ChatPageContent({ sessionId }: { sessionId: string }) {
 }
 
 // Main component with Suspense boundary
-export default function ChatPage({ params }: PageProps) {
-  const resolvedParams = use(params);
+export default function ChatPage({ params }: { params: { id: string } }) {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <ChatPageContent sessionId={resolvedParams.id} />
+      <ChatPageContent sessionId={params.id} />
     </Suspense>
   );
 } 

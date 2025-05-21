@@ -620,8 +620,16 @@ export function createMCPLoopBody(
   entityId?: string,
   insightId?: string,
   scope?: string,
-  companyIds?: string[]
+  companyIds?: string[],
+  actionData?: {
+    actionId: string;
+    params: Record<string, any>;
+  }
 ) {
+  // Extract all params from actionData if present
+  const actionParams = actionData?.params || {};
+  
+  // Create flattened base context
   const baseContext = {
     lastMessage: message,
     mode,
@@ -631,20 +639,27 @@ export function createMCPLoopBody(
     semanticContext: {
       previousMatches: []
     },
-    contextEmbedding: []
+    contextEmbedding: [],
+    // Flatten all action params into context
+    ...actionParams
   };
 
+  // Create flattened body with all parameters at top level
   const body = {
     mode,
     sessionId,
     ...(mode === 'candidate' ? { profileId: entityId } : {}),
     ...(mode === 'hiring' ? { roleId: entityId } : {}),
+    // Flatten all action params at top level
+    ...actionParams,
+    // Include actionId if present
+    ...(actionData?.actionId && { actionId: actionData.actionId }),
     context: baseContext
   };
 
   // Add analyst-specific fields if in analyst mode
   if (mode === 'analyst') {
-    return {
+    const analystBody = {
       ...body,
       insightId,
       companyIds: companyIds || [entityId],
@@ -656,7 +671,11 @@ export function createMCPLoopBody(
       },
       plannerRecommendations: []
     };
+
+    console.log('MCP Loop V2 Request (Analyst):', JSON.stringify(analystBody, null, 2));
+    return analystBody;
   }
 
+  console.log('MCP Loop V2 Request:', JSON.stringify(body, null, 2));
   return body;
 } 

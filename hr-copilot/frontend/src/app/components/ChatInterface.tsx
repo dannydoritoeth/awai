@@ -42,12 +42,14 @@ interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   isLoading: boolean;
+  sessionId: string;
 }
 
 export default function ChatInterface({
   messages,
   onSendMessage,
-  isLoading
+  isLoading,
+  sessionId
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
@@ -114,6 +116,26 @@ export default function ChatInterface({
     if (inputValue.trim() && !isLoading) {
       setHasUserInteracted(true); // Mark as interacted when user sends a message
       onSendMessage(inputValue.trim());
+
+      // Prepare request body
+      const requestBody = {
+        action: 'postMessage',
+        sessionId,
+        message: inputValue.trim()
+      };
+
+      console.log('Sending chat request:', requestBody);
+
+      // Make the API call
+      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
       setInputValue('');
     }
   };
@@ -205,17 +227,49 @@ export default function ChatInterface({
 
   const handleActionButtonClick = async (actionData: ActionButtonData) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/actions`, {
+      // Generate natural language message based on action type
+      let message = '';
+      const roleTitle = actionData.params.roleTitle || 'this role';
+      
+      switch (actionData.actionId) {
+        case 'getRoleDetails':
+          message = `Can you tell me more about ${roleTitle}?`;
+          break;
+        case 'getCapabilityGaps':
+          message = `What capability gaps do I have for ${roleTitle}?`;
+          break;
+        case 'getSemanticSkillRecommendations':
+          message = `What skills should I develop for ${roleTitle}?`;
+          break;
+        case 'getDevelopmentPlan':
+          message = `Can you create a development plan for ${roleTitle}?`;
+          break;
+        default:
+          message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
+      }
+
+      // Send the natural language message to continue the conversation
+      onSendMessage(message);
+
+      // Prepare flattened request body
+      const requestBody = {
+        action: 'postMessage',
+        sessionId,
+        message,
+        actionId: actionData.actionId,
+        ...actionData.params
+      };
+
+      console.log('Sending action request:', requestBody);
+
+      // Execute the action through chat endpoint
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          actionId: actionData.actionId,
-          params: actionData.params
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -223,10 +277,6 @@ export default function ChatInterface({
       }
 
       await response.json();
-      
-      // Send the action result as a user message to continue the conversation
-      onSendMessage(`Executed action: ${actionData.label}`);
-      
     } catch (error) {
       console.error('Error executing action:', error);
       // Optionally show an error message to the user
