@@ -12,55 +12,28 @@ import { Database } from '../../../../database.types.ts';
 import { getCapabilityGaps } from '../getCapabilityGaps/action.ts';
 import { getSkillGaps } from '../../../profile/getSkillGaps.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
-import { getRoleDetail } from '../../../role/getRoleDetail.ts';
+import { getRoleDetail, RoleDetail } from '../../../role/getRoleDetail.ts';
 import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
 import type { Tables } from '../../../embeddings.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
-import { buildDevelopmentPlanPrompt } from './buildPrompt.ts';
-import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
+import { buildDevelopmentPlanPrompt, AIContext } from './buildPrompt.ts';
 
 // Types for internal context vs AI context separation
 interface ActionContext {
   profileData: any;
-  roleData: any;
+  roleData: RoleDetail & {
+    requirements?: string[];
+  };
   capabilityGaps: any;
   skillGaps: any;
   mentorMatches: any[];
   sessionId?: string;
+  downstreamData?: any;
 }
 
-interface AIContext {
-  profile: {
-    skills: Array<{
-      name: string;
-      currentLevel: number;
-      years: number;
-    }>;
-    capabilities: Array<{
-      name: string;
-      currentLevel: number;
-    }>;
-  };
-  targetRole: {
-    title: string;
-    requirements: string[];
-  };
-  gaps: {
-    capabilities: any[];
-    skills: any[];
-  };
-  potentialMentors: Array<{
-    id: string;
-    name: string;
-    title?: string;
-    expertise?: string[];
-    similarity: number;
-  }>;
-}
-
-export interface DevelopmentPlan {
+interface DevelopmentPlan {
   recommendedSkills: Array<{
     name: string;
     priority: 'high' | 'medium' | 'low';
@@ -69,19 +42,16 @@ export interface DevelopmentPlan {
     timeEstimate: string;
     trainingModules: Array<{
       name: string;
-      type: string;
       duration: string;
-      provider?: string;
     }>;
   }>;
   interimRoles: Array<{
     title: string;
+    typicalDuration: string;
     relevance: string;
     keySkillsGained: string[];
-    typicalDuration: string;
   }>;
   suggestedMentors: Array<{
-    id: string;
     name: string;
     title: string;
     expertise: string[];
@@ -100,6 +70,16 @@ export interface DevelopmentPlan {
  * Prepares minimal context needed for AI processing
  */
 function prepareAIContext(context: ActionContext): AIContext {
+  // Get downstream data from previous actions if available
+  const downstreamData = context.downstreamData || {};
+  const capabilityGapsData = downstreamData.getCapabilityGaps;
+  const skillRecommendationsData = downstreamData.getSemanticSkillRecommendations;
+
+  // Ensure we have valid gaps data
+  const capabilityGaps = capabilityGapsData?.structured?.gaps || 
+    (context.capabilityGaps.data?.gaps || context.capabilityGaps.data || []);
+  const skillGaps = context.skillGaps.data || [];
+
   return {
     profile: {
       skills: context.profileData.skills.map(s => ({
@@ -113,12 +93,12 @@ function prepareAIContext(context: ActionContext): AIContext {
       }))
     },
     targetRole: {
-      title: context.roleData.title || context.roleData.name || 'Target Role',
+      title: context.roleData.title || 'Target Role',
       requirements: context.roleData.requirements || []
     },
     gaps: {
-      capabilities: context.capabilityGaps.data || [],
-      skills: context.skillGaps.data || []
+      capabilities: capabilityGaps,
+      skills: skillGaps
     },
     potentialMentors: context.mentorMatches.map(match => ({
       id: match.id,
@@ -126,7 +106,17 @@ function prepareAIContext(context: ActionContext): AIContext {
       title: match.metadata?.title,
       expertise: match.metadata?.expertise,
       similarity: match.similarity
-    }))
+    })),
+    previousAnalysis: {
+      capabilityReadiness: capabilityGapsData?.structured?.overallReadiness,
+      criticalCapabilityGaps: capabilityGapsData?.structured?.criticalGaps,
+      recommendedSkills: skillRecommendationsData?.structured?.topRecommendations || [],
+      skillPriorities: {
+        high: skillRecommendationsData?.structured?.highPriorityCount || 0,
+        medium: skillRecommendationsData?.structured?.mediumPriorityCount || 0,
+        low: skillRecommendationsData?.structured?.lowPriorityCount || 0
+      }
+    }
   };
 }
 
@@ -150,17 +140,23 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
     }
 
     // Load profile and role data
-    const [profileData, roleData] = await Promise.all([
+    const [profileData, roleDetailResponse] = await Promise.all([
       getProfileData(supabase, profileId),
       getRoleDetail(supabase, roleId)
     ]);
 
-    if (!profileData || !roleData) {
+    if (!profileData || !roleDetailResponse.data) {
       throw new Error('Could not fetch profile or role data');
     }
 
-    // Analyze gaps
-    const [capabilityGaps, skillGaps] = await Promise.all([
+    const roleData = roleDetailResponse.data;
+
+    // Check for existing analysis in context
+    const downstreamData = request.context?.downstreamData || {};
+    const hasExistingAnalysis = downstreamData.getCapabilityGaps || downstreamData.getSemanticSkillRecommendations;
+
+    // Only run gap analysis if we don't have it from context
+    const [capabilityGaps, skillGaps] = !hasExistingAnalysis ? await Promise.all([
       getCapabilityGaps.actionFn({
         supabase,
         profileId,
@@ -169,35 +165,90 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
         context: {}
       }),
       getSkillGaps(supabase, profileId, roleId)
-    ]);
+    ]) : [
+      downstreamData.getCapabilityGaps,
+      downstreamData.getSkillGaps
+    ];
 
     if (!capabilityGaps.success || !capabilityGaps.data) {
       throw new Error('Could not analyze capability gaps');
     }
 
-    // Generate development plan
-    const developmentPlan = {
-      recommendedSkills: [],
-      recommendedCapabilities: [],
-      estimatedTimeToReadiness: '3-6 months',
-      suggestedMentors: [],
-      trainingResources: []
+    // Find potential mentors
+    const mentorMatches = await getSemanticMatches(
+      supabase,
+      { id: roleId, table: 'roles' as Tables },
+      'profiles' as Tables,
+      20, // Limit to 20 potential mentors
+      0.6 // Similarity threshold
+    );
+
+    // Prepare context for AI processing
+    const context: ActionContext = {
+      profileData,
+      roleData: {
+        ...roleData,
+        requirements: roleData.capabilities.map(cap => 
+          `${cap.name} (Level ${cap.level || 'Required'})${cap.capabilityType ? ` [${cap.capabilityType}]` : ''}`
+        )
+      },
+      capabilityGaps,
+      skillGaps,
+      mentorMatches,
+      sessionId,
+      downstreamData
     };
 
-    // Only log if we have recommendations
-    if (sessionId && (developmentPlan.recommendedSkills.length > 0 || developmentPlan.recommendedCapabilities.length > 0)) {
-      const planMarkdown = `### 📚 Development Plan
+    // Build AI prompt
+    const aiContext = prepareAIContext(context);
+    const prompt = buildDevelopmentPlanPrompt(aiContext);
 
-${developmentPlan.recommendedCapabilities.length > 0 ? `#### Key Capabilities to Develop
-${developmentPlan.recommendedCapabilities.map(cap => `- **${cap.name}**: ${cap.description}`).join('\n')}` : ''}
+    // Generate development plan
+    const aiResponse = await invokeChatModel(prompt, {
+      model: 'openai:gpt-4',
+      temperature: 0.2,
+      max_tokens: 2000,
+      supabase,
+      entityType: 'profile',
+      entityId: profileId
+    });
 
-${developmentPlan.recommendedSkills.length > 0 ? `#### Skills to Acquire
-${developmentPlan.recommendedSkills.map(skill => `- **${skill.name}**: ${skill.description}`).join('\n')}` : ''}
+    if (!aiResponse.success || !aiResponse.output) {
+      throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    // Parse AI response
+    const developmentPlan = JSON.parse(aiResponse.output) as DevelopmentPlan;
+
+    // Log progress if we have a session
+    let planMarkdown = '';
+    if (sessionId) {
+      planMarkdown = `### 📚 Development Plan
+
+#### Key Skills to Develop
+${developmentPlan.recommendedSkills.map(skill => `- **${skill.name}** (Priority: ${skill.priority})
+  - Current Level: ${skill.currentLevel || 'N/A'} → Target Level: ${skill.targetLevel}
+  - Time Estimate: ${skill.timeEstimate}
+  - Training: ${skill.trainingModules.map(m => `${m.name} (${m.duration})`).join(', ')}`).join('\n')}
+
+#### Interim Roles
+${developmentPlan.interimRoles.map(role => `- **${role.title}** (${role.typicalDuration})
+  - Relevance: ${role.relevance}
+  - Key Skills: ${role.keySkillsGained.join(', ')}`).join('\n')}
+
+#### Suggested Mentors
+${developmentPlan.suggestedMentors.map(mentor => `- **${mentor.name}** (${mentor.title})
+  - Expertise: ${mentor.expertise.join(', ')}
+  - Match Score: ${(mentor.matchScore * 100).toFixed(1)}%`).join('\n')}
+
+#### Timeline
+- Short Term: ${developmentPlan.timeline.shortTerm.join(', ')}
+- Medium Term: ${developmentPlan.timeline.mediumTerm.join(', ')}
+- Long Term: ${developmentPlan.timeline.longTerm.join(', ')}
 
 Estimated Time to Role Readiness: ${developmentPlan.estimatedTimeToReadiness}
 
-${developmentPlan.suggestedMentors.length > 0 ? `#### Suggested Mentors
-${developmentPlan.suggestedMentors.map(mentor => `- ${mentor.name} (${mentor.role})`).join('\n')}` : ''}`;
+${developmentPlan.explanation}`;
 
       await logAgentProgress(
         supabase,
@@ -215,11 +266,11 @@ ${developmentPlan.suggestedMentors.map(mentor => `- ${mentor.name} (${mentor.rol
           dataSummary: planMarkdown,
           structured: {
             recommendedSkillsCount: developmentPlan.recommendedSkills.length,
-            recommendedCapabilitiesCount: developmentPlan.recommendedCapabilities.length,
+            recommendedCapabilitiesCount: developmentPlan.recommendedSkills.filter(s => s.priority === 'high').length,
             estimatedTimeToReadiness: developmentPlan.estimatedTimeToReadiness,
             mentorCount: developmentPlan.suggestedMentors.length,
             topSkills: developmentPlan.recommendedSkills.slice(0, 3).map(s => s.name),
-            topCapabilities: developmentPlan.recommendedCapabilities.slice(0, 3).map(c => c.name)
+            topPriorities: developmentPlan.timeline.shortTerm.slice(0, 3)
           },
           truncated: false
         }
@@ -239,6 +290,14 @@ ${developmentPlan.suggestedMentors.map(mentor => `- ${mentor.name} (${mentor.rol
           result: 'success',
           confidence: 0.9,
           inputs: { profileId, roleId },
+          timestamp: new Date().toISOString()
+        },
+        {
+          tool: 'findMentors',
+          reason: 'Found potential mentors',
+          result: 'success',
+          confidence: 0.8,
+          inputs: { roleTitle: context.roleData.title },
           timestamp: new Date().toISOString()
         }
       ]

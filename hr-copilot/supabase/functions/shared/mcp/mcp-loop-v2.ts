@@ -436,6 +436,11 @@ ${JSON.stringify(tools.map(t => ({
    * Executes each planned action in sequence, updating context with results
    */
   private async executeActions() {
+    // Initialize downstream data context if not exists
+    if (!this.context.downstreamData) {
+      this.context.downstreamData = {};
+    }
+
     for (const action of this.plan) {
       try {
         // Validate action before execution
@@ -453,6 +458,16 @@ ${JSON.stringify(tools.map(t => ({
         const existingResult = await this.findExistingActionResult(action, requestHash);
         if (existingResult && isResultStillValid(existingResult)) {
           console.log(`Reusing cached result for ${action.tool}`);
+          
+          // Store both result and downstream data in context
+          this.context[action.tool] = existingResult;
+          if (existingResult.dataForDownstreamPrompt) {
+            this.context.downstreamData = {
+              ...this.context.downstreamData,
+              ...existingResult.dataForDownstreamPrompt
+            };
+          }
+
           this.intermediateResults.push({
             tool: action.tool,
             input: loadedTool.args,
@@ -460,7 +475,6 @@ ${JSON.stringify(tools.map(t => ({
             success: true,
             reused: true
           });
-          this.context[action.tool] = existingResult;
           continue;
         }
 
@@ -478,6 +492,15 @@ ${JSON.stringify(tools.map(t => ({
         // Log action and result
         await this.logMcpStep(action, result, requestHash);
 
+        // Store both result and downstream data in context
+        this.context[action.tool] = result;
+        if (result.dataForDownstreamPrompt) {
+          this.context.downstreamData = {
+            ...this.context.downstreamData,
+            ...result.dataForDownstreamPrompt
+          };
+        }
+
         // Store result
         this.intermediateResults.push({
           tool: action.tool,
@@ -485,9 +508,6 @@ ${JSON.stringify(tools.map(t => ({
           output: result,
           success: true
         });
-
-        // Update context with result
-        this.context[action.tool] = result;
 
       } catch (error) {
         console.error(`Action ${action.tool} failed:`, error);
@@ -502,15 +522,17 @@ ${JSON.stringify(tools.map(t => ({
       }
     }
 
-    // Log execution summary
+    // Log execution summary with downstream data
     console.log('Actions executed:', {
       total: this.plan.length,
       successful: this.intermediateResults.filter(r => r.success).length,
       failed: this.intermediateResults.filter(r => !r.success).length,
+      downstreamDataKeys: Object.keys(this.context.downstreamData || {}),
       results: this.intermediateResults.map(r => ({
         tool: r.tool,
         success: r.success,
-        error: r.error
+        error: r.error,
+        hasDownstreamData: r.output?.dataForDownstreamPrompt ? true : false
       }))
     });
   }
