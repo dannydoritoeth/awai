@@ -346,7 +346,7 @@ export class McpLoopRunner {
 
 Follow this process:
 1. Read the context carefully to understand what has already been done and what the user wants.
-2. Select 1 tool that will help solve the user's request.
+2. Select up to 3 tools that will help solve the user's request.
 4. Output your answer as a JSON array only.
 
 IMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.

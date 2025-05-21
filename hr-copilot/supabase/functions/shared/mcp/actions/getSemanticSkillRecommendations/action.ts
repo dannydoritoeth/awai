@@ -239,16 +239,20 @@ async function getSemanticSkillRecommendationsBase(
     });
 
     let recommendations: SkillRecommendations;
+    let recommendationsMarkdown = '';
+    
     try {
       recommendations = JSON.parse(cleanOutput) as SkillRecommendations;
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', parseError);
-      throw new Error(`Failed to parse AI recommendations: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
-    }
+      
+      // Filter out invalid recommendations where current level exceeds target level
+      recommendations.recommendations = recommendations.recommendations.filter(rec => {
+        const currentLevel = rec.currentLevel || 0;
+        return currentLevel < rec.targetLevel;
+      });
 
-    // Only post the final recommendations to chat
-    if (sessionId && recommendations.recommendations.length > 0) {
-      const recommendationsMarkdown = `### 🎯 Skill Recommendations
+      // Generate markdown if we have recommendations
+      if (recommendations.recommendations.length > 0) {
+        recommendationsMarkdown = `### 🎯 Skill Recommendations
 
 ${recommendations.recommendations.map(rec => `**${rec.name}** (Priority: ${rec.priority})
 ${rec.explanation}
@@ -258,13 +262,27 @@ Learning Path:
 ${rec.learningPath.map(path => `- ${path.resource} (${path.type}, ${path.duration}${path.provider ? `, by ${path.provider}` : ''})`).join('\n')}`).join('\n\n')}
 
 ${recommendations.explanation}`;
+      }
 
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        recommendationsMarkdown,
-        { phase: 'recommendations_generated' }
-      );
+      // Post to chat if we have a session
+      if (sessionId) {
+        await logAgentProgress(
+          supabase,
+          sessionId,
+          recommendations.recommendations.length > 0 
+            ? recommendationsMarkdown 
+            : "No skill gaps identified that require development. Your current skills meet or exceed the requirements.",
+          { 
+            phase: recommendations.recommendations.length > 0 
+              ? 'recommendations_generated' 
+              : 'no_recommendations_needed' 
+          }
+        );
+      }
+      
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError);
+      throw new Error(`Failed to parse AI recommendations: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
     }
 
     return {
@@ -273,6 +291,23 @@ ${recommendations.explanation}`;
         recommendations: recommendations.recommendations,
         explanation: recommendations.explanation,
         rawAiResponse: aiResponse.output
+      },
+      dataForDownstreamPrompt: {
+        getSemanticSkillRecommendations: {
+          dataSummary: recommendationsMarkdown || "No skill gaps identified that require development.",
+          structured: {
+            recommendationCount: recommendations.recommendations.length,
+            highPriorityCount: recommendations.recommendations.filter(r => r.priority === 'high').length,
+            mediumPriorityCount: recommendations.recommendations.filter(r => r.priority === 'medium').length,
+            lowPriorityCount: recommendations.recommendations.filter(r => r.priority === 'low').length,
+            topRecommendations: recommendations.recommendations.slice(0, 3).map(r => ({
+              name: r.name,
+              priority: r.priority,
+              targetLevel: r.targetLevel
+            }))
+          },
+          truncated: false
+        }
       },
       actionsTaken: [
         {

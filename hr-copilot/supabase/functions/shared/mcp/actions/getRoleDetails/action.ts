@@ -112,13 +112,6 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     const safePrompt = buildSafePrompt(promptInput);
 
     // Invoke AI
-    await logAgentProgress(
-      supabase,
-      request.sessionId,
-      'Generating role insights...',
-      { phase: 'ai_invoked' }
-    );
-
     const aiResponse = await invokeChatModel({
       system: safePrompt.system,
       user: safePrompt.user
@@ -131,12 +124,15 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       entityId: args.roleId
     });
 
-    await logAgentProgress(
-      supabase,
-      request.sessionId,
-      aiResponse.output || 'No response generated',
-      { phase: 'response_received' }
-    );
+    // Only log the final analysis to chat if we have a session
+    if (request.sessionId && aiResponse.output) {
+      await logAgentProgress(
+        supabase,
+        request.sessionId,
+        aiResponse.output,
+        { phase: 'analysis_complete' }
+      );
+    }
 
     // Structure the final response
     const response: MCPResponse = {
@@ -146,6 +142,19 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
         analysis: aiResponse.success ? aiResponse.output : 'Failed to analyze role details',
         aiResponse: aiResponse
       },
+      dataForDownstreamPrompt: {
+        getRoleDetails: {
+          dataSummary: aiResponse.success ? aiResponse.output : 'Failed to analyze role details',
+          structured: {
+            roleId: args.roleId,
+            title: roleDetailResponse.data.title || roleDetailResponse.data.name,
+            department: roleDetailResponse.data.department,
+            level: roleDetailResponse.data.level,
+            hasAiAnalysis: aiResponse.success
+          },
+          truncated: false
+        }
+      }
     };
 
     return response;

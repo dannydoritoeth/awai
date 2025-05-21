@@ -25,7 +25,7 @@ Focus on:
 3. Organizational context and impact
 4. Career development opportunities
 
-Use a professional, clear tone and structure the information logically.`;
+Use a professional, clear tone and structure the information logically. Don't include guids or ids in the response.`;
 
   const roleCapabilities = roleDetail.capabilities
     .map(cap => `- ${cap.name} (${cap.level || 'Required'})${cap.capabilityType ? ` [${cap.capabilityType}]` : ''}`)

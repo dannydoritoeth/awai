@@ -65,6 +65,18 @@ export interface MCPResponse<T = any> {
     aiPrompt?: string;
     promptDetails?: any;
   };
+
+  /**
+   * Summarised or truncated data for the current actions
+   * that can be safely used in downstream prompt building.
+   */
+  dataForDownstreamPrompt?: {
+    [actionId: string]: {
+      dataSummary?: string;         // A short natural language summary
+      structured?: any;             // Optional structured version
+      truncated?: boolean;          // If trimmed for token limits
+    };
+  };
 }
 
 export interface MCPActionV2 extends MCPActionMetadata {

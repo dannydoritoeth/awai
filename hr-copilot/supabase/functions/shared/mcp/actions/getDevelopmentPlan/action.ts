@@ -210,6 +210,20 @@ ${developmentPlan.suggestedMentors.map(mentor => `- ${mentor.name} (${mentor.rol
     return {
       success: true,
       data: developmentPlan,
+      dataForDownstreamPrompt: {
+        getDevelopmentPlan: {
+          dataSummary: planMarkdown,
+          structured: {
+            recommendedSkillsCount: developmentPlan.recommendedSkills.length,
+            recommendedCapabilitiesCount: developmentPlan.recommendedCapabilities.length,
+            estimatedTimeToReadiness: developmentPlan.estimatedTimeToReadiness,
+            mentorCount: developmentPlan.suggestedMentors.length,
+            topSkills: developmentPlan.recommendedSkills.slice(0, 3).map(s => s.name),
+            topCapabilities: developmentPlan.recommendedCapabilities.slice(0, 3).map(c => c.name)
+          },
+          truncated: false
+        }
+      },
       actionsTaken: [
         {
           tool: 'getProfileData',

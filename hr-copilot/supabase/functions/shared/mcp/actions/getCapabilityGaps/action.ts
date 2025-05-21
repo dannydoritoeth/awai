@@ -9,12 +9,23 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
-import { DatabaseResponse, CapabilityGap } from '../../../types.ts';
+import { DatabaseResponse } from '../../../types.ts';
 import { getLevelValue } from '../../../utils.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
 import { getRoleDetail } from '../../../role/getRoleDetail.ts';
+
+interface CapabilityGap {
+  capabilityId: string;
+  name: string;
+  groupName: string;
+  level?: string;
+  requiredLevel: string;
+  gapType: 'missing' | 'insufficient' | 'met';
+  severity: number;
+  description: string;
+}
 
 interface CapabilityAnalysis {
   gaps: CapabilityGap[];
@@ -165,7 +176,7 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       };
     }) || [];
 
-    // Sort gaps by severity
+    // Sort gaps by severity (we know severity is defined for all gaps)
     gaps.sort((a, b) => {
       if (a.severity !== b.severity) {
         return b.severity - a.severity;
@@ -185,9 +196,8 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
       }
     };
 
-    // Only log if we found significant gaps
-    if (sessionId && analysis.gaps.length > 0) {
-      const gapsMarkdown = `### 📊 Capability Gap Analysis
+    // Generate markdown summary for both chat and downstream prompts
+    const gapsMarkdown = `### 📊 Capability Gap Analysis
 
 ${analysis.gaps.map(gap => `**${gap.name}**: ${gap.level || 'Not Present'} → ${gap.requiredLevel}
 ${gap.description}`).join('\n\n')}
@@ -197,6 +207,8 @@ Critical Gaps: ${analysis.summary.criticalGaps}
 Minor Gaps: ${analysis.summary.minorGaps}
 Met Requirements: ${analysis.summary.metRequirements}`;
 
+    // Only log if we found significant gaps
+    if (sessionId && analysis.gaps.length > 0) {
       await logAgentProgress(
         supabase,
         sessionId,
@@ -208,6 +220,18 @@ Met Requirements: ${analysis.summary.metRequirements}`;
     return {
       success: true,
       data: analysis,
+      dataForDownstreamPrompt: {
+        getCapabilityGaps: {
+          dataSummary: gapsMarkdown,
+          structured: {
+            overallReadiness: analysis.summary.overallReadiness,
+            criticalGaps: analysis.summary.criticalGaps,
+            minorGaps: analysis.summary.minorGaps,
+            metRequirements: analysis.summary.metRequirements
+          },
+          truncated: false
+        }
+      },
       actionsTaken: [
         {
           tool: 'getProfileData',
