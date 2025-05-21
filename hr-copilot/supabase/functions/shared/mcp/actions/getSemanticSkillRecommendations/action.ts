@@ -126,16 +126,6 @@ async function getSemanticSkillRecommendationsBase(
       };
     }
 
-    // Phase 1: Load profile and role skills
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Loading current skills and role requirements...",
-        { phase: 'data_gathering' }
-      );
-    }
-
     console.log('Fetching skills data:', { profileId, roleId });
 
     const [profileSkillsResult, roleSkillsResult] = await Promise.all([
@@ -191,16 +181,6 @@ async function getSemanticSkillRecommendationsBase(
       throw new Error('No skills data returned from database');
     }
 
-    // Phase 2: Get semantic matches
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Finding semantically related skills...",
-        { phase: 'semantic_matching' }
-      );
-    }
-
     const semanticMatches = await getSemanticMatches(
       supabase,
       { id: roleId, table: 'roles' },
@@ -228,28 +208,8 @@ async function getSemanticSkillRecommendationsBase(
     };
 
     const aiContext = prepareAIContext(context);
-
-    // Phase 3: Generate recommendations
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Analyzing skills and generating recommendations...",
-        { phase: 'prompt_building' }
-      );
-    }
-
     const prompt = buildSkillRecommendationsPrompt(aiContext);
     const safePrompt = buildSafePrompt(prompt);
-
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Generating AI-powered skill recommendations...",
-        { phase: 'ai_generation' }
-      );
-    }
 
     const aiResponse = await invokeChatModel(
       {
@@ -267,7 +227,6 @@ async function getSemanticSkillRecommendationsBase(
       throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    // Phase 4: Process and validate recommendations
     // Strip markdown code block markers if present
     const cleanOutput = aiResponse.output
       .replace(/^```json\n/, '')  // Remove opening code block
@@ -287,12 +246,24 @@ async function getSemanticSkillRecommendationsBase(
       throw new Error(`Failed to parse AI recommendations: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
     }
 
-    if (sessionId) {
+    // Only post the final recommendations to chat
+    if (sessionId && recommendations.recommendations.length > 0) {
+      const recommendationsMarkdown = `### 🎯 Skill Recommendations
+
+${recommendations.recommendations.map(rec => `**${rec.name}** (Priority: ${rec.priority})
+${rec.explanation}
+Current Level: ${rec.currentLevel || 'Not Present'} → Target Level: ${rec.targetLevel}
+
+Learning Path:
+${rec.learningPath.map(path => `- ${path.resource} (${path.type}, ${path.duration}${path.provider ? `, by ${path.provider}` : ''})`).join('\n')}`).join('\n\n')}
+
+${recommendations.explanation}`;
+
       await logAgentProgress(
         supabase,
         sessionId,
-        "Finalizing skill recommendations...",
-        { phase: 'finalizing' }
+        recommendationsMarkdown,
+        { phase: 'recommendations_generated' }
       );
     }
 
