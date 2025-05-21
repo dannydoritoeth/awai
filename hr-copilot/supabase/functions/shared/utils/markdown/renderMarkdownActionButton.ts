@@ -119,6 +119,18 @@ export const ActionButtons = {
     size: 'medium'
   }),
 
+    /**
+   * Renders a "View Capability Gaps" button for a profile and role
+   */
+  viewSemanticSkillRecommendations: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionButton({
+    label: 'View Skill Recommendations',
+    actionId: 'getSemanticSkillRecommendations',
+    params: { profileId, roleId, roleTitle },
+    variant: 'primary',
+    size: 'medium'
+  }),
+  
+
   /**
    * Renders a "Get Development Plan" button for a profile and role
    */
@@ -149,6 +161,13 @@ export const ActionButtons = {
       size: 'medium'
     },
     {
+      label: 'View Skill Recommendations',
+      actionId: 'getSemanticSkillRecommendations',
+      params: { profileId, roleId, roleTitle },
+      variant: 'secondary',
+      size: 'medium'
+    },
+    {
       label: 'Get Development Plan',
       actionId: 'getDevelopmentPlan',
       params: { profileId, roleId, roleTitle },
@@ -173,6 +192,13 @@ export const ActionButtons = {
       {
         label: 'View Capability Gaps',
         actionId: 'getCapabilityGaps',
+        params: { profileId, roleId, roleTitle },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'View Skill Recommendations',
+        actionId: 'getSemanticSkillRecommendations',
         params: { profileId, roleId, roleTitle },
         variant: 'secondary',
         size: 'medium'
