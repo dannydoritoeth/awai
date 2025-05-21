@@ -134,7 +134,7 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     await logAgentProgress(
       supabase,
       request.sessionId,
-      'Processing role analysis...',
+      aiResponse.output || 'No response generated',
       { phase: 'response_received' }
     );
 
