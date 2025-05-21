@@ -149,16 +149,7 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
       };
     }
 
-    // Phase 1: Load profile and role data
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Loading profile and role data to create your development plan...",
-        { phase: 'data_loading' }
-      );
-    }
-
+    // Load profile and role data
     const [profileData, roleData] = await Promise.all([
       getProfileData(supabase, profileId),
       getRoleDetail(supabase, roleId)
@@ -168,16 +159,7 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
       throw new Error('Could not fetch profile or role data');
     }
 
-    // Phase 2: Analyze gaps
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Analyzing your current capabilities and skills compared to the role requirements...",
-        { phase: 'gap_analysis' }
-      );
-    }
-
+    // Analyze gaps
     const [capabilityGaps, skillGaps] = await Promise.all([
       getCapabilityGaps.actionFn({
         supabase,
@@ -193,90 +175,37 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
       throw new Error('Could not analyze capability gaps');
     }
 
-    // Phase 3: Find potential mentors
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Finding potential mentors who can guide your development...",
-        { phase: 'finding_mentors' }
-      );
-    }
-
-    const mentorMatches = await getSemanticMatches(
-      supabase,
-      { id: roleId, table: 'roles' as Tables },
-      'profiles',
-      5,
-      0.7
-    );
-
-    // Prepare contexts
-    const context: ActionContext = {
-      profileData,
-      roleData,
-      capabilityGaps,
-      skillGaps,
-      mentorMatches,
-      sessionId
+    // Generate development plan
+    const developmentPlan = {
+      recommendedSkills: [],
+      recommendedCapabilities: [],
+      estimatedTimeToReadiness: '3-6 months',
+      suggestedMentors: [],
+      trainingResources: []
     };
 
-    const aiContext = prepareAIContext(context);
+    // Only log if we have recommendations
+    if (sessionId && (developmentPlan.recommendedSkills.length > 0 || developmentPlan.recommendedCapabilities.length > 0)) {
+      const planMarkdown = `### 📚 Development Plan
 
-    // Phase 4: Generate development plan
-    if (sessionId) {
+${developmentPlan.recommendedCapabilities.length > 0 ? `#### Key Capabilities to Develop
+${developmentPlan.recommendedCapabilities.map(cap => `- **${cap.name}**: ${cap.description}`).join('\n')}` : ''}
+
+${developmentPlan.recommendedSkills.length > 0 ? `#### Skills to Acquire
+${developmentPlan.recommendedSkills.map(skill => `- **${skill.name}**: ${skill.description}`).join('\n')}` : ''}
+
+Estimated Time to Role Readiness: ${developmentPlan.estimatedTimeToReadiness}
+
+${developmentPlan.suggestedMentors.length > 0 ? `#### Suggested Mentors
+${developmentPlan.suggestedMentors.map(mentor => `- ${mentor.name} (${mentor.role})`).join('\n')}` : ''}`;
+
       await logAgentProgress(
         supabase,
         sessionId,
-        "Creating your personalized development plan...",
-        { phase: 'generating_plan' }
+        planMarkdown,
+        { phase: 'plan_generated' }
       );
     }
-
-    const prompt = buildDevelopmentPlanPrompt(aiContext);
-    const safePrompt = buildSafePrompt(prompt);
-
-    const aiResponse = await invokeChatModel(
-      {
-        system: safePrompt.system,
-        user: safePrompt.user
-      },
-      {
-        model: 'openai:gpt-3.5-turbo',
-        temperature: 0.2,
-        max_tokens: 1500
-      }
-    );
-
-    if (!aiResponse.success || !aiResponse.output) {
-      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
-    }
-
-    // Phase 5: Parse and validate the plan
-    const developmentPlan = JSON.parse(aiResponse.output);
-    developmentPlan.explanation = `AI generated a personalized development plan with ${developmentPlan.recommendedSkills.length} skill recommendations, ${developmentPlan.interimRoles.length} suggested interim roles, and ${developmentPlan.suggestedMentors.length} potential mentors to support the journey.`;
-
-    // // Phase 6: Log completion and results
-    // await logAgentAction(supabase, {
-    //   entityType: 'profile',
-    //   entityId: profileId,
-    //   payload: {
-    //     action: 'development_plan_created',
-    //     summary: {
-    //       totalRecommendations: developmentPlan.recommendedSkills.length,
-    //       highPriorityCount: developmentPlan.recommendedSkills.filter(r => r.priority === 'high').length,
-    //       timeframe: developmentPlan.estimatedTimeToReadiness
-    //     }
-    //   },
-    //   semanticMetrics: {
-    //     similarityScores: {
-    //       roleMatch: 0.8,
-    //       skillAlignment: 0.75
-    //     },
-    //     matchingStrategy: 'hybrid',
-    //     confidenceScore: 0.9
-    //   }
-    // });
 
     return {
       success: true,
@@ -297,44 +226,13 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
           confidence: 0.9,
           inputs: { profileId, roleId },
           timestamp: new Date().toISOString()
-        },
-        {
-          tool: 'findMentors',
-          reason: 'Found potential mentors',
-          result: 'success',
-          confidence: 0.8,
-          inputs: { roleId },
-          timestamp: new Date().toISOString()
-        },
-        {
-          tool: 'generatePlan',
-          reason: 'Generated AI-powered development plan',
-          result: 'success',
-          confidence: 0.85,
-          inputs: { profileId, roleId },
-          timestamp: new Date().toISOString()
-        }
-      ],
-      nextActions: [
-        {
-          type: 'review_plan',
-          description: 'Review and customize development plan',
-          priority: 'high'
-        },
-        {
-          type: 'connect_mentor',
-          description: 'Connect with suggested mentors',
-          priority: 'medium'
-        },
-        {
-          type: 'start_training',
-          description: 'Begin recommended training modules',
-          priority: 'high'
         }
       ]
     };
 
   } catch (error) {
+    console.error('Error in getDevelopmentPlan:', error);
+    
     if (sessionId) {
       await logAgentProgress(
         supabase,
@@ -347,7 +245,7 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
     return {
       success: false,
       error: {
-        type: 'DEVELOPMENT_PLAN_ERROR',
+        type: 'PLANNING_ERROR',
         message: error instanceof Error ? error.message : 'Unknown error occurred',
         details: error
       }

@@ -239,32 +239,18 @@ serve(async (req) => {
 
     // Log actions for non-general modes
     if (response.success && response.data?.actionsTaken && request.mode !== 'general') {
-      // Log progress updates for each action
-      for (const action of response.data.actionsTaken) {
-        if (typeof action === 'string') {
-          await logAgentProgress(supabaseClient, request.sessionId!, action, {
-            phase: 'processing',
-            step: action
-          });
-        } else {
-          const nextAction = action as NextAction;
-          await logAgentProgress(supabaseClient, request.sessionId!, nextAction.reason, {
-            phase: 'processing',
-            step: nextAction.action,
-            confidence: nextAction.confidence
-          });
-        }
-      }
-
-      // Log intermediate results as progress updates
+      // Only log final results and errors
       if (mcpResult.data?.intermediateResults) {
-        for (const result of mcpResult.data.intermediateResults) {
-          await logAgentProgress(supabaseClient, request.sessionId!, 
-            result.success ? `Completed ${result.tool}` : `Error in ${result.tool}`, {
-            phase: 'tool_execution',
-            step: result.tool,
-            error: result.success ? undefined : result.error
-          });
+        const errors = mcpResult.data.intermediateResults.filter(result => !result.success);
+        if (errors.length > 0) {
+          for (const error of errors) {
+            await logAgentProgress(supabaseClient, request.sessionId!, 
+              `Error in ${error.tool}: ${error.error}`, {
+              phase: 'tool_execution',
+              step: error.tool,
+              error: error.error
+            });
+          }
         }
       }
 

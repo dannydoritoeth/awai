@@ -20,155 +20,32 @@ import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButto
 
 async function getMatchingRolesForPersonBase(request: MCPRequest): Promise<MCPResponse> {
   const supabase = request.supabase as SupabaseClient<Database>;
-  const { profileId, context, sessionId } = request;
-
-  // Enhanced logging for debugging
-  console.log('Starting getMatchingRolesForPerson with:', {
-    hasProfileId: !!profileId,
-    hasContext: !!context,
-    contextKeys: context ? Object.keys(context) : [],
-    sessionId
-  });
+  const { profileId, sessionId } = request;
 
   try {
-    // Validate inputs with detailed error messages
-    if (!profileId) {
-      const error = {
-        type: 'INVALID_INPUT',
-        message: 'ProfileId is required',
-        details: { providedContext: context }
+    // Load profile context
+    const profileContext = await getProfileContext(supabase, profileId);
+    if (!profileContext) {
+      throw new Error('Could not load profile context');
+    }
+
+    // Find matching roles
+    const roleMatchingResult = await getRolesMatching(supabase, profileId);
+    if (!roleMatchingResult.success) {
+      throw new Error('Failed to find matching roles');
+    }
+
+    const matches = roleMatchingResult.matches || [];
+    const recommendations = roleMatchingResult.recommendations || [];
+
+    // Only log if we found matches
+    if (sessionId && matches.length > 0) {
+      const truncateSummary = (summary: string) => {
+        const firstSentence = summary.split('.')[0];
+        return firstSentence.length > 100 ? `${firstSentence.substring(0, 97)}...` : firstSentence;
       };
-      console.error('Validation failed:', error);
-      return {
-        success: false,
-        message: 'Invalid input: profileId is required',
-        error
-      };
-    }
 
-    // Phase 1: Load profile data with enhanced error handling
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Loading your profile data to find matching roles...",
-        { phase: 'data_loading' }
-      );
-    }
-
-    let profileContext: ProfileContext | null = null;
-    let profileData = null;
-
-    try {
-      [profileContext, profileData] = await Promise.all([
-        getProfileContext(supabase, profileId).then(result => {
-          if (result.error) {
-            console.error('Error loading profile context:', result.error);
-            throw result.error;
-          }
-          return result.data;
-        }),
-        getProfileData(supabase, profileId)
-      ]);
-
-      console.log('Profile data loaded:', {
-        hasProfileContext: !!profileContext,
-        hasProfileData: !!profileData,
-        skillsCount: profileData?.skills?.length,
-        capabilitiesCount: profileData?.capabilities?.length
-      });
-
-    } catch (loadError) {
-      console.error('Failed to load profile data:', loadError);
-      return {
-        success: false,
-        message: 'Could not load profile data',
-        error: {
-          type: 'DATA_LOADING_ERROR',
-          message: 'Failed to load profile data',
-          details: loadError
-        }
-      };
-    }
-
-    if (!profileContext || !profileData) {
-      return {
-        success: false,
-        message: 'Could not fetch profile data',
-        error: {
-          type: 'DATA_NOT_FOUND',
-          message: 'Profile data not found',
-          details: { profileId }
-        }
-      };
-    }
-
-    // Phase 2: Find matching roles with enhanced logging
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        "Searching for roles that match your profile...",
-        { phase: 'finding_matches' }
-      );
-    }
-
-    const matches: SemanticMatch[] = [];
-    const recommendations: any[] = [];
-
-    try {
-      const roleMatchingResult = await getRolesMatching(supabase, profileId, {
-        limit: 20,
-        threshold: 0.7,
-        includeDetails: true
-      });
-
-      console.log('Role matching completed:', {
-        matchCount: roleMatchingResult.matches.length,
-        threshold: 0.7
-      });
-
-      // Phase 3: Process matches
-      if (sessionId) {
-        await logAgentProgress(
-          supabase,
-          sessionId,
-          `Found ${roleMatchingResult.matches.length} potential matches. Processing results...`,
-          { phase: 'processing_matches' }
-        );
-      }
-
-      if (roleMatchingResult.matches.length > 0) {
-        matches.push(...roleMatchingResult.matches.map(match => ({
-          id: match.roleId,
-          name: match.title,
-          similarity: match.semanticScore,
-          type: 'role' as const,
-          summary: match.summary
-        })));
-
-        recommendations.push(...roleMatchingResult.matches.map(match => ({
-          type: 'role_match',
-          score: match.semanticScore,
-          semanticScore: match.semanticScore,
-          summary: match.summary,
-          details: {
-            roleId: match.roleId,
-            title: match.title,
-            department: match.details?.department,
-            location: match.details?.location,
-            matchedSkills: match.details?.matchedSkills
-          }
-        })));
-
-        // Format matches as markdown and log to chat
-        if (sessionId) {
-          const truncateSummary = (summary: string) => {
-            const firstSentence = summary.split('.')[0];
-            return firstSentence.length > 100 ? `${firstSentence.substring(0, 97)}...` : firstSentence;
-          };
-
-          const matchesMarkdown = `### 🎯 Top Matching Roles
+      const matchesMarkdown = `### 🎯 Top Matching Roles
 
 ${roleMatchingResult.matches.slice(0, 5).map((match, index) => `**${index + 1}. ${match.title}** (${(match.semanticScore * 100).toFixed(0)}% match)
    ${truncateSummary(match.summary)}
@@ -177,51 +54,13 @@ ${ActionButtons.roleExplorationGroup(profileId, match.roleId, match.title)}`).jo
 
 Select an action above to learn more about any role.`;
 
-          await logAgentProgress(
-            supabase,
-            sessionId,
-            matchesMarkdown,
-            { phase: 'matches_found' }
-          );
-        }
-      }
-
-    } catch (matchError) {
-      console.error('Error during role matching:', matchError);
-      return {
-        success: false,
-        message: 'Failed to find matching roles',
-        error: {
-          type: 'MATCHING_ERROR',
-          message: 'Error during role matching process',
-          details: matchError
-        }
-      };
+      await logAgentProgress(
+        supabase,
+        sessionId,
+        matchesMarkdown,
+        { phase: 'matches_found' }
+      );
     }
-
-    // Log completion and results
-    await logAgentAction(supabase, {
-      entityType: 'profile',
-      entityId: profileId,
-      payload: {
-        action: 'matching_roles_found',
-        roleCount: matches.length,
-        topMatch: matches[0]?.id,
-        matchCriteria: {
-          skillMatch: true,
-          capabilityMatch: true,
-          careerPathMatch: true
-        }
-      },
-      semanticMetrics: {
-        similarityScores: {
-          roleMatch: 0.8,
-          skillAlignment: 0.75
-        },
-        matchingStrategy: 'hybrid',
-        confidenceScore: 0.9
-      }
-    });
 
     return {
       success: true,
