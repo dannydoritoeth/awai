@@ -110,8 +110,7 @@ export class McpLoopRunner {
   ): Promise<ActionResultV2 | null> {
     if (!this.request.sessionId) return null;
 
-
-    console.log('Finding xxx existing action result for:', {
+    console.log('Finding existing action result for:', {
       session_id: this.request.sessionId,
       action_type: action.tool,
       request_hash: requestHash
@@ -119,7 +118,7 @@ export class McpLoopRunner {
 
     const { data } = await this.supabase
       .from('agent_actions')
-      .select('response, outcome')
+      .select('response, outcome, request_hash')
       .match({
         session_id: this.request.sessionId,
         action_type: action.tool
@@ -130,6 +129,35 @@ export class McpLoopRunner {
 
     // Don't rehydrate if there's no data
     if (!data?.response) return null;
+
+    // Check if request hash matches
+    if (data.request_hash) {
+      try {
+        // Parse the stored hash if it's a JSON string
+        const storedHash = typeof data.request_hash === 'string' ? JSON.parse(data.request_hash) : data.request_hash;
+        
+        // Convert current hash to array if it's Uint8Array
+        const currentHashArray = Array.from(requestHash);
+        
+        // Convert stored hash object to array if needed
+        const storedHashArray = Array.isArray(storedHash) ? storedHash : Object.values(storedHash);
+        
+        // Compare the arrays
+        const hashesMatch = storedHashArray.length === currentHashArray.length &&
+          storedHashArray.every((value, index) => value === currentHashArray[index]);
+        
+        if (!hashesMatch) {
+          console.log(`Request hash mismatch for ${action.tool}:`, {
+            stored: storedHashArray,
+            current: currentHashArray
+          });
+          return null;
+        }
+      } catch (error) {
+        console.error(`Error comparing request hashes for ${action.tool}:`, error);
+        return null;
+      }
+    }
 
     // Don't rehydrate failed responses
     if (

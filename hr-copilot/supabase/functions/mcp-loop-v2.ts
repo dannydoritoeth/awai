@@ -101,11 +101,17 @@ private isResultStillValid(result: any, currentHash: string): boolean {
     return false;
   }
 
-  // Check if the hashes match
-  if (result.request_hash !== currentHash) {
+  // Check if the hashes match by comparing their numeric values
+  const storedHashArray = result.request_hash.split(',').map(Number);
+  const currentHashArray = currentHash.split(',').map(Number);
+  
+  const hashesMatch = storedHashArray.length === currentHashArray.length &&
+    storedHashArray.every((val, idx) => val === currentHashArray[idx]);
+
+  if (!hashesMatch) {
     console.log('Hash mismatch:', { 
-      stored: result.request_hash, 
-      current: currentHash 
+      stored: storedHashArray,
+      current: currentHashArray
     });
     return false;
   }
