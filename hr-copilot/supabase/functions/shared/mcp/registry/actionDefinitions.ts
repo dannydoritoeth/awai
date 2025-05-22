@@ -88,6 +88,20 @@ export const MCP_ACTIONS: Record<string, MCPActionMetadata> = {
     requiresProfileId: true,
     requiresRoleId: true
   },
+  scoreProfilesToRoleFit: {
+    id: 'scoreProfilesToRoleFit',
+    role: 'hiring',
+    description: 'Score how well multiple profiles match a role',
+    requiresProfileId: true,
+    requiresRoleId: true
+  },
+  scoreRolesToProfileFit: {
+    id: 'scoreRolesToProfileFit',
+    role: 'candidate',
+    description: 'Score how well multiple roles match a profile',
+    requiresProfileId: true,
+    requiresRoleId: true
+  },
   getSemanticCompanyFit: {
     id: 'getSemanticCompanyFit',
     role: 'hiring',

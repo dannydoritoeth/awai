@@ -1,5 +1,5 @@
 /**
- * @fileoverview Recommends skills based on role gap analysis using semantic matching and AI insights
+ * @fileoverview Recommends skills based on skill gap analysis using semantic matching and AI insights
  * 
  * Inputs:
  * - profileId: ID of the profile to analyze
@@ -374,7 +374,7 @@ ${recommendations.explanation}`;
 export const getSemanticSkillRecommendations: MCPActionV2 = {
   id: 'getSemanticSkillRecommendations',
   title: 'Get Semantic Skill Recommendations',
-  description: 'Recommend skills based on role gap analysis using semantic matching',
+  description: 'Recommend skills based on skill gap analysis using semantic matching',
   applicableRoles: ['candidate', 'manager'],
   capabilityTags: ['Career Development', 'Skill Development', 'AI Analysis'],
   requiredInputs: ['profileId', 'roleId'],

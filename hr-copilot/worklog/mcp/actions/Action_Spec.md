@@ -1,114 +1,147 @@
-# 📄 Action Spec Template
+# 📄 MCP Action Specification v2
 
 This spec defines the implementation guidelines for each MCP Action. It ensures consistency, separation of concerns, and safe AI interaction.
 
 ---
 
-## 🧱 Structure & Contracts
+## 🧱 Core Structure
 
-- Action lives in its own directory (e.g. `getCapabilityGaps/`)
-- Main file is `action.ts` and must export a valid `MCPActionV2`
-- Must implement `MCPActionV2`, take `MCPRequest` as input and return `MCPResponse` as output
-- Include header comments at the top describing the purpose, inputs, outputs, and related actions
+Each action must:
+- Live in its own directory (e.g. `getCapabilityGaps/`)
+- Export a valid `MCPActionV2` implementation from `action.ts`
+- Include comprehensive JSDoc comments describing purpose, inputs, outputs, and related actions
+- Implement clear separation between internal context and AI context
+- Register itself in the `actionRegistry.ts` by adding to the `actions` array
 
----
-
-## 🔄 Data Handling
-
-- Gather all relevant internal data (e.g., profiles, roles, gaps) from `MCPRequest`
-- Internal data should be used to inform logic, but not all of it should go to the AI
-- Define a **clean separation** between:
-  - `context`: internal execution state
-  - `aiContext`: only the minimal structured data needed for AI
-
----
-
-## 🧠 Prompt Construction
-
-- All AI prompt construction must be done in a separate file: `buildPrompt.ts`
-- `buildPrompt.ts` must export `buildPromptInput(context: Record<string, any>): AIPromptInput`
-- `buildPromptInput` should:
-  - Select relevant fields from context
-  - Trim or summarize unnecessary data
-  - Format a clean, structured prompt for AI use
-- Pass all prompt data through `buildSafePrompt()` before sending to AI
+### Required Files
+```
+actionName/
+├── action.ts       # Main action implementation
+├── buildPrompt.ts  # AI prompt construction (if uses AI)
+```
 
 ---
 
-## 🤖 AI Invocation
+## 🔄 Implementation Requirements
 
-- Use `invokeChatModel()` with:
-  - Explicit `model`, `temperature`, and `max_tokens`
-- AI-based actions must return:
-  - `output`: core content or result
-  - `explanation`: (if applicable) a plain-language rationale
-  - `rawAiResponse`: full AI response for debugging/logging
+### MCPActionV2 Interface
+```typescript
+interface MCPActionV2 {
+  id: string;                 // Unique identifier
+  title: string;             // Human-readable name
+  description: string;       // Purpose description
+  applicableRoles: string[]; // Which user roles can use this
+  capabilityTags: string[]; // Relevant capability areas
+  requiredInputs: string[]; // Required input fields
+  tags: string[];           // Search/categorization tags
+  recommendedAfter: string[]; // Suggested action ordering
+  recommendedBefore: string[];
+  usesAI: boolean;          // Whether action uses AI
+  actionFn: (ctx: Record<string, any>) => Promise<MCPResponse>;
+  getDefaultArgs?: (context: Record<string, any>) => Record<string, any>;
+}
+```
+
+### Action Function Structure
+1. Input Validation
+   - Validate all required inputs are present
+   - Type check inputs using TypeScript interfaces
+   - Return early with error if validation fails
+
+2. Data Gathering
+   - Use supabase client for database queries
+   - Log progress using `logAgentProgress`
+   - Handle database errors gracefully
+
+3. Context Preparation
+   - Maintain clear separation between:
+     - `context`: Internal execution state
+     - `aiContext`: Minimal data needed for AI
+   - Use TypeScript interfaces to enforce structure
+
+4. AI Processing (if applicable)
+   - Use `buildPrompt.ts` for prompt construction
+   - Apply `buildSafePrompt` for safety checks
+   - Use `invokeChatModel` with explicit configuration
+   - Handle AI errors gracefully
+
+5. Response Structure
+   ```typescript
+   interface MCPResponse {
+     success: boolean;
+     data?: any;
+     error?: {
+       type: string;
+       message: string;
+       details?: any;
+     };
+     dataForDownstreamPrompt?: {
+       [actionId: string]: {
+         dataSummary: string;
+         structured: Record<string, any>;
+         truncated: boolean;
+       }
+     };
+   }
+   ```
 
 ---
 
-## 📜 Logging
+## 🗃️ Database Integration
 
-- Log steps to the chat stream:
-  - `data_gathered`
-  - `prompt_built`
-  - `ai_invoked`
-  - `response_received`
-- Use `logAgentAction()` for final logging:
-  - Inputs used
-  - Prompt passed
-  - AI model config
-  - AI response (summary and raw)
+- Use strongly typed Supabase client
+- Reference table structure from migrations
+- Key tables to consider:
+  - `profiles`
+  - `roles`
+  - `skills`
+  - `capabilities`
+  - `agent_actions`
+  - `conversation_sessions`
+  - `chat_messages`
 
-## 📜 Get Default Args
-
- - Implement a function to return the default arguments to call with the parameters from the context:
-   - implement getDefaultArgs?: (context: Record<string, any>) => Record<string, any>
-   - pass in the current context
-   - returns what args this action would need to be passed
-   - Used by the planner to get what actions are recommended next
-
-## 🧪 Testing Guidance
-
-- Include a Deno + supabase compatible `test.ts` file for:
-  - Snapshot testing of `buildPromptInput()`
-  - Verifying output structure of the action
-- Ensure graceful handling of:
-  - Missing inputs
-  - Empty AI responses
-  - Unexpected data structures
 ---
 
-## ✅ Success Criteria for Actions
-
-Each action implementation should meet the following criteria:
+## 🔍 Success Criteria
 
 ### 🔧 Structure & Type Safety
-- [ ] Resides in its own directory with clear naming
-- [ ] Exports a valid `MCPActionV2` from `action.ts`
-- [ ] Accepts `MCPRequest` and returns `MCPResponse`
-- [ ] Has a header comment explaining purpose, inputs, outputs, related actions
+- [ ] Implements MCPActionV2 interface completely
+- [ ] Uses TypeScript interfaces for all data structures
+- [ ] Includes comprehensive JSDoc documentation
+- [ ] Maintains separation between action.ts and buildPrompt.ts
+- [ ] Properly registered in actionRegistry.ts
 
-### 📊 Data Handling
-- [ ] Gathers only required data based on `requiredInputs`
-- [ ] Maintains clean separation between internal `context` and AI `aiContext` (if applicable)
-- [ ] Handles missing or malformed inputs gracefully
+### 📊 Data & Error Handling
+- [ ] Validates all inputs before processing
+- [ ] Handles database errors gracefully
+- [ ] Implements proper error typing and messages
+- [ ] Uses structured logging via logAgentProgress
 
-### 🧠 AI Usage (if applicable)
-- [ ] Prompt is built via `buildPromptInput()` in a separate `buildPrompt.ts` file
-- [ ] Uses `buildSafePrompt()` to enforce safety and size constraints
-- [ ] Calls `invokeChatModel()` with explicit configuration (model, temp, max_tokens)
-- [ ] Returns structured `output`, optional `explanation`, and full `rawAiResponse`
+### 🧠 AI Integration (if applicable)
+- [ ] Maintains clean separation of internal/AI contexts
+- [ ] Uses buildSafePrompt for all AI interactions
+- [ ] Configures AI model explicitly
+- [ ] Handles AI errors gracefully
 
-### 📜 Logging
-- [ ] Logs key steps to chat: `data_gathered`, `prompt_built`, `ai_invoked`, `response_received`
-- [ ] Uses `logAgentAction()` to record all relevant inputs, prompt, and AI outputs
+### 📤 Response Format
+- [ ] Returns valid MCPResponse structure
+- [ ] Includes dataForDownstreamPrompt when relevant
+- [ ] Provides structured data for planner
+- [ ] Includes clear error information when needed
 
-### 🧪 Testing
-- [ ] Includes a `test.ts` file for logic and prompt snapshot testing
-- [ ] Produces correct output with example/mock input
-- [ ] Can be tested independently without full orchestrator
+### 🔄 Default Arguments
+- [ ] Implements getDefaultArgs if action can be suggested
+- [ ] Returns sensible defaults based on context
+- [ ] Handles missing context gracefully
 
-### 📈 Result Quality
-- [ ] Outputs are relevant to the purpose of the action
-- [ ] Any explanations are clear and grounded in the inputs
-- [ ] Handles edge cases (e.g. no data, overly long prompts) reliably
+### 📝 Documentation
+- [ ] Includes clear purpose and usage examples
+- [ ] Documents all inputs and outputs
+- [ ] Lists related actions
+- [ ] Explains any special considerations
+
+### 🎯 Quality Assurance (Optional)
+- [ ] Includes basic test cases in test.ts
+- [ ] Tests error handling paths
+- [ ] Validates prompt construction
+- [ ] Checks response format

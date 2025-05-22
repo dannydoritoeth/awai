@@ -24,6 +24,9 @@ import { getDevelopmentPlan } from './getDevelopmentPlan/action.ts';
 import { getMatchingRolesForPerson } from './getMatchingRolesForPerson/action.ts';
 import { getSemanticSkillRecommendations } from './getSemanticSkillRecommendations/action.ts';
 import { getRoleDetails } from './getRoleDetails/action.ts';
+import { getMatchingPeopleForRole } from './getMatchingPeopleForRole/action.ts';
+import { scoreProfilesToRoleFit } from './scoreProfilesToRoleFit/action.ts';
+import { scoreRolesToProfileFit } from './scoreRolesToProfileFit/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -38,7 +41,10 @@ const actions: MCPActionV2[] = [
   getDevelopmentPlan,
   getMatchingRolesForPerson,
   getSemanticSkillRecommendations,
-  getRoleDetails
+  getRoleDetails,
+  getMatchingPeopleForRole,
+  scoreProfilesToRoleFit,
+  scoreRolesToProfileFit
 //   getSuggestedCareerPaths
 ];
 
