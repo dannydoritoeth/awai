@@ -30,8 +30,8 @@ async function callMCPLoop(
     params: Record<string, any>;
   }
 ) {
-  // Determine the endpoint based on mode
-  const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+  // Always use v2 endpoint
+  const endpoint = '/functions/v1/mcp-loop-v2';
   console.log('Calling MCP loop with endpoint:', endpoint);
   
   // Create the MCP loop body using the shared utility
@@ -92,10 +92,9 @@ async function processInitialMessage(
       entityId || undefined
     );
 
-    // Determine the endpoint based on mode
-    const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+    // Always use v2 endpoint
+    const endpoint = '/functions/v1/mcp-loop-v2';
     console.log('Calling MCP loop with endpoint:', endpoint);
-    console.log('endpoint', endpoint);
     
     const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
       method: 'POST',
@@ -191,12 +190,9 @@ async function startSession(
       // Log the initial message with the MCP loop body
       await postUserMessage(supabaseClient, sessionId, initialMessage, undefined, mcpLoopBody);
 
-      // Trigger MCP loop asynchronously
-      // Determine the endpoint based on mode
-      const endpoint = mode === 'candidate' ? '/functions/v1/mcp-loop-v2' : '/functions/v1/mcp-loop';
+      // Always use v2 endpoint
+      const endpoint = '/functions/v1/mcp-loop-v2';
       console.log('Calling MCP loop with endpoint:', endpoint);
-      console.log('endpoint', endpoint);
-  
 
       fetch(`${Deno.env.get('SUPABASE_URL')}${endpoint}`, {
         method: 'POST',

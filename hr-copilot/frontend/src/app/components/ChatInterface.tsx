@@ -7,6 +7,7 @@ import { ChatMessage, HeatmapRequestData } from '@/types/chat';
 import { CapabilityData } from './CapabilityHeatmap';
 import HeatmapModal from './HeatmapModal';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import React from 'react';
 
 interface ActionButtonData {
   label: string;
@@ -76,6 +77,12 @@ export default function ChatInterface({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [heatmapData, setHeatmapData] = useState<{[key: string]: CapabilityData[]}>({});
+  const pendingRoleMatches = useRef<Array<{
+    id: string;
+    name: string;
+    matchPercentage: number;
+    matchStatus: string;
+  }>>([]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -126,6 +133,16 @@ export default function ChatInterface({
     
     prevMessagesLengthRef.current = messages.length;
   }, [messages, hasUserInteracted]);
+
+  // Process any pending role matches after render
+  useEffect(() => {
+    if (pendingRoleMatches.current.length > 0) {
+      pendingRoleMatches.current.forEach(match => {
+        onRoleMatchFound?.(match);
+      });
+      pendingRoleMatches.current = [];
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,7 +325,8 @@ export default function ChatInterface({
       await response.json();
 
       if (actionData.params.roleId && actionData.params.roleTitle) {
-        onRoleMatchFound?.({
+        // Queue the role match to be processed after render
+        pendingRoleMatches.current.push({
           id: actionData.params.roleId,
           name: actionData.params.roleTitle,
           matchPercentage: actionData.params.matchPercentage || 0,
@@ -421,11 +439,23 @@ export default function ChatInterface({
     try {
       const actionData = JSON.parse(content);
       
+      // Schedule role match processing for next tick to avoid render phase updates
+      const processRoleMatch = (match: { 
+        id: string; 
+        name: string; 
+        matchPercentage: number; 
+        matchStatus: string; 
+      }) => {
+        setTimeout(() => {
+          onRoleMatchFound?.(match);
+        }, 0);
+      };
+      
       // If it's an array of actions, process each one
       if (Array.isArray(actionData)) {
         actionData.forEach(action => {
           if (action.params.roleId && action.params.roleTitle) {
-            onRoleMatchFound?.({
+            processRoleMatch({
               id: action.params.roleId,
               name: action.params.roleTitle,
               matchPercentage: action.params.matchPercentage || 0,
@@ -436,7 +466,7 @@ export default function ChatInterface({
       } 
       // If it's a single action
       else if (actionData.params?.roleId && actionData.params?.roleTitle) {
-        onRoleMatchFound?.({
+        processRoleMatch({
           id: actionData.params.roleId,
           name: actionData.params.roleTitle,
           matchPercentage: actionData.params.matchPercentage || 0,

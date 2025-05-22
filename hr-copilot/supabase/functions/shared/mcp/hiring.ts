@@ -13,6 +13,7 @@ import { logAgentResponse } from '../chatUtils.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
 import { loadRoleDataForPrompt } from './utils/roleDataLoader.ts';
 import { invokeChatModel } from '../ai/invokeAIModel.ts';
+import { batchScoreRoleProfiles } from '../agent/scoreRoleProfiles.ts';
 
 // Type definitions
 declare const Deno: {
@@ -160,8 +161,8 @@ async function processHiringMatches(
     const processStartTime = Date.now();
 
     // Score all profiles in batch
-    const scoreResults = await batchScoreProfileFit(supabase, roleId, profileIds, {
-      maxRoles: options.limit,
+    const scoreResults = await batchScoreRoleProfiles(supabase, roleId, profileIds, {
+      maxProfiles: options.limit,
       maxConcurrent: 5
     });
 

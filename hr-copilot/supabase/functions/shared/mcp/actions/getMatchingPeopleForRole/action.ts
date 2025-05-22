@@ -2,7 +2,7 @@
  * @fileoverview Finds and analyzes matching candidates for a given role
  * 
  * Purpose: Identifies and evaluates potential candidates for a role based on skills,
- * capabilities, and semantic matching. Provides detailed analysis of each match.
+ * capabilities, and semantic matching.
  * 
  * Inputs:
  * - roleId: ID of the role to find matches for
@@ -20,35 +20,11 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
-import { MCPRequest, MCPResponse, SemanticMatch } from '../../types/action.ts';
-import { getSemanticMatches } from '../../../embeddings.ts';
-import { getCapabilityGaps } from '../../../profile/getCapabilityGaps.ts';
-import { getSkillGaps } from '../../../profile/getSkillGaps.ts';
-import { batchScoreProfileFit } from '../../../agent/scoreProfileFit.ts';
+import { MCPRequest, MCPResponse, MCPActionV2 } from '../../types/action.ts';
 import { getRoleDetail } from '../../../role/getRoleDetail.ts';
-import { getProfileData } from '../../../profile/getProfileData.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButton.ts';
-
-interface ProcessedMatch {
-  profileId: string;
-  name: string;
-  score: number;
-  semanticScore: number;
-  details: {
-    capabilities: {
-      matched: string[];
-      missing: string[];
-      insufficient: string[];
-    };
-    skills: {
-      matched: string[];
-      missing: string[];
-      insufficient: string[];
-    };
-  };
-  summary?: string;
-}
+import { getProfilesMatching, ProfileMatch } from '../../../profile/getProfilesMatching.ts';
 
 async function getMatchingPeopleForRoleBase(request: MCPRequest): Promise<MCPResponse> {
   const supabase = request.supabase as SupabaseClient<Database>;
@@ -77,94 +53,29 @@ async function getMatchingPeopleForRoleBase(request: MCPRequest): Promise<MCPRes
     }
     const roleData = roleDetailResponse.data;
 
-    // Get semantic matches
-    const profileMatches = await getSemanticMatches(
-      supabase,
-      { id: roleId, table: 'roles' },
-      'profiles',
-      20,
-      0.5
-    );
+    // Find matching profiles
+    const profileMatchingResult = await getProfilesMatching(supabase, roleId);
+    const matches = profileMatchingResult.matches || [];
 
-    // Log matches found
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        `Found ${profileMatches.length} potential matches. Analyzing qualifications...`,
-        { phase: 'matches_found' }
-      );
-    }
-
-    // Process matches in detail
-    const processedMatches: ProcessedMatch[] = [];
-    const profileIds = profileMatches.map(match => match.id);
-
-    // Score all profiles in batch
-    const scoreResults = await batchScoreProfileFit(supabase, roleId, profileIds, {
-      maxRoles: 20,
-      maxConcurrent: 5
-    });
-
-    // Process each match with detailed analysis
-    for (const profileId of profileIds) {
-      const semanticMatch = profileMatches.find(m => m.id === profileId);
-      const scoreResult = scoreResults.find(r => r.roleId === profileId);
-      
-      if (!semanticMatch || !scoreResult?.result.data) continue;
-
-      // Get profile data
-      const profileData = await getProfileData(supabase, profileId);
-      if (!profileData) continue;
-
-      // Get capability and skill gaps
-      const [capabilityGaps, skillGaps] = await Promise.all([
-        getCapabilityGaps(supabase, profileId, roleId),
-        getSkillGaps(supabase, profileId, roleId)
-      ]);
-
-      processedMatches.push({
-        profileId,
-        name: profileData.name,
-        score: scoreResult.result.data.score,
-        semanticScore: semanticMatch.similarity,
-        details: {
-          capabilities: {
-            matched: capabilityGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-            missing: capabilityGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-            insufficient: capabilityGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
-          },
-          skills: {
-            matched: skillGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-            missing: skillGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-            insufficient: skillGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
-          }
-        },
-        summary: semanticMatch.summary
-      });
-    }
-
-    // Sort matches by combined score
-    processedMatches.sort((a, b) => {
-      const scoreA = (a.score * 0.4) + (a.semanticScore * 0.6);
-      const scoreB = (b.score * 0.4) + (b.semanticScore * 0.6);
-      return scoreB - scoreA;
-    });
-
-    // Format message for chat and response
+    // Format the message for both chat and response
     let message = '';
-    if (processedMatches.length > 0) {
+    if (matches.length > 0) {
+      const truncateSummary = (summary: string) => {
+        const firstSentence = summary.split('.')[0];
+        return firstSentence.length > 100 ? `${firstSentence.substring(0, 97)}...` : firstSentence;
+      };
+
       message = `### 👥 Top Matching Candidates for ${roleData.title}
 
-${processedMatches.slice(0, 5).map((match, index) => {
-  const score = ((match.score * 0.4 + match.semanticScore * 0.6) * 100).toFixed(0);
-  const capabilityMatch = match.details.capabilities.matched.length;
-  const skillMatch = match.details.skills.matched.length;
+${matches.slice(0, 5).map((match, index) => {
+  const score = (match.semanticScore * 100).toFixed(0);
+  const skills = match.details?.matchedSkills?.length || 0;
+  const currentRole = match.details?.currentRole;
   
   return `**${index + 1}. ${match.name}** (${score}% match)
-   🎯 Matches ${capabilityMatch} capabilities and ${skillMatch} skills
-   ${match.summary || 'No summary available'}
-${ActionButtons.profileExplorationGroup(match.profileId, roleId, match.name)}`;
+   ${currentRole ? `💼 ${currentRole}` : ''}
+   
+${ActionButtons.roleExplorationGroup(match.profileId, roleId, match.name)}`;
 }).join('\n\n')}
 
 Select an action above to learn more about any candidate.`;
@@ -178,20 +89,20 @@ Select an action above to learn more about any candidate.`;
         supabase,
         sessionId,
         message,
-        { phase: 'analysis_complete' }
+        { phase: matches.length > 0 ? 'matches_found' : 'no_matches' }
       );
     }
 
     return {
       success: true,
-      message: `Found ${processedMatches.length} matching candidates`,
+      message: `Found ${matches.length} matching candidates`,
       chatResponse: {
         message,
         followUpQuestion: 'Would you like to explore any of these candidates in more detail?',
         aiPrompt: 'The user may want to explore candidate profiles or analyze skill gaps.',
         promptDetails: {
-          matchCount: processedMatches.length,
-          hasMatches: processedMatches.length > 0
+          matchCount: matches.length,
+          hasMatches: matches.length > 0
         }
       },
       dataForDownstreamPrompt: {
@@ -200,22 +111,20 @@ Select an action above to learn more about any candidate.`;
           structured: {
             roleId,
             roleTitle: roleData.title,
-            matchCount: processedMatches.length,
-            topMatches: processedMatches.slice(0, 5).map(match => ({
+            matchCount: matches.length,
+            topMatches: matches.slice(0, 5).map(match => ({
               profileId: match.profileId,
               name: match.name,
-              score: match.score,
-              semanticScore: match.semanticScore,
-              capabilityMatches: match.details.capabilities.matched.length,
-              skillMatches: match.details.skills.matched.length
+              score: match.semanticScore,
+              skills: match.details?.skills || []
             }))
           },
           truncated: false
         }
       },
       data: {
-        matches: processedMatches.slice(0, 10),
-        recommendations: processedMatches.slice(0, 5),
+        matches: matches.slice(0, 10),
+        recommendations: matches.slice(0, 5),
         nextActions: [
           {
             type: 'review_candidates',
