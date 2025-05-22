@@ -39,6 +39,7 @@ interface RoleScore {
   factors: {
     capabilityAlignment: number;
     skillAlignment: number;
+    capabilityCoverage: number;
   };
   details: {
     capabilities: {
@@ -46,6 +47,9 @@ interface RoleScore {
       insufficient: string[];
       missing: string[];
       score: number;
+      coverage: number;
+      totalCriteria: number;
+      metCriteria: number;
     };
     skills: {
       met: string[];
@@ -174,6 +178,11 @@ async function scoreRolesToProfileFitBase(request: MCPRequest): Promise<MCPRespo
       }
 
       // Calculate scores
+      const totalCapabilityCriteria = roleCapabilities.data?.length || 0;
+      const metCapabilityCriteria = capabilityAnalysis.met.length;
+      const capabilityCoverage = totalCapabilityCriteria > 0 ? 
+        metCapabilityCriteria / totalCapabilityCriteria : 0;
+      
       const capabilityScore = roleCapabilities.data?.length ?
         capabilityAnalysis.met.length / roleCapabilities.data.length : 0;
       
@@ -184,19 +193,23 @@ async function scoreRolesToProfileFitBase(request: MCPRequest): Promise<MCPRespo
       const totalScore = (capabilityScore * 0.6) + (skillScore * 0.4);
 
       // Generate explanation
-      const explanation = `Matches ${capabilityAnalysis.met.length} of ${roleCapabilities.data?.length || 0} required capabilities and ${skillAnalysis.met.length} of ${roleSkills.data?.length || 0} required skills.`;
+      const explanation = `Matches ${capabilityAnalysis.met.length} of ${roleCapabilities.data?.length || 0} required capabilities (${(capabilityCoverage * 100).toFixed(1)}% coverage) and ${skillAnalysis.met.length} of ${roleSkills.data?.length || 0} required skills.`;
 
       scores[roleId] = {
         score: totalScore,
         explanation,
         factors: {
           capabilityAlignment: capabilityScore,
-          skillAlignment: skillScore
+          skillAlignment: skillScore,
+          capabilityCoverage: capabilityCoverage
         },
         details: {
           capabilities: {
             ...capabilityAnalysis,
-            score: capabilityScore
+            score: capabilityScore,
+            coverage: capabilityCoverage,
+            totalCriteria: totalCapabilityCriteria,
+            metCriteria: metCapabilityCriteria
           },
           skills: {
             ...skillAnalysis,
@@ -212,34 +225,65 @@ async function scoreRolesToProfileFitBase(request: MCPRequest): Promise<MCPRespo
       throw new Error('Could not load profile data');
     }
 
-    // Log completion
+    // Log completion with formatted markdown
     if (sessionId) {
+      const topRoles = Object.entries(scores)
+        .sort(([, a], [, b]) => b.score - a.score)
+        .slice(0, 5);
+
+      const markdownSummary = `### 📊 Role-Profile Fit Analysis
+
+**Profile**: ${profileData.display_name || profileId}
+**Roles Analyzed**: ${Object.keys(scores).length}
+
+#### 🏆 Top Matching Roles
+
+${topRoles.map(([roleId, score], index) => `
+${index + 1}. **Role ${roleId}** (${(score.score * 100).toFixed(1)}% Overall Fit)
+   - Capability Coverage: ${(score.factors.capabilityCoverage * 100).toFixed(1)}%
+   - Capability Alignment: ${(score.factors.capabilityAlignment * 100).toFixed(1)}%
+   - Skill Alignment: ${(score.factors.skillAlignment * 100).toFixed(1)}%
+   - Met Capabilities: ${score.details.capabilities.met.length}/${score.details.capabilities.totalCriteria}
+   - Met Skills: ${score.details.skills.met.length}
+`).join('\n')}
+
+#### 📈 Summary
+- Average Capability Coverage: ${(Object.values(scores).reduce((sum, s) => sum + s.factors.capabilityCoverage, 0) / Object.keys(scores).length * 100).toFixed(1)}%
+- Average Overall Fit: ${(Object.values(scores).reduce((sum, s) => sum + s.score, 0) / Object.keys(scores).length * 100).toFixed(1)}%
+
+#### 💡 Next Steps
+- Review detailed capability gaps for top matching roles
+- Explore skill development opportunities
+- Consider career path options based on top matches
+`;
+
       await logAgentProgress(
         supabase,
         sessionId,
-        `Completed fit analysis for ${Object.keys(scores).length} roles.`,
+        markdownSummary,
         { phase: 'analysis_complete' }
       );
     }
 
     return {
       success: true,
-      message: `Scored ${Object.keys(scores).length} roles`,
+      message: markdownSummary,
       data: {
         scores
       },
       dataForDownstreamPrompt: {
         scoreRolesToProfileFit: {
-          dataSummary: `Analyzed ${Object.keys(scores).length} roles for profile ${profileData.name}`,
+          dataSummary: `Analyzed ${Object.keys(scores).length} roles for profile ${profileData.display_name || profileId}`,
           structured: {
             profileId,
-            profileName: profileData.name,
+            profileName: profileData.display_name || profileId,
             roleCount: Object.keys(scores).length,
             scores: Object.entries(scores).map(([id, score]) => ({
               roleId: id,
               score: score.score,
               capabilityScore: score.factors.capabilityAlignment,
-              skillScore: score.factors.skillAlignment
+              skillScore: score.factors.skillAlignment,
+              capabilityCoverage: score.factors.capabilityCoverage
             }))
           },
           truncated: false
