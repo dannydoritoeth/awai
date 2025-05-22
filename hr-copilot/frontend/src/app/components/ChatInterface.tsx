@@ -468,90 +468,44 @@ export default function ChatInterface({
           onRoleMatchFound?.(match);
         }, 0);
       };
-      
-      // If it's an array of actions
-      if (Array.isArray(actionData)) {
-        // Group actions by groupId
-        const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
-          const groupId = action.groupId || 'default';
-          if (!groups[groupId]) {
-            groups[groupId] = [];
-          }
-          groups[groupId].push(action);
-          return groups;
-        }, {});
 
-        // Process each group
-        Object.values(groupedActions).forEach(actions => {
-          // Find the profile ID and role ID from any action that has them
-          const profileAction = actions.find(action => action.params.profileId);
-          const roleAction = actions.find(action => action.params.roleId && action.params.roleTitle);
-          
-          // If we have both profile and role info, determine which is the match based on which one we're viewing
-          if (profileAction && roleAction) {
-            const isProfileContext = !roleData; // If we don't have roleData, we're viewing a profile
-            
-            if (isProfileContext) {
-              // We're viewing a profile, so roles are the matches
-              const roleId = roleAction.params.roleId;
-              const roleTitle = roleAction.params.roleTitle;
-              
-              if (roleId && roleTitle) {
-                processMatch({
-                  id: roleId,
-                  name: roleTitle,
-                  matchPercentage: roleAction.params.matchPercentage || 100,
-                  matchStatus: 'Candidate',
-                  type: 'role'
-                });
-              }
-            } else {
-              // We're viewing a role, so profiles are the matches
-              const profileId = profileAction.params.profileId;
-              const name = (profileAction.params.profileName as string) || (profileAction.params.name as string) || 'Unknown Profile';
-              const matchPercentage = profileAction.params.matchPercentage || 83;
-              
-              if (profileId && name) {
-                processMatch({
-                  id: profileId,
-                  name: name,
-                  matchPercentage: matchPercentage,
-                  matchStatus: 'Candidate',
-                  type: 'profile'
-                });
-              }
-            }
-          }
-        });
-      } 
-      // If it's a single action
-      else if (actionData.params) {
-        const params = actionData.params;
-        const isProfileContext = !roleData; // If we don't have roleData, we're viewing a profile
-        
-        if (isProfileContext && params.roleId && params.roleTitle) {
-          // We're viewing a profile, so roles are the matches
+      const processParams = (params: any) => {
+        if (params.roleId) {
+          // This is a role match
           processMatch({
             id: params.roleId,
-            name: params.roleTitle,
+            name: params.roleTitle || 'Unknown Role',
             matchPercentage: params.matchPercentage || 100,
             matchStatus: 'Candidate',
             type: 'role'
           });
-        } else if (!isProfileContext && params.profileId) {
-          // We're viewing a role, so profiles are the matches
-          const name = (params.profileName as string) || (params.name as string) || 'Unknown Profile';
-          if (params.profileId && name) {
-            processMatch({
-              id: params.profileId,
-              name: name,
-              matchPercentage: params.matchPercentage || 83,
-              matchStatus: 'Candidate',
-              type: 'profile'
-            });
-          }
+        } else if (params.profileId) {
+          // This is a profile match
+          const name = params.profileName || params.name || 'Unknown Profile';
+          const matchPercentage = params.matchPercentage || 
+            (typeof params.semanticScore === 'number' ? params.semanticScore * 100 : 83);
+
+          processMatch({
+            id: params.profileId,
+            name: name,
+            matchPercentage: matchPercentage,
+            matchStatus: 'Candidate',
+            type: 'profile'
+          });
         }
+      };
+      
+      // Handle both array of actions and single action
+      if (Array.isArray(actionData)) {
+        actionData.forEach(action => {
+          if (action.params) {
+            processParams(action.params);
+          }
+        });
+      } else if (actionData.params) {
+        processParams(actionData.params);
       }
+
       return actionData;
     } catch (error) {
       console.error('Failed to process action buttons:', error);

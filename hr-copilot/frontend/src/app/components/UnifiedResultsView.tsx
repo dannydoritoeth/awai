@@ -12,6 +12,12 @@ interface Match {
   type: 'role' | 'profile';
 }
 
+// Extend the ApiMatch type to include profileName and type
+interface ExtendedApiMatch extends ApiMatch {
+  profileName?: string;
+  type?: 'role' | 'profile';
+}
+
 interface ProfileData {
   id: string;
   name: string;
@@ -162,14 +168,34 @@ export default function UnifiedResultsView({
                     console.warn('Match missing ID:', match);
                     return;
                   }
-                  const existing = matchMap.get(match.id);
+
+                  // Determine the correct type based on context
+                  const expectedType = roleData ? 'profile' : 'role';
+                  const matchType = roleData ? 'profile' : 'role';
+
+                  // Skip matches that don't match our current context
+                  if ((match as ExtendedApiMatch).type && (match as ExtendedApiMatch).type !== matchType) {
+                    console.log('Skipping match of wrong type:', {
+                      id: match.id,
+                      type: (match as ExtendedApiMatch).type,
+                      expectedType
+                    });
+                    return;
+                  }
+
+                  const existing = matchMap.get(match.id) as ExtendedApiMatch;
                   if (!existing || existing.match_percentage < match.match_percentage) {
                     console.log('Adding/updating match in map:', {
                       id: match.id,
                       name: match.name,
+                      type: matchType,
                       percentage: match.match_percentage
                     });
-                    matchMap.set(match.id, match);
+                    const extendedMatch: ExtendedApiMatch = {
+                      ...match,
+                      type: matchType
+                    };
+                    matchMap.set(match.id, extendedMatch);
                   }
                 });
 
@@ -179,10 +205,10 @@ export default function UnifiedResultsView({
 
                 console.log('Final unique sorted matches:', uniqueSortedMatches.length);
 
-                setMatches(uniqueSortedMatches.map((match: ApiMatch) => {
+                setMatches(uniqueSortedMatches.map((match: ExtendedApiMatch) => {
                   const transformed: Match = {
                     id: match.id,
-                    name: match.name,
+                    name: match.profileName || match.name || 'Unknown Profile',
                     matchPercentage: match.match_percentage,
                     matchStatus: match.match_status || 'now',
                     type: roleData ? 'profile' : 'role'

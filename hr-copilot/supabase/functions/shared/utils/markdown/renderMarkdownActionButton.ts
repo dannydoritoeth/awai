@@ -263,5 +263,80 @@ export const ActionButtons = {
         size: 'medium'
       }
     ]
+  }),
+
+  /**
+   * Renders a set of common profile exploration buttons as a grouped dropdown
+   */
+  profileExplorationGroup: (profileId: string, roleId: string, profileName: string, profileData?: {
+    profileId: string;
+    name: string;
+    semanticScore: number;
+    currentRole?: string;
+    department?: string;
+    capabilities?: { name: string; level: number; }[];
+    capabilityMatchScore?: number;
+  }) => renderMarkdownActionGroup({
+    groupId: `profile_${profileId}`,
+    actions: [
+      {
+        label: `Learn More About ${profileData?.name || profileName}`,
+        actionId: 'getProfileDetails',
+        params: { 
+          profileId,
+          profileName: profileData?.name || profileName,
+          ...(profileData && {
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole,
+            department: profileData.department
+          })
+        },
+        variant: 'primary',
+        size: 'medium'
+      },
+      {
+        label: 'View Capability Assessment',
+        actionId: 'getCapabilityAssessment',
+        params: { 
+          profileId,
+          profileName: profileData?.name || profileName,
+          ...(profileData && {
+            semanticScore: profileData.semanticScore,
+            capabilities: profileData.capabilities,
+            capabilityMatchScore: profileData.capabilityMatchScore
+          })
+        },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'View Skills & Experience',
+        actionId: 'getSkillsAndExperience',
+        params: { 
+          profileId,
+          profileName: profileData?.name || profileName,
+          ...(profileData && {
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole
+          })
+        },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'Get Career History',
+        actionId: 'getCareerHistory',
+        params: { 
+          profileId,
+          profileName: profileData?.name || profileName,
+          ...(profileData && {
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole
+          })
+        },
+        variant: 'outline',
+        size: 'medium'
+      }
+    ]
   })
 }; 

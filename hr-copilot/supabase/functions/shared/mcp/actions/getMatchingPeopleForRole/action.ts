@@ -74,9 +74,9 @@ ${matches.slice(0, 5).map((match, index) => {
   return `**${index + 1}. ${match.name}** (${score}% match)
    ${currentRole ? `💼 ${currentRole}` : ''}
    
-${ActionButtons.roleExplorationGroup(match.profileId, roleId, roleData.title, {
+${ActionButtons.profileExplorationGroup(match.profileId, roleId, match.name, {
   profileId: match.profileId,
-  profileName: match.name,
+  name: match.name,
   semanticScore: match.semanticScore,
   currentRole: match.details?.currentRole,
   department: match.details?.department,
