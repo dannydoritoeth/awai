@@ -437,45 +437,93 @@ export default function ChatInterface({
 
   const processActionButtons = (content: string) => {
     try {
+      console.log('Processing action buttons with content:', content);
       const actionData = JSON.parse(content);
+      console.log('Parsed action data:', actionData);
       
-      // Schedule role match processing for next tick to avoid render phase updates
-      const processRoleMatch = (match: { 
+      // Schedule match processing for next tick to avoid render phase updates
+      const processMatch = (match: { 
         id: string; 
         name: string; 
         matchPercentage: number; 
         matchStatus: string; 
+        type?: 'role' | 'profile';
       }) => {
+        console.log('Processing match:', match);
         setTimeout(() => {
+          console.log('Calling onRoleMatchFound with match:', match);
           onRoleMatchFound?.(match);
         }, 0);
       };
       
-      // If it's an array of actions, process each one
+      // If it's an array of actions
       if (Array.isArray(actionData)) {
-        actionData.forEach(action => {
-          if (action.params.roleId && action.params.roleTitle) {
-            processRoleMatch({
-              id: action.params.roleId,
-              name: action.params.roleTitle,
-              matchPercentage: action.params.matchPercentage || 0,
-              matchStatus: action.params.matchStatus || 'now'
-            });
+        console.log('Processing array of actions, length:', actionData.length);
+        // Group actions by groupId
+        const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
+          const groupId = action.groupId || 'default';
+          if (!groups[groupId]) {
+            groups[groupId] = [];
+          }
+          groups[groupId].push(action);
+          return groups;
+        }, {});
+
+        console.log('Grouped actions:', groupedActions);
+
+        // Process each group
+        Object.entries(groupedActions).forEach(([groupId, actions]) => {
+          console.log(`Processing group ${groupId} with ${actions.length} actions`);
+          
+          // Find the profile ID from any action that has it
+          const profileAction = actions.find(action => action.params.profileId);
+          const roleAction = actions.find(action => action.params.roleId && action.params.roleTitle);
+          
+          if (profileAction && roleAction) {
+            console.log('Found profile and role actions:', { profileAction, roleAction });
+            
+            // Add type checks for required fields
+            const profileId = profileAction.params.profileId;
+            const roleTitle = roleAction.params.roleTitle;
+            
+            if (profileId && roleTitle) {
+              processMatch({
+                id: profileId,
+                name: roleTitle,
+                matchPercentage: 100,
+                matchStatus: 'Candidate',
+                type: 'profile'
+              });
+            } else {
+              console.log('Missing required profile ID or role title:', { profileId, roleTitle });
+            }
+          } else {
+            console.log('Missing required profile or role information:', { profileAction, roleAction });
           }
         });
       } 
       // If it's a single action
-      else if (actionData.params?.roleId && actionData.params?.roleTitle) {
-        processRoleMatch({
-          id: actionData.params.roleId,
-          name: actionData.params.roleTitle,
-          matchPercentage: actionData.params.matchPercentage || 0,
-          matchStatus: actionData.params.matchStatus || 'now'
-        });
+      else if (actionData.params) {
+        console.log('Processing single action with params:', actionData.params);
+        const params = actionData.params;
+        
+        if (params.profileId && params.roleTitle) {
+          console.log('Processing as profile match');
+          processMatch({
+            id: params.profileId,
+            name: params.roleTitle,
+            matchPercentage: 100,
+            matchStatus: 'Candidate',
+            type: 'profile'
+          });
+        } else {
+          console.log('Single action missing required profile information:', params);
+        }
       }
       return actionData;
     } catch (error) {
       console.error('Failed to parse action button data:', error);
+      console.error('Original content:', content);
       return null;
     }
   };

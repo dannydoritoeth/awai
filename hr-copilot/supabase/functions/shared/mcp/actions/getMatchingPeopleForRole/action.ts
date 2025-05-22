@@ -69,13 +69,20 @@ async function getMatchingPeopleForRoleBase(request: MCPRequest): Promise<MCPRes
 
 ${matches.slice(0, 5).map((match, index) => {
   const score = (match.semanticScore * 100).toFixed(0);
-  const skills = match.details?.matchedSkills?.length || 0;
   const currentRole = match.details?.currentRole;
   
   return `**${index + 1}. ${match.name}** (${score}% match)
    ${currentRole ? `💼 ${currentRole}` : ''}
    
-${ActionButtons.roleExplorationGroup(match.profileId, roleId, match.name)}`;
+${ActionButtons.roleExplorationGroup(match.profileId, roleId, roleData.title, {
+  profileId: match.profileId,
+  profileName: match.name,
+  semanticScore: match.semanticScore,
+  currentRole: match.details?.currentRole,
+  department: match.details?.department,
+  capabilities: match.details?.capabilities,
+  capabilityMatchScore: match.details?.capabilityMatchScore
+})}`;
 }).join('\n\n')}
 
 Select an action above to learn more about any candidate.`;

@@ -179,34 +179,86 @@ export const ActionButtons = {
   /**
    * Renders a set of common role exploration buttons as a grouped dropdown
    */
-  roleExplorationGroup: (profileId: string, roleId: string, roleTitle: string) => renderMarkdownActionGroup({
+  roleExplorationGroup: (profileId: string, roleId: string, roleTitle: string, profileData?: {
+    profileId: string;
+    profileName: string;
+    semanticScore: number;
+    currentRole?: string;
+    department?: string;
+    capabilities?: { name: string; level: number; }[];
+    capabilityMatchScore?: number;
+  }) => renderMarkdownActionGroup({
     groupId: `role_${roleId}`,
     actions: [
       {
-        label: `Learn More About ${roleTitle}`,
+        label: `Learn More About ${profileData?.profileName || roleTitle}`,
         actionId: 'getRoleDetails',
-        params: { roleId, roleTitle },
+        params: { 
+          roleId, 
+          roleTitle,
+          ...(profileData && {
+            profileId: profileData.profileId,
+            profileName: profileData.profileName,
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole,
+            department: profileData.department
+          })
+        },
         variant: 'primary',
         size: 'medium'
       },
       {
         label: 'View Capability Gaps',
         actionId: 'getCapabilityGaps',
-        params: { profileId, roleId, roleTitle },
+        params: { 
+          profileId, 
+          roleId, 
+          roleTitle,
+          ...(profileData && {
+            profileId: profileData.profileId,
+            profileName: profileData.profileName,
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole,
+            capabilities: profileData.capabilities,
+            capabilityMatchScore: profileData.capabilityMatchScore
+          })
+        },
         variant: 'secondary',
         size: 'medium'
       },
       {
         label: 'View Skill Recommendations',
         actionId: 'getSemanticSkillRecommendations',
-        params: { profileId, roleId, roleTitle },
+        params: { 
+          profileId, 
+          roleId, 
+          roleTitle,
+          ...(profileData && {
+            profileId: profileData.profileId,
+            profileName: profileData.profileName,
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole
+          })
+        },
         variant: 'secondary',
         size: 'medium'
       },
       {
         label: 'Get Development Plan',
         actionId: 'getDevelopmentPlan',
-        params: { profileId, roleId, roleTitle },
+        params: { 
+          profileId, 
+          roleId, 
+          roleTitle,
+          ...(profileData && {
+            profileId: profileData.profileId,
+            profileName: profileData.profileName,
+            semanticScore: profileData.semanticScore,
+            currentRole: profileData.currentRole,
+            capabilities: profileData.capabilities,
+            capabilityMatchScore: profileData.capabilityMatchScore
+          })
+        },
         variant: 'outline',
         size: 'medium'
       }
