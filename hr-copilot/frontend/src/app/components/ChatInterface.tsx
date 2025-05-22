@@ -437,9 +437,7 @@ export default function ChatInterface({
 
   const processActionButtons = (content: string) => {
     try {
-      console.log('Processing action buttons with content:', content);
       const actionData = JSON.parse(content);
-      console.log('Parsed action data:', actionData);
       
       // Schedule match processing for next tick to avoid render phase updates
       const processMatch = (match: { 
@@ -449,16 +447,14 @@ export default function ChatInterface({
         matchStatus: string; 
         type?: 'role' | 'profile';
       }) => {
-        console.log('Processing match:', match);
         setTimeout(() => {
-          console.log('Calling onRoleMatchFound with match:', match);
+          console.log('Adding match:', { name: match.name, type: match.type });
           onRoleMatchFound?.(match);
         }, 0);
       };
       
       // If it's an array of actions
       if (Array.isArray(actionData)) {
-        console.log('Processing array of actions, length:', actionData.length);
         // Group actions by groupId
         const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
           const groupId = action.groupId || 'default';
@@ -469,20 +465,13 @@ export default function ChatInterface({
           return groups;
         }, {});
 
-        console.log('Grouped actions:', groupedActions);
-
         // Process each group
-        Object.entries(groupedActions).forEach(([groupId, actions]) => {
-          console.log(`Processing group ${groupId} with ${actions.length} actions`);
-          
+        Object.values(groupedActions).forEach(actions => {
           // Find the profile ID from any action that has it
           const profileAction = actions.find(action => action.params.profileId);
           const roleAction = actions.find(action => action.params.roleId && action.params.roleTitle);
           
           if (profileAction && roleAction) {
-            console.log('Found profile and role actions:', { profileAction, roleAction });
-            
-            // Add type checks for required fields
             const profileId = profileAction.params.profileId;
             const roleTitle = roleAction.params.roleTitle;
             
@@ -495,20 +484,16 @@ export default function ChatInterface({
                 type: 'profile'
               });
             } else {
-              console.log('Missing required profile ID or role title:', { profileId, roleTitle });
+              console.warn('Missing required profile ID or role title for match');
             }
-          } else {
-            console.log('Missing required profile or role information:', { profileAction, roleAction });
           }
         });
       } 
       // If it's a single action
       else if (actionData.params) {
-        console.log('Processing single action with params:', actionData.params);
         const params = actionData.params;
         
         if (params.profileId && params.roleTitle) {
-          console.log('Processing as profile match');
           processMatch({
             id: params.profileId,
             name: params.roleTitle,
@@ -516,14 +501,11 @@ export default function ChatInterface({
             matchStatus: 'Candidate',
             type: 'profile'
           });
-        } else {
-          console.log('Single action missing required profile information:', params);
         }
       }
       return actionData;
     } catch (error) {
-      console.error('Failed to parse action button data:', error);
-      console.error('Original content:', content);
+      console.error('Failed to process action buttons:', error);
       return null;
     }
   };
