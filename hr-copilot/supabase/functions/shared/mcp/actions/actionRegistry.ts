@@ -27,6 +27,9 @@ import { getRoleDetails } from './getRoleDetails/action.ts';
 import { getMatchingPeopleForRole } from './getMatchingPeopleForRole/action.ts';
 import { scoreProfilesToRoleFit } from './scoreProfilesToRoleFit/action.ts';
 import { scoreRolesToProfileFit } from './scoreRolesToProfileFit/action.ts';
+import { getReadinessAssessment } from './getReadinessAssessment/action.ts';
+import { recommendAlternateCareerPaths } from './recommendAlternateCareerPaths/action.ts';
+import { recommendSuccessors } from './recommendSuccessors/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -44,7 +47,10 @@ const actions: MCPActionV2[] = [
   getRoleDetails,
   getMatchingPeopleForRole,
   scoreProfilesToRoleFit,
-  scoreRolesToProfileFit
+  scoreRolesToProfileFit,
+  getReadinessAssessment,
+  recommendAlternateCareerPaths,
+  recommendSuccessors
 //   getSuggestedCareerPaths
 ];
 
