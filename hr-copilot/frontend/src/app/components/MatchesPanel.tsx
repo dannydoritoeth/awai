@@ -8,6 +8,7 @@ interface Match {
   name: string;
   matchPercentage: number;
   matchStatus: string;
+  type: 'role' | 'profile';
 }
 
 interface MatchesPanelProps {

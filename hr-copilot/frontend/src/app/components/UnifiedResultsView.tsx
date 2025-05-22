@@ -9,6 +9,7 @@ interface Match {
   name: string;
   matchPercentage: number;
   matchStatus: string;
+  type: 'role' | 'profile';
 }
 
 interface ProfileData {
@@ -48,13 +49,15 @@ interface UnifiedResultsViewProps {
   profileData?: ProfileData;
   roleData?: RoleData;
   startContext?: 'profile' | 'role' | 'open';
+  onRoleMatchFound?: (match: Match) => void;
 }
 
 export default function UnifiedResultsView({ 
   sessionId,
   profileData,
   roleData,
-  startContext = 'open'
+  startContext = 'open',
+  onRoleMatchFound
 }: UnifiedResultsViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,14 +67,19 @@ export default function UnifiedResultsView({
   const [isEditing, setIsEditing] = useState(false);
   const [additionalContext, setAdditionalContext] = useState(profileData?.additionalContext || '');
   const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'matches'>(() => {
+    console.log('Initializing activeTab with startContext:', startContext);
     if (startContext === 'profile') return 'profile';
     if (startContext === 'role') return 'role';
     return profileData ? 'profile' : 'role';
   });
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<Match[]>(() => {
+    console.log('Initializing matches state');
+    return [];
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<ChatMessage | null>(null);
+  const pendingRoleMatches = useRef<Match[]>([]);
 
   useEffect(() => {
     console.log('ProfileData changed:', {
@@ -100,23 +108,19 @@ export default function UnifiedResultsView({
 
     const pollMessages = async () => {
       try {
-        const newMessages = await getSessionMessages(sessionId);
-        console.log('All messages from API:', newMessages);
+        const response = await getSessionMessages(sessionId);
+        const newMessages: ChatMessage[] = response || [];
+        
         setMessages(prev => {
           // Create a Set of existing message IDs for efficient lookup
-          const existingIds = new Set(prev.map(msg => msg.id));
+          const existingIds = new Set(prev.map(m => m.id));
           
           // Filter out messages we already have
-          const uniqueNewMessages = newMessages.filter(msg => !existingIds.has(msg.id));
-          console.log('Unique new messages:', uniqueNewMessages);
+          const uniqueNewMessages = newMessages.filter((m: ChatMessage) => !existingIds.has(m.id));
+          console.log('New unique messages:', uniqueNewMessages.length);
           
-          // Only update if we have new unique messages
           if (uniqueNewMessages.length > 0) {
-            setIsInitializing(false);
-            setIsLoading(false);
-            
-            // Check if we received an AI response
-            const hasNewAIMessage = uniqueNewMessages.some(msg => msg.sender === 'assistant');
+            const hasNewAIMessage = uniqueNewMessages.some((m: ChatMessage) => m.sender === 'assistant');
             console.log('Has new AI message:', hasNewAIMessage);
             
             if (hasNewAIMessage) {
@@ -124,35 +128,47 @@ export default function UnifiedResultsView({
 
               // Get all assistant messages with matches
               const assistantMessagesWithMatches = uniqueNewMessages
-                .filter(m => {
+                .filter((m: ChatMessage) => {
                   if (m.sender !== 'assistant' || !m.response_data) return false;
                   const data = m.response_data as ResponseData;
-                  console.log('Checking message for matches:', m.id, data);
+                  console.log('Checking message for matches:', {
+                    messageId: m.id,
+                    hasMatches: !!data.matches,
+                    matchCount: data.matches?.length || 0
+                  });
                   return !!data.matches;
                 });
 
-              console.log('Assistant messages with matches:', assistantMessagesWithMatches);
+              console.log('Found assistant messages with matches:', assistantMessagesWithMatches.length);
 
               // Accumulate all matches from all messages
-              const allMatches = assistantMessagesWithMatches.reduce((acc: ApiMatch[], message) => {
+              const allMatches = assistantMessagesWithMatches.reduce((acc: ApiMatch[], message: ChatMessage) => {
                 const data = message.response_data as ResponseData;
-                console.log('Adding matches from message:', message.id, data.matches);
+                console.log('Processing matches from message:', {
+                  messageId: message.id,
+                  matchCount: data.matches?.length || 0
+                });
                 return [...acc, ...(data.matches || [])];
               }, []);
 
-              console.log('All accumulated matches:', allMatches);
+              console.log('Total accumulated matches:', allMatches.length);
 
               if (allMatches.length > 0) {
                 // Create a Map to deduplicate matches by ID while keeping the highest match percentage
                 const matchMap = new Map<string, ApiMatch>();
                 
-                allMatches.forEach((match) => {
+                allMatches.forEach((match: ApiMatch) => {
                   if (!match.id) {
                     console.warn('Match missing ID:', match);
                     return;
                   }
                   const existing = matchMap.get(match.id);
                   if (!existing || existing.match_percentage < match.match_percentage) {
+                    console.log('Adding/updating match in map:', {
+                      id: match.id,
+                      name: match.name,
+                      percentage: match.match_percentage
+                    });
                     matchMap.set(match.id, match);
                   }
                 });
@@ -161,14 +177,15 @@ export default function UnifiedResultsView({
                 const uniqueSortedMatches = Array.from(matchMap.values())
                   .sort((a, b) => b.match_percentage - a.match_percentage);
 
-                console.log('Unique sorted matches:', uniqueSortedMatches);
+                console.log('Final unique sorted matches:', uniqueSortedMatches.length);
 
                 setMatches(uniqueSortedMatches.map((match: ApiMatch) => {
-                  const transformed = {
+                  const transformed: Match = {
                     id: match.id,
                     name: match.name,
                     matchPercentage: match.match_percentage,
-                    matchStatus: match.match_status || 'now'
+                    matchStatus: match.match_status || 'now',
+                    type: roleData ? 'profile' : 'role'
                   };
                   console.log('Transformed match:', transformed);
                   return transformed;
@@ -447,29 +464,35 @@ export default function UnifiedResultsView({
 
   // Add a function to handle new role matches
   const handleRoleMatchFound = (match: Match) => {
+    console.log('handleRoleMatchFound called with:', match);
+    
     setMatches(prevMatches => {
-      // Check if we already have this match
-      const existingMatchIndex = prevMatches.findIndex(m => m.id === match.id);
+      console.log('Current matches state:', prevMatches);
+      
+      // Check if we already have this match using both ID and type
+      const existingMatchIndex = prevMatches.findIndex(m => 
+        m.id === match.id && m.type === match.type
+      );
+      console.log('Existing match index:', existingMatchIndex);
       
       if (existingMatchIndex >= 0) {
-        // If the match exists and has a higher percentage, update it
-        if (match.matchPercentage > prevMatches[existingMatchIndex].matchPercentage) {
-          const updatedMatches = [...prevMatches];
-          updatedMatches[existingMatchIndex] = match;
-          return updatedMatches;
-        }
+        // If we already have this exact match (same ID and type), don't add it again
+        console.log('Match already exists, skipping');
         return prevMatches;
       }
       
       // Add new match and sort by match percentage
       const newMatches = [...prevMatches, match].sort((a, b) => b.matchPercentage - a.matchPercentage);
+      console.log('Final matches state:', newMatches);
+      
+      // Update tab after matches are updated
+      if (newMatches.length > 0 && activeTab !== 'matches') {
+        console.log('Setting active tab to matches');
+        setTimeout(() => setActiveTab('matches'), 0);
+      }
+      
       return newMatches;
     });
-
-    // If we have matches and matches tab isn't showing, show the matches tab
-    if (activeTab !== 'matches' && profileData) {
-      setActiveTab('matches');
-    }
   };
 
   return (
@@ -483,6 +506,7 @@ export default function UnifiedResultsView({
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
             sessionId={sessionId}
             profileId={profileData?.id}
+            roleData={roleData}
             onRoleMatchFound={handleRoleMatchFound}
           />
         </div>
@@ -520,17 +544,24 @@ export default function UnifiedResultsView({
             )}
 
             {/* Show Matches tab if we have matches */}
-            {matches.length > 0 && (
-              <button
-                className={`px-6 py-4 text-sm font-medium transition-colors relative
-                  ${activeTab === 'matches'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'}`}
-                onClick={() => setActiveTab('matches')}
-              >
-                Matches ({matches.length})
-              </button>
-            )}
+            {(() => {
+              console.log('Rendering matches tab. Current matches:', matches.length);
+              console.log('Current activeTab:', activeTab);
+              return matches.length > 0 && (
+                <button
+                  className={`px-6 py-4 text-sm font-medium transition-colors relative
+                    ${activeTab === 'matches'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => {
+                    console.log('Matches tab clicked, switching to matches tab');
+                    setActiveTab('matches');
+                  }}
+                >
+                  Matches ({matches.length})
+                </button>
+              );
+            })()}
           </div>
         </div>
 
