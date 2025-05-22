@@ -30,6 +30,12 @@ import { scoreRolesToProfileFit } from './scoreRolesToProfileFit/action.ts';
 import { getReadinessAssessment } from './getReadinessAssessment/action.ts';
 import { recommendAlternateCareerPaths } from './recommendAlternateCareerPaths/action.ts';
 import { recommendSuccessors } from './recommendSuccessors/action.ts';
+import { generateCapabilityHeatmapByTaxonomy } from './generateCapabilityHeatmapByTaxonomy/action.ts';
+import { generateCapabilityHeatmapByDivision } from './generateCapabilityHeatmapByDivision/action.ts';
+import { generateCapabilityHeatmapByRegion } from './generateCapabilityHeatmapByRegion/action.ts';
+import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapByCompany/action.ts';
+import { summarizeCapabilityHeatmap } from './summarizeCapabilityHeatmap/action.ts';
+import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -50,7 +56,13 @@ const actions: MCPActionV2[] = [
   scoreRolesToProfileFit,
   getReadinessAssessment,
   recommendAlternateCareerPaths,
-  recommendSuccessors
+  recommendSuccessors,
+  generateCapabilityHeatmapByTaxonomy,
+  generateCapabilityHeatmapByDivision,
+  generateCapabilityHeatmapByRegion,
+  generateCapabilityHeatmapByCompany,
+  summarizeCapabilityHeatmap,
+  generateCapabilityInsights
 //   getSuggestedCareerPaths
 ];
 
