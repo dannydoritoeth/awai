@@ -116,12 +116,20 @@ export class ActionV2Registry {
   /**
    * Returns only metadata used for listing actions in tools format (e.g. for tool calling)
    */
-  static getToolMetadataList(): { name: string; description: string; argsSchema: z.ZodTypeAny; run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any> }[] {
+  static getToolMetadataList(): ToolMetadataV2[] {
     return actions.map(a => ({
       name: a.id,
+      title: a.title,
       description: a.description ?? '',
       argsSchema: a.argsSchema ?? z.object({}),
-      run: async ({ context, args }) => a.actionFn({ ...context, ...args })
+      run: async ({ context, args }) => a.actionFn({ ...context, ...args }),
+      recommendedAfter: a.recommendedAfter,
+      recommendedBefore: a.recommendedBefore,
+      applicableRoles: a.applicableRoles,
+      capabilityTags: a.capabilityTags,
+      requiredInputs: a.requiredInputs,
+      tags: a.tags,
+      usesAI: a.usesAI
     }));
   }
 

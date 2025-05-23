@@ -174,10 +174,18 @@ export interface MCPResponseV2 {
 
 export interface ToolMetadataV2 {
   name: string;
+  title: string;
   description: string;
   argsSchema: {
     safeParse: (args: Record<string, any>) => { success: boolean; error?: { issues: string[] } };
   };
   requiredContext?: string[];
   run: (params: { context: Record<string, any>; args: Record<string, any> }) => Promise<any>;
+  recommendedAfter?: string[];
+  recommendedBefore?: string[];
+  applicableRoles: string[];
+  capabilityTags: string[];
+  requiredInputs: string[];
+  tags?: string[];
+  usesAI?: boolean;
 } 

@@ -12,6 +12,7 @@ import {
   PlannedActionV2, 
   ActionResultV2 
 } from './types/action.ts';
+import { formatToolMetadataAsCSV } from './utils/formatters.ts';
 
 interface DependenciesV2 {
   generateEmbedding: typeof generateEmbedding;
@@ -342,42 +343,42 @@ export class McpLoopRunner {
     const tools: ToolMetadataV2[] = ActionV2Registry.getToolMetadataList();
 
     // Construct Planner Prompt
-    const plannerPrompt = `You are a structured planning agent. Your task is to solve the user's query by selecting and sequencing appropriate tools from the list below. 
+    const systemPrompt = `You are a structured planning agent. Your task is to solve the user's query by selecting and sequencing appropriate tools from the list below.
 
-Follow this process:
-1. Read the context carefully to understand what has already been done and what the user wants.
-2. Select up to 3 tools that will help solve the user's request.
-4. Output your answer as a JSON array only.
-
-IMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.
-
-Each tool call must follow this format:
-[
-  { "tool": "tool_id", "args": { key: value } }
-]
-
-If any required argument is unknown, skip that tool.
-
-Here is the current user query:
-${JSON.stringify({
-  latestMessage: this.context.lastMessage
-}, null, 2)}
-
-Available tools:
-${JSON.stringify(tools.map(t => ({
-  id: t.name,
-  description: t.description,
-  args: t.argsSchema
-})), null, 2)}`;
+    Follow this process:
+    1. Read the context to understand what the user wants and what actions have already been taken.
+    2. Select up to 3 tools that help solve the user's request.
+    3. Ensure you only call a tool if all of its "requiredInputs" are available AND all tools in its "recommendedAfter" list have either already been run or are being included in this same list.
+    4. Output your answer as a JSON array ONLY. Do not include markdown, backticks, or extra text.
+    
+    Each tool call must follow this format:
+    [
+      {
+        "tool": "tool_id",
+        "args": { key: value },
+        "reason": "why this tool helps the user",
+        "announcement": "what to tell the user when this tool runs"
+      }
+    ]
+    
+    🧠 Example:
+    To run getDevelopmentPlan, you must also run getCapabilityGaps and getSemanticSkillRecommendations if they haven't already been completed.
+    
+    🚫 If a required input is unknown or a dependency has not been satisfied, SKIP the tool.
+       
+    Available tools (in CSV format):
+    ${formatToolMetadataAsCSV(tools)}
+    `;
+    
+    const userPrompt = `
+    This is the full request context including the user's query:
+    ${JSON.stringify(this.request, null, 2)}
+    `;
 
     // Get AI plan
     const aiResponse = await this.deps.invokeChatModel({
-      system: plannerPrompt,
-      user: '',
-      messages: [{
-        role: 'system',
-        content: plannerPrompt
-      }]
+      system: systemPrompt,
+      user: userPrompt
     }, {
       model: 'openai:gpt-3.5-turbo',
       temperature: 0.2,

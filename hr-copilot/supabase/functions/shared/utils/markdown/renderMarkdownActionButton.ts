@@ -289,7 +289,7 @@ export const ActionButtons = {
         },
         variant: 'secondary',
         size: 'medium'
-      },,
+      },
       {
         label: 'View Capability Gaps',
         actionId: 'getCapabilityGaps',
