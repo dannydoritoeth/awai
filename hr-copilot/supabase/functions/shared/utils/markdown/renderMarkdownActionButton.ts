@@ -177,32 +177,24 @@ export const ActionButtons = {
   ]),
 
   /**
-   * Renders a set of common role exploration buttons as a grouped dropdown
+   * Renders a set of common profile exploration buttons as a grouped dropdown
+   * Used when starting from a role context and exploring matching profiles
    */
-  roleExplorationGroup: (profileId: string, roleId: string, roleTitle: string, profileData?: {
+  profileExplorationGroup: (profileId: string, roleId: string, profileName: string, profileData?: {
     profileId: string;
-    profileName: string;
+    name: string;
     semanticScore: number;
     currentRole?: string;
     department?: string;
-    capabilities?: { name: string; level: number; }[];
-    capabilityMatchScore?: number;
   }) => renderMarkdownActionGroup({
-    groupId: `role_${roleId}`,
+    groupId: `profile_${profileId}`,
     actions: [
       {
-        label: `Learn More About ${profileData?.profileName || roleTitle}`,
-        actionId: 'getRoleDetails',
+        label: `Learn More About ${profileData?.name || profileName}`,
+        actionId: 'getProfileContext',
         params: { 
-          roleId, 
-          roleTitle,
-          ...(profileData && {
-            profileId: profileData.profileId,
-            profileName: profileData.profileName,
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole,
-            department: profileData.department
-          })
+          profileId,
+          profileName: profileData?.name || profileName
         },
         variant: 'primary',
         size: 'medium'
@@ -211,17 +203,9 @@ export const ActionButtons = {
         label: 'View Capability Gaps',
         actionId: 'getCapabilityGaps',
         params: { 
-          profileId, 
-          roleId, 
-          roleTitle,
-          ...(profileData && {
-            profileId: profileData.profileId,
-            profileName: profileData.profileName,
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole,
-            capabilities: profileData.capabilities,
-            capabilityMatchScore: profileData.capabilityMatchScore
-          })
+          profileId,
+          roleId,
+          profileName: profileData?.name || profileName
         },
         variant: 'secondary',
         size: 'medium'
@@ -230,15 +214,20 @@ export const ActionButtons = {
         label: 'View Skill Recommendations',
         actionId: 'getSemanticSkillRecommendations',
         params: { 
-          profileId, 
-          roleId, 
-          roleTitle,
-          ...(profileData && {
-            profileId: profileData.profileId,
-            profileName: profileData.profileName,
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole
-          })
+          profileId,
+          roleId,
+          profileName: profileData?.name || profileName
+        },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'Get Readiness Assessment',
+        actionId: 'getReadinessAssessment',
+        params: { 
+          profileId,
+          roleId,
+          profileName: profileData?.name || profileName
         },
         variant: 'secondary',
         size: 'medium'
@@ -247,17 +236,9 @@ export const ActionButtons = {
         label: 'Get Development Plan',
         actionId: 'getDevelopmentPlan',
         params: { 
-          profileId, 
-          roleId, 
-          roleTitle,
-          ...(profileData && {
-            profileId: profileData.profileId,
-            profileName: profileData.profileName,
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole,
-            capabilities: profileData.capabilities,
-            capabilityMatchScore: profileData.capabilityMatchScore
-          })
+          profileId,
+          roleId,
+          profileName: profileData?.name || profileName
         },
         variant: 'outline',
         size: 'medium'
@@ -266,73 +247,67 @@ export const ActionButtons = {
   }),
 
   /**
-   * Renders a set of common profile exploration buttons as a grouped dropdown
+   * Renders a set of common role exploration buttons as a grouped dropdown
+   * Used when starting from a profile context and exploring matching roles
    */
-  profileExplorationGroup: (profileId: string, roleId: string, profileName: string, profileData?: {
-    profileId: string;
-    name: string;
+  roleExplorationGroup: (profileId: string, roleId: string, roleTitle: string, roleData?: {
+    roleId: string;
+    title: string;
     semanticScore: number;
-    currentRole?: string;
     department?: string;
-    capabilities?: { name: string; level: number; }[];
-    capabilityMatchScore?: number;
   }) => renderMarkdownActionGroup({
-    groupId: `profile_${profileId}`,
+    groupId: `role_${roleId}`,
     actions: [
       {
-        label: `Learn More About ${profileData?.name || profileName}`,
-        actionId: 'getProfileDetails',
+        label: `Learn More About ${roleData?.title || roleTitle}`,
+        actionId: 'getRoleDetails',
         params: { 
-          profileId,
-          profileName: profileData?.name || profileName,
-          ...(profileData && {
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole,
-            department: profileData.department
-          })
+          roleId,
+          roleTitle: roleData?.title || roleTitle
         },
         variant: 'primary',
         size: 'medium'
       },
       {
-        label: 'View Capability Assessment',
-        actionId: 'getCapabilityAssessment',
+        label: 'View Capability Gaps',
+        actionId: 'getCapabilityGaps',
         params: { 
           profileId,
-          profileName: profileData?.name || profileName,
-          ...(profileData && {
-            semanticScore: profileData.semanticScore,
-            capabilities: profileData.capabilities,
-            capabilityMatchScore: profileData.capabilityMatchScore
-          })
+          roleId,
+          roleTitle: roleData?.title || roleTitle
         },
         variant: 'secondary',
         size: 'medium'
       },
       {
-        label: 'View Skills & Experience',
-        actionId: 'getSkillsAndExperience',
+        label: 'View Skill Recommendations',
+        actionId: 'getSemanticSkillRecommendations',
         params: { 
           profileId,
-          profileName: profileData?.name || profileName,
-          ...(profileData && {
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole
-          })
+          roleId,
+          roleTitle: roleData?.title || roleTitle
         },
         variant: 'secondary',
         size: 'medium'
       },
       {
-        label: 'Get Career History',
-        actionId: 'getCareerHistory',
+        label: 'Get Readiness Assessment',
+        actionId: 'getReadinessAssessment',
         params: { 
           profileId,
-          profileName: profileData?.name || profileName,
-          ...(profileData && {
-            semanticScore: profileData.semanticScore,
-            currentRole: profileData.currentRole
-          })
+          roleId,
+          roleTitle: roleData?.title || roleTitle
+        },
+        variant: 'secondary',
+        size: 'medium'
+      },
+      {
+        label: 'Get Development Plan',
+        actionId: 'getDevelopmentPlan',
+        params: { 
+          profileId,
+          roleId,
+          roleTitle: roleData?.title || roleTitle
         },
         variant: 'outline',
         size: 'medium'
