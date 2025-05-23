@@ -1,9 +1,30 @@
+/**
+ * @fileoverview Implements the explainMatch MCPActionV2 which generates narrative explanations
+ * of profile-to-role or role-to-profile matches. This action analyzes capability gaps, skill gaps,
+ * and overall fit scores to produce human-readable explanations tailored to different audiences
+ * and purposes.
+ * 
+ * Key Features:
+ * - Supports multiple explanation modes: fit assessment, diagnostic analysis, and feedback
+ * - Adapts tone and content for different audiences: managers, candidates, and analysts
+ * - Leverages AI to generate natural language explanations
+ * - Provides structured output with key highlights and actionable insights
+ * 
+ * Dependencies:
+ * - Requires prior execution of capability gap analysis
+ * - Requires prior execution of skill gap analysis
+ * - Requires prior execution of profile-role fit scoring
+ * 
+ * @see getCapabilityGaps
+ * @see getSkillGaps
+ * @see scoreProfileRoleFit
+ */
+
 import { z } from "https://deno.land/x/zod/mod.ts";
-import { MCPActionV2, MCPResponse } from "../../types/action.ts";
-import { buildSafePrompt } from "../../utils/buildSafePrompt.ts";
-import { invokeChatModel } from "../../utils/invokeChatModel.ts";
+import { buildSafePrompt } from "../../promptBuilder.ts";
+import { invokeChatModel } from "../../../ai/invokeAIModel.ts";
 import { logAgentProgress } from "../../../chatUtils.ts";
-import { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 // Input validation schema
 const explainMatchSchema = z.object({

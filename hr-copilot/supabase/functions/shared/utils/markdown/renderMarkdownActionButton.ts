@@ -190,13 +190,24 @@ export const ActionButtons = {
     groupId: `profile_${profileId}`,
     actions: [
       {
-        label: `Learn More About ${profileData?.name || profileName}`,
+        label: `Learn More`,
         actionId: 'getProfileContext',
         params: { 
           profileId,
           profileName: profileData?.name || profileName
         },
         variant: 'primary',
+        size: 'medium'
+      },
+      {
+        label: 'Explain Match',
+        actionId: 'explainMatch',
+        params: { 
+          profileId,
+          roleId,
+          profileName: profileData?.name || profileName
+        },
+        variant: 'secondary',
         size: 'medium'
       },
       {
@@ -259,7 +270,7 @@ export const ActionButtons = {
     groupId: `role_${roleId}`,
     actions: [
       {
-        label: `Learn More About ${roleData?.title || roleTitle}`,
+        label: `Learn More`,
         actionId: 'getRoleDetails',
         params: { 
           roleId,
@@ -268,6 +279,17 @@ export const ActionButtons = {
         variant: 'primary',
         size: 'medium'
       },
+      {
+        label: 'Explain Match',
+        actionId: 'explainMatch',
+        params: { 
+          profileId,
+          roleId,
+          roleTitle: roleData?.title || roleTitle
+        },
+        variant: 'secondary',
+        size: 'medium'
+      },,
       {
         label: 'View Capability Gaps',
         actionId: 'getCapabilityGaps',
