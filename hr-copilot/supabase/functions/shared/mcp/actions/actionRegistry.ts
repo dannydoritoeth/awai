@@ -37,6 +37,7 @@ import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapB
 import { summarizeCapabilityHeatmap } from './summarizeCapabilityHeatmap/action.ts';
 import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
 import { getProfileContextAction } from './getProfileContext/action.ts';
+import { explainMatch } from './explainMatch/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -68,7 +69,8 @@ const actions: MCPActionV2[] = [
   generateCapabilityHeatmapByCompany,
   summarizeCapabilityHeatmap,
   generateCapabilityInsights,
-  getProfileContextAction
+  getProfileContextAction,
+  explainMatch
 //   getSuggestedCareerPaths
 ];
 
