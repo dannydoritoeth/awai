@@ -12,10 +12,10 @@ import {
 import { McpLoopRunner } from '../shared/mcp/mcp-loop-v2.ts';
 import { generateEmbedding } from '../shared/semanticSearch.ts';
 import { getConversationContextV2 } from '../shared/context/getConversationContext.ts';
-import { invokeChatModel } from '../shared/ai/invokeAIModel.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
 import { logAgentProgress } from '../shared/chatUtils.ts';
 import { generateRequestHash } from '../shared/utils/generateRequestHash.ts';
+import { invokeChatModelV2 } from '../shared/ai/invokeAIModelV2.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -168,7 +168,7 @@ serve(async (req) => {
     }, {
       generateEmbedding,
       getConversationContext: getConversationContextV2,
-      invokeChatModel,
+      invokeChatModelV2,
       findExistingActionResult // Pass the helper function
     });
 

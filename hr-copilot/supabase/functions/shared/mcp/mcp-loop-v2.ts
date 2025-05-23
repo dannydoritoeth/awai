@@ -2,7 +2,6 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js';
 import type { Database } from '../../database.types.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 import { getConversationContextV2, ConversationContextV2 } from '../context/getConversationContext.ts';
-import { invokeChatModel } from '../ai/invokeAIModel.ts';
 import { invokeChatModelV2, type ChatPrompt, type AIResponse } from '../ai/invokeAIModelV2.ts';
 import { ActionV2Registry } from './actions/actionRegistry.ts';
 import { createHash } from 'https://deno.land/std@0.110.0/hash/mod.ts';
@@ -19,7 +18,6 @@ import { logAgentProgress } from '../chatUtils.ts';
 interface DependenciesV2 {
   generateEmbedding: typeof generateEmbedding;
   getConversationContext: typeof getConversationContextV2;
-  invokeChatModel: typeof invokeChatModel;
   invokeChatModelV2: (prompt: ChatPrompt, options: any) => Promise<AIResponse>;
 }
 
@@ -68,7 +66,6 @@ export class McpLoopRunner {
     this.deps = {
       generateEmbedding,
       getConversationContext: getConversationContextV2,
-      invokeChatModel,
       invokeChatModelV2,
       ...deps
     };
