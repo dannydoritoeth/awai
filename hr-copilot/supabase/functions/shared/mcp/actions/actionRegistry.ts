@@ -36,6 +36,7 @@ import { generateCapabilityHeatmapByRegion } from './generateCapabilityHeatmapBy
 import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapByCompany/action.ts';
 import { summarizeCapabilityHeatmap } from './summarizeCapabilityHeatmap/action.ts';
 import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
+import { getProfileContextAction } from './getProfileContext/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
@@ -43,6 +44,10 @@ import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 const capabilityGapsSchema = z.object({
   profileId: z.string(),
   roleId: z.string()
+});
+
+const profileContextSchema = z.object({
+  profileId: z.string()
 });
 
 const actions: MCPActionV2[] = [
@@ -62,7 +67,8 @@ const actions: MCPActionV2[] = [
   generateCapabilityHeatmapByRegion,
   generateCapabilityHeatmapByCompany,
   summarizeCapabilityHeatmap,
-  generateCapabilityInsights
+  generateCapabilityInsights,
+  getProfileContextAction
 //   getSuggestedCareerPaths
 ];
 
