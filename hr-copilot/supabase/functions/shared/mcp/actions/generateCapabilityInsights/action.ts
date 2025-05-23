@@ -3,7 +3,7 @@ import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPResponse } from '../../types/action.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { buildSafePrompt } from '../../promptBuilder.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
+import { invokeChatModelV2 } from '../../../ai/invokeAIModelV2.ts';
 
 interface InsightResponse {
   response: string;
@@ -12,6 +12,8 @@ interface InsightResponse {
 
 async function generateCapabilityInsightsBase(
   data: any,
+  supabase: SupabaseClient<Database>,
+  sessionId?: string,
   message?: string
 ): Promise<InsightResponse> {
   const promptData = {
@@ -27,22 +29,25 @@ async function generateCapabilityInsightsBase(
     maxFieldLength: 200
   });
 
-  const aiResponse = await invokeChatModel(
+  const aiResponse = await invokeChatModelV2(
     {
       system: prompt.system,
       user: prompt.user
     },
     {
       model: 'openai:gpt-3.5-turbo',
-      temperature: 0.2
+      temperature: 0.2,
+      supabase,
+      sessionId: sessionId || 'default',
+      actionType: 'generateCapabilityInsights'
     }
   );
 
-  if (!aiResponse.success) {
+  if (!aiResponse.success || !aiResponse.output) {
     throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
   }
 
-  const parts = (aiResponse.output || '').split(/\n\nFollow-up question:/i);
+  const parts = aiResponse.output.split(/\n\nFollow-up question:/i);
   return {
     response: parts[0].trim(),
     followUpQuestion: parts[1]?.trim()
@@ -83,7 +88,7 @@ export const generateCapabilityInsights: MCPActionV2 = {
         );
       }
 
-      const insights = await generateCapabilityInsightsBase(heatmapData, message);
+      const insights = await generateCapabilityInsightsBase(heatmapData, supabase, sessionId, message);
 
       // Log completion
       if (sessionId) {

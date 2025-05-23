@@ -4,7 +4,7 @@ import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { getRoleDetail } from '../../../role/getRoleDetail.ts';
 import { buildPromptInput } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
+import { invokeChatModelV2 } from '../../../ai/invokeAIModelV2.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 
 /**
@@ -61,19 +61,6 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       };
     }
 
-    // Log data gathering step
-    await logAgentProgress(
-      supabase,
-      request.sessionId,
-      'Fetching role details...',
-      { phase: 'data_gathering' }
-    );
-
-    console.log('Fetching role details for:', {
-      roleId: args.roleId,
-      sessionId: request.sessionId
-    });
-
     // Get role details from database
     const roleDetailResponse = await getRoleDetail(supabase, args.roleId);
     
@@ -97,22 +84,12 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       roleDetail: roleDetailResponse.data
     };
 
-    // Log AI processing step
-    if (request.sessionId) {
-      await logAgentProgress(
-        supabase,
-        request.sessionId,
-        'Analyzing role details and generating summary...',
-        { phase: 'ai_processing' }
-      );
-    }
-
     // Build AI prompt
     const promptInput = buildPromptInput(context);
     const safePrompt = buildSafePrompt(promptInput);
 
     // Invoke AI
-    const aiResponse = await invokeChatModel({
+    const aiResponse = await invokeChatModelV2({
       system: safePrompt.system,
       user: safePrompt.user
     }, {
@@ -120,9 +97,13 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       temperature: 0.2,
       max_tokens: 1500,
       supabase,
-      entityType: 'role',
-      entityId: args.roleId
+      sessionId: request.sessionId || 'default',
+      actionType: 'getRoleDetails'
     });
+
+    if (!aiResponse.success || !aiResponse.output) {
+      throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
 
     // Only log the final analysis to chat if we have a session
     if (request.sessionId && aiResponse.output) {
@@ -139,18 +120,18 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       success: true,
       data: {
         role: roleDetailResponse.data,
-        analysis: aiResponse.success ? aiResponse.output : 'Failed to analyze role details',
+        analysis: aiResponse.output,
         aiResponse: aiResponse
       },
       dataForDownstreamPrompt: {
         getRoleDetails: {
-          dataSummary: aiResponse.success ? aiResponse.output : 'Failed to analyze role details',
+          dataSummary: aiResponse.output,
           structured: {
             roleId: args.roleId,
             title: roleDetailResponse.data.title || roleDetailResponse.data.name,
             department: roleDetailResponse.data.department,
             level: roleDetailResponse.data.level,
-            hasAiAnalysis: aiResponse.success
+            hasAiAnalysis: true
           },
           truncated: false
         }

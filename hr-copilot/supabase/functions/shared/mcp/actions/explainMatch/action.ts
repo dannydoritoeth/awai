@@ -22,7 +22,7 @@
 
 import { z } from "https://deno.land/x/zod/mod.ts";
 import { buildSafePrompt } from "../../promptBuilder.ts";
-import { invokeChatModel } from "../../../ai/invokeAIModel.ts";
+import { invokeChatModelV2 } from "../../../ai/invokeAIModelV2.ts";
 import { logAgentProgress } from "../../../chatUtils.ts";
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -134,32 +134,52 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<MCPResp
     });
 
     // Generate explanation using AI
-    const aiResponse = await invokeChatModel({
-      messages: [{ role: 'user', content: prompt }],
+    const aiResponse = await invokeChatModelV2({
+      system: "You are an expert at analyzing profile-role matches and providing clear, actionable insights.",
+      user: prompt
+    }, {
+      model: 'openai:gpt-4',
       temperature: 0.7,
-      max_tokens: 500
+      max_tokens: 500,
+      supabase,
+      sessionId: sessionId || 'default',
+      actionType: 'explainMatch'
     });
 
+    if (!aiResponse.success || !aiResponse.output) {
+      throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
     // Extract key highlights using a follow-up AI call
-    const highlightsPrompt = `Extract 3-5 key highlights from this match analysis as bullet points: ${aiResponse}`;
-    const highlightsResponse = await invokeChatModel({
-      messages: [{ role: 'user', content: highlightsPrompt }],
+    const highlightsPrompt = `Extract 3-5 key highlights from this match analysis as bullet points: ${aiResponse.output}`;
+    const highlightsResponse = await invokeChatModelV2({
+      system: "Extract the most important points as bullet points starting with •",
+      user: highlightsPrompt
+    }, {
+      model: 'openai:gpt-4',
       temperature: 0.3,
-      max_tokens: 200
+      max_tokens: 200,
+      supabase,
+      sessionId: sessionId || 'default',
+      actionType: 'explainMatch_highlights'
     });
+
+    if (!highlightsResponse.success || !highlightsResponse.output) {
+      throw new Error(`AI highlights extraction failed: ${highlightsResponse.error?.message || 'Unknown error'}`);
+    }
 
     // Structure the response
     const response: MCPResponse = {
       success: true,
       data: {
-        message: aiResponse,
-        keyHighlights: highlightsResponse.split('\n').filter(line => line.trim().startsWith('•')),
+        message: aiResponse.output,
+        keyHighlights: highlightsResponse.output.split('\n').filter(line => line.trim().startsWith('•')),
         reasoning: prompt // Include the reasoning/prompt for transparency
       },
       dataForDownstreamPrompt: {
         explainMatch: {
-          dataSummary: aiResponse,
-          keyHighlights: highlightsResponse.split('\n').filter(line => line.trim().startsWith('•')),
+          dataSummary: aiResponse.output,
+          keyHighlights: highlightsResponse.output.split('\n').filter(line => line.trim().startsWith('•')),
           structured: {
             profileId,
             roleId,
@@ -171,7 +191,7 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<MCPResp
         }
       },
       chatResponse: {
-        message: aiResponse,
+        message: aiResponse.output,
         followUpQuestion: "Would you like to see a development plan based on this analysis?",
         aiPrompt: "The user may want to explore specific gaps or get more detailed recommendations."
       }

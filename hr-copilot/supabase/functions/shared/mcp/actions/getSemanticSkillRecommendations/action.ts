@@ -18,7 +18,7 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
+import { invokeChatModelV2 } from '../../../ai/invokeAIModelV2.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { buildSkillRecommendationsPrompt } from './buildPrompt.ts';
 import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
@@ -211,7 +211,7 @@ async function getSemanticSkillRecommendationsBase(
     const prompt = buildSkillRecommendationsPrompt(aiContext);
     const safePrompt = buildSafePrompt(prompt);
 
-    const aiResponse = await invokeChatModel(
+    const aiResponse = await invokeChatModelV2(
       {
         system: safePrompt.system,
         user: safePrompt.user
@@ -219,7 +219,10 @@ async function getSemanticSkillRecommendationsBase(
       {
         model: 'openai:gpt-3.5-turbo',
         temperature: 0.2,
-        max_tokens: 1000
+        max_tokens: 1000,
+        supabase,
+        sessionId: sessionId || 'default',
+        actionType: 'getSemanticSkillRecommendations'
       }
     );
 
