@@ -13,7 +13,7 @@ import { getCapabilityGaps } from '../getCapabilityGaps/action.ts';
 import { getSkillGaps } from '../../../profile/getSkillGaps.ts';
 import { getProfileData } from '../../../profile/getProfileData.ts';
 import { getRoleDetail, RoleDetail } from '../../../role/getRoleDetail.ts';
-import { invokeChatModel } from '../../../ai/invokeAIModel.ts';
+import { invokeChatModelV2 } from '../../../ai/invokeAIModelV2.ts';
 import { getSemanticMatches } from '../../../embeddings.ts';
 import type { Tables } from '../../../embeddings.ts';
 import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
@@ -204,13 +204,13 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
     const prompt = buildDevelopmentPlanPrompt(aiContext);
 
     // Generate development plan
-    const aiResponse = await invokeChatModel(prompt, {
+    const aiResponse = await invokeChatModelV2(prompt, {
       model: 'openai:gpt-4',
       temperature: 0.2,
       max_tokens: 2000,
       supabase,
-      entityType: 'profile',
-      entityId: profileId
+      sessionId: sessionId || 'default',
+      actionType: 'getDevelopmentPlan'
     });
 
     if (!aiResponse.success || !aiResponse.output) {
@@ -313,6 +313,11 @@ ${developmentPlan.explanation}`;
         "I encountered an error while creating your development plan. Let me know if you'd like to try again.",
         { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
+      
+      // Mark the error as logged
+      if (error instanceof Error) {
+        (error as any).wasLogged = true;
+      }
     }
 
     return {

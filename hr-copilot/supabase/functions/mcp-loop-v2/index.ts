@@ -253,24 +253,6 @@ serve(async (req) => {
           }
         }
       }
-
-      // Log final action result with request hash
-      await logAgentAction(supabaseClient, {
-        entityType: request.mode === 'candidate' ? 'profile' : 'role',
-        entityId: request.mode === 'candidate' ? request.profileId! : request.roleId!,
-        payload: {
-          action: 'mcp_v2_execution',
-          reason: 'Completed MCP loop V2 processing',
-          result: {
-            success: response.success,
-            actionCount: response.data.actionsTaken.length,
-            intermediateResultCount: mcpResult.data?.intermediateResults?.length || 0,
-            mode: request.mode
-          }
-        },
-        requestHash,
-        actionType: 'mcp_v2'
-      });
     }
 
     // Clear retry count on success

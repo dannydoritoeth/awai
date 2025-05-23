@@ -140,11 +140,15 @@ export interface ActionResultV2 {
   output: any;
   success: boolean;
   error?: string;
+  dataForDownstreamPrompt?: Record<string, any>;
+  reused?: boolean;
 }
 
 export interface PlannedActionV2 {
   tool: string;
   args: Record<string, any>;
+  reason?: string;
+  announcement?: string;
 }
 
 export interface MCPResponseV2 {

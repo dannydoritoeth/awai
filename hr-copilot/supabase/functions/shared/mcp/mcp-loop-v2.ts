@@ -3,6 +3,7 @@ import type { Database } from '../../database.types.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 import { getConversationContextV2, ConversationContextV2 } from '../context/getConversationContext.ts';
 import { invokeChatModel } from '../ai/invokeAIModel.ts';
+import { invokeChatModelV2, type ChatPrompt, type AIResponse } from '../ai/invokeAIModelV2.ts';
 import { ActionV2Registry } from './actions/actionRegistry.ts';
 import { createHash } from 'https://deno.land/std@0.110.0/hash/mod.ts';
 import { 
@@ -13,11 +14,13 @@ import {
   ActionResultV2 
 } from './types/action.ts';
 import { formatToolMetadataAsCSV } from './utils/formatters.ts';
+import { logAgentProgress } from '../chatUtils.ts';
 
 interface DependenciesV2 {
   generateEmbedding: typeof generateEmbedding;
   getConversationContext: typeof getConversationContextV2;
   invokeChatModel: typeof invokeChatModel;
+  invokeChatModelV2: (prompt: ChatPrompt, options: any) => Promise<AIResponse>;
 }
 
 /**
@@ -66,6 +69,7 @@ export class McpLoopRunner {
       generateEmbedding,
       getConversationContext: getConversationContextV2,
       invokeChatModel,
+      invokeChatModelV2,
       ...deps
     };
   }
@@ -277,6 +281,7 @@ export class McpLoopRunner {
       mode: this.request.mode,
       messages: this.request.messages || [],
       latestMessage,
+      sessionId: this.request.sessionId
     };
 
     // Log normalized context for debugging
@@ -369,14 +374,21 @@ export class McpLoopRunner {
     Available tools (in CSV format):
     ${formatToolMetadataAsCSV(tools)}
     `;
-    
+
     const userPrompt = `
-    This is the full request context including the user's query:
-    ${JSON.stringify(this.request, null, 2)}
+    This is the request context from the user:
+    - action: ${this.request.action || 'N/A'}
+    - sessionId: ${this.request.sessionId || 'N/A'}
+    - message: ${this.request.messages?.[this.request.messages.length - 1]?.content || this.context.latestMessage || 'N/A'}
+    - profileId: ${this.request.profileId || this.context.profileId || 'N/A'}
+    - roleId: ${this.request.roleId || this.context.roleId || 'N/A'}
+    - roleTitle: ${this.context.roleTitle || 'N/A'}
+    - actionId: ${this.context.actionId || 'N/A'}
+    - mode: ${this.request.mode || 'N/A'}
     `;
 
     // Get AI plan
-    const aiResponse = await this.deps.invokeChatModel({
+    const aiResponse = await this.deps.invokeChatModelV2({
       system: systemPrompt,
       user: userPrompt
     }, {
@@ -384,12 +396,8 @@ export class McpLoopRunner {
       temperature: 0.2,
       max_tokens: 1000,
       supabase: this.supabase,
-      entityType: this.context.profileId ? 'profile' : 
-                 this.context.roleId ? 'role' : 
-                 this.context.sessionId ? 'chat' : undefined,
-      entityId: this.context.profileId || 
-                this.context.roleId || 
-                this.context.sessionId
+      sessionId: this.context.sessionId || 'default',
+      actionType: 'mcp-loop'
     });
 
     if (!aiResponse.success || !aiResponse.output) {
@@ -444,6 +452,16 @@ export class McpLoopRunner {
 
     for (const action of this.plan) {
       try {
+        // Log the announcement from the planner if it exists and we have a session ID
+        if (action.announcement && this.request.sessionId) {
+          await logAgentProgress(
+            this.supabase,
+            this.request.sessionId,
+            action.announcement,
+            { phase: 'tool_announcement', tool: action.tool }
+          );
+        }
+
         // Validate action before execution
         await this.validateAction(action);
 
@@ -513,6 +531,19 @@ export class McpLoopRunner {
       } catch (error) {
         console.error(`Action ${action.tool} failed:`, error);
         
+        // Only log error to chat if it wasn't already logged by the action
+        // We can check this by looking at the error object
+        const errorWasLogged = error instanceof Error && (error as any).wasLogged;
+        
+        if (this.request.sessionId && !errorWasLogged) {
+          await logAgentProgress(
+            this.supabase,
+            this.request.sessionId,
+            `I encountered an error while ${action.tool}. Let me know if you'd like to try again.`,
+            { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
+          );
+        }
+        
         this.intermediateResults.push({
           tool: action.tool,
           input: action.args,
@@ -523,17 +554,15 @@ export class McpLoopRunner {
       }
     }
 
-    // Log execution summary with downstream data
+    // Log execution summary
     console.log('Actions executed:', {
       total: this.plan.length,
       successful: this.intermediateResults.filter(r => r.success).length,
       failed: this.intermediateResults.filter(r => !r.success).length,
-      downstreamDataKeys: Object.keys(this.context.downstreamData || {}),
       results: this.intermediateResults.map(r => ({
         tool: r.tool,
         success: r.success,
-        error: r.error,
-        hasDownstreamData: r.output?.dataForDownstreamPrompt ? true : false
+        error: r.error
       }))
     });
   }
