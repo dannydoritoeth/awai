@@ -37,10 +37,14 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     
     // Debug logging for incoming request
     console.log('getRoleDetails request:', {
+      requestId: request.id,
+      sessionId: request.sessionId,
       args,
       contextKeys: Object.keys(request),
       roleId: request.roleId, // Direct from request
       contextRoleId: request.context?.roleId, // From context
+      stack: new Error().stack,
+      timestamp: new Date().toISOString(),
       rawRequest: request // Full request for debugging
     });
 

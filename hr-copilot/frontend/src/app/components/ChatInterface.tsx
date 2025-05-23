@@ -303,9 +303,6 @@ export default function ChatInterface({
           message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
       }
 
-      // Send the natural language message to continue the conversation
-      onSendMessage(message);
-
       // Prepare flattened request body
       const requestBody = {
         action: 'postMessage',

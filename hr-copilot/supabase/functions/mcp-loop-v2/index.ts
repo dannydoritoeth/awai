@@ -26,7 +26,7 @@ const supabaseClient = createClient(
 // Constants for retry and error handling
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const CACHE_DURATION_MS = 1440 * 60 * 1000; // 1 day
+const CACHE_DURATION_MS = 1 * 60 * 1000; // 1 minute
 
 // Track retries per session to prevent endless loops
 const retryTracker = new Map<string, number>();
@@ -118,7 +118,12 @@ serve(async (req) => {
 
   try {
     const request = await req.json();
-    console.log('MCP Loop V2 Request:', request);
+    console.log('MCP Loop V2 Request:', {
+      ...request,
+      requestId: request.id || Date.now(),
+      timestamp: new Date().toISOString(),
+      stack: new Error().stack
+    });
 
     // Generate request hash
     const requestHash = generateRequestHash(request);

@@ -341,6 +341,17 @@ export class McpLoopRunner {
    * Uses AI to plan a sequence of actions based on the context
    */
   private async planActions() {
+    console.log('planActions called with context:', {
+      requestId: this.request.id,
+      sessionId: this.request.sessionId,
+      action: this.request.action,
+      contextRoleId: this.context.roleId,
+      requestRoleId: this.request.roleId,
+      contextKeys: Object.keys(this.context),
+      requestKeys: Object.keys(this.request),
+      stack: new Error().stack // This will show us the call stack
+    });
+
     // Gather Available Tools
     const tools: ToolMetadataV2[] = ActionV2Registry.getToolMetadataList();
 
@@ -383,6 +394,16 @@ export class McpLoopRunner {
     - actionId: ${this.context.actionId || 'N/A'}
     - mode: ${this.request.mode || 'N/A'}
     `;
+
+    console.log('About to invoke planner with prompt:', {
+      systemPrompt,
+      userPrompt,
+      contextState: {
+        roleId: this.request.roleId || this.context.roleId,
+        roleTitle: this.context.roleTitle,
+        mode: this.request.mode
+      }
+    });
 
     // Get AI plan
     const aiResponse = await this.deps.invokeChatModelV2({
