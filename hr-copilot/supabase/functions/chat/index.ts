@@ -391,15 +391,23 @@ serve(async (req) => {
           throw new Error('Message is required');
         }
 
+        // Extract all potential action data from the request
+        const actionData = {
+          actionId,
+          params: {
+            roleId,
+            roleTitle,
+            profileId,
+            ...requestBody // Include any additional params from request body
+          }
+        };
+
         // Log the complete request with all available parameters
         const requestLog = {
           action,
           sessionId,
           message,
-          ...(actionId && { actionId }),
-          ...(roleId && { roleId }),
-          ...(profileId && { profileId }),
-          ...(roleTitle && { roleTitle }),
+          actionData,
           ...requestBody
         };
 
@@ -422,17 +430,6 @@ serve(async (req) => {
             throw new Error('Invalid session ID');
           }
 
-          // Create action data if actionId is present
-          const actionData = actionId ? {
-            actionId,
-            params: {
-              roleId,
-              roleTitle,
-              profileId,
-              ...requestBody
-            }
-          } : undefined;
-
           // Call MCP loop with all parameters
           const mcpResponse = await callMCPLoop(
             sessionId,
@@ -442,7 +439,7 @@ serve(async (req) => {
             undefined,
             undefined,
             undefined,
-            actionData
+            actionData.actionId ? actionData : undefined // Only pass actionData if actionId exists
           );
 
           console.log('Chat Endpoint Received from MCP Loop V2:', JSON.stringify(mcpResponse, null, 2));
