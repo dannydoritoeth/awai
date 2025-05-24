@@ -205,7 +205,7 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
 
     // Generate development plan
     const aiResponse = await invokeChatModelV2(prompt, {
-      model: 'openai:gpt-4',
+      model: 'openai:gpt-3.5-turbo',
       temperature: 0.2,
       max_tokens: 2000,
       supabase,
@@ -217,90 +217,27 @@ async function getDevelopmentPlanBase(request: MCPRequest): Promise<MCPResponse<
       throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    // Parse AI response
-    const developmentPlan = JSON.parse(aiResponse.output) as DevelopmentPlan;
-
     // Log progress if we have a session
-    let planMarkdown = '';
     if (sessionId) {
-      planMarkdown = `### 📚 Development Plan
-
-#### Key Skills to Develop
-${developmentPlan.recommendedSkills.map(skill => `- **${skill.name}** (Priority: ${skill.priority})
-  - Current Level: ${skill.currentLevel || 'N/A'} → Target Level: ${skill.targetLevel}
-  - Time Estimate: ${skill.timeEstimate}
-  - Training: ${skill.trainingModules.map(m => `${m.name} (${m.duration})`).join(', ')}`).join('\n')}
-
-#### Interim Roles
-${developmentPlan.interimRoles.map(role => `- **${role.title}** (${role.typicalDuration})
-  - Relevance: ${role.relevance}
-  - Key Skills: ${role.keySkillsGained.join(', ')}`).join('\n')}
-
-#### Suggested Mentors
-${developmentPlan.suggestedMentors.map(mentor => `- **${mentor.name}** (${mentor.title})
-  - Expertise: ${mentor.expertise.join(', ')}
-  - Match Score: ${(mentor.matchScore * 100).toFixed(1)}%`).join('\n')}
-
-#### Timeline
-- Short Term: ${developmentPlan.timeline.shortTerm.join(', ')}
-- Medium Term: ${developmentPlan.timeline.mediumTerm.join(', ')}
-- Long Term: ${developmentPlan.timeline.longTerm.join(', ')}
-
-Estimated Time to Role Readiness: ${developmentPlan.estimatedTimeToReadiness}
-
-${developmentPlan.explanation}`;
-
       await logAgentProgress(
         supabase,
         sessionId,
-        planMarkdown,
-        { phase: 'plan_generated' }
+        aiResponse.output,
+        { 
+          phase: 'complete',
+          analysisDetails: {
+            message: aiResponse.output
+          }
+        }
       );
     }
 
     return {
       success: true,
-      data: developmentPlan,
-      dataForDownstreamPrompt: {
-        getDevelopmentPlan: {
-          dataSummary: planMarkdown,
-          structured: {
-            recommendedSkillsCount: developmentPlan.recommendedSkills.length,
-            recommendedCapabilitiesCount: developmentPlan.recommendedSkills.filter(s => s.priority === 'high').length,
-            estimatedTimeToReadiness: developmentPlan.estimatedTimeToReadiness,
-            mentorCount: developmentPlan.suggestedMentors.length,
-            topSkills: developmentPlan.recommendedSkills.slice(0, 3).map(s => s.name),
-            topPriorities: developmentPlan.timeline.shortTerm.slice(0, 3)
-          },
-          truncated: false
-        }
-      },
-      actionsTaken: [
-        {
-          tool: 'getProfileData',
-          reason: 'Retrieved profile and role data',
-          result: 'success',
-          confidence: 1.0,
-          inputs: { profileId, roleId },
-          timestamp: new Date().toISOString()
-        },
-        {
-          tool: 'analyzeGaps',
-          reason: 'Analyzed capability and skill gaps',
-          result: 'success',
-          confidence: 0.9,
-          inputs: { profileId, roleId },
-          timestamp: new Date().toISOString()
-        },
-        {
-          tool: 'findMentors',
-          reason: 'Found potential mentors',
-          result: 'success',
-          confidence: 0.8,
-          inputs: { roleTitle: context.roleData.title },
-          timestamp: new Date().toISOString()
-        }
-      ]
+      data: {
+        structured: {},
+        raw: aiResponse.output
+      }
     };
 
   } catch (error) {

@@ -12,7 +12,8 @@ import {
   DocumentMagnifyingGlassIcon, 
   ChartBarIcon, 
   LightBulbIcon, 
-  ClipboardDocumentCheckIcon 
+  ClipboardDocumentCheckIcon,
+  ClipboardIcon 
 } from '@heroicons/react/24/outline';
 import React from 'react';
 
@@ -423,6 +424,9 @@ export default function ChatInterface({
                 )}
                 {action.actionId === 'explainMatch' && (
                   <DocumentMagnifyingGlassIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'getReadinessAssessment' && (
+                  <ClipboardIcon className="mr-3 h-5 w-5 text-gray-400" />
                 )}
                 {action.actionId === 'getDevelopmentPlan' && (
                   <ClipboardDocumentCheckIcon className="mr-3 h-5 w-5 text-gray-400" />

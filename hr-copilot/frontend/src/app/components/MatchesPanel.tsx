@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
-import { InformationCircleIcon, DocumentMagnifyingGlassIcon, ChartBarIcon, LightBulbIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
+import { InformationCircleIcon, DocumentMagnifyingGlassIcon, ChartBarIcon, LightBulbIcon, ClipboardDocumentCheckIcon, ClipboardIcon } from '@heroicons/react/24/outline';
 
 interface Match {
   id: string;
@@ -90,6 +90,14 @@ export default function MatchesPanel({
                     >
                       <LightBulbIcon className="mr-3 h-5 w-5 text-gray-400" />
                       View Skill Recommendations
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onSelect={() => handleAction('readiness', match)}
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center"
+                    >
+                      <ClipboardIcon className="mr-3 h-5 w-5 text-gray-400" />
+                      Get Readiness Assessment
                     </DropdownMenu.Item>
 
                     <DropdownMenu.Item

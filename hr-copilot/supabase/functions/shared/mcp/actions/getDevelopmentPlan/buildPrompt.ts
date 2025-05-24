@@ -68,48 +68,43 @@ Consider:
 6. Mentorship opportunities
 
 CRITICAL INSTRUCTIONS FOR RESPONSE FORMAT:
-1. Respond ONLY with a valid JSON object
-2. DO NOT include any markdown formatting (no \`\`\`json or \`\`\`)
-3. DO NOT include any explanatory text before or after the JSON
-4. Ensure all JSON properties exactly match the specified interface
-5. Use proper JSON syntax (double quotes for strings, no trailing commas)
+1. Respond with a well-structured markdown document
+2. Use appropriate markdown headings (# for main sections)
+3. Use bullet points and nested lists where appropriate
+4. Include all the following sections in your response:
 
-Your response must follow this exact structure:
-{
-  "recommendedSkills": [{
-    "name": string,
-    "priority": "high" | "medium" | "low",
-    "currentLevel": number | null,
-    "targetLevel": number,
-    "timeEstimate": string,
-    "trainingModules": [{
-      "name": string,
-      "type": string,
-      "duration": string,
-      "provider": string
-    }]
-  }],
-  "interimRoles": [{
-    "title": string,
-    "relevance": string,
-    "keySkillsGained": string[],
-    "typicalDuration": string
-  }],
-  "suggestedMentors": [{
-    "id": string,
-    "name": string,
-    "title": string,
-    "expertise": string[],
-    "matchScore": number
-  }],
-  "timeline": {
-    "shortTerm": string[],
-    "mediumTerm": string[],
-    "longTerm": string[]
-  },
-  "estimatedTimeToReadiness": string,
-  "explanation": string
-}`;
+Required Sections:
+# Development Plan Summary
+Brief overview of the plan and estimated time to readiness
+
+# Key Skills to Develop
+For each skill include:
+- Name and priority level (High/Medium/Low)
+- Current and target levels
+- Time estimate
+- Recommended training modules/resources
+
+# Suggested Career Path
+List interim roles that could help build required skills:
+- Role title
+- Typical duration
+- Relevance to target role
+- Key skills gained
+
+# Mentorship Recommendations
+For each potential mentor:
+- Name and current role
+- Areas of expertise
+- Match score and why they'd be a good mentor
+
+# Timeline
+Break down into:
+- Short-term goals (0-6 months)
+- Medium-term goals (6-12 months)
+- Long-term goals (12+ months)
+
+# Implementation Strategy
+Practical steps and recommendations for executing the plan`;
 
   const userPrompt = `Create a development plan for transitioning into the role of ${context.targetRole.title}.
 
@@ -144,7 +139,7 @@ ${context.previousAnalysis ? `
   Low: ${context.previousAnalysis.skillPriorities?.low || 0}
 ` : 'No previous analysis available'}
 
-Please generate a comprehensive development plan following the exact JSON structure specified in the system prompt.`;
+Please generate a comprehensive development plan following the markdown structure specified in the system prompt.`;
 
   return buildSafePrompt({
     system: systemPrompt,
