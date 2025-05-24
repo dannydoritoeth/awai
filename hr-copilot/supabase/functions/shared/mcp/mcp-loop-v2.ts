@@ -399,8 +399,8 @@ Success criteria:
 - You must include all tools that have \`suggestedPrerequisites\` if they're relevant.
 
 
-Available tools (in CSV format):
-${formatToolMetadataAsCSV(tools)}
+Available tools:
+${JSON.stringify(tools)}
     `;
 
     const userPrompt = `

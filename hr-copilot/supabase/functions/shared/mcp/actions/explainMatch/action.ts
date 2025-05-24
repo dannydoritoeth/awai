@@ -27,6 +27,7 @@ import { logAgentProgress } from "../../../chatUtils.ts";
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js';
 import { MCPActionV2, MCPResponse } from "../../types/action.ts";
 import { PromptData } from "../../promptTypes.ts";
+import { buildPrompt } from "./buildPrompt.ts";
 
 // Helper function to convert level strings to numeric values
 function getLevelValue(level: string): number {
@@ -99,6 +100,18 @@ interface ExplainMatchContext {
         };
       };
     };
+    getSemanticSkillRecommendations?: {
+      dataSummary: string;
+      structured: {
+        recommendationCount: number;
+        topRecommendations: Array<{
+          name: string;
+          currentLevel: number;
+          requiredLevel: number;
+          gap: number;
+        }>;
+      };
+    };
   };
 }
 
@@ -117,14 +130,12 @@ export interface AIContext {
     requiredLevel: number;
     gap: number;
   }>;
-  fitScore: {
-    overall: number;
-    breakdown: {
-      capabilities: number;
-      skills: number;
-      experience: number;
-    };
-  };
+  skillRecommendations: Array<{
+    name: string;
+    currentLevel: number;
+    requiredLevel: number;
+    gap: number;
+  }>;
   mode: 'fit' | 'diagnostic' | 'feedback';
   audience: 'manager' | 'candidate' | 'analyst';
 }
@@ -209,17 +220,21 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<Extende
       if (!skillGapsData?.dataSummary) {
         throw new Error('Skill gaps data not found. Please run getSkillGaps action first.');
       }
-      if (!fitScoreData?.dataSummary) {
-        throw new Error('Fit score data not found. Please run scoreProfileRoleFit action first.');
-      }
 
-      // Prepare AI context
+      // Get semantic skill recommendations if available
+      const skillRecommendationsData = context.downstreamData?.getSemanticSkillRecommendations;
+      console.log('Skill recommendations data:', {
+        hasData: !!skillRecommendationsData,
+        recommendationCount: skillRecommendationsData?.structured?.recommendationCount
+      });
+
+      // Prepare AI context with both skill gaps and recommendations
       const aiContext: AIContext = {
         profileName: profileData.data.name,
         roleName: roleData.data.title,
         capabilityGaps: capabilityGapsData.structured.gaps,
         skillGaps: skillGapsData.structured.gaps,
-        fitScore: fitScoreData.structured.score,
+        skillRecommendations: skillRecommendationsData?.structured?.topRecommendations || [],
         mode,
         audience
       };
@@ -246,18 +261,15 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<Extende
         }
       };
 
-      const prompt = await buildSafePrompt('openai:gpt-4', promptData);
+      const prompt = await buildSafePrompt('openai:gpt-3.5-turbo', promptData);
 
       // Generate explanation using AI
-      const chatPrompt: ChatPrompt = {
-        system: "You are an expert at analyzing profile-role matches and providing clear, actionable insights.",
-        user: prompt.user
-      };
+      const chatPrompt = buildPrompt(aiContext);
 
       const aiResponse = await invokeChatModelV2(chatPrompt, {
-        model: 'openai:gpt-4',
+        model: 'openai:gpt-3.5-turbo',
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 800,
         supabase,
         sessionId: sessionId || 'default',
         actionType: 'explainMatch'
@@ -267,47 +279,38 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<Extende
         throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
       }
 
-      // Extract key highlights using a follow-up AI call
-      const highlightsChatPrompt: ChatPrompt = {
-        system: "Extract the most important points as bullet points starting with •",
-        user: `Extract 3-5 key highlights from this match analysis as bullet points: ${aiResponse.output}`
-      };
-
-      const highlightsResponse = await invokeChatModelV2(highlightsChatPrompt, {
-        model: 'openai:gpt-4',
-        temperature: 0.3,
-        max_tokens: 200,
-        supabase,
-        sessionId: sessionId || 'default',
-        actionType: 'explainMatch_highlights'
-      });
-
-      if (!highlightsResponse.success || !highlightsResponse.output) {
-        throw new Error(`AI highlights extraction failed: ${highlightsResponse.error?.message || 'Unknown error'}`);
-      }
+      // Split the response into analysis and highlights
+      const [analysis, highlights] = aiResponse.output.split(/\n\s*(?:Key )?Highlights:?\s*\n/i);
+      
+      // Extract bullet points
+      const keyHighlights = highlights ? 
+        highlights.split('\n')
+          .filter(line => line.trim().startsWith('•'))
+          .map(line => line.trim()) :
+        [];
 
       // Structure the response
       const response: ExtendedMCPResponse = {
         success: true,
         data: {
-          message: aiResponse.output,
-          keyHighlights: highlightsResponse.output.split('\n').filter(line => line.trim().startsWith('•'))
+          message: analysis.trim(),
+          keyHighlights
         },
         dataForDownstreamPrompt: {
           explainMatch: {
-            dataSummary: aiResponse.output,
+            dataSummary: analysis.trim(),
             structured: {
               profileId,
               roleId,
-              fitScore: aiContext.fitScore,
               mode,
-              audience
+              audience,
+              highlights: keyHighlights
             },
             truncated: false
           }
         },
         chatResponse: {
-          message: aiResponse.output,
+          message: analysis.trim(),
           followUpQuestion: "Would you like to see a development plan based on this analysis?",
           aiPrompt: "The user may want to explore specific gaps or get more detailed recommendations."
         },
@@ -316,11 +319,25 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<Extende
 
       // Log completion
       if (sessionId) {
+        const summaryMessage = `
+Match Analysis Results:
+
+${analysis.trim()}
+
+Key Highlights:
+${keyHighlights.join('\n')}`;
+
         await logAgentProgress(
           supabase,
           sessionId,
-          "Match explanation analysis complete",
-          { phase: 'complete' }
+          summaryMessage,
+          { 
+            phase: 'complete',
+            analysisDetails: {
+              message: analysis.trim(),
+              keyHighlights
+            }
+          }
         );
       }
 
@@ -357,12 +374,12 @@ async function explainMatchAction(context: ExplainMatchContext): Promise<Extende
 export const explainMatch: MCPActionV2 = {
   id: 'explainMatch',
   title: 'Explain Match',
-  description: 'Generate a narrative explanation of how well a profile aligns with a role, based on capability, skill, and fit scoring data.',
+  description: 'Generate a narrative explanation of how well a profile aligns with a role, based on capability and skill gap analysis.',
   applicableRoles: ['candidate', 'manager', 'analyst'],
   capabilityTags: ['Explainability', 'Transparency', 'AI Reasoning'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['explanation', 'narrative', 'ai', 'post-analysis'],
-  suggestedPrerequisites: ['getCapabilityGaps', 'getSkillGaps', 'scoreProfileRoleFit'],
+  requiredPrerequisites: ['getCapabilityGaps', 'getSkillGaps'],
   suggestedPostrequisites: ['getDevelopmentPlan'],
   usesAI: true,
   argsSchema: explainMatchSchema,

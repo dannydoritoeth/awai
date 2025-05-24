@@ -23,6 +23,7 @@ import { getCapabilityGaps } from './getCapabilityGaps/action.ts';
 import { getDevelopmentPlan } from './getDevelopmentPlan/action.ts';
 import { getMatchingRolesForPerson } from './getMatchingRolesForPerson/action.ts';
 import { getSemanticSkillRecommendations } from './getSemanticSkillRecommendations/action.ts';
+import { getSkillGaps } from './getSkillGaps/action.ts';
 import { getRoleDetails } from './getRoleDetails/action.ts';
 import { getMatchingPeopleForRole } from './getMatchingPeopleForRole/action.ts';
 import { scoreProfilesToRoleFit } from './scoreProfilesToRoleFit/action.ts';
@@ -56,6 +57,7 @@ const actions: MCPActionV2[] = [
   getDevelopmentPlan,
   getMatchingRolesForPerson,
   getSemanticSkillRecommendations,
+  getSkillGaps,
   getRoleDetails,
   getMatchingPeopleForRole,
   scoreProfilesToRoleFit,
@@ -125,6 +127,7 @@ export class ActionV2Registry {
       run: async ({ context, args }) => a.actionFn({ ...context, ...args }),
       suggestedPrerequisites: a.suggestedPrerequisites,
       suggestedPostrequisites: a.suggestedPostrequisites,
+      requiredPrerequisites: a.requiredPrerequisites,
       applicableRoles: a.applicableRoles,
       capabilityTags: a.capabilityTags,
       requiredInputs: a.requiredInputs,
