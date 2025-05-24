@@ -18,6 +18,7 @@ interface MatchesPanelProps {
   onCompare: (name: string) => void;
   profileId?: string;
   sessionId: string;
+  onAction: (action: string, match: Match) => void;
 }
 
 export default function MatchesPanel({
@@ -26,105 +27,29 @@ export default function MatchesPanel({
   onDevelopmentPath,
   onCompare,
   profileId,
-  sessionId
+  sessionId,
+  onAction
 }: MatchesPanelProps) {
   const handleAction = async (action: string, match: Match) => {
     console.log('Action clicked:', { action, match, profileId, sessionId });
     
-    let message = '';
-    let actionId = '';
-    
+    // Call the parent's onAction handler
+    onAction(action, match);
+
+    // Call the appropriate callback for UI updates
     switch (action) {
-      case 'learn':
-        message = `Can you tell me more about ${match.name}?`;
-        actionId = 'getRoleDetails';
-        break;
       case 'explain':
-        message = `Explain why this would be a good match for ${match.name}?`;
-        actionId = 'explainMatch';
-        break;
-      case 'gaps':
-        message = `What capability gaps are there for ${match.name}?`;
-        actionId = 'getCapabilityGaps';
-        break;
-      case 'skills':
-        message = `What skills should be developed for ${match.name}?`;
-        actionId = 'getSemanticSkillRecommendations';
+        console.log('Calling onExplainMatch with:', match.name);
+        onExplainMatch(match.name);
         break;
       case 'development':
-        message = `Can you create a development plan for ${match.name}?`;
-        actionId = 'getDevelopmentPlan';
+        console.log('Calling onDevelopmentPath with:', match.name);
+        onDevelopmentPath(match.name);
         break;
       case 'compare':
-        message = `Can you compare my profile to ${match.name}?`;
-        actionId = 'compareToRole';
+        console.log('Calling onCompare with:', match.name);
+        onCompare(match.name);
         break;
-    }
-
-    console.log('Generated message and actionId:', { message, actionId });
-
-    // Prepare request body with all necessary parameters
-    const requestBody = {
-      action: 'postMessage',
-      sessionId,
-      message,
-      actionId,
-      roleId: match.id,
-      roleTitle: match.name,
-      ...(profileId && { profileId })
-    };
-
-    console.log('Preparing request with body:', requestBody);
-    console.log('Using URL:', `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`);
-    console.log('Using auth:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Auth key present' : 'Auth key missing');
-
-    try {
-      // Send request to chat endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to execute action: ${response.statusText}. Details: ${errorText}`);
-      }
-
-      const responseData = await response.json();
-      console.log('Response data:', responseData);
-
-      // Call the appropriate callback
-      switch (action) {
-        case 'explain':
-          console.log('Calling onExplainMatch with:', match.name);
-          onExplainMatch(match.name);
-          break;
-        case 'development':
-          console.log('Calling onDevelopmentPath with:', match.name);
-          onDevelopmentPath(match.name);
-          break;
-        case 'compare':
-          console.log('Calling onCompare with:', match.name);
-          onCompare(match.name);
-          break;
-      }
-
-    } catch (error) {
-      console.error('Error executing action:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
     }
   };
 

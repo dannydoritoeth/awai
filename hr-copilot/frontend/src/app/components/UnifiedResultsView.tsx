@@ -479,18 +479,42 @@ export default function UnifiedResultsView({
   );
 
   const handleExplainMatch = (name: string) => {
-    handleSendMessage(`Explain why ${name} is a good fit for this role`);
+    const message = `Explain why ${name} is a good fit for this role`;
+    // Add user message to local state
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      message: message,
+      sender: 'user'
+    };
+    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
+    handleSendMessage(message);
   };
 
   const handleDevelopmentPath = (name: string) => {
-    handleSendMessage(`What would ${name} need to work on to succeed in this role?`);
+    const message = `What would ${name} need to work on to succeed in this role?`;
+    // Add user message to local state
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      message: message,
+      sender: 'user'
+    };
+    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
+    handleSendMessage(message);
   };
 
   const handleCompare = (name: string) => {
     // For now, just compare with the next person in the list
     const otherMatch = matches.find(m => m.name !== name);
     if (otherMatch) {
-      handleSendMessage(`Compare ${name} to ${otherMatch.name} for this role`);
+      const message = `Compare ${name} to ${otherMatch.name} for this role`;
+      // Add user message to local state
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        message: message,
+        sender: 'user'
+      };
+      setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
+      handleSendMessage(message);
     }
   };
 
@@ -609,6 +633,46 @@ export default function UnifiedResultsView({
               onCompare={handleCompare}
               sessionId={sessionId}
               profileId={profileData?.id}
+              onAction={(action: string, match: Match) => {
+                let message = '';
+                let actionId = '';
+                
+                switch (action) {
+                  case 'learn':
+                    message = `Can you tell me more about ${match.name}?`;
+                    actionId = 'getRoleDetails';
+                    break;
+                  case 'explain':
+                    message = `Explain why this would be a good match for ${match.name}?`;
+                    actionId = 'explainMatch';
+                    break;
+                  case 'gaps':
+                    message = `What capability gaps are there for ${match.name}?`;
+                    actionId = 'getCapabilityGaps';
+                    break;
+                  case 'skills':
+                    message = `What skills should be developed for ${match.name}?`;
+                    actionId = 'getSemanticSkillRecommendations';
+                    break;
+                  case 'development':
+                    message = `Can you create a development plan for ${match.name}?`;
+                    actionId = 'getDevelopmentPlan';
+                    break;
+                  case 'compare':
+                    message = `Can you compare my profile to ${match.name}?`;
+                    actionId = 'compareToRole';
+                    break;
+                }
+
+                handleSendMessage(message, {
+                  actionId,
+                  params: {
+                    roleId: match.id,
+                    roleTitle: match.name,
+                    ...(profileData?.id && { profileId: profileData.id })
+                  }
+                });
+              }}
             />
           )}
         </div>
