@@ -216,7 +216,7 @@ export const getMatchingPeopleForRole: MCPActionV2 = {
   requiredInputs: ['roleId'],
   tags: ['hiring', 'matching', 'tactical'],
   suggestedPrerequisites: ['getRoleDetails'],
-  suggestedPostrequisites: ['getCapabilityGaps', 'getSkillGaps'],
+  suggestedPostrequisites: ['getCapabilityGaps', 'getSemanticSkillRecommendations'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => getMatchingPeopleForRoleBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

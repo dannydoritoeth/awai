@@ -479,67 +479,21 @@ export default function UnifiedResultsView({
   );
 
   const handleExplainMatch = (name: string) => {
-    const message = `Explain why ${name} is a good fit`;
-    // Add user message to local state
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      message: message,
-      sender: 'user'
-    };
-    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    handleSendMessage(message, {
-      actionId: 'explainMatch',
-      params: {
-        roleId: name,
-        roleTitle: name,
-        profileId: profileData!.id,
-        ...(profileData?.id && { profileId: profileData.id })
-      }
-    });
+    // This function is now only used for direct button clicks, not panel actions
+    console.log('Direct explain match button clicked:', name);
+    // No-op as this will be handled by the panel's onAction
   };
 
   const handleDevelopmentPath = (name: string) => {
-    const message = `What would ${name} need to work on to succeed in this role?`;
-    // Add user message to local state
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      message: message,
-      sender: 'user'
-    };
-    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    handleSendMessage(message, {
-      actionId: 'getDevelopmentPlan',
-      params: {
-        roleId: name,
-        roleTitle: name,
-        profileId: profileData!.id,
-        ...(profileData?.id && { profileId: profileData.id })
-      }
-    });
+    // This function is now only used for direct button clicks, not panel actions
+    console.log('Direct development path button clicked:', name);
+    // No-op as this will be handled by the panel's onAction
   };
 
   const handleCompare = (name: string) => {
-    // For now, just compare with the next person in the list
-    const otherMatch = matches.find(m => m.name !== name);
-    if (otherMatch) {
-      const message = `Compare ${name} to ${otherMatch.name} for this role`;
-      // Add user message to local state
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        message: message,
-        sender: 'user'
-      };
-      setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-      handleSendMessage(message, {
-        actionId: 'compareToRole',
-        params: {
-          roleId: name,
-          roleTitle: name,
-          profileId: profileData!.id,
-          ...(profileData?.id && { profileId: profileData.id })
-        }
-      });
-    }
+    // This function is now only used for direct button clicks, not panel actions
+    console.log('Direct compare button clicked:', name);
+    // No-op as this will be handled by the panel's onAction
   };
 
   // Add a function to handle new role matches

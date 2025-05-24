@@ -374,6 +374,18 @@ export class McpLoopRunner {
     "args": { key: value },
     "reason": "why this tool is needed for the user",
     "announcement": "what to tell the user when this runs"
+  },
+  {
+    "tool": "tool_id",
+    "args": { key: value },
+    "reason": "why this tool is needed for the user",
+    "announcement": "what to tell the user when this runs"
+  },
+  {
+    "tool": "tool_id",
+    "args": { key: value },
+    "reason": "why this tool is needed for the user",
+    "announcement": "what to tell the user when this runs"
   }
 ]
 

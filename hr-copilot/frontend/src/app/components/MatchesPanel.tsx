@@ -13,22 +13,16 @@ interface Match {
 
 interface MatchesPanelProps {
   matches: Match[];
-  onExplainMatch: (name: string) => void;
-  onDevelopmentPath: (name: string) => void;
-  onCompare: (name: string) => void;
+  onAction: (action: string, match: Match) => void;
   profileId?: string;
   sessionId: string;
-  onAction: (action: string, match: Match) => void;
 }
 
 export default function MatchesPanel({
   matches,
-  onExplainMatch,
-  onDevelopmentPath,
-  onCompare,
+  onAction,
   profileId,
-  sessionId,
-  onAction
+  sessionId
 }: MatchesPanelProps) {
   const handleAction = async (action: string, match: Match) => {
     console.log('Action clicked:', { action, match, profileId, sessionId });
@@ -36,21 +30,8 @@ export default function MatchesPanel({
     // Call the parent's onAction handler
     onAction(action, match);
 
-    // Call the appropriate callback for UI updates
-    switch (action) {
-      case 'explain':
-        console.log('Calling onExplainMatch with:', match.name);
-        onExplainMatch(match.name);
-        break;
-      case 'development':
-        console.log('Calling onDevelopmentPath with:', match.name);
-        onDevelopmentPath(match.name);
-        break;
-      case 'compare':
-        console.log('Calling onCompare with:', match.name);
-        onCompare(match.name);
-        break;
-    }
+    // Remove the duplicate callback handling since it's now handled by onAction
+    console.log('Action handled by parent component');
   };
 
   return (
