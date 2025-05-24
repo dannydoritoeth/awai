@@ -315,6 +315,9 @@ export default function ChatInterface({
         case 'getDevelopmentPlan':
           message = `Can you create a development plan for ${roleTitle}?`;
           break;
+        case 'getProfileContext':
+          message = `Can you tell me more about ${actionData.params.profileName}?`;
+          break;
         default:
           message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
       }
@@ -324,8 +327,12 @@ export default function ChatInterface({
       onSendMessage(message, {
         actionId: actionData.actionId,
         params: {
-          roleId: actionData.params.roleId,
-          roleTitle: actionData.params.roleTitle,
+          // Include roleId and roleTitle from roleData if we're in role context
+          ...(roleData && { roleId: roleData.id, roleTitle: roleData.title }),
+          // Include any roleId/roleTitle from the action data itself
+          ...(actionData.params.roleId && { roleId: actionData.params.roleId }),
+          ...(actionData.params.roleTitle && { roleTitle: actionData.params.roleTitle }),
+          // Include profileId if it exists in action params
           ...(actionData.params.profileId && { profileId: actionData.params.profileId })
         }
       });
