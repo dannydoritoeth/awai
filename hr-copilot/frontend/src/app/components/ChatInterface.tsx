@@ -59,7 +59,7 @@ interface RoleData {
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, actionData?: { actionId: string; params: Record<string, unknown> }) => void;
   isLoading: boolean;
   sessionId: string;
   profileId?: string;
@@ -303,42 +303,16 @@ export default function ChatInterface({
           message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
       }
 
-      // Add the message to the chat interface
+      // Add the message to the chat interface with action data
       setHasUserInteracted(true);
-      onSendMessage(message);
-
-      // Prepare flattened request body
-      const requestBody = {
-        action: 'postMessage',
-        sessionId,
-        message,
+      onSendMessage(message, {
         actionId: actionData.actionId,
-        roleId: actionData.params.roleId,
-        roleTitle: actionData.params.roleTitle,
-        ...(profileId && { profileId })
-      };
-
-      console.log('Sending action request with full details:', {
-        requestBody,
-        hasProfileId: !!profileId,
-        profileIdValue: profileId
+        params: {
+          roleId: actionData.params.roleId,
+          roleTitle: actionData.params.roleTitle,
+          ...(actionData.params.profileId && { profileId: actionData.params.profileId })
+        }
       });
-
-      // Execute the action through chat endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to execute action: ${response.statusText}`);
-      }
-
-      await response.json();
 
       if (actionData.params.roleId && actionData.params.roleTitle) {
         // Queue the role match to be processed after render

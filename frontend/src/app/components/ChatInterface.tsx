@@ -12,3 +12,19 @@
   console.log('Sending action request:', requestBody);
 
   // Execute the action through chat endpoint 
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputValue.trim() && !isLoading) {
+      setHasUserInteracted(true); // Mark as interacted when user sends a message
+      onSendMessage(inputValue.trim());
+      setInputValue('');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  }; 

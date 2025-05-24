@@ -207,13 +207,21 @@ Critical Gaps: ${analysis.summary.criticalGaps}
 Minor Gaps: ${analysis.summary.minorGaps}
 Met Requirements: ${analysis.summary.metRequirements}`;
 
-    // Only log if we found significant gaps
-    if (sessionId && analysis.gaps.length > 0) {
+    // Always provide feedback to the user
+    if (sessionId) {
+      const message = analysis.gaps.length > 0 
+        ? gapsMarkdown
+        : `Based on my analysis, I don't see any significant capability gaps for this role. The profile's current capabilities align well with the role requirements.
+
+The profile meets ${analysis.summary.metRequirements} of the role requirements, showing strong alignment with the position.
+
+Would you like me to analyze any specific aspects in more detail?`;
+
       await logAgentProgress(
         supabase,
         sessionId,
-        gapsMarkdown,
-        { phase: 'gaps_analyzed' }
+        message,
+        { phase: analysis.gaps.length > 0 ? 'gaps_analyzed' : 'no_gaps_found' }
       );
     }
 

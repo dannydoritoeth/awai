@@ -265,7 +265,7 @@ export default function UnifiedResultsView({
     }
   }, [isLoading, isInitializing, isDataLoaded]);
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = async (message: string, actionData?: { actionId: string; params: Record<string, unknown> }) => {
     if (!sessionId || !message.trim()) return;
 
     const messageId = crypto.randomUUID();
@@ -276,7 +276,8 @@ export default function UnifiedResultsView({
       messageId,
       hasProfileData: !!profileData,
       profileId: profileData?.id,
-      message
+      message,
+      actionData
     });
     
     // Add user message to local state
@@ -296,13 +297,18 @@ export default function UnifiedResultsView({
         sessionId,
         messageId,
         message,
-        ...(profileData?.id && { profileId: profileData.id })
+        ...(profileData?.id && { profileId: profileData.id }),
+        ...(actionData && {
+          actionId: actionData.actionId,
+          ...actionData.params
+        })
       };
 
       console.log('Sending chat request with full details:', {
         requestBody,
         hasProfileId: !!profileData?.id,
-        profileIdValue: profileData?.id
+        profileIdValue: profileData?.id,
+        hasActionData: !!actionData
       });
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
