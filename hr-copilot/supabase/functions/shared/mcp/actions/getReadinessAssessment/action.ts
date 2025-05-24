@@ -76,14 +76,17 @@ async function getReadinessAssessmentBase(request: MCPRequest): Promise<MCPRespo
         c.name.toLowerCase() === required.name.toLowerCase()
       );
 
+      const requiredLevel = required.required_level || 1; // Default to 1 if not specified
+      const actualLevel = actual?.level || 0;
+
       return {
         name: required.name,
-        required: required.required_level,
-        actual: actual?.level || 0,
-        match: actual ? Math.min(actual.level / required.required_level, 1) : 0,
-        severity: actual ? 
-          actual.level >= required.required_level ? 0 :
-          ((required.required_level - actual.level) / required.required_level) * 100 : 100
+        required: requiredLevel,
+        actual: actualLevel,
+        match: requiredLevel > 0 ? Math.min(actualLevel / requiredLevel, 1) : 0,
+        severity: requiredLevel > 0 ? 
+          actualLevel >= requiredLevel ? 0 :
+          ((requiredLevel - actualLevel) / requiredLevel) * 100 : 100
       };
     });
 
@@ -94,14 +97,17 @@ async function getReadinessAssessmentBase(request: MCPRequest): Promise<MCPRespo
         s.name.toLowerCase() === required.name.toLowerCase()
       );
 
+      const requiredLevel = required.required_level || 1; // Default to 1 if not specified
+      const actualLevel = actual?.level || 0;
+
       return {
         name: required.name,
-        required: required.required_level,
-        actual: actual?.level || 0,
-        match: actual ? Math.min(actual.level / required.required_level, 1) : 0,
-        severity: actual ? 
-          actual.level >= required.required_level ? 0 :
-          ((required.required_level - actual.level) / required.required_level) * 100 : 100
+        required: requiredLevel,
+        actual: actualLevel,
+        match: requiredLevel > 0 ? Math.min(actualLevel / requiredLevel, 1) : 0,
+        severity: requiredLevel > 0 ? 
+          actualLevel >= requiredLevel ? 0 :
+          ((requiredLevel - actualLevel) / requiredLevel) * 100 : 100
       };
     });
 
@@ -114,8 +120,11 @@ async function getReadinessAssessmentBase(request: MCPRequest): Promise<MCPRespo
       ? skillMatches.reduce((sum, m) => sum + m.match, 0) / skillMatches.length * 100
       : 0;
 
-    // Overall score with 60/40 weighting
-    const overallScore = (capabilityScore * 0.6) + (skillScore * 0.4);
+    // Overall score with 60/40 weighting - ensure we have valid scores
+    const overallScore = (
+      (capabilityMatches.length > 0 ? capabilityScore * 0.6 : 0) + 
+      (skillMatches.length > 0 ? skillScore * 0.4 : 0)
+    );
 
     // Identify critical gaps (severity > 70)
     const criticalGaps = [
@@ -159,11 +168,61 @@ async function getReadinessAssessmentBase(request: MCPRequest): Promise<MCPRespo
                           overallScore >= 40 ? 'Partially prepared' :
                           'Additional preparation needed';
 
-    const summary = `${readinessLevel} for ${roleData.title} (${overallScore.toFixed(1)}% overall readiness)
-• Capability alignment: ${capabilityScore.toFixed(1)}%
-• Skill alignment: ${skillScore.toFixed(1)}%
-• Critical gaps: ${criticalGaps.length}
-• Development timeline: ${developmentTimeline.shortTerm.length} short-term, ${developmentTimeline.mediumTerm.length} medium-term, ${developmentTimeline.longTerm.length} long-term items`;
+    // Format capability details
+    const capabilityDetails = capabilityMatches
+      .sort((a, b) => b.match - a.match)
+      .map(cap => `| ${cap.name} | ${cap.actual.toFixed(1)} | ${cap.required.toFixed(1)} | ${(cap.match * 100).toFixed(1)}% |`)
+      .join('\n');
+
+    // Format skill details
+    const skillDetails = skillMatches
+      .sort((a, b) => b.match - a.match)
+      .map(skill => `| ${skill.name} | ${skill.actual.toFixed(1)} | ${skill.required.toFixed(1)} | ${(skill.match * 100).toFixed(1)}% |`)
+      .join('\n');
+
+    const summary = `### 📊 Readiness Assessment for ${roleData.title}
+
+**Overall Readiness: ${overallScore.toFixed(1)}% (${readinessLevel})**
+
+#### Summary Metrics
+- Capability Alignment: ${capabilityScore.toFixed(1)}%
+- Skill Alignment: ${skillScore.toFixed(1)}%
+- Critical Gaps: ${criticalGaps.length}
+- Development Timeline: 
+  - Short-term items: ${developmentTimeline.shortTerm.length}
+  - Medium-term items: ${developmentTimeline.mediumTerm.length}
+  - Long-term items: ${developmentTimeline.longTerm.length}
+
+#### Capability Alignment Details
+| Capability | Current Level | Required Level | Match Rate |
+|------------|--------------|----------------|------------|
+${capabilityDetails}
+
+#### Skill Alignment Details
+| Skill | Current Level | Required Level | Match Rate |
+|-------|--------------|----------------|------------|
+${skillDetails}
+
+#### Development Focus Areas
+${criticalGaps.length > 0 ? `
+Critical gaps requiring attention:
+${criticalGaps.map(gap => `- ${gap.name} (Current: ${gap.currentLevel}, Required: ${gap.requiredLevel})`).join('\n')}
+` : 'No critical gaps identified.'}
+
+${developmentTimeline.shortTerm.length > 0 ? `
+Short-term development priorities:
+${developmentTimeline.shortTerm.map(item => `- ${item}`).join('\n')}
+` : ''}
+
+${developmentTimeline.mediumTerm.length > 0 ? `
+Medium-term development areas:
+${developmentTimeline.mediumTerm.map(item => `- ${item}`).join('\n')}
+` : ''}
+
+${developmentTimeline.longTerm.length > 0 ? `
+Long-term development goals:
+${developmentTimeline.longTerm.map(item => `- ${item}`).join('\n')}
+` : ''}`;
 
     const assessment: ReadinessAssessment = {
       score: overallScore,
