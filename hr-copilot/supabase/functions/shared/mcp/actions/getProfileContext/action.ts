@@ -20,8 +20,11 @@
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../../../../database.types.ts';
-import { MCPRequest, MCPResponse, MCPActionV2 } from '../../types/action.ts';
+import { MCPActionV2, MCPRequest, MCPResponse } from '../../types/action.ts';
 import { getProfileContext } from '../../../profile/getProfileContext.ts';
+import { buildPromptInput } from './buildPrompt.ts';
+import { buildSafePrompt } from '../../../ai/buildSafePrompt.ts';
+import { invokeChatModelV2 } from '../../../ai/invokeAIModelV2.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButton.ts';
 import { z } from "https://deno.land/x/zod/mod.ts";
@@ -30,151 +33,152 @@ const profileContextSchema = z.object({
   profileId: z.string()
 });
 
-async function getProfileContextBase(request: MCPRequest): Promise<MCPResponse> {
-  const supabase = request.supabase as SupabaseClient<Database>;
-  const { profileId, sessionId } = request;
+interface GetProfileContextArgs extends MCPRequest {
+  profileId: string;
+}
 
+async function getProfileContextBase(request: MCPRequest): Promise<MCPResponse> {
   try {
-    // Input validation
-    if (!profileId) {
-      throw new Error('profileId is required');
+    const args = request as GetProfileContextArgs;
+    const supabase = request.supabase as SupabaseClient<Database>;
+    
+    // Debug logging for incoming request
+    console.log('getProfileContext request:', {
+      requestId: request.id,
+      sessionId: request.sessionId,
+      args,
+      contextKeys: Object.keys(request),
+      profileId: request.profileId,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!args.profileId) {
+      console.error('getProfileContext failed: No profileId provided', {
+        args,
+        request: {
+          profileId: request.profileId,
+          context: request.context
+        }
+      });
+      return {
+        success: false,
+        error: {
+          type: 'INVALID_INPUT',
+          message: 'profileId is required'
+        }
+      };
     }
 
-    // Log starting analysis
-    if (sessionId) {
+    // Get profile details from database
+    const profileContextResponse = await getProfileContext(supabase, args.profileId);
+    
+    if (!profileContextResponse.data) {
+      console.error('getProfileContext database error:', {
+        error: profileContextResponse.error,
+        profileId: args.profileId
+      });
+      return {
+        success: false,
+        error: profileContextResponse.error || {
+          type: 'NOT_FOUND',
+          message: 'Profile details not found'
+        }
+      };
+    }
+
+    // Add profile details to context
+    const context = {
+      profileId: args.profileId,
+      profileContext: profileContextResponse.data
+    };
+
+    // Build AI prompt
+    const promptInput = buildPromptInput(context);
+    const safePrompt = buildSafePrompt(promptInput);
+
+    // Generate profile analysis
+    const aiResponse = await invokeChatModelV2(safePrompt, {
+      model: 'openai:gpt-3.5-turbo',
+      temperature: 0.7,
+      max_tokens: 1000,
+      supabase,
+      sessionId: request.sessionId || 'default',
+      actionType: 'getProfileContext'
+    });
+
+    if (!aiResponse.success || !aiResponse.output) {
+      throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    // Log progress if we have a session
+    if (request.sessionId) {
       await logAgentProgress(
         supabase,
-        sessionId,
-        "I'm gathering detailed information about the profile...",
-        { phase: 'analysis_start' }
+        request.sessionId,
+        aiResponse.output,
+        { 
+          phase: 'complete',
+          analysisDetails: {
+            message: aiResponse.output
+          }
+        }
       );
     }
 
-    // Get profile context using existing implementation
-    const profileContextResponse = await getProfileContext(supabase, profileId);
-    if (!profileContextResponse.data) {
-      throw new Error('Could not load profile context');
-    }
-    const profileContext = profileContextResponse.data;
+    // Add action buttons to the response
+    const finalOutput = `${aiResponse.output}
 
-    // Format the message for both chat and response
-    const message = `### 👤 Profile Context for ${profileContext.profile.name}
-
-#### Current Status
-${profileContext.careerPath?.current_role ? `💼 Current Role: ${profileContext.careerPath.current_role}` : ''}
-${profileContext.careerPath?.target_role ? `🎯 Target Role: ${profileContext.careerPath.target_role}` : ''}
-
-#### Skills & Capabilities
-${profileContext.profile.skills.length > 0 ? `
-**Skills:**
-${profileContext.profile.skills.map(skill => `- ${skill.name} (Level ${skill.level})`).join('\\n')}` : ''}
-
-${profileContext.profile.capabilities.length > 0 ? `
-**Capabilities:**
-${profileContext.profile.capabilities.map(cap => `- ${cap.name} (Level ${cap.level})`).join('\\n')}` : ''}
-
-${profileContext.jobInteractions.length > 0 ? `
-#### Recent Job Interactions
-${profileContext.jobInteractions.map(ji => `- ${ji.status}: ${ji.job_id} (${new Date(ji.applied_date).toLocaleDateString()})`).join('\\n')}` : ''}
-
-${ActionButtons.profileExplorationGroup(profileId, '', profileContext.profile.name, {
-  profileId: profileId,
-  name: profileContext.profile.name,
+${ActionButtons.profileExplorationGroup(args.profileId, '', profileContextResponse.data.profile.name, {
+  profileId: args.profileId,
+  name: profileContextResponse.data.profile.name,
   semanticScore: 1,
-  currentRole: profileContext.careerPath?.current_role
+  currentRole: profileContextResponse.data.careerPath?.current_role
 })}`;
 
-    // Log final message to chat
-    if (sessionId) {
-      await logAgentProgress(
-        supabase,
-        sessionId,
-        message,
-        { phase: 'context_loaded' }
-      );
-    }
-
-    return {
+    // Structure the final response
+    const response: MCPResponse = {
       success: true,
-      message: 'Successfully retrieved profile context',
-      chatResponse: {
-        message,
-        followUpQuestion: 'Would you like to explore any specific aspect of this profile?',
-        aiPrompt: 'The user may want to explore skills, capabilities, or career path.',
-        promptDetails: {
-          hasSkills: profileContext.profile.skills.length > 0,
-          hasCapabilities: profileContext.profile.capabilities.length > 0,
-          hasCareerPath: !!profileContext.careerPath
-        }
+      data: {
+        structured: {
+          profileId: args.profileId,
+          name: profileContextResponse.data.profile.name,
+          skills: profileContextResponse.data.profile.skills,
+          capabilities: profileContextResponse.data.profile.capabilities,
+          careerPath: profileContextResponse.data.careerPath
+        },
+        raw: finalOutput
       },
       dataForDownstreamPrompt: {
         getProfileContext: {
-          dataSummary: message,
+          dataSummary: aiResponse.output,
           structured: {
-            profileId,
-            profile: {
-              id: profileContext.profile.id,
-              name: profileContext.profile.name,
-              email: profileContext.profile.email,
-              embedding: profileContext.profile.embedding,
-              skills: profileContext.profile.skills.map(skill => ({
-                id: skill.id,
-                name: skill.name,
-                level: skill.level
-              })),
-              capabilities: profileContext.profile.capabilities.map(cap => ({
-                id: cap.id,
-                name: cap.name,
-                groupName: cap.group_name,
-                level: cap.level
-              }))
-            },
-            careerPath: profileContext.careerPath ? {
-              currentRole: profileContext.careerPath.current_role,
-              targetRole: profileContext.careerPath.target_role,
-              status: profileContext.careerPath.status,
-              progress: profileContext.careerPath.progress
-            } : null,
-            jobInteractions: profileContext.jobInteractions.map(ji => ({
-              jobId: ji.job_id,
-              status: ji.status,
-              appliedDate: ji.applied_date
-            }))
+            profileId: args.profileId,
+            name: profileContextResponse.data.profile.name,
+            currentRole: profileContextResponse.data.careerPath?.current_role,
+            targetRole: profileContextResponse.data.careerPath?.target_role,
+            hasAiAnalysis: true
           },
           truncated: false
         }
-      },
-      data: profileContext
+      }
     };
 
+    return response;
+
   } catch (error) {
-    console.error('Error in getProfileContext:', error);
-    
-    const errorMessage = "I encountered an error while retrieving the profile context. Let me know if you'd like to try again.";
-    
-    if (sessionId) {
+    if (request.sessionId) {
       await logAgentProgress(
         supabase,
-        sessionId,
-        errorMessage,
+        request.sessionId,
+        'Error retrieving profile details. Please try again.',
         { phase: 'error', error: error instanceof Error ? error.message : 'Unknown error' }
       );
     }
 
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      chatResponse: {
-        message: errorMessage,
-        followUpQuestion: 'Would you like me to try retrieving the context again?',
-        aiPrompt: 'The user may want to retry or try a different approach.',
-        promptDetails: {
-          hadError: true,
-          errorType: error instanceof Error ? error.message : 'Unknown error'
-        }
-      },
       error: {
-        type: 'CONTEXT_ERROR',
+        type: 'PROCESSING_ERROR',
         message: error instanceof Error ? error.message : 'Unknown error occurred',
         details: error
       }
@@ -186,19 +190,23 @@ ${ActionButtons.profileExplorationGroup(profileId, '', profileContext.profile.na
 export const getProfileContextAction: MCPActionV2 = {
   id: 'getProfileContext',
   title: 'Get Profile Context',
-  description: 'Get detailed context about a profile including skills, capabilities, and career path',
-  applicableRoles: ['hiring_manager', 'recruiter', 'career_coach'],
-  capabilityTags: ['Profile Analysis', 'Career Planning', 'Skill Assessment'],
+  description: 'Retrieve and analyze detailed information about a specific profile',
+  applicableRoles: ['candidate', 'manager', 'hr'],
+  capabilityTags: ['Career Development', 'Profile Analysis'],
   requiredInputs: ['profileId'],
-  tags: ['profile', 'context', 'tactical'],
+  tags: ['profile', 'analysis', 'career'],
   suggestedPrerequisites: [],
-  suggestedPostrequisites: ['getCapabilityGaps', 'getSkillRecommendations', 'getDevelopmentPlan'],
-  usesAI: false,
+  suggestedPostrequisites: ['getCapabilityGaps', 'getDevelopmentPlan'],
+  usesAI: true,
   argsSchema: profileContextSchema,
-  actionFn: (ctx: Record<string, any>) => getProfileContextBase(ctx as MCPRequest),
-  getDefaultArgs: (context: Record<string, any>) => ({
-    profileId: context.profileId
-  })
+  actionFn: (ctx: Record<string, any>) => {
+    return getProfileContextBase(ctx as MCPRequest);
+  },
+  getDefaultArgs: (context: Record<string, any>) => {
+    return {
+      profileId: context.profileId || context.context?.profileId
+    };
+  }
 };
 
 export default getProfileContextAction; 
