@@ -288,13 +288,13 @@ export default function ChatInterface({
       
       switch (actionData.actionId) {
         case 'getRoleDetails':
-          message = `Can you tell me more about ${roleTitle}?`;
+          message = `Can you tell me more about the ${roleTitle} role?`;
           break;
         case 'getCapabilityGaps':
-          message = `What capability gaps do I have for ${roleTitle}?`;
+          message = `What capability gaps are there for ${roleTitle}?`;
           break;
         case 'getSemanticSkillRecommendations':
-          message = `What skills should I develop for ${roleTitle}?`;
+          message = `What skills should be developed for ${roleTitle}?`;
           break;
         case 'getDevelopmentPlan':
           message = `Can you create a development plan for ${roleTitle}?`;
@@ -302,6 +302,10 @@ export default function ChatInterface({
         default:
           message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
       }
+
+      // Add the message to the chat interface
+      setHasUserInteracted(true);
+      onSendMessage(message);
 
       // Prepare flattened request body
       const requestBody = {

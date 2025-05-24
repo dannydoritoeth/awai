@@ -415,7 +415,7 @@ export class McpLoopRunner {
       max_tokens: 1000,
       supabase: this.supabase,
       sessionId: this.context.sessionId || 'default',
-      actionType: 'mcp-loop'
+      actionType: 'planner'
     });
 
     if (!aiResponse.success || !aiResponse.output) {

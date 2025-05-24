@@ -44,11 +44,11 @@ export default function MatchesPanel({
         actionId = 'explainMatch';
         break;
       case 'gaps':
-        message = `What capability gaps do I have for ${match.name}?`;
+        message = `What capability gaps are there for ${match.name}?`;
         actionId = 'getCapabilityGaps';
         break;
       case 'skills':
-        message = `What skills should I develop for ${match.name}?`;
+        message = `What skills should be developed for ${match.name}?`;
         actionId = 'getSemanticSkillRecommendations';
         break;
       case 'development':

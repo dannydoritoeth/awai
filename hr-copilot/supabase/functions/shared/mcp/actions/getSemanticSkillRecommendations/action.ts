@@ -219,7 +219,7 @@ async function getSemanticSkillRecommendationsBase(
       {
         model: 'openai:gpt-3.5-turbo',
         temperature: 0.2,
-        max_tokens: 1000,
+        max_tokens: 2000,
         supabase,
         sessionId: sessionId || 'default',
         actionType: 'getSemanticSkillRecommendations'
@@ -245,7 +245,22 @@ async function getSemanticSkillRecommendationsBase(
     let recommendationsMarkdown = '';
     
     try {
-      recommendations = JSON.parse(cleanOutput) as SkillRecommendations;
+      // Try to parse the cleaned output
+      try {
+        recommendations = JSON.parse(cleanOutput) as SkillRecommendations;
+      } catch (parseError) {
+        console.error('Initial parse failed, attempting to fix common JSON issues:', parseError);
+        
+        // Try to fix common JSON issues
+        const fixedOutput = cleanOutput
+          .replace(/\n/g, ' ')  // Remove newlines
+          .replace(/,\s*}/g, '}')  // Remove trailing commas
+          .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+          .trim();
+          
+        console.log('Attempting to parse fixed output:', fixedOutput);
+        recommendations = JSON.parse(fixedOutput) as SkillRecommendations;
+      }
       
       // Filter out invalid recommendations where current level exceeds target level
       recommendations.recommendations = recommendations.recommendations.filter(rec => {

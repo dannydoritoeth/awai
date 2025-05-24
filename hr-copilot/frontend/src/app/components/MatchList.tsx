@@ -32,22 +32,22 @@ export default function MatchList({ matches, onAction, onRemove }: MatchListProp
       case 'getCapabilityGaps':
         message = match.type === 'profile'
           ? `What capability gaps does ${match.name} have for this role?`
-          : `What capability gaps do I have for the ${match.name} role?`;
+          : `What capability gaps are there for the ${match.name} role?`;
         break;
       case 'getSemanticSkillRecommendations':
         message = match.type === 'profile'
           ? `What skills should ${match.name} develop for this role?`
-          : `What skills should I develop for the ${match.name} role?`;
+          : `What skills should be developed for the ${match.name} role?`;
         break;
       case 'getReadinessAssessment':
         message = match.type === 'profile'
           ? `How ready is ${match.name} for this role?`
-          : `How ready am I for the ${match.name} role?`;
+          : `How ready are they for the ${match.name} role?`;
         break;
       case 'getDevelopmentPlan':
         message = match.type === 'profile'
           ? `Create a development plan for ${match.name} for this role`
-          : `Create a development plan for me for the ${match.name} role`;
+          : `Create a development plan for the ${match.name} role`;
         break;
       default:
         message = `Can you ${actionId.toLowerCase()} for ${match.name}?`;
