@@ -326,8 +326,8 @@ export const scoreRolesToProfileFit: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Role Analysis', 'Fit Analysis'],
   requiredInputs: ['profileId', 'roleIds'],
   tags: ['scoring', 'fit_estimation', 'batch'],
-  recommendedAfter: ['getProfileContext'],
-  recommendedBefore: ['getMatchingRolesForPerson', 'getCapabilityGaps'],
+  suggestedPrerequisites: ['getProfileContext'],
+  suggestedPostrequisites: ['getMatchingRolesForPerson', 'getCapabilityGaps'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => scoreRolesToProfileFitBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

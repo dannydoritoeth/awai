@@ -271,8 +271,8 @@ export const recommendSuccessors: MCPActionV2 = {
   capabilityTags: ['Succession Planning', 'Role Analysis', 'Talent Development'],
   requiredInputs: ['roleId'],
   tags: ['succession', 'recommendations', 'strategic'],
-  recommendedAfter: ['getRoleDetails', 'getReadinessAssessment'],
-  recommendedBefore: ['getDevelopmentPlan'],
+  suggestedPrerequisites: ['getRoleDetails', 'getReadinessAssessment'],
+  suggestedPostrequisites: ['getDevelopmentPlan'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => recommendSuccessorsBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

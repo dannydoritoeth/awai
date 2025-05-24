@@ -9,8 +9,10 @@ export interface MCPActionMetadata {
   capabilityTags: string[];  // e.g. ['Workforce Planning', 'Succession']
   requiredInputs: string[];  // e.g. ['profileId', 'roleId']
   tags?: string[];  // e.g. ['gap_analysis', 'tactical', 'strategic']
-  recommendedAfter?: string[];  // Actions that should precede this one
-  recommendedBefore?: string[];  // Actions that should follow this one
+  suggestedPrerequisites?: string[];  // Actions that could precede this one
+  suggestedPostrequisites?: string[];  // Actions that could follow this one
+  requiredPrerequisites?: string[];  // Actions that must precede this one
+
   usesAI?: boolean;  // Whether this action uses AI for processing
 }
 
@@ -185,8 +187,9 @@ export interface ToolMetadataV2 {
   };
   requiredContext?: string[];
   run: (params: { context: Record<string, any>; args: Record<string, any> }) => Promise<any>;
-  recommendedAfter?: string[];
-  recommendedBefore?: string[];
+  suggestedPrerequisites?: string[];
+  suggestedPostrequisites?: string[];
+  requiredPrerequisites?: string[];
   applicableRoles: string[];
   capabilityTags: string[];
   requiredInputs: string[];

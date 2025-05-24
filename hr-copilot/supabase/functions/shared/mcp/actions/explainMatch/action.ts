@@ -362,8 +362,8 @@ export const explainMatch: MCPActionV2 = {
   capabilityTags: ['Explainability', 'Transparency', 'AI Reasoning'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['explanation', 'narrative', 'ai', 'post-analysis'],
-  recommendedAfter: ['getCapabilityGaps', 'getSkillGaps', 'scoreProfileRoleFit'],
-  recommendedBefore: ['getDevelopmentPlan'],
+  suggestedPrerequisites: ['getCapabilityGaps', 'getSkillGaps', 'scoreProfileRoleFit'],
+  suggestedPostrequisites: ['getDevelopmentPlan'],
   usesAI: true,
   argsSchema: explainMatchSchema,
   actionFn: async (context: Record<string, any>): Promise<ExtendedMCPResponse> => {

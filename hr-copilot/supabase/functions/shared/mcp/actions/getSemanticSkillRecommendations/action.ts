@@ -397,8 +397,8 @@ export const getSemanticSkillRecommendations: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Skill Development', 'AI Analysis'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['skill_recommendations', 'tactical', 'strategic'],
-  recommendedAfter: ['getCapabilityGaps'],
-  recommendedBefore: ['getDevelopmentPlan'],
+  suggestedPrerequisites: ['getCapabilityGaps'],
+  suggestedPostrequisites: ['getDevelopmentPlan'],
   usesAI: true,
   actionFn: (ctx: Record<string, any>) => getSemanticSkillRecommendationsBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

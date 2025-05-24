@@ -271,8 +271,8 @@ export const recommendAlternateCareerPaths: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Role Analysis', 'Succession Planning'],
   requiredInputs: ['profileId'],
   tags: ['career_paths', 'recommendations', 'strategic'],
-  recommendedAfter: ['getProfileContext', 'getReadinessAssessment'],
-  recommendedBefore: ['getDevelopmentPlan'],
+  suggestedPrerequisites: ['getProfileContext', 'getReadinessAssessment'],
+  suggestedPostrequisites: ['getDevelopmentPlan'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => recommendAlternateCareerPathsBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

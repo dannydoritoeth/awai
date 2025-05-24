@@ -262,8 +262,8 @@ export const getReadinessAssessment: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Role Analysis', 'Gap Analysis'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['readiness', 'assessment', 'tactical'],
-  recommendedAfter: ['getProfileContext', 'getRoleDetails'],
-  recommendedBefore: ['getCapabilityGaps', 'getDevelopmentPlan'],
+  suggestedPrerequisites: ['getProfileContext', 'getRoleDetails'],
+  suggestedPostrequisites: ['getCapabilityGaps', 'getDevelopmentPlan'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => getReadinessAssessmentBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

@@ -32,8 +32,9 @@ export function formatToolMetadataAsCSV(tools: ToolMetadataV2[]): string {
     'capabilityTags',
     'requiredInputs',
     'tags',
-    'recommendedAfter',
-    'recommendedBefore',
+    'suggestedPrerequisites',
+    'suggestedPostrequisites',
+    'requiredPrerequisites',
     'usesAI'
   ] as const;
 
@@ -58,10 +59,12 @@ export function formatToolMetadataAsCSV(tools: ToolMetadataV2[]): string {
           return tool.requiredInputs;
         case 'tags':
           return tool.tags || [];
-        case 'recommendedAfter':
-          return tool.recommendedAfter || [];
-        case 'recommendedBefore':
-          return tool.recommendedBefore || [];
+        case 'suggestedPrerequisites':
+          return tool.suggestedPrerequisites || [];
+        case 'suggestedPostrequisites':
+          return tool.suggestedPostrequisites || [];
+        case 'requiredPrerequisites':
+          return tool.requiredPrerequisites || [];
         case 'usesAI':
           return tool.usesAI ? 'true' : 'false';
       }

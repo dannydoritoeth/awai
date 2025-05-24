@@ -10,7 +10,7 @@
  *
  * The planner accesses this registry to:
  * - Discover available actions
- * - Understand relationships between them (e.g. recommendedBefore/After)
+ * - Understand relationships between them (e.g. suggestedPostrequisites/After)
  * - Present descriptions in prompt-friendly formats
  *
  * The loop uses this registry to:
@@ -106,8 +106,8 @@ export class ActionV2Registry {
     return [
       'Available Actions:',
       ...actions.map(a => {
-        const after = a.recommendedAfter?.length ? a.recommendedAfter.join(', ') : 'none';
-        const before = a.recommendedBefore?.length ? a.recommendedBefore.join(', ') : 'none';
+        const after = a.suggestedPrerequisites?.length ? a.suggestedPrerequisites.join(', ') : 'none';
+        const before = a.suggestedPostrequisites?.length ? a.suggestedPostrequisites.join(', ') : 'none';
         return `- ${a.id}: ${a.description}\n  Recommended After: ${after}\n  Recommended Before: ${before}`;
       })
     ].join('\n\n');
@@ -123,8 +123,8 @@ export class ActionV2Registry {
       description: a.description ?? '',
       argsSchema: a.argsSchema ?? z.object({}),
       run: async ({ context, args }) => a.actionFn({ ...context, ...args }),
-      recommendedAfter: a.recommendedAfter,
-      recommendedBefore: a.recommendedBefore,
+      suggestedPrerequisites: a.suggestedPrerequisites,
+      suggestedPostrequisites: a.suggestedPostrequisites,
       applicableRoles: a.applicableRoles,
       capabilityTags: a.capabilityTags,
       requiredInputs: a.requiredInputs,

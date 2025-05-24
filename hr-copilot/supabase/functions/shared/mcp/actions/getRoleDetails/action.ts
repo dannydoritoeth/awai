@@ -174,8 +174,8 @@ export const getRoleDetails: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Role Analysis'],
   requiredInputs: ['roleId'],
   tags: ['role', 'analysis', 'career'],
-  recommendedAfter: [],
-  recommendedBefore: ['getCapabilityGaps', 'getDevelopmentPlan'],
+  suggestedPrerequisites: [],
+  suggestedPostrequisites: ['getCapabilityGaps', 'getDevelopmentPlan'],
   usesAI: true,
   actionFn: (ctx: Record<string, any>) => {
     // Debug logging for context passed to actionFn

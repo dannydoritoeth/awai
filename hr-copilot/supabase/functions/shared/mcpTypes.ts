@@ -48,8 +48,8 @@ export interface MCPAction {
   capabilityTags: string[];
   requiredInputs: string[];
   tags: string[];
-  recommendedAfter: string[];
-  recommendedBefore: string[];
+  suggestedPrerequisites: string[];
+  suggestedPostrequisites: string[];
   usesAI: boolean;
   actionFn: (request: MCPRequest) => Promise<MCPResponse>;
 }

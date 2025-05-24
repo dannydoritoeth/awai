@@ -292,8 +292,8 @@ export const getCapabilityGaps: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Skill Assessment', 'Gap Analysis'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['gap_analysis', 'tactical', 'strategic'],
-  recommendedAfter: ['getMatchingRolesForPerson', 'getSuggestedCareerPaths'],
-  recommendedBefore: ['getDevelopmentPlan', 'getSemanticSkillRecommendations'],
+  suggestedPrerequisites: ['getMatchingRolesForPerson', 'getSuggestedCareerPaths'],
+  suggestedPostrequisites: ['getDevelopmentPlan', 'getSemanticSkillRecommendations'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => getCapabilityGapsBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({

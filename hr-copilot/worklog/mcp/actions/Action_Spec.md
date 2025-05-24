@@ -34,8 +34,8 @@ interface MCPActionV2 {
   capabilityTags: string[]; // Relevant capability areas
   requiredInputs: string[]; // Required input fields
   tags: string[];           // Search/categorization tags
-  recommendedAfter: string[]; // Suggested action ordering
-  recommendedBefore: string[];
+  suggestedPrerequisites: string[]; // Suggested action ordering
+  suggestedPostrequisites: string[];
   usesAI: boolean;          // Whether action uses AI
   actionFn: (ctx: Record<string, any>) => Promise<MCPResponse>;
   getDefaultArgs?: (context: Record<string, any>) => Record<string, any>;

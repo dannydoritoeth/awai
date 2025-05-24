@@ -340,8 +340,8 @@ export const getDevelopmentPlan: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Skill Development', 'Mentoring'],
   requiredInputs: ['profileId', 'roleId'],
   tags: ['development', 'tactical', 'strategic'],
-  recommendedAfter: ['getCapabilityGaps', 'getSemanticSkillRecommendations'],
-  recommendedBefore: ['logPlannedTransitions'],
+  suggestedPrerequisites: ['getCapabilityGaps', 'getSemanticSkillRecommendations'],
+  suggestedPostrequisites: ['logPlannedTransitions'],
   usesAI: true,
   actionFn: (ctx: Record<string, any>) => getDevelopmentPlanBase(ctx as MCPRequest)
 }; 

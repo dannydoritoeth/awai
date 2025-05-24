@@ -195,8 +195,8 @@ export const getMatchingRolesForPerson: MCPActionV2 = {
   capabilityTags: ['Career Development', 'Job Matching', 'Role Analysis'],
   requiredInputs: ['profileId'],
   tags: ['role_matching', 'tactical'],
-  recommendedAfter: [],
-  recommendedBefore: ['getCapabilityGaps', 'getDevelopmentPlan'],
+  suggestedPrerequisites: [],
+  suggestedPostrequisites: ['getCapabilityGaps', 'getDevelopmentPlan'],
   usesAI: false,
   actionFn: (ctx: Record<string, any>) => getMatchingRolesForPersonBase(ctx as MCPRequest),
   getDefaultArgs: (context: Record<string, any>) => ({
