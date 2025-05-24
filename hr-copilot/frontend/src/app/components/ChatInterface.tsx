@@ -139,11 +139,19 @@ export default function ChatInterface({
       if (!container) return false;
       
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      return hasUserInteracted && messages.length > prevMessagesLengthRef.current && isNearBottom;
+      return messages.length > prevMessagesLengthRef.current && (hasUserInteracted || isNearBottom);
     };
 
     if (shouldAutoScroll()) {
       scrollToBottom();
+    }
+
+    // If we have new messages and they're from the user, mark as interacted
+    if (messages.length > prevMessagesLengthRef.current) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.sender === 'user') {
+        setHasUserInteracted(true);
+      }
     }
     
     prevMessagesLengthRef.current = messages.length;

@@ -479,7 +479,7 @@ export default function UnifiedResultsView({
   );
 
   const handleExplainMatch = (name: string) => {
-    const message = `Explain why ${name} is a good fit for this role`;
+    const message = `Explain why ${name} is a good fit`;
     // Add user message to local state
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
