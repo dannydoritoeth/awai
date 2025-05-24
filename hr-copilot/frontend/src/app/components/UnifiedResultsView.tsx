@@ -487,7 +487,15 @@ export default function UnifiedResultsView({
       sender: 'user'
     };
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    handleSendMessage(message);
+    handleSendMessage(message, {
+      actionId: 'explainMatch',
+      params: {
+        roleId: name,
+        roleTitle: name,
+        profileId: profileData!.id,
+        ...(profileData?.id && { profileId: profileData.id })
+      }
+    });
   };
 
   const handleDevelopmentPath = (name: string) => {
@@ -499,7 +507,15 @@ export default function UnifiedResultsView({
       sender: 'user'
     };
     setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-    handleSendMessage(message);
+    handleSendMessage(message, {
+      actionId: 'getDevelopmentPlan',
+      params: {
+        roleId: name,
+        roleTitle: name,
+        profileId: profileData!.id,
+        ...(profileData?.id && { profileId: profileData.id })
+      }
+    });
   };
 
   const handleCompare = (name: string) => {
@@ -514,7 +530,15 @@ export default function UnifiedResultsView({
         sender: 'user'
       };
       setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
-      handleSendMessage(message);
+      handleSendMessage(message, {
+        actionId: 'compareToRole',
+        params: {
+          roleId: name,
+          roleTitle: name,
+          profileId: profileData!.id,
+          ...(profileData?.id && { profileId: profileData.id })
+        }
+      });
     }
   };
 
@@ -637,6 +661,12 @@ export default function UnifiedResultsView({
                 let message = '';
                 let actionId = '';
                 
+                // Ensure we have a profileId for actions that require it
+                if (action === 'explain' && !profileData?.id) {
+                  console.error('Cannot explain match without a profile ID');
+                  return;
+                }
+
                 switch (action) {
                   case 'learn':
                     message = `Can you tell me more about ${match.name}?`;
@@ -669,7 +699,7 @@ export default function UnifiedResultsView({
                   params: {
                     roleId: match.id,
                     roleTitle: match.name,
-                    ...(profileData?.id && { profileId: profileData.id })
+                    ...(action === 'explain' || profileData?.id ? { profileId: profileData!.id } : {})
                   }
                 });
               }}

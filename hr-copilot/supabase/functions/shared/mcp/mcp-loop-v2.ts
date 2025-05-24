@@ -442,7 +442,9 @@ export class McpLoopRunner {
 
         return {
           tool: action.tool,
-          args: loadedTool.args
+          args: loadedTool.args,
+          announcement: action.announcement,
+          reason: action.reason
         } as PlannedActionV2;
       });
 
@@ -471,6 +473,8 @@ export class McpLoopRunner {
     for (const action of this.plan) {
       try {
         // Log the announcement from the planner if it exists and we have a session ID
+        console.log('action.announcement', action);
+        console.log('this.request.sessionId', this.request.sessionId);
         if (action.announcement && this.request.sessionId) {
           await logAgentProgress(
             this.supabase,
