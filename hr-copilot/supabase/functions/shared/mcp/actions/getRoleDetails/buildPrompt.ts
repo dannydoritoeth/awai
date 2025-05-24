@@ -25,7 +25,34 @@ Focus on:
 3. Organizational context and impact
 4. Career development opportunities
 
-Use a professional, clear tone and structure the information logically. Don't include guids or ids in the response.`;
+RESPONSE FORMAT:
+Please structure your response in markdown format with the following sections:
+
+# Role Overview
+A concise summary of the role and its place in the organization
+
+# Key Responsibilities
+- List major responsibilities
+- Impact areas
+- Scope of influence
+
+# Required Capabilities
+- Analysis of required capabilities
+- Key skills and experience needed
+- Critical success factors
+
+# Organizational Context
+- Reporting relationships
+- Team structure
+- Budget responsibilities
+- Division/department context
+
+# Growth & Development
+- Career progression opportunities
+- Development areas
+- Potential career paths
+
+Use professional language and ensure all information is clearly structured using appropriate markdown formatting (headers, lists, etc).`;
 
   const roleCapabilities = roleDetail.capabilities
     .map(cap => `- ${cap.name} (${cap.level || 'Required'})${cap.capabilityType ? ` [${cap.capabilityType}]` : ''}`)
@@ -34,7 +61,7 @@ Use a professional, clear tone and structure the information logically. Don't in
   const userPrompt = `Please analyze the following role:
 
 Role Title: ${roleDetail.title}
-${roleDetail.divisionId ? `Division: ${roleDetail.divisionId}` : ''}
+${roleDetail.divisionName ? `Division: ${roleDetail.divisionName}` : ''}
 ${roleDetail.gradeBand ? `Grade Band: ${roleDetail.gradeBand}` : ''}
 ${roleDetail.location ? `Location: ${roleDetail.location}` : ''}
 
@@ -51,12 +78,7 @@ ${roleDetail.budgetResponsibility || 'Not specified'}
 Required Capabilities:
 ${roleCapabilities}
 
-Please provide:
-1. A comprehensive overview of this role
-2. Key responsibilities and impact areas
-3. Required skills and experience analysis
-4. Career development opportunities and growth potential
-5. Any notable insights about the role's organizational context`;
+Please provide a comprehensive analysis following the markdown structure specified in the system prompt.`;
 
   return {
     system: systemPrompt,

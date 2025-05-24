@@ -92,14 +92,11 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     const promptInput = buildPromptInput(context);
     const safePrompt = buildSafePrompt(promptInput);
 
-    // Invoke AI
-    const aiResponse = await invokeChatModelV2({
-      system: safePrompt.system,
-      user: safePrompt.user
-    }, {
+    // Generate role analysis
+    const aiResponse = await invokeChatModelV2(safePrompt, {
       model: 'openai:gpt-3.5-turbo',
-      temperature: 0.2,
-      max_tokens: 1500,
+      temperature: 0.7,
+      max_tokens: 1000,
       supabase,
       sessionId: request.sessionId || 'default',
       actionType: 'getRoleDetails'
@@ -109,13 +106,18 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
       throw new Error(`AI processing failed: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    // Only log the final analysis to chat if we have a session
-    if (request.sessionId && aiResponse.output) {
+    // Log progress if we have a session
+    if (request.sessionId) {
       await logAgentProgress(
         supabase,
         request.sessionId,
         aiResponse.output,
-        { phase: 'analysis_complete' }
+        { 
+          phase: 'complete',
+          analysisDetails: {
+            message: aiResponse.output
+          }
+        }
       );
     }
 
@@ -123,9 +125,13 @@ async function getRoleDetailsBase(request: MCPRequest): Promise<MCPResponse> {
     const response: MCPResponse = {
       success: true,
       data: {
-        role: roleDetailResponse.data,
-        analysis: aiResponse.output,
-        aiResponse: aiResponse
+        structured: {
+          roleId: roleDetailResponse.data.roleId,
+          title: roleDetailResponse.data.title || roleDetailResponse.data.name,
+          division: roleDetailResponse.data.divisionName || 'Not specified',
+          capabilities: roleDetailResponse.data.capabilities
+        },
+        raw: aiResponse.output
       },
       dataForDownstreamPrompt: {
         getRoleDetails: {

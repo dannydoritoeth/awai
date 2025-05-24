@@ -5,6 +5,7 @@ export interface RoleDetail {
   roleId: string;
   title: string;
   divisionId?: string;
+  divisionName?: string;
   gradeBand?: string;
   location?: string;
   primaryPurpose?: string;
@@ -86,6 +87,10 @@ export async function getRoleDetail(
         id,
         title,
         division_id,
+        divisions (
+          id,
+          name
+        ),
         grade_band,
         location,
         primary_purpose,
@@ -121,6 +126,7 @@ export async function getRoleDetail(
       roleId: role.id,
       title: role.title,
       divisionId: role.division_id,
+      divisionName: role.divisions?.name,
       gradeBand: role.grade_band,
       location: role.location,
       primaryPurpose: role.primary_purpose,

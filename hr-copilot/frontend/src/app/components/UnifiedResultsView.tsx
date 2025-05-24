@@ -638,6 +638,10 @@ export default function UnifiedResultsView({
                     message = `What skills should be developed for ${match.name}?`;
                     actionId = 'getSemanticSkillRecommendations';
                     break;
+                  case 'readiness':
+                    message = `Can you prepare a readiness assessment for ${match.name}?`;
+                    actionId = 'getReadinessAssessment';
+                    break;
                   case 'development':
                     message = `Can you create a development plan for ${match.name}?`;
                     actionId = 'getDevelopmentPlan';
