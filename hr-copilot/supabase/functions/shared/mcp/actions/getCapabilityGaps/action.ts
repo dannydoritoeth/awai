@@ -140,7 +140,8 @@ async function getCapabilityGapsBase(request: MCPRequest): Promise<MCPResponse<C
         groupName: rc.capabilities.group_name
       };
 
-      const requiredLevel = rc.level;
+      // Default to 'Intermediate' if no required level is specified
+      const requiredLevel = rc.level || 'Intermediate';
       const currentLevel = profileCap.level;
 
       let gapType: 'missing' | 'insufficient' | 'met' = 'missing';
