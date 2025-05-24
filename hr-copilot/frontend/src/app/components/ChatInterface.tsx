@@ -413,7 +413,7 @@ export default function ChatInterface({
                 onSelect={() => handleActionButtonClick(action)}
                 className={`${baseButtonClasses} ${dropdownItemClasses} w-full text-left flex items-center outline-none cursor-pointer`}
               >
-                {action.actionId === 'getRoleDetails' && (
+                {(action.actionId === 'getRoleDetails' || action.actionId === 'getProfileContext') && (
                   <InformationCircleIcon className="mr-3 h-5 w-5 text-gray-400" />
                 )}
                 {action.actionId === 'getCapabilityGaps' && (
