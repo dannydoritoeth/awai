@@ -51,12 +51,32 @@ const semanticDiscoverySchema = z.object({
 });
 
 // Update getSemanticDiscoveryMatches to include the schema
-const getSemanticDiscoveryMatchesWithSchema = {
+const getSemanticDiscoveryMatchesWithMeta = {
   ...getSemanticDiscoveryMatches,
-  argsSchema: semanticDiscoverySchema,
-  // Override the tool metadata to distinguish between args and context
-  requiredContext: [], // Empty since we don't need context
-  requiredArgs: ['queryText'] // Specify that queryText is required in args
+  requiredContext: [], // No shared context required
+  requiredArgs: ['queryText'], // queryText should be in args
+  // Add validation wrapper
+  actionFn: async (request) => {
+    console.log('Registry: Pre-validation state:', {
+      hasArgs: !!request.args,
+      args: request.args,
+      context: request.context,
+      requiredContext: [],
+      requiredArgs: ['queryText'],
+      argsSchema: getSemanticDiscoveryMatches.argsSchema?.toString(),
+    });
+
+    // Log schema validation if present
+    if (getSemanticDiscoveryMatches.argsSchema) {
+      const schemaValidation = getSemanticDiscoveryMatches.argsSchema.safeParse(request.args || {});
+      console.log('Registry: Schema validation result:', {
+        success: schemaValidation.success,
+        error: !schemaValidation.success ? schemaValidation.error : undefined
+      });
+    }
+
+    return getSemanticDiscoveryMatches.actionFn(request);
+  }
 };
 
 const actions: MCPActionV2[] = [
@@ -80,7 +100,7 @@ const actions: MCPActionV2[] = [
   // generateCapabilityInsights,
   getProfileContextAction,
   explainMatch,
-  getSemanticDiscoveryMatchesWithSchema // Use the version with schema
+  getSemanticDiscoveryMatchesWithMeta
 //   getSuggestedCareerPaths
 ];
 
@@ -127,21 +147,33 @@ export class ActionV2Registry {
    * Returns only metadata used for listing actions in tools format (e.g. for tool calling)
    */
   static getToolMetadataList(): ToolMetadataV2[] {
-    return actions.map(a => ({
-      name: a.id,
-      title: a.title,
-      description: a.description ?? '',
-      argsSchema: a.argsSchema ?? z.object({}),
-      run: async ({ context, args }) => a.actionFn({ ...context, ...args }),
-      suggestedPrerequisites: a.suggestedPrerequisites,
-      suggestedPostrequisites: a.suggestedPostrequisites,
-      requiredPrerequisites: a.requiredPrerequisites,
-      applicableRoles: a.applicableRoles,
-      capabilityTags: a.capabilityTags,
-      requiredInputs: a.requiredInputs,
-      tags: a.tags,
-      usesAI: a.usesAI
-    }));
+    return actions.map(a => {
+      // Get any additional metadata from wrapped actions
+      const meta = {
+        requiredContext: [],
+        requiredArgs: [],
+        ...a
+      };
+
+      return {
+        name: a.id,
+        title: a.title,
+        description: a.description ?? '',
+        argsSchema: a.argsSchema ?? z.object({}),
+        run: async ({ context, args }) => a.actionFn({ ...context, ...args }),
+        suggestedPrerequisites: a.suggestedPrerequisites,
+        suggestedPostrequisites: a.suggestedPostrequisites,
+        requiredPrerequisites: a.requiredPrerequisites,
+        applicableRoles: a.applicableRoles,
+        capabilityTags: a.capabilityTags,
+        // Use requiredContext/Args from meta instead of requiredInputs for validation
+        requiredContext: meta.requiredContext || [],
+        // Keep requiredInputs for backward compatibility and AI guidance
+        requiredInputs: meta.requiredArgs || a.requiredInputs || [],
+        tags: a.tags,
+        usesAI: a.usesAI
+      };
+    });
   }
 
   /**
@@ -208,16 +240,34 @@ export class ActionV2Registry {
   /**
    * Returns a tool by name in the tool metadata format
    */
-  static getTool(name: string): { name: string; description: string; argsSchema: z.ZodTypeAny; run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any>; requiredContext?: string[] } | undefined {
+  static getTool(name: string): { 
+    name: string; 
+    description: string; 
+    argsSchema: z.ZodTypeAny; 
+    run: (input: { context: Record<string, any>; args: Record<string, any>; }) => Promise<any>;
+    requiredContext?: string[];
+    requiredArgs?: string[];
+  } | undefined {
     const action = actions.find(a => a.id === name);
     if (!action) return undefined;
+
+    // Get any additional metadata from wrapped actions
+    const meta = {
+      requiredContext: [],
+      requiredArgs: [],
+      ...action
+    };
+
+    // If no explicit requiredArgs/Context is set, map requiredInputs to requiredArgs
+    const mappedArgs = meta.requiredArgs?.length ? meta.requiredArgs : action.requiredInputs || [];
 
     return {
       name: action.id,
       description: action.description ?? '',
       argsSchema: action.argsSchema ?? z.object({}),
       run: async ({ context, args }) => action.actionFn({ ...context, ...args }),
-      requiredContext: action.requiredInputs
+      requiredContext: meta.requiredContext || [], // Should be empty unless explicitly set
+      requiredArgs: mappedArgs // Use mapped args
     };
   }
 
@@ -252,5 +302,15 @@ export class ActionV2Registry {
       tool,
       args: mergedArgs
     };
+  }
+
+  // Add logging to validateAction method
+  static validateAction(action, context) {
+    console.log('Registry: validateAction called:', {
+      actionId: action.tool,
+      context: context,
+      tool: this.getTool(action.tool)
+    });
+    return this.validateInputs(action.tool, context);
   }
 }

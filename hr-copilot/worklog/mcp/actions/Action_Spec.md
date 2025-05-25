@@ -32,58 +32,152 @@ interface MCPActionV2 {
   description: string;       // Purpose description
   applicableRoles: string[]; // Which user roles can use this
   capabilityTags: string[]; // Relevant capability areas
-  requiredInputs: string[]; // Required input fields
+  requiredInputs: string[]; // DEPRECATED: Use argsSchema for required args
   tags: string[];           // Search/categorization tags
   suggestedPrerequisites: string[]; // Suggested action ordering
   suggestedPostrequisites: string[];
   usesAI: boolean;          // Whether action uses AI
-  actionFn: (ctx: Record<string, any>) => Promise<MCPResponse>;
+  
+  // Schema defining expected arguments and their types
+  argsSchema?: z.ZodObject<any>;  // Required args and their validation
+  
+  // Function to get default values for args based on context
   getDefaultArgs?: (context: Record<string, any>) => Record<string, any>;
+  
+  // Main action implementation
+  actionFn: (request: MCPRequest) => Promise<MCPResponse>;
+}
+
+interface MCPRequest {
+  args?: Record<string, any>;     // Arguments specific to this action
+  context: Record<string, any>;   // Shared context across actions
+  supabase: SupabaseClient;       // Database client
+  sessionId?: string;             // Current session identifier
 }
 ```
 
-### Action Function Structure
-1. Input Validation
-   - Validate all required inputs are present
-   - Type check inputs using TypeScript interfaces
-   - Return early with error if validation fails
+## 📝 Argument Handling
 
-2. Data Gathering
-   - Use supabase client for database queries
-   - Log progress using `logAgentProgress`
-   - Handle database errors gracefully
+### 1. Infrastructure vs Arguments
 
-3. Context Preparation
-   - Maintain clear separation between:
-     - `context`: Internal execution state
-     - `aiContext`: Minimal data needed for AI
-   - Use TypeScript interfaces to enforce structure
+There are three distinct types of inputs to actions:
 
-4. AI Processing (if applicable)
-   - Use `buildPrompt.ts` for prompt construction
-   - Apply `buildSafePrompt` for safety checks
-   - Use `invokeChatModel` with explicit configuration
-   - Handle AI errors gracefully
+1. **Infrastructure Components** (from `request` directly)
+   - `supabase`: Database client
+   - `sessionId`: Current session identifier
+   - These should NEVER be included in args or argsSchema
+   - Always access these directly from the request object: `request.supabase`, `request.sessionId`
 
-5. Response Structure
-   ```typescript
-   interface MCPResponse {
-     success: boolean;
-     data?: any;
-     error?: {
-       type: string;
-       message: string;
-       details?: any;
-     };
-     dataForDownstreamPrompt?: {
-       [actionId: string]: {
-         dataSummary: string;
-         structured: Record<string, any>;
-         truncated: boolean;
-       }
-     };
-   }
-   ```
+2. **Shared Context** (from `request.context`)
+   - Cross-action state (e.g. user info, selected role)
+   - Shared data needed by multiple actions
+   - Access via `request.context.someValue`
+
+3. **Action Arguments** (from `request.args`)
+   - Action-specific parameters
+   - Defined in `argsSchema`
+   - Examples: queryText, limit, filters
+   - Access via validated args object
+
+### 2. Defining Arguments
+Arguments should ONLY include action-specific parameters:
+
+```typescript
+argsSchema: z.object({
+  // ✅ CORRECT: Action-specific parameters
+  queryText: z.string().min(1, "Query text cannot be empty")
+    .describe("The text to search for matches"),
+  limit: z.number().positive().optional()
+    .describe("Maximum number of results to return"),
+
+  // ❌ INCORRECT: Infrastructure components should not be in args
+  // supabase: z.any(),     // WRONG - This comes from request
+  // sessionId: z.string(), // WRONG - This comes from request
+})
+```
+
+### 3. Default Values
+`getDefaultArgs` should only provide defaults for action-specific arguments:
+
+```typescript
+getDefaultArgs: (context) => ({
+  // ✅ CORRECT: Action-specific defaults
+  queryText: context.lastMessage || '',
+  limit: 10,
+
+  // ❌ INCORRECT: Don't include infrastructure
+  // supabase: context.supabase,  // WRONG
+  // sessionId: context.sessionId // WRONG
+})
+```
+
+### 4. Accessing Values in actionFn
+
+```typescript
+actionFn: async (request: MCPRequest) => {
+  // ✅ CORRECT: Infrastructure from request
+  const { supabase, sessionId } = request;
+  
+  // ✅ CORRECT: Shared context from request.context
+  const { userId, selectedRole } = request.context;
+  
+  // ✅ CORRECT: Action args from request.args
+  const { queryText, limit } = request.args;
+  
+  // ❌ INCORRECT: Don't mix sources
+  // const { supabase } = request.args; // WRONG
+  // const { queryText } = request;     // WRONG
+}
+```
+
+### 5. Base Function Parameters
+When creating helper functions, be explicit about parameter sources:
+
+```typescript
+// ✅ CORRECT: Explicitly combine MCPRequest with args interface
+async function actionBase(
+  request: MCPRequest & ActionSpecificArgs
+): Promise<Result> {
+  // Infrastructure from request
+  const { supabase, sessionId } = request;
+  
+  // Action-specific args
+  const { queryText, limit } = request;
+}
+
+// ❌ INCORRECT: Don't use separate parameters
+async function actionBase(
+  args: ActionSpecificArgs,
+  supabase: SupabaseClient  // WRONG - Should come with request
+): Promise<Result>
+```
+
+### 4. Validation Flow
+1. System checks `argsSchema` for required fields
+2. Merges with defaults from `getDefaultArgs`
+3. Validates final args against schema
+4. Passes validated args to `actionFn`
+
+### 5. Context vs Args
+- `context`: Shared state across actions (e.g. sessionId, user info)
+- `args`: Action-specific parameters
+- Use `argsSchema` to define action-specific parameters
+- Use `requiredContext` in registry for shared context requirements
+
+Example:
+```typescript
+// In action definition
+argsSchema: z.object({
+  queryText: z.string().min(1)
+})
+
+// In registry
+{
+  ...action,
+  requiredContext: ['sessionId'],  // Shared context requirements
+  requiredArgs: ['queryText']      // Action-specific requirements
+}
+```
 
 ---
 

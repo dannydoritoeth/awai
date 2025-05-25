@@ -640,6 +640,15 @@ ${JSON.stringify(tools)}
         throw new Error(`Missing required context for ${action.tool}: ${key}`);
       }
     }
+
+    // Validate required args are available
+    const requiredArgs = loadedTool.tool.requiredArgs || [];
+    console.log('Validating args:', { requiredArgs, providedArgs: loadedTool.args });
+    for (const key of requiredArgs) {
+      if (!loadedTool.args || !(key in loadedTool.args)) {
+        throw new Error(`Missing required argument for ${action.tool}: ${key}`);
+      }
+    }
   }
 
   /**
