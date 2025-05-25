@@ -640,6 +640,8 @@ export function createMCPLoopBody(
       previousMatches: []
     },
     contextEmbedding: [],
+    // Add companyIds to context if present
+    ...(companyIds ? { companyIds } : {}),
     // Flatten all action params into context
     ...actionParams
   };
@@ -648,10 +650,13 @@ export function createMCPLoopBody(
   const body = {
     mode,
     sessionId,
-    ...(mode === 'candidate' ? { profileId: entityId } : {}),
-    ...(mode === 'hiring' ? { roleId: entityId } : {}),
-    // Flatten all action params at top level
+    // Add companyIds at top level if present
+    ...(companyIds ? { companyIds } : {}),
+    // Flatten all action params at top level first
     ...actionParams,
+    // Then add mode-specific IDs, but don't overwrite roleId/profileId from actionParams
+    ...(mode === 'candidate' && !actionParams.profileId ? { profileId: entityId } : {}),
+    ...(mode === 'hiring' && !actionParams.roleId ? { roleId: entityId } : {}),
     // Include actionId if present
     ...(actionData?.actionId && { actionId: actionData.actionId }),
     context: baseContext
@@ -659,23 +664,13 @@ export function createMCPLoopBody(
 
   // Add analyst-specific fields if in analyst mode
   if (mode === 'analyst') {
-    const analystBody = {
+    return {
       ...body,
       insightId,
-      companyIds: companyIds || [entityId],
-      context: {
-        ...baseContext,
-        companyIds: companyIds || [entityId],
-        scope: scope || 'division',
-        outputFormat: 'action_plan'
-      },
+      scope,
       plannerRecommendations: []
     };
-
-    console.log('MCP Loop V2 Request (Analyst):', JSON.stringify(analystBody, null, 2));
-    return analystBody;
   }
 
-  console.log('MCP Loop V2 Request:', JSON.stringify(body, null, 2));
   return body;
 } 

@@ -349,6 +349,7 @@ export class McpLoopRunner {
       requestRoleId: this.request.roleId,
       contextKeys: Object.keys(this.context),
       requestKeys: Object.keys(this.request),
+      companyIds: this.request.companyIds,
       stack: new Error().stack // This will show us the call stack
     });
 
@@ -413,6 +414,7 @@ ${JSON.stringify(tools)}
     - roleTitle: ${this.context.roleTitle || 'N/A'}
     - actionId: ${this.context.actionId || 'N/A'}
     - mode: ${this.request.mode || 'N/A'}
+    - companyIds: ${JSON.stringify(this.request.companyIds || this.context.companyIds || [])}
     `;
 
     console.log('About to invoke planner with prompt:', {
@@ -421,7 +423,8 @@ ${JSON.stringify(tools)}
       contextState: {
         roleId: this.request.roleId || this.context.roleId,
         roleTitle: this.context.roleTitle,
-        mode: this.request.mode
+        mode: this.request.mode,
+        companyIds: this.request.companyIds || this.context.companyIds
       }
     });
 
@@ -556,10 +559,16 @@ ${JSON.stringify(tools)}
         // Store both result and downstream data in context
         this.context[action.tool] = result;
         if (result.dataForDownstreamPrompt) {
+          // Store in downstreamData for general use
           this.context.downstreamData = {
             ...this.context.downstreamData,
             ...result.dataForDownstreamPrompt
           };
+          
+          // Also store specific data needed by other tools directly in context
+          if (action.tool === 'generateCapabilityHeatmapByTaxonomy') {
+            this.context.heatmapData = result.data;
+          }
         }
 
         // Store result

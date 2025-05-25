@@ -128,12 +128,18 @@ export interface ChatMessageV2 {
 }
 
 export interface MCPRequestV2 {
-  mode: string;
+  id?: string;
+  mode: 'candidate' | 'hiring' | 'general' | 'analyst';
   sessionId?: string;
+  messages?: ChatMessage[];
+  context?: Record<string, any>;
+  plannerRecommendations?: any[];
+  availableTools?: ToolMetadataV2[];
+  action?: string;
   profileId?: string;
   roleId?: string;
-  messages?: ChatMessageV2[];
-  context?: Record<string, any>;
+  companyIds?: string[];
+  insightId?: string;
 }
 
 export interface ActionResultV2 {

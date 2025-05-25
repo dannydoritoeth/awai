@@ -1,6 +1,8 @@
+import { z } from 'https://deno.land/x/zod@v3.21.4/mod.ts';
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Database } from '../../../../database.types.ts';
+import type { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPResponse } from '../../types/action.ts';
+import { analyzeCapabilityData, CapabilityData } from '../../utils/capabilityAnalysis.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { executeHeatmapQuery, formatCompanyIds } from '../utils.ts';
 
@@ -65,12 +67,15 @@ export const generateCapabilityHeatmapByTaxonomy: MCPActionV2 = {
   title: 'Generate Capability Heatmap by Taxonomy',
   description: 'Shows how capabilities are distributed across taxonomy groups for selected companies.',
   applicableRoles: ['analyst'],
-  capabilityTags: ['Heatmap', 'Taxonomy'],
+  capabilityTags: ['Workforce Planning', 'Capability Analysis'],
   requiredInputs: ['companyIds'],
-  tags: ['heatmap', 'taxonomy', 'data'],
-  usesAI: false,
-  actionFn: async (request): Promise<MCPResponse<HeatmapResponse[]>> => {
-    const { supabase, companyIds, sessionId } = request;
+  tags: ['heatmap', 'taxonomy', 'capability', 'analysis'],
+  suggestedPrerequisites: [],
+  suggestedPostrequisites: [],
+  usesAI: true,
+
+  async actionFn(request): Promise<MCPResponse> {
+    const { supabase, companyIds, sessionId, message } = request;
 
     if (!companyIds?.length) {
       return {
@@ -94,31 +99,46 @@ export const generateCapabilityHeatmapByTaxonomy: MCPActionV2 = {
         );
       }
 
-      const data = await generateCapabilityHeatmapByTaxonomyBase(supabase, companyIds);
+      // Get base data
+      const formattedData = await generateCapabilityHeatmapByTaxonomyBase(supabase, companyIds);
 
-      // Log completion
+      console.log('KKK Formatted data:', formattedData);
+
+      // Always perform analysis with either provided message or default
+      const analysis = await analyzeCapabilityData(
+        formattedData,
+        message || 'provide insights on the capability distribution across taxonomies'
+      );
+
+      console.log('KKK Analysis:', analysis);
+
+      // Log completion with analysis
       if (sessionId) {
         await logAgentProgress(
           supabase,
           sessionId,
-          "Capability taxonomy analysis complete.",
+          analysis.response || "Capability taxonomy analysis complete.",
           { phase: 'taxonomy_analysis_complete' }
         );
       }
 
       return {
         success: true,
-        data,
+        data: formattedData,
         dataForDownstreamPrompt: {
           generateCapabilityHeatmapByTaxonomy: {
-            dataSummary: `Analyzed capability distribution across ${new Set(data.map(d => d.taxonomy)).size} taxonomies.`,
+            truncated: false,
             structured: {
-              taxonomyCount: new Set(data.map(d => d.taxonomy)).size,
-              capabilityCount: new Set(data.map(d => d.capability)).size,
-              totalRoles: Math.max(...data.map(d => d.total_roles))
+              totalRoles: formattedData[0]?.total_roles || 0,
+              taxonomyCount: new Set(formattedData.map(d => d.taxonomy)).size,
+              capabilityCount: new Set(formattedData.map(d => d.capability)).size
             },
-            truncated: false
+            dataSummary: "Analyzed capability distribution across taxonomies."
           }
+        },
+        chatResponse: {
+          message: analysis.response,
+          followUpQuestion: analysis.followUpQuestion
         }
       };
 
@@ -144,6 +164,7 @@ export const generateCapabilityHeatmapByTaxonomy: MCPActionV2 = {
       };
     }
   },
+
   getDefaultArgs: (context) => ({
     companyIds: context.companyIds || []
   })

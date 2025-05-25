@@ -35,8 +35,8 @@ import { generateCapabilityHeatmapByTaxonomy } from './generateCapabilityHeatmap
 import { generateCapabilityHeatmapByDivision } from './generateCapabilityHeatmapByDivision/action.ts';
 import { generateCapabilityHeatmapByRegion } from './generateCapabilityHeatmapByRegion/action.ts';
 import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapByCompany/action.ts';
-import { summarizeCapabilityHeatmap } from './summarizeCapabilityHeatmap/action.ts';
-import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
+// import { summarizeCapabilityHeatmap } from './summarizeCapabilityHeatmap/action.ts';
+// import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
 import { getProfileContextAction } from './getProfileContext/action.ts';
 import { explainMatch } from './explainMatch/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
@@ -69,8 +69,8 @@ const actions: MCPActionV2[] = [
   generateCapabilityHeatmapByDivision,
   generateCapabilityHeatmapByRegion,
   generateCapabilityHeatmapByCompany,
-  summarizeCapabilityHeatmap,
-  generateCapabilityInsights,
+  // summarizeCapabilityHeatmap,
+  // generateCapabilityInsights,
   getProfileContextAction,
   explainMatch
 //   getSuggestedCareerPaths
