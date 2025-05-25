@@ -540,6 +540,7 @@ export default function UnifiedResultsView({
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
             sessionId={sessionId}
             profileId={profileData?.id}
+            profileData={profileData}
             roleData={roleData}
             onRoleMatchFound={handleRoleMatchFound}
           />
@@ -631,23 +632,23 @@ export default function UnifiedResultsView({
                     actionId = 'explainMatch';
                     break;
                   case 'gaps':
-                    message = `What capability gaps are there for ${match.name}?`;
+                    message = `What capability gaps are there between ${match.name} and the ${roleData?.title || 'current'} role?`;
                     actionId = 'getCapabilityGaps';
                     break;
                   case 'skills':
-                    message = `What skills should be developed for ${match.name}?`;
+                    message = `What skills should be developed for ${match.name} to match the ${roleData?.title || 'current'} role?`;
                     actionId = 'getSemanticSkillRecommendations';
                     break;
                   case 'readiness':
-                    message = `Can you prepare a readiness assessment for ${match.name}?`;
+                    message = `What is ${match.name}'s readiness for the ${roleData?.title || 'current'} role?`;
                     actionId = 'getReadinessAssessment';
                     break;
                   case 'development':
-                    message = `Can you create a development plan for ${match.name}?`;
+                    message = `Can you create a development plan for ${match.name} for the ${roleData?.title || 'current'} role?`;
                     actionId = 'getDevelopmentPlan';
                     break;
                   case 'compare':
-                    message = `Can you compare my profile to ${match.name}?`;
+                    message = `Can you compare ${match.name} to the ${roleData?.title || 'current'} role?`;
                     actionId = 'compareToRole';
                     break;
                 }
@@ -656,7 +657,8 @@ export default function UnifiedResultsView({
                   actionId,
                   params: {
                     roleId: match.id,
-                    roleTitle: match.name,
+                    roleTitle: roleData?.title,
+                    profileName: match.name,
                     ...(action === 'explain' || profileData?.id ? { profileId: profileData!.id } : {})
                   }
                 });

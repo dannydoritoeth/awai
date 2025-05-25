@@ -65,12 +65,21 @@ interface RoleData {
   requirements?: string[];
 }
 
+interface ProfileData {
+  name?: string;
+  profile?: {
+    name: string;
+    id: string;
+  };
+}
+
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (message: string, actionData?: { actionId: string; params: Record<string, unknown> }) => void;
   isLoading: boolean;
   sessionId: string;
   profileId?: string;
+  profileData?: ProfileData;
   roleData?: RoleData;
   onRoleMatchFound?: (match: {
     id: string;
@@ -87,12 +96,15 @@ export default function ChatInterface({
   isLoading,
   sessionId,
   profileId,
-  roleData,
+  profileData: initialProfileData,
+  roleData: initialRoleData,
   onRoleMatchFound
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
   const [loadingHeatmaps, setLoadingHeatmaps] = useState<{[key: string]: boolean}>({});
+  const [roleData, setRoleData] = useState<RoleData | null>(initialRoleData || null);
+  const [profileData, setProfileData] = useState<ProfileData | null>(initialProfileData || null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
@@ -106,6 +118,21 @@ export default function ChatInterface({
     matchStatus: string;
     type: 'role' | 'profile';
   }>>([]);
+
+  // Update state when props change
+  useEffect(() => {
+    console.log('Props changed:', {
+      initialProfileData,
+      initialRoleData
+    });
+    
+    if (initialRoleData) {
+      setRoleData(initialRoleData);
+    }
+    if (initialProfileData) {
+      setProfileData(initialProfileData);
+    }
+  }, [initialRoleData, initialProfileData]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -295,31 +322,46 @@ export default function ChatInterface({
       console.log('Action button clicked with data:', {
         actionId: actionData.actionId,
         params: actionData.params,
-        profileId: actionData.params.profileId
+        profileId: actionData.params.profileId,
+        roleId: actionData.params.roleId,
+        profileData,
+        roleData,
+        context: roleData ? 'role' : 'profile'
       });
 
+      // Get profile name from profileData if available
+      const resolvedProfileName = roleData ? actionData.params.profileName : profileData?.profile?.name || profileData?.name;
+
+      console.log('KKK Action data:', actionData);
+      console.log('KKK Profile data:', profileData);
+      console.log('KKK Role data:', roleData);
       // Generate natural language message based on action type
       let message = '';
-      const roleTitle = actionData.params.roleTitle || 'this role';
       
       switch (actionData.actionId) {
         case 'getRoleDetails':
-          message = `Can you tell me more about the ${roleTitle} role?`;
-          break;
-        case 'getCapabilityGaps':
-          message = `What capability gaps are there for ${roleTitle}?`;
-          break;
-        case 'getSemanticSkillRecommendations':
-          message = `What skills should be developed for ${roleTitle}?`;
-          break;
-        case 'getDevelopmentPlan':
-          message = `Can you create a development plan for ${roleTitle}?`;
+          message = `Can you tell me more about the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
           break;
         case 'getProfileContext':
-          message = `Can you tell me more about ${actionData.params.profileName}?`;
+          message = `Can you tell me more about ${resolvedProfileName || 'the candidate'}?`;
+          break;
+        case 'getCapabilityGaps':
+          message = `What capability gaps are there between ${resolvedProfileName || 'the candidate'} and the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
+          break;
+        case 'getSemanticSkillRecommendations':
+          message = `What skills should be developed for ${resolvedProfileName || 'the candidate'} to match the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
+          break;
+        case 'getDevelopmentPlan':
+          message = `Can you create a development plan for ${resolvedProfileName || 'the candidate'} for the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
+          break;
+        case 'getReadinessAssessment':
+          message = `What is ${resolvedProfileName || 'the candidate'}'s readiness for the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
+          break;
+        case 'explainMatch':
+          message = `Can you explain how ${resolvedProfileName || 'the candidate'} matches the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
           break;
         default:
-          message = `Can you ${actionData.label.toLowerCase()} for ${roleTitle}?`;
+          message = `Can you ${actionData.label.toLowerCase()} for ${resolvedProfileName || 'the candidate'} regarding the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
       }
 
       // Add the message to the chat interface with action data
@@ -327,18 +369,25 @@ export default function ChatInterface({
       onSendMessage(message, {
         actionId: actionData.actionId,
         params: {
-          // Include roleId and roleTitle from roleData if we're in role context
+          // Include role context
           ...(roleData && { roleId: roleData.id, roleTitle: roleData.title }),
-          // Include any roleId/roleTitle from the action data itself
           ...(actionData.params.roleId && { roleId: actionData.params.roleId }),
           ...(actionData.params.roleTitle && { roleTitle: actionData.params.roleTitle }),
-          // Include profileId if it exists in action params
-          ...(actionData.params.profileId && { profileId: actionData.params.profileId })
+          
+          // Include profile context
+          ...(profileData && resolvedProfileName && { 
+            profileId, 
+            profileName: resolvedProfileName 
+          }),
+          ...(actionData.params.profileId && { 
+            profileId: actionData.params.profileId,
+            profileName: actionData.params.profileName || resolvedProfileName || 'the candidate'
+          })
         }
       });
 
+      // Process role matches if needed
       if (actionData.params.roleId && actionData.params.roleTitle) {
-        // Queue the role match to be processed after render
         pendingRoleMatches.current.push({
           id: actionData.params.roleId,
           name: actionData.params.roleTitle,
@@ -349,7 +398,6 @@ export default function ChatInterface({
       }
     } catch (error) {
       console.error('Error executing action:', error);
-      // Optionally show an error message to the user
     }
   };
 
@@ -465,7 +513,17 @@ export default function ChatInterface({
         }, 0);
       };
 
-      const processParams = (params: any) => {
+      interface ActionParams {
+        roleId?: string;
+        roleTitle?: string;
+        profileId?: string;
+        profileName?: string;
+        name?: string;
+        matchPercentage?: number;
+        semanticScore?: number;
+      }
+
+      const processParams = (params: ActionParams) => {
         if (params.roleId) {
           // This is a role match
           processMatch({
