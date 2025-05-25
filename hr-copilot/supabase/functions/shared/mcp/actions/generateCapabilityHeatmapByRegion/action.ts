@@ -3,6 +3,7 @@ import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPResponse } from '../../types/action.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { executeHeatmapQuery, formatCompanyIds } from '../utils.ts';
+import { analyzeCapabilityData } from '../../utils/capabilityAnalysis.ts';
 
 interface HeatmapResponse {
   region: string;
@@ -10,6 +11,7 @@ interface HeatmapResponse {
   role_count: number;
   total_roles: number;
   company: string;
+  percentage: number;
 }
 
 export { HeatmapResponse };
@@ -30,7 +32,21 @@ export async function generateCapabilityHeatmapByRegionBase(
         WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
         AND r2.location = r.location
       ) as total_roles,
-      co.name AS company
+      co.name AS company,
+      CASE 
+        WHEN (
+          SELECT COUNT(DISTINCT r2.id)
+          FROM roles r2
+          WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+          AND r2.location = r.location
+        ) = 0 THEN 0
+        ELSE ROUND((COUNT(*)::float / (
+          SELECT COUNT(DISTINCT r2.id)::float
+          FROM roles r2
+          WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+          AND r2.location = r.location
+        ) * 100)::numeric, 1)
+      END as percentage
     FROM roles r
     JOIN role_capabilities rc ON rc.role_id = r.id
     JOIN capabilities c ON rc.capability_id = c.id
@@ -46,7 +62,8 @@ export async function generateCapabilityHeatmapByRegionBase(
     capability: row.capability,
     role_count: parseInt(row.role_count),
     total_roles: parseInt(row.total_roles),
-    company: row.company
+    company: row.company,
+    percentage: parseFloat(row.percentage)
   }));
 }
 
@@ -55,12 +72,15 @@ export const generateCapabilityHeatmapByRegion: MCPActionV2 = {
   title: 'Generate Capability Heatmap by Region',
   description: 'Summarizes capability presence by region and compares role distribution.',
   applicableRoles: ['analyst'],
-  capabilityTags: ['Heatmap', 'Region'],
+  capabilityTags: ['Workforce Planning', 'Capability Analysis'],
   requiredInputs: ['companyIds'],
-  tags: ['heatmap', 'region', 'data'],
-  usesAI: false,
-  actionFn: async (request): Promise<MCPResponse<HeatmapResponse[]>> => {
-    const { supabase, companyIds, sessionId } = request;
+  tags: ['heatmap', 'region', 'capability', 'analysis'],
+  suggestedPrerequisites: [],
+  suggestedPostrequisites: [],
+  usesAI: true,
+
+  async actionFn(request): Promise<MCPResponse> {
+    const { supabase, companyIds, sessionId, message } = request;
 
     if (!companyIds?.length) {
       return {
@@ -84,31 +104,42 @@ export const generateCapabilityHeatmapByRegion: MCPActionV2 = {
         );
       }
 
-      const data = await generateCapabilityHeatmapByRegionBase(supabase, companyIds);
+      // Get base data
+      const formattedData = await generateCapabilityHeatmapByRegionBase(supabase, companyIds);
 
-      // Log completion
+      // Always perform analysis with either provided message or default
+      const analysis = await analyzeCapabilityData(
+        formattedData,
+        message || 'provide insights on the capability distribution across regions'
+      );
+
+      // Log completion with analysis
       if (sessionId) {
         await logAgentProgress(
           supabase,
           sessionId,
-          "Capability region analysis complete.",
+          analysis.response || "Capability region analysis complete.",
           { phase: 'region_analysis_complete' }
         );
       }
 
       return {
         success: true,
-        data,
+        data: formattedData,
         dataForDownstreamPrompt: {
           generateCapabilityHeatmapByRegion: {
-            dataSummary: `Analyzed capability distribution across ${new Set(data.map(d => d.region)).size} regions.`,
+            truncated: false,
             structured: {
-              regionCount: new Set(data.map(d => d.region)).size,
-              capabilityCount: new Set(data.map(d => d.capability)).size,
-              totalRoles: Math.max(...data.map(d => d.total_roles))
+              totalRoles: formattedData[0]?.total_roles || 0,
+              regionCount: new Set(formattedData.map(d => d.region)).size,
+              capabilityCount: new Set(formattedData.map(d => d.capability)).size
             },
-            truncated: false
+            dataSummary: "Analyzed capability distribution across regions."
           }
+        },
+        chatResponse: {
+          message: analysis.response,
+          followUpQuestion: analysis.followUpQuestion
         }
       };
 
@@ -134,6 +165,7 @@ export const generateCapabilityHeatmapByRegion: MCPActionV2 = {
       };
     }
   },
+
   getDefaultArgs: (context) => ({
     companyIds: context.companyIds || []
   })

@@ -3,12 +3,14 @@ import { Database } from '../../../../database.types.ts';
 import { MCPActionV2, MCPResponse } from '../../types/action.ts';
 import { logAgentProgress } from '../../../chatUtils.ts';
 import { executeHeatmapQuery, formatCompanyIds } from '../utils.ts';
+import { analyzeCapabilityData } from '../../utils/capabilityAnalysis.ts';
 
 interface HeatmapResponse {
   company: string;
   capability: string;
   role_count: number;
   total_roles: number;
+  percentage: number;
 }
 
 export { HeatmapResponse };
@@ -29,7 +31,23 @@ export async function generateCapabilityHeatmapByCompanyBase(
         JOIN companies co2 ON r2.company_id = co2.id
         WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
         AND co2.name = co.name
-      ) as total_roles
+      ) as total_roles,
+      CASE 
+        WHEN (
+          SELECT COUNT(DISTINCT r2.id)
+          FROM roles r2
+          JOIN companies co2 ON r2.company_id = co2.id
+          WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+          AND co2.name = co.name
+        ) = 0 THEN 0
+        ELSE ROUND((COUNT(*)::float / (
+          SELECT COUNT(DISTINCT r2.id)::float
+          FROM roles r2
+          JOIN companies co2 ON r2.company_id = co2.id
+          WHERE r2.company_id = ANY(ARRAY[${companyIdsStr}])
+          AND co2.name = co.name
+        ) * 100)::numeric, 1)
+      END as percentage
     FROM role_capabilities rc
     JOIN capabilities c ON rc.capability_id = c.id
     JOIN roles r ON rc.role_id = r.id
@@ -44,7 +62,8 @@ export async function generateCapabilityHeatmapByCompanyBase(
     company: row.company,
     capability: row.capability,
     role_count: parseInt(row.role_count),
-    total_roles: parseInt(row.total_roles)
+    total_roles: parseInt(row.total_roles),
+    percentage: parseFloat(row.percentage)
   }));
 }
 
@@ -53,12 +72,15 @@ export const generateCapabilityHeatmapByCompany: MCPActionV2 = {
   title: 'Generate Capability Heatmap by Company',
   description: 'Breaks down capability role counts and totals by company.',
   applicableRoles: ['analyst'],
-  capabilityTags: ['Heatmap', 'Company'],
+  capabilityTags: ['Workforce Planning', 'Capability Analysis'],
   requiredInputs: ['companyIds'],
-  tags: ['heatmap', 'company', 'data'],
-  usesAI: false,
-  actionFn: async (request): Promise<MCPResponse<HeatmapResponse[]>> => {
-    const { supabase, companyIds, sessionId } = request;
+  tags: ['heatmap', 'company', 'capability', 'analysis'],
+  suggestedPrerequisites: [],
+  suggestedPostrequisites: [],
+  usesAI: true,
+
+  async actionFn(request): Promise<MCPResponse> {
+    const { supabase, companyIds, sessionId, message } = request;
 
     if (!companyIds?.length) {
       return {
@@ -82,31 +104,42 @@ export const generateCapabilityHeatmapByCompany: MCPActionV2 = {
         );
       }
 
-      const data = await generateCapabilityHeatmapByCompanyBase(supabase, companyIds);
+      // Get base data
+      const formattedData = await generateCapabilityHeatmapByCompanyBase(supabase, companyIds);
 
-      // Log completion
+      // Always perform analysis with either provided message or default
+      const analysis = await analyzeCapabilityData(
+        formattedData,
+        message || 'provide insights on the capability distribution across companies'
+      );
+
+      // Log completion with analysis
       if (sessionId) {
         await logAgentProgress(
           supabase,
           sessionId,
-          "Capability company analysis complete.",
+          analysis.response || "Capability company analysis complete.",
           { phase: 'company_analysis_complete' }
         );
       }
 
       return {
         success: true,
-        data,
+        data: formattedData,
         dataForDownstreamPrompt: {
           generateCapabilityHeatmapByCompany: {
-            dataSummary: `Analyzed capability distribution across ${new Set(data.map(d => d.company)).size} companies.`,
+            truncated: false,
             structured: {
-              companyCount: new Set(data.map(d => d.company)).size,
-              capabilityCount: new Set(data.map(d => d.capability)).size,
-              totalRoles: Math.max(...data.map(d => d.total_roles))
+              totalRoles: formattedData[0]?.total_roles || 0,
+              companyCount: new Set(formattedData.map(d => d.company)).size,
+              capabilityCount: new Set(formattedData.map(d => d.capability)).size
             },
-            truncated: false
+            dataSummary: "Analyzed capability distribution across companies."
           }
+        },
+        chatResponse: {
+          message: analysis.response,
+          followUpQuestion: analysis.followUpQuestion
         }
       };
 
@@ -132,6 +165,7 @@ export const generateCapabilityHeatmapByCompany: MCPActionV2 = {
       };
     }
   },
+
   getDefaultArgs: (context) => ({
     companyIds: context.companyIds || []
   })
