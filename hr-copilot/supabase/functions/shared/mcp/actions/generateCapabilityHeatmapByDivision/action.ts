@@ -12,7 +12,9 @@ interface HeatmapResponse {
   company: string;
 }
 
-async function generateCapabilityHeatmapByDivisionBase(
+export { HeatmapResponse };
+
+export async function generateCapabilityHeatmapByDivisionBase(
   supabase: SupabaseClient<Database>,
   companyIds: string[]
 ): Promise<HeatmapResponse[]> {

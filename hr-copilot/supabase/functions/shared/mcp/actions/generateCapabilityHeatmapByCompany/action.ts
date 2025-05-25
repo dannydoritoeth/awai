@@ -11,7 +11,9 @@ interface HeatmapResponse {
   total_roles: number;
 }
 
-async function generateCapabilityHeatmapByCompanyBase(
+export { HeatmapResponse };
+
+export async function generateCapabilityHeatmapByCompanyBase(
   supabase: SupabaseClient<Database>,
   companyIds: string[]
 ): Promise<HeatmapResponse[]> {

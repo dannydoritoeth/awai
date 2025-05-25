@@ -1,13 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
-import { 
-  generateCapabilityHeatmapByTaxonomy,
-  generateCapabilityHeatmapByDivision,
-  generateCapabilityHeatmapByRegion,
-  generateCapabilityHeatmapByCompany,
-  summarizeData
-} from '../shared/mcp/analyst.ts';
+import { generateCapabilityHeatmapByTaxonomyBase } from '../shared/mcp/actions/generateCapabilityHeatmapByTaxonomy/action.ts';
+import { generateCapabilityHeatmapByDivisionBase } from '../shared/mcp/actions/generateCapabilityHeatmapByDivision/action.ts';
+import { generateCapabilityHeatmapByRegionBase } from '../shared/mcp/actions/generateCapabilityHeatmapByRegion/action.ts';
+import { generateCapabilityHeatmapByCompanyBase } from '../shared/mcp/actions/generateCapabilityHeatmapByCompany/action.ts';
+import { summarizeHeatmapData } from '../shared/mcp/actions/utils.ts';
 
 interface DataRequest {
   insightId: string;
@@ -43,23 +41,23 @@ serve(async (req) => {
     let data;
     switch (input.insightId) {
       case 'generateCapabilityHeatmapByTaxonomy':
-        data = await generateCapabilityHeatmapByTaxonomy(supabaseClient, input.companyIds);
+        data = await generateCapabilityHeatmapByTaxonomyBase(supabaseClient, input.companyIds);
         break;
       case 'generateCapabilityHeatmapByDivision':
-        data = await generateCapabilityHeatmapByDivision(supabaseClient, input.companyIds);
+        data = await generateCapabilityHeatmapByDivisionBase(supabaseClient, input.companyIds);
         break;
       case 'generateCapabilityHeatmapByRegion':
-        data = await generateCapabilityHeatmapByRegion(supabaseClient, input.companyIds);
+        data = await generateCapabilityHeatmapByRegionBase(supabaseClient, input.companyIds);
         break;
       case 'generateCapabilityHeatmapByCompany':
-        data = await generateCapabilityHeatmapByCompany(supabaseClient, input.companyIds);
+        data = await generateCapabilityHeatmapByCompanyBase(supabaseClient, input.companyIds);
         break;
       default:
         throw new Error(`Unsupported insight: ${input.insightId}`);
     }
 
     // Get both raw and summarized data
-    const summarizedData = summarizeData(data);
+    const summarizedData = summarizeHeatmapData(data);
 
     // Return success response
     return new Response(

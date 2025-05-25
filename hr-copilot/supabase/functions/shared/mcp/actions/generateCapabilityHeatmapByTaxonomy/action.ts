@@ -15,7 +15,9 @@ interface HeatmapResponse {
   percentage: number;
 }
 
-async function generateCapabilityHeatmapByTaxonomyBase(
+export { HeatmapResponse };
+
+export async function generateCapabilityHeatmapByTaxonomyBase(
   supabase: SupabaseClient<Database>,
   companyIds: string[]
 ): Promise<HeatmapResponse[]> {
