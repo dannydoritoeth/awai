@@ -150,14 +150,14 @@ export default function Home() {
         <div className="bg-white p-8 rounded-2xl shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-4">
             <h2 className="text-2xl font-semibold text-gray-900 text-center mb-4">
-              Start a Conversation
+              Explore with Chat
             </h2>
             <div className="relative">
               <textarea
                 ref={textareaRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask me anything about roles or candidates..."
+                placeholder="Ask me anything about roles, candidates or where you might want to go next..."
                 className="w-full resize-none rounded-xl border-none focus:border-none focus:outline-none focus:ring-0 bg-gray-50 text-gray-900 placeholder:text-gray-500 text-sm py-3 px-4 min-h-[48px] max-h-[150px]"
                 rows={1}
                 onKeyDown={(e) => {
@@ -188,7 +188,7 @@ export default function Home() {
               <p className="text-sm text-red-600 text-center">{error}</p>
             )}
             <p className="text-sm text-gray-500 text-center">
-              Type your question about roles, candidates, or skills matching
+              Discover opportunities, compare options, or get personalized suggestions.
             </p>
           </form>
         </div>

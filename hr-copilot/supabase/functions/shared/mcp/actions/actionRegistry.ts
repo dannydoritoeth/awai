@@ -39,18 +39,25 @@ import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapB
 // import { generateCapabilityInsights } from './generateCapabilityInsights/action.ts';
 import { getProfileContextAction } from './getProfileContext/action.ts';
 import { explainMatch } from './explainMatch/action.ts';
+import { getSemanticDiscoveryMatches } from './getSemanticDiscoveryMatches/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 
-
-const capabilityGapsSchema = z.object({
-  profileId: z.string(),
-  roleId: z.string()
+const semanticDiscoverySchema = z.object({
+  queryText: z.string().min(1, "Query text cannot be empty").describe("The text to search for matches"),
+  targetTables: z.array(z.string()).optional(),
+  limit: z.number().positive().optional(),
+  threshold: z.number().min(0).max(1).optional()
 });
 
-const profileContextSchema = z.object({
-  profileId: z.string()
-});
+// Update getSemanticDiscoveryMatches to include the schema
+const getSemanticDiscoveryMatchesWithSchema = {
+  ...getSemanticDiscoveryMatches,
+  argsSchema: semanticDiscoverySchema,
+  // Override the tool metadata to distinguish between args and context
+  requiredContext: [], // Empty since we don't need context
+  requiredArgs: ['queryText'] // Specify that queryText is required in args
+};
 
 const actions: MCPActionV2[] = [
   getCapabilityGaps,
@@ -72,7 +79,8 @@ const actions: MCPActionV2[] = [
   // summarizeCapabilityHeatmap,
   // generateCapabilityInsights,
   getProfileContextAction,
-  explainMatch
+  explainMatch,
+  getSemanticDiscoveryMatchesWithSchema // Use the version with schema
 //   getSuggestedCareerPaths
 ];
 

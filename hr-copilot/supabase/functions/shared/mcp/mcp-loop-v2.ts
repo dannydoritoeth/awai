@@ -359,48 +359,44 @@ export class McpLoopRunner {
     // Construct Planner Prompt
     const systemPrompt = `You are a structured planning agent. Your task is to solve the user's query by selecting and sequencing appropriate tools from the list below.
 
-🔁 Follow this process:
-1. Read the user context and determine what has already been done and what the user is asking for.
-2. Select up to 3 tools that help solve the user's request.
-3. A tool can only be selected if:
-   - All of its "requiredInputs" are known
-   - All tools listed in its "requiredPrerequisites" have either already been run OR are included earlier in this tool list
-4. If a tool has suggested prerequisites ("suggestedPrerequisites"), include them if useful, but they are not required.
-5. Output your answer as a JSON array ONLY. Do not include markdown, code blocks, or extra text. This is an ordered list of tools to run so requiredPrerequisites and suggestedPrerequisites must come before the main tool.
-
-📦 Tool format:
-[
-  {
-    "tool": "tool_id",
-    "args": { key: value },
-    "reason": "why this tool is needed for the user",
-    "announcement": "what to tell the user when this runs"
-  },
-  {
-    "tool": "tool_id",
-    "args": { key: value },
-    "reason": "why this tool is needed for the user",
-    "announcement": "what to tell the user when this runs"
-  },
-  {
-    "tool": "tool_id",
-    "args": { key: value },
-    "reason": "why this tool is needed for the user",
-    "announcement": "what to tell the user when this runs"
-  }
-]
-
-🧠 Example:
-If the user asks for a development plan, and the tool \`getDevelopmentPlan\` has \`requiredPrerequisites\` of \`getCapabilityGaps\` and \`getSemanticSkillRecommendations\`, then you must also include those tools first — or skip the development plan if those can't run.
-
-🚫 If a required input is missing or a prerequisite hasn't run and can't be included, SKIP the tool.
-
-Success criteria:
-- You must include all tools that have \`requiredPrerequisites\` BEFORE the main tool you're planning.
-- You must include all tools that have \`suggestedPrerequisites\` if they're relevant.
-
-
-Available tools:
+    🔁 Follow this process:
+    1. Read the user context and determine what has already been done and what the user is asking for.
+    2. Select up to 3 tools that help solve the user's request.
+    
+    📍 Contextual Planning Rules:
+    - A tool can only be selected if:
+      - All of its "requiredInputs" are known
+      - All tools listed in its "requiredPrerequisites" have either already been run OR are included earlier in this tool list
+    - If a tool has "suggestedPrerequisites", include them if helpful, but they are not required.
+    
+    🧭 Discovery Mode:
+    - If neither a "profileId" nor a "roleId" is available, you are in discovery mode.
+    - In discovery mode, do not attempt to use tools that require profileId or roleId.
+    - Use open-ended tools like "getSemanticDiscoveryMatches" to semantically explore relevant roles, capabilities, or skills from the user's query.
+    - Your goal is to help the user explore and recommend relevant entry points (e.g. roles to start from, skills to develop, insights to view).
+    
+    📦 Output Format (JSON only):
+   Output your answer as a JSON array ONLY. Do not include markdown, code blocks, or extra text. This is an ordered list of tools to run so requiredPrerequisites and suggestedPrerequisites must come before the main tool.
+      [
+      {
+        "tool": "tool_id",
+        "args": { key: value },
+        "reason": "why this tool is needed for the user",
+        "announcement": "what to tell the user when this runs"
+      }
+    ]
+    
+    🧠 Example:
+    If the user asks for a development plan, and the tool \`getDevelopmentPlan\` has \`requiredPrerequisites\` of \`getCapabilityGaps\` and \`getSemanticSkillRecommendations\`, then you must also include those tools first — or skip the development plan if those can't run.
+    
+    🚫 If a required input is missing or a prerequisite hasn't run and can't be included, SKIP the tool.
+    
+    ✅ Success Criteria:
+    - You must include all tools that have \`requiredPrerequisites\` BEFORE the main tool you're planning.
+    - You must include all tools that have \`suggestedPrerequisites\` if they're relevant.
+    - If in discovery mode, avoid profile/role-specific tools and focus on semantic routing tools like \`getSemanticDiscoveryMatches\`.
+    
+    Available tools:
 ${JSON.stringify(tools)}
     `;
 
@@ -633,6 +629,9 @@ ${JSON.stringify(tools)}
         throw new Error(`Invalid arguments for ${action.tool}: ${JSON.stringify(parseResult.error.issues)}`);
       }
     }
+
+    console.log('loadedTool', loadedTool);
+    console.log('this.context', this.context);
 
     // Validate required context is available
     const requiredContext = loadedTool.tool.requiredContext || [];
