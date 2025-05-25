@@ -3,6 +3,7 @@ import ChatInterface from './ChatInterface';
 import MatchesPanel from './MatchesPanel';
 import { getSessionMessages } from '@/lib/api/chat';
 import type { ChatMessage, Match as ApiMatch, ResponseData } from '@/types/chat';
+import { generateActionMessage } from '@/lib/messageUtils';
 
 interface Match {
   id: string;
@@ -613,55 +614,50 @@ export default function UnifiedResultsView({
               sessionId={sessionId}
               profileId={profileData?.id}
               onAction={(action: string, match: Match) => {
-                let message = '';
-                let actionId = '';
-                
                 // Ensure we have a profileId for actions that require it
                 if (action === 'explain' && !profileData?.id) {
                   console.error('Cannot explain match without a profile ID');
                   return;
                 }
 
-                switch (action) {
-                  case 'learn':
-                    message = `Can you tell me more about ${match.name}?`;
-                    actionId = 'getRoleDetails';
-                    break;
-                  case 'explain':
-                    message = `Explain why this would be a good match for ${match.name}?`;
-                    actionId = 'explainMatch';
-                    break;
-                  case 'gaps':
-                    message = `What capability gaps are there between ${match.name} and the ${roleData?.title || 'current'} role?`;
-                    actionId = 'getCapabilityGaps';
-                    break;
-                  case 'skills':
-                    message = `What skills should be developed for ${match.name} to match the ${roleData?.title || 'current'} role?`;
-                    actionId = 'getSemanticSkillRecommendations';
-                    break;
-                  case 'readiness':
-                    message = `What is ${match.name}'s readiness for the ${roleData?.title || 'current'} role?`;
-                    actionId = 'getReadinessAssessment';
-                    break;
-                  case 'development':
-                    message = `Can you create a development plan for ${match.name} for the ${roleData?.title || 'current'} role?`;
-                    actionId = 'getDevelopmentPlan';
-                    break;
-                  case 'compare':
-                    message = `Can you compare ${match.name} to the ${roleData?.title || 'current'} role?`;
-                    actionId = 'compareToRole';
-                    break;
-                }
-
-                handleSendMessage(message, {
-                  actionId,
+                const actionData = {
+                  actionId: (() => {
+                    switch (action) {
+                      case 'learn': return 'getRoleDetails';
+                      case 'explain': return 'explainMatch';
+                      case 'gaps': return 'getCapabilityGaps';
+                      case 'skills': return 'getSemanticSkillRecommendations';
+                      case 'readiness': return 'getReadinessAssessment';
+                      case 'development': return 'getDevelopmentPlan';
+                      case 'compare': return 'compareToRole';
+                      default: return action;
+                    }
+                  })(),
                   params: {
-                    roleId: match.id,
-                    roleTitle: roleData?.title,
-                    profileName: match.name,
-                    ...(action === 'explain' || profileData?.id ? { profileId: profileData!.id } : {})
+                    // In role context, match.id is profileId and match.name is profileName
+                    // In profile context, match.id is roleId and match.name is roleTitle
+                    ...(roleData 
+                      ? {
+                          profileId: match.id,
+                          profileName: match.name,
+                          roleId: roleData.id,
+                          roleTitle: roleData.title
+                        }
+                      : {
+                          roleId: match.id,
+                          roleTitle: match.name,
+                          ...(profileData?.id && { 
+                            profileId: profileData.id,
+                            profileName: profileData.name 
+                          })
+                        }
+                    ),
+                    ...(action === 'explain' && profileData?.id ? { profileId: profileData.id } : {})
                   }
-                });
+                };
+
+                const { message } = generateActionMessage(actionData, roleData, profileData);
+                handleSendMessage(message, actionData);
               }}
             />
           )}

@@ -16,6 +16,7 @@ import {
   ClipboardIcon 
 } from '@heroicons/react/24/outline';
 import React from 'react';
+import { generateActionMessage } from '@/lib/messageUtils';
 
 interface ActionButtonData {
   label: string;
@@ -329,45 +330,12 @@ export default function ChatInterface({
         context: roleData ? 'role' : 'profile'
       });
 
-      // Get profile name from profileData if available
-      const resolvedProfileName = roleData ? actionData.params.profileName : profileData?.profile?.name || profileData?.name;
-
-      console.log('KKK Action data:', actionData);
-      console.log('KKK Profile data:', profileData);
-      console.log('KKK Role data:', roleData);
-      // Generate natural language message based on action type
-      let message = '';
-      
-      switch (actionData.actionId) {
-        case 'getRoleDetails':
-          message = `Can you tell me more about the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        case 'getProfileContext':
-          message = `Can you tell me more about ${resolvedProfileName || 'the candidate'}?`;
-          break;
-        case 'getCapabilityGaps':
-          message = `What capability gaps are there between ${resolvedProfileName || 'the candidate'} and the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        case 'getSemanticSkillRecommendations':
-          message = `What skills should be developed for ${resolvedProfileName || 'the candidate'} to match the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        case 'getDevelopmentPlan':
-          message = `Can you create a development plan for ${resolvedProfileName || 'the candidate'} for the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        case 'getReadinessAssessment':
-          message = `What is ${resolvedProfileName || 'the candidate'}'s readiness for the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        case 'explainMatch':
-          message = `Can you explain how ${resolvedProfileName || 'the candidate'} matches the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-          break;
-        default:
-          message = `Can you ${actionData.label.toLowerCase()} for ${resolvedProfileName || 'the candidate'} regarding the ${actionData.params.roleTitle || (roleData?.title) || 'this role'} role?`;
-      }
+      const { message, actionId } = generateActionMessage(actionData, roleData, profileData);
 
       // Add the message to the chat interface with action data
       setHasUserInteracted(true);
       onSendMessage(message, {
-        actionId: actionData.actionId,
+        actionId: actionId,
         params: {
           // Include role context
           ...(roleData && { roleId: roleData.id, roleTitle: roleData.title }),
@@ -375,13 +343,13 @@ export default function ChatInterface({
           ...(actionData.params.roleTitle && { roleTitle: actionData.params.roleTitle }),
           
           // Include profile context
-          ...(profileData && resolvedProfileName && { 
+          ...(profileData && profileData.name && { 
             profileId, 
-            profileName: resolvedProfileName 
+            profileName: profileData.name 
           }),
           ...(actionData.params.profileId && { 
             profileId: actionData.params.profileId,
-            profileName: actionData.params.profileName || resolvedProfileName || 'the candidate'
+            profileName: actionData.params.profileName || profileData?.name || 'the candidate'
           })
         }
       });
