@@ -82,89 +82,86 @@ To build a public-facing, AI-powered career exploration and workforce mobility p
 
 ## Implementation Plan
 
-### Phase 1: Data Foundation
-**Goal:** Establish base data access for all entities without AI enhancement
-- Set up database tables and relationships
-- Implement data edge function with basic querying
-- Create frontend data service layer
-- Implement basic filtering
+### Phase 1: Core Foundation
+**Goal:** Establish fundamental data structures and basic functionality
+**Features:**
+- General Roles
+- Specific Roles
+- Role Transitions
+- Capabilities
+- Data Edge Function
+- Frontend Data Service
+- Filter System
+- Caching Layer
 
 **Success Criteria:**
-- ✓ All entity types queryable through data endpoint
-- ✓ Basic filtering working at database level
-- ✓ Type-safe data access layer in frontend
-- ✓ Unit tests passing for data access
-- ✓ E2E tests passing for basic queries
+- ✓ Database schema implemented for core entities
+- ✓ Basic CRUD operations working
+- ✓ Data edge function operational
+- ✓ Initial filtering system in place
+- ✓ Basic caching implemented
+- ✓ Core entity relationships established
 
-### Phase 2: UI Components & Navigation
-**Goal:** Build UI components that work with base data
-- Implement entity list and detail views
-- Create filter UI components
-- Build navigation structure
-- Implement URL-based state management
-
-**Success Criteria:**
-- ✓ All entity types have working list/detail views
-- ✓ Filter UI working with URL sync
-- ✓ Navigation between related entities working
-- ✓ Responsive design implemented
-- ✓ Accessibility requirements met
-
-### Phase 3: AI Enhancement Layer
-**Goal:** Add AI-powered insights and relationships
-- Implement AI actions without registry integration
-- Add progressive enhancement to UI
-- Set up caching for AI results
-- Implement semantic search
+### Phase 2: Extended Features & Infrastructure
+**Goal:** Build out secondary features and strengthen infrastructure
+**Features:**
+- Skills
+- Taxonomies
+- Capability Requirements
+- Skill Requirements
+- Error Handling
+- Monitoring
 
 **Success Criteria:**
-- ✓ AI enhancements loading after base data
-- ✓ Caching working correctly
-- ✓ Semantic search producing relevant results
-- ✓ Performance metrics within targets
-- ✓ Cost monitoring in place
+- ✓ Skills and taxonomies fully integrated
+- ✓ Requirements system operational
+- ✓ Frontend service layer complete
+- ✓ Error handling implemented
+- ✓ Monitoring systems in place
+- ✓ UI components for all Phase 2 features
 
-### Phase 4: Action Registry Integration
-**Goal:** Connect AI actions to the system
-- Register actions in registry
-- Implement action orchestration
-- Add monitoring and logging
-- Set up error handling and retries
+### Phase 3: Advanced Features & Optimization
+**Goal:** Implement AI-powered features and optimize performance
+**Features:**
+- Career Pathways
+- Capability Heatmaps
+- Skill Gap Analysis
+- Performance Optimization
+- Documentation
 
 **Success Criteria:**
-- ✓ Actions registered and discoverable
-- ✓ Monitoring showing correct usage
-- ✓ Error handling working as expected
-- ✓ System handling load efficiently
+- ✓ AI enhancement layer operational
+- ✓ Advanced analytics features working
+- ✓ Performance metrics meeting targets
+- ✓ Documentation complete
+- ✓ System optimized for scale
 
 ## Implementation Progress Tracker
 
-| Entity/Feature              | DB Schema | Base Data | UI Components | Filters | AI Enhancement | Action Registry | Tests | Done |
-|----------------------------|:---------:|:---------:|:-------------:|:-------:|:--------------:|:---------------:|:-----:|:----:|
-| **Core Entities**          |           |           |               |         |                |                 |       |      |
-| General Roles              |           |           |               |         |                |                 |       |      |
-| Specific Roles             |           |           |               |         |                |                 |       |      |
-| Capabilities               |           |           |               |         |                |                 |       |      |
-| Skills                     |           |           |               |         |                |                 |       |      |
-| Taxonomies                 |           |           |               |         |                |                 |       |      |
-| **Relationships**          |           |           |               |         |                |                 |       |      |
-| Role Transitions           |           |           |               |         |                |                 |       |      |
-| Capability Requirements    |           |           |               |         |                |                 |       |      |
-| Skill Requirements         |           |           |               |         |                |                 |       |      |
-| **Insights**              |           |           |               |         |                |                 |       |      |
-| Career Pathways            |           |           |               |         |                |                 |       |      |
-| Capability Heatmaps        |           |           |               |         |                |                 |       |      |
-| Skill Gap Analysis         |           |           |               |         |                |                 |       |      |
-| **Infrastructure**         |           |           |               |         |                |                 |       |      |
-| Data Edge Function         |           |           |               |         |                |                 |       |      |
-| Frontend Data Service      |           |           |               |         |                |                 |       |      |
-| Filter System             |           |           |               |         |                |                 |       |      |
-| Caching Layer             |           |           |               |         |                |                 |       |      |
-| **Cross-Cutting**         |           |           |               |         |                |                 |       |      |
-| Error Handling            |           |           |               |         |                |                 |       |      |
-| Monitoring                |           |           |               |         |                |                 |       |      |
-| Performance Optimization  |           |           |               |         |                |                 |       |      |
-| Documentation            |           |           |               |         |                |                 |       |      |
+| Entity/Feature              | Phase  | DB Schema | Base Data | UI Components | Filters | AI Enhancement | Action Registry | Tests | Done |
+|----------------------------|:------:|:---------:|:---------:|:-------------:|:-------:|:--------------:|:---------------:|:-----:|:----:|
+| **Phase 1 Features**       |        |           |           |               |         |                |                 |       |      |
+| General Roles              |   1    |           |           |               |         |                |                 |       |      |
+| Specific Roles             |   1    |           |           |               |         |                |                 |       |      |
+| Role Transitions           |   1    |           |           |               |         |                |                 |       |      |
+| Capabilities               |   1    |           |           |               |         |                |                 |       |      |
+| Data Edge Function         |   1    |           |           |               |         |                |                 |       |      |
+| Frontend Data Service      |   1    |           |           |               |         |                |                 |       |      |
+| Filter System              |   1    |           |           |               |         |                |                 |       |      |
+| Caching Layer              |   1    |           |           |               |         |                |                 |       |      |
+| **Phase 2 Features**       |        |           |           |               |         |                |                 |       |      |
+| Skills                     |   2    |           |           |               |         |                |                 |       |      |
+| Taxonomies                 |   2    |           |           |               |         |                |                 |       |      |
+| Capability Requirements    |   2    |           |           |               |         |                |                 |       |      |
+| Skill Requirements         |   2    |           |           |               |         |                |                 |       |      |
+| Error Handling             |   2    |           |           |               |         |                |                 |       |      |
+| Monitoring                 |   2    |           |           |               |         |                |                 |       |      |
+| **Phase 3 Features**       |        |           |           |               |         |                |                 |       |      |
+| Career Pathways            |   3    |           |           |               |         |                |                 |       |      |
+| Capability Heatmaps        |   3    |           |           |               |         |                |                 |       |      |
+| Skill Gap Analysis         |   3    |           |           |               |         |                |                 |       |      |
+| Performance Optimization   |   3    |           |           |               |         |                |                 |       |      |
+| Documentation             |   3    |           |           |               |         |                |                 |       |      |
 
 ### Legend
 - ⬜ Not Started
