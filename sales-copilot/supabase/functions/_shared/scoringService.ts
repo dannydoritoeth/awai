@@ -180,12 +180,15 @@ ${JSON.stringify(data, null, 2)}`;
   private async callOpenAI(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
     const aiResponse = await invokeChatModel(
       {
-        system: '',
-        user: prompt
+        system: 'You are a helpful AI assistant that analyzes and scores sales opportunities.',
+        messages: [
+          { role: 'user', content: prompt }
+        ]
       },
       {
         model: 'openai:gpt-3.5-turbo',
-        temperature: 0.2
+        temperature: temperature,
+        max_tokens: maxTokens
       }
     );
 

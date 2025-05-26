@@ -1,7 +1,8 @@
 import { AIContext } from './action.ts';
 import { ChatPrompt } from '../../../ai/invokeAIModelV2.ts';
+import { enhancePromptWithContext } from '../../../ai/enhancePromptWithContext.ts';
 
-export function buildPrompt(context: AIContext): ChatPrompt {
+export function buildPrompt(context: AIContext & { pastMessages?: Array<{ role: 'user' | 'assistant'; content: string }>; summary?: string }): ChatPrompt {
   const { profileName, roleName, capabilityGaps = [], skillGaps = [], skillRecommendations = [], mode, audience } = context;
 
   // Base prompt structure
@@ -38,7 +39,7 @@ ${skillRecommendations.map(rec => `- ${rec.name}: Target Level ${rec.requiredLev
     analyst: 'Use a detailed, analytical tone with specific metrics and comparisons.'
   }[audience || 'manager'];
 
-  return {
+  const prompt: ChatPrompt = {
     system: "You are an expert at analyzing profile-role matches and providing clear, actionable insights. Format your response in two sections: first a detailed analysis, then 3-5 key highlights as bullet points starting with •",
     user: `${basePrompt}
 
@@ -59,4 +60,10 @@ Please structure your response with:
    - Focus on actionable insights and critical findings
    - Include both strengths and areas for development`
   };
+
+  // Enhance the prompt with conversation context
+  return enhancePromptWithContext(prompt, {
+    pastMessages: context.pastMessages,
+    summary: context.summary
+  });
 } 

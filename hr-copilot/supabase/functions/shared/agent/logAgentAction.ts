@@ -3,13 +3,25 @@ import { Database } from '../../database.types.ts';
 import { SemanticMetrics } from '../embeddings.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 
-export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division' | 'chat';
-
 export interface AgentAction {
-  entityType: EntityType;
-  entityId: string;
-  payload: Record<string, any>;
-  semanticMetrics?: SemanticMetrics;
+  id: string;
+  agent_name: string;
+  action_type: string;
+  target_type?: string;
+  target_id?: string;
+  request: Record<string, any>;
+  request_hash?: string;
+  response?: {
+    summary?: string;
+    dataForPrompt?: Record<string, any>;
+    [key: string]: any;
+  };
+  outcome: 'success' | 'error';
+  confidence_score?: number;
+  session_id: string;
+  step_index: number;
+  embedding?: number[];
+  timestamp: string;
 }
 
 // Actions that don't need embeddings (simple status updates or processing steps)

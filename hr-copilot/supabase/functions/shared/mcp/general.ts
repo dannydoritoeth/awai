@@ -200,7 +200,9 @@ async function generateGeneralResponse(
     const aiResponse = await invokeChatModel(
       {
         system: prompt.system,
-        user: prompt.user
+        messages: [
+          { role: 'user', content: prompt.user }
+        ]
       },
       {
         model: 'openai:gpt-3.5-turbo',
@@ -432,6 +434,80 @@ export async function runGeneralLoop(
         type: 'PLANNER_ERROR',
         message: 'Failed to run general loop',
         details: error
+      }
+    };
+  }
+}
+
+async function handleGeneralRequest(
+  supabase: SupabaseClient<Database>,
+  input: MCPRequest
+): Promise<MCPResponse> {
+  try {
+    const { mode, sessionId, context, messages } = input;
+    const lastMessage = messages?.[messages.length - 1]?.content || context?.lastMessage;
+
+    if (!lastMessage) {
+      throw new Error('No message content provided');
+    }
+
+    // Get semantic matches if available
+    const embedding = await generateEmbedding(lastMessage);
+    const semanticMatches = await getSemanticMatches(supabase, embedding);
+
+    // Build the system prompt
+    const systemPrompt = `You are a helpful AI assistant. Your goal is to help users with their questions and tasks.
+Always provide clear explanations and actionable recommendations.`;
+
+    // Build the user prompt with semantic context
+    const userPrompt = buildSafePrompt(
+      lastMessage,
+      {
+        semanticMatches,
+        sessionId
+      }
+    );
+
+    // Call the AI model
+    const aiResponse = await invokeChatModel(
+      {
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ]
+      },
+      {
+        model: 'openai:gpt-3.5-turbo',
+        temperature: 0.7,
+        max_tokens: 1000
+      }
+    );
+
+    if (!aiResponse.success) {
+      throw new Error(`AI model error: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    // Log the response
+    if (sessionId) {
+      await logAgentResponse(supabase, sessionId, aiResponse.output || '');
+    }
+
+    return {
+      success: true,
+      mode: 'general',
+      response: aiResponse.output || '',
+      semanticMatches,
+      nextAction: null
+    };
+
+  } catch (error) {
+    console.error('Error in general loop:', error);
+    return {
+      success: false,
+      mode: 'general',
+      error: {
+        type: 'GENERAL_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     };
   }

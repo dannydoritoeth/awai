@@ -342,7 +342,9 @@ async function generateCapabilityInsights(
   const aiResponse = await invokeChatModel(
     {
       system: prompt.system,
-      user: prompt.user
+      messages: [
+        { role: 'user', content: prompt.user }
+      ]
     },
     {
       model: 'openai:gpt-3.5-turbo',
@@ -359,6 +361,72 @@ async function generateCapabilityInsights(
     response: parts[0].trim(),
     followUpQuestion: parts[1]?.trim()
   };
+}
+
+async function handleAnalystRequest(
+  supabase: SupabaseClient<Database>,
+  input: AnalystLoopInput
+): Promise<AnalystMCPResponse> {
+  try {
+    const { mode, insightId, sessionId, context, plannerRecommendations } = input;
+
+    // Build the system prompt
+    const systemPrompt = `You are an AI analyst assistant helping to analyze and understand data.
+Your goal is to help users understand insights and make data-driven decisions.
+Always provide clear explanations and actionable recommendations.`;
+
+    // Build the user prompt
+    const userPrompt = buildSafePrompt(
+      context?.lastMessage || '',
+      {
+        insightId,
+        companyIds: context?.companyIds,
+        recommendations: plannerRecommendations
+      }
+    );
+
+    // Call the AI model
+    const aiResponse = await invokeChatModel(
+      {
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ]
+      },
+      {
+        model: 'openai:gpt-3.5-turbo',
+        temperature: 0.7,
+        max_tokens: 1000
+      }
+    );
+
+    if (!aiResponse.success) {
+      throw new Error(`AI model error: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    // Log the response
+    if (sessionId) {
+      await logAgentResponse(supabase, sessionId, aiResponse.output || '');
+    }
+
+    return {
+      success: true,
+      mode: 'analyst',
+      response: aiResponse.output || '',
+      nextAction: null
+    };
+
+  } catch (error) {
+    console.error('Error in analyst loop:', error);
+    return {
+      success: false,
+      mode: 'analyst',
+      error: {
+        type: 'ANALYST_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    };
+  }
 }
 
 export async function runAnalystLoop(

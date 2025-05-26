@@ -14,11 +14,19 @@ import {
 } from './types/action.ts';
 import { formatToolMetadataAsCSV } from './utils/formatters.ts';
 import { logAgentProgress } from '../chatUtils.ts';
+import { ModelId } from './promptTypes.ts';
 
 interface DependenciesV2 {
   generateEmbedding: typeof generateEmbedding;
   getConversationContext: typeof getConversationContextV2;
-  invokeChatModelV2: (prompt: ChatPrompt, options: any) => Promise<AIResponse>;
+  invokeChatModelV2: (prompt: ChatPrompt, options: {
+    model?: ModelId;
+    temperature?: number;
+    max_tokens?: number;
+    supabase?: SupabaseClient;
+    sessionId?: string;
+    actionType?: string;
+  }) => Promise<AIResponse>;
 }
 
 /**
@@ -262,7 +270,6 @@ export class McpLoopRunner {
     // Normalize context fields and handle common typos
     const normalizedContext = {
       ...(this.request.context || {}),
-      // Fix common typos and ensure proper field mapping
       roleId: this.request.roleId || 
              this.request.context?.roleId || 
              this.request.context?.role_id,
@@ -281,14 +288,6 @@ export class McpLoopRunner {
       sessionId: this.request.sessionId
     };
 
-    // Log normalized context for debugging
-    console.log('Normalized context:', {
-      roleId: this.context.roleId,
-      profileId: this.context.profileId,
-      mode: this.context.mode,
-      messageCount: this.context.messages.length
-    });
-
     // Only load conversation context if session ID is provided
     if (this.request.sessionId) {
       console.log('Loading conversation context for session:', this.request.sessionId);
@@ -297,16 +296,19 @@ export class McpLoopRunner {
           this.supabase,
           this.request.sessionId,
           {
-            messageLimit: 10,
+            messageLimit: 5,
             actionLimit: 5,
-            embeddingAverageCount: 3
+            embeddingAverageCount: 3,
+            semanticActionMatchThreshold: 0.75,
+            semanticActionLimit: 3,
+            queryEmbedding: embeddedMessage
           }
         );
 
         // Update context with conversation history
         this.context = {
           ...this.context,
-          recentMessages: conversationContext.history || [],
+          pastMessages: conversationContext.pastMessages || [],
           agentActions: conversationContext.agentActions || [],
           summary: conversationContext.summary,
           contextEmbedding: conversationContext.contextEmbedding,
@@ -318,7 +320,7 @@ export class McpLoopRunner {
           sessionId: this.request.sessionId,
           mode: this.request.mode,
           messageCount: this.request.messages?.length || 0,
-          historyCount: conversationContext.history?.length || 0,
+          historyCount: conversationContext.pastMessages?.length || 0,
           actionsCount: conversationContext.agentActions?.length || 0
         });
       } catch (error) {
@@ -427,7 +429,12 @@ ${JSON.stringify(tools)}
     // Get AI plan
     const aiResponse = await this.deps.invokeChatModelV2({
       system: systemPrompt,
-      user: userPrompt
+      messages: this.context.pastMessages ? [
+        ...this.context.pastMessages,
+        { role: 'user', content: userPrompt }
+      ] : [
+        { role: 'user', content: userPrompt }
+      ]
     }, {
       model: 'openai:gpt-3.5-turbo',
       temperature: 0.2,
