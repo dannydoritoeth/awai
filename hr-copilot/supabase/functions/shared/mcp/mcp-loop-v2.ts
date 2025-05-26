@@ -373,8 +373,14 @@ export class McpLoopRunner {
 
 
     🔁 Follow this process:
-    1. Read the user context and determine what has already been done and what the user is asking for.
-    2. Select up to 3 tools that help solve the user's request.
+   1. Read the user context and determine what has already been done and what the user is asking for.
+   2. Select up to 3 tools that help solve the user's request.
+   3. A tool can only be selected if:
+      - All of its "requiredInputs" are known
+      - All tools listed in its "requiredPrerequisites" have either already been run OR are included earlier in this tool list
+   4. If a tool has "suggestedPrerequisites", include them if helpful, but they are not required.
+   5. When calling a tool, fill in its "args" by copying values from the user context (e.g. profileId, roleId, companyIds), if those inputs are required by the tool.
+   6. Output your answer as a JSON array ONLY. Do not include markdown, code blocks, or extra text.
     
     📍 Contextual Planning Rules:
     - A tool can only be selected if:
@@ -389,7 +395,10 @@ export class McpLoopRunner {
     - Your goal is to help the user explore and recommend relevant entry points (e.g. roles to start from, skills to develop, insights to view).
     
     📦 Output Format (JSON only):
-   Output your answer as a JSON array ONLY. Do not include markdown, code blocks, or extra text. This is an ordered list of tools to run so requiredPrerequisites and suggestedPrerequisites must come before the main tool.
+    - Output your answer as a JSON array ONLY. Do not include markdown, code blocks, or extra text. This is an ordered list of tools to run so requiredPrerequisites and suggestedPrerequisites must come before the main tool.
+    -  Do NOT include markdown formatting, triple backticks, code blocks, or json tags.
+    -  Respond with raw JSON that can be parsed directly using JSON.parse().
+    -  Example:
       [
       {
         "tool": "tool_id",
@@ -452,7 +461,18 @@ ${JSON.stringify(tools)}
 
     // Parse and validate plan
     try {
-      const plan = JSON.parse(aiResponse.output);
+      // Clean the AI response to handle both raw JSON and code block wrapped JSON
+      const cleanOutput = aiResponse.output
+        .replace(/^```json\s*/, '')  // Remove opening code block if present
+        .replace(/\s*```$/, '')      // Remove closing code block if present
+        .trim();                     // Clean up whitespace
+
+      console.log('Parsing plan from cleaned output:', {
+        originalOutput: aiResponse.output,
+        cleanOutput
+      });
+
+      const plan = JSON.parse(cleanOutput);
       if (!Array.isArray(plan)) {
         throw new Error('Plan must be an array');
       }
