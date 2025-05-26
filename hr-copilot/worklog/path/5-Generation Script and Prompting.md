@@ -363,13 +363,13 @@ Each generation task logs:
 
 #### 1. `generateEntityData`
 
-**Purpose:** Generate structured data for any entity type
+**Purpose:** Generate structured data for any entity type with filter context support
 
 **Steps:**
 1. Load entity and related data
-2. Find semantic matches and relationships
+2. Apply filter context if provided
 3. Generate entity-specific data
-4. Store in `generated_content` with embeddings
+4. Store in `generated_content` with embeddings and filter metadata
 
 **Base Prompt Template:**
 ```md
@@ -377,13 +377,16 @@ System: Generate structured data for {entityType}. Focus on accurate, comprehens
 
 Entity: {entityData}
 Related Entities: {semanticMatches}
-Context: {additionalContext}
+Context: {
+  filters: {filterContext},
+  additionalContext: {additionalContext}
+}
 
 Required data structure:
 1. Core Attributes
-2. Relationships & Connections
-3. Career Pathways
-4. Insights & Analytics
+2. Relationships & Connections (filtered by context)
+3. Career Pathways (within filter scope)
+4. Insights & Analytics (contextualized)
 
 Output must match interface:
 {typescript interface for entity type}
@@ -391,16 +394,808 @@ Output must match interface:
 
 #### 2. `refreshEntityData`
 
-**Purpose:** Smart refresh of entity data
+**Purpose:** Smart refresh of entity data considering filter contexts
 
 **Triggers:**
 - Entity data changes
 - Related entity updates
+- Filter context changes
 - Classification system changes
 - Periodic refresh (30 days)
 
 **Process:**
 1. Check data age and dependencies
-2. Identify affected entities
+2. Identify affected entities and filter combinations
 3. Queue entity regeneration tasks
 4. Update embeddings and version tracking
+
+---
+
+### Filtering Architecture
+
+#### Filter Types
+
+```typescript
+interface FilterContext {
+  taxonomy?: string[];      // e.g., ["Policy", "Environment"]
+  region?: string[];        // e.g., ["Sydney", "Northern NSW"]
+  division?: string[];      // e.g., ["DPIE", "Transport"]
+  employmentType?: string[]; // e.g., ["Permanent", "Temporary"]
+}
+
+interface FilterConfig {
+  type: 'inclusion' | 'exclusion';
+  combineOperator: 'AND' | 'OR';
+  allowMultiple: boolean;
+}
+
+const FILTER_CONFIGS: Record<keyof FilterContext, FilterConfig> = {
+  taxonomy: {
+    type: 'inclusion',
+    combineOperator: 'OR',
+    allowMultiple: true
+  },
+  region: {
+    type: 'inclusion',
+    combineOperator: 'OR',
+    allowMultiple: true
+  },
+  division: {
+    type: 'inclusion',
+    combineOperator: 'OR',
+    allowMultiple: true
+  },
+  employmentType: {
+    type: 'inclusion',
+    combineOperator: 'OR',
+    allowMultiple: true
+  }
+};
+```
+
+#### URL Structure
+
+Filters are applied via URL parameters for consistency and shareability:
+
+```typescript
+// Example URLs
+/roles/general/123?division=DPIE,Transport&region=Sydney
+/transitions/456/789?taxonomy=Policy,Environment
+/capabilities/234?division=DPIE&employmentType=Permanent
+```
+
+---
+
+### Caching Strategy
+
+#### 1. Entity Type Classification
+
+```typescript
+interface EntityTypeConfig {
+  type: 'db-only' | 'ai-generated';
+  filterStrategy: 'per-combination' | 'base-plus-filter';
+  ttl: number;
+  maxFilterCombinations?: number;
+}
+
+const ENTITY_CONFIGS: Record<string, EntityTypeConfig> = {
+  // DB-Only Entities
+  'role.list': {
+    type: 'db-only',
+    filterStrategy: 'per-combination',
+    ttl: 24 * 3600 // 1 day
+  },
+  'capability.list': {
+    type: 'db-only',
+    filterStrategy: 'per-combination',
+    ttl: 7 * 24 * 3600 // 7 days
+  },
+  
+  // AI-Generated Entities
+  'transition.analysis': {
+    type: 'ai-generated',
+    filterStrategy: 'base-plus-filter',
+    ttl: 7 * 24 * 3600, // 7 days
+    maxFilterCombinations: 10
+  },
+  'career.pathway': {
+    type: 'ai-generated',
+    filterStrategy: 'base-plus-filter',
+    ttl: 14 * 24 * 3600, // 14 days
+    maxFilterCombinations: 5
+  }
+};
+```
+
+#### 2. Cache Key Generation
+
+```typescript
+function generateCacheKey(params: {
+  entityType: string;
+  entityId: string;
+  filters: FilterContext;
+}): string {
+  const { entityType, entityId, filters } = params;
+  const filterHash = createFilterHash(filters);
+  return `${entityType}:${entityId}:${filterHash}`;
+}
+```
+
+---
+
+### Key Architecture Decisions & Recommendations
+
+1. **Filter State Management**
+   
+   **Recommendation:** URL-based filter state
+   ```typescript
+   // Benefits:
+   - Shareable filtered views
+   - Browser history support
+   - Easy state restoration
+   - SEO-friendly
+   ```
+
+2. **Caching Strategy by Entity Type**
+
+   **Recommendation:** Hybrid approach based on entity type
+   ```typescript
+   DB-Only Entities:
+   - Cache per filter combination
+   - Short TTL (24 hours)
+   - No limit on combinations
+   
+   AI-Generated Entities:
+   - Base content + filter logic
+   - Longer TTL (7-14 days)
+   - Limited filter combinations
+   ```
+
+3. **Filter Application Point**
+
+   **Recommendation:** Multi-level filtering
+   ```typescript
+   1. Database Level:
+      - Apply basic filters (division, region)
+      - Handle exact matches
+   
+   2. Application Level:
+      - Complex filter logic
+      - Relationship filtering
+      - Cross-entity filters
+   
+   3. AI Generation Level:
+      - Only for significant context changes
+      - When filtered view needs deep analysis
+   ```
+
+4. **Cost Optimization**
+
+   **Recommendation:** Progressive generation
+   ```typescript
+   1. Try cached exact match
+   2. Try filtered cached base
+   3. Generate new if:
+      - High-value filter combination
+      - Frequently requested
+      - Cannot be derived from base
+   ```
+
+---
+
+### Implementation Example
+
+```typescript
+async function getFilteredEntityData(params: {
+  entityType: string;
+  entityId: string;
+  filters: FilterContext;
+}): Promise<EntityData> {
+  const config = ENTITY_CONFIGS[params.entityType];
+  const cacheKey = generateCacheKey(params);
+
+  // 1. Try exact cache match
+  const cached = await cache.get(cacheKey);
+  if (cached) return cached;
+
+  // 2. For DB-only entities
+  if (config.type === 'db-only') {
+    const data = await queryDatabaseWithFilters(params);
+    await cache.set(cacheKey, data, config.ttl);
+    return data;
+  }
+
+  // 3. For AI-generated entities
+  if (config.filterStrategy === 'base-plus-filter') {
+    // Try to filter existing base content
+    const baseData = await getBaseEntityData(params);
+    if (canApplyFiltersToBase(baseData, params.filters)) {
+      const filtered = applyFilters(baseData, params.filters);
+      await cache.set(cacheKey, filtered, config.ttl);
+      return filtered;
+    }
+  }
+
+  // 4. Generate new content with filters
+  const generated = await generateEntityData({
+    ...params,
+    context: { filters: params.filters }
+  });
+  
+  await cache.set(cacheKey, generated, config.ttl);
+  return generated;
+}
+```
+
+---
+
+### Monitoring & Analytics
+
+Track filter usage and performance:
+
+```typescript
+interface FilterAnalytics {
+  filterCombinations: Record<string, number>; // Usage count
+  generationTriggers: number;                 // AI generations
+  cacheHits: number;                          // Cache effectiveness
+  averageResponseTime: Record<string, number>;// By strategy
+  costByFilter: Record<string, number>;       // AI cost tracking
+}
+```
+
+### Semantic Discovery & Filtering
+
+#### 1. Semantic Search Integration
+
+```typescript
+interface SemanticSearchParams {
+  query?: string;           // Free text search
+  entityType: string;
+  entityId?: string;
+  filters: FilterContext;
+  semanticConfig: {
+    minSimilarity: number;  // e.g., 0.75
+    maxResults: number;     // e.g., 20
+    includeFiltered: boolean; // Whether to search before or after filters
+  };
+}
+
+interface SemanticMatch {
+  entityId: string;
+  entityType: string;
+  similarity: number;
+  matchReason: string;
+  matchingAttributes: string[];
+}
+```
+
+#### 2. Hybrid Search Strategy
+
+```typescript
+async function findRelatedEntities(params: SemanticSearchParams): Promise<SemanticMatch[]> {
+  const { entityType, entityId, filters, semanticConfig } = params;
+
+  // 1. Get base embeddings
+  const baseEmbedding = entityId 
+    ? await getEntityEmbedding(entityType, entityId)
+    : await generateQueryEmbedding(params.query);
+
+  // 2. Strategy based on config
+  if (semanticConfig.includeFiltered) {
+    // Search first, then filter
+    const matches = await semanticSearch(baseEmbedding, {
+      minSimilarity: semanticConfig.minSimilarity,
+      maxResults: semanticConfig.maxResults * 2 // Get more to allow for filtering
+    });
+    return filterSemanticMatches(matches, filters);
+  } else {
+    // Filter first, then search within filtered set
+    const filteredIds = await getFilteredEntityIds(entityType, filters);
+    return semanticSearchWithinSet(baseEmbedding, filteredIds, semanticConfig);
+  }
+}
+```
+
+#### 3. Emergent Relationship Discovery
+
+```typescript
+interface EmergentRelationship {
+  type: 'skill_based' | 'capability_based' | 'domain_knowledge' | 'career_pathway';
+  confidence: number;
+  explanation: string;
+  supporting_evidence: {
+    shared_attributes: string[];
+    semantic_similarity: number;
+    historical_transitions?: number;
+  };
+}
+
+async function findEmergentRelationships(params: {
+  entityType: string;
+  entityId: string;
+  filters: FilterContext;
+}): Promise<EmergentRelationship[]> {
+  // 1. Get entity embedding and key attributes
+  const entityData = await getEntityData(params.entityType, params.entityId);
+  
+  // 2. Find semantic matches across different entity types
+  const crossEntityMatches = await Promise.all([
+    findRelatedEntities({
+      ...params,
+      semanticConfig: { minSimilarity: 0.7, maxResults: 10, includeFiltered: true }
+    }),
+    // Look for matches in other domains/divisions
+    findRelatedEntities({
+      ...params,
+      filters: removeConstraints(params.filters, ['division', 'taxonomy']),
+      semanticConfig: { minSimilarity: 0.8, maxResults: 5, includeFiltered: true }
+    })
+  ]);
+
+  // 3. Analyze patterns and generate insights
+  return analyzeRelationships(entityData, crossEntityMatches);
+}
+```
+
+#### 4. Integration with Entity Generation
+
+Update the generateEntityData function to include semantic relationships:
+
+```typescript
+async function generateEntityData(params: GenerateEntityParams): Promise<GeneratedEntityData> {
+  // ... existing loading code ...
+
+  // Find semantic relationships
+  const semanticRelationships = await findEmergentRelationships({
+    entityType: params.entityType,
+    entityId: params.entityId,
+    filters: params.context?.filters || {}
+  });
+
+  // Generate content with semantic insights
+  const content = await generateEntityContent(params.entityType, {
+    entity: entityData,
+    related: relatedData,
+    semanticInsights: semanticRelationships,
+    context: params.context
+  });
+
+  // ... rest of the function ...
+}
+```
+
+#### 5. Semantic Search Prompts
+
+```typescript
+const SEMANTIC_PROMPTS = {
+  relationship_analysis: `
+    System: Analyze the semantic relationship between these entities and identify non-obvious connections:
+
+    Source Entity: {entityData}
+    Matched Entity: {matchData}
+    Similarity Score: {similarity}
+    
+    Consider:
+    1. Shared skill patterns
+    2. Complementary capabilities
+    3. Domain knowledge transfer
+    4. Historical career transitions
+    
+    Output must include:
+    1. Relationship type classification
+    2. Confidence score
+    3. Evidence-based explanation
+    4. Suggested transition pathway
+  `,
+
+  emergent_pattern: `
+    System: Identify emergent career patterns from these semantic matches:
+
+    Entity: {entityData}
+    Semantic Matches: {matches}
+    Filter Context: {filters}
+
+    Look for:
+    1. Non-traditional career paths
+    2. Cross-domain skill applications
+    3. Emerging role clusters
+    4. Novel capability combinations
+
+    Output must match EmergentRelationship interface
+  `
+};
+```
+
+### Updated Implementation Example
+
+```typescript
+async function getFilteredEntityDataWithSemantics(params: {
+  entityType: string;
+  entityId: string;
+  filters: FilterContext;
+  semanticConfig?: SemanticSearchParams;
+}): Promise<EntityData> {
+  const config = ENTITY_CONFIGS[params.entityType];
+  const cacheKey = generateCacheKey(params);
+
+  // Try cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) return cached;
+
+  // Get base data
+  const baseData = await getFilteredEntityData(params);
+
+  // Enhance with semantic relationships if configured
+  if (params.semanticConfig) {
+    const semanticRelationships = await findEmergentRelationships({
+      entityType: params.entityType,
+      entityId: params.entityId,
+      filters: params.filters
+    });
+
+    // Merge semantic insights
+    baseData.relationships = {
+      ...baseData.relationships,
+      emergent: semanticRelationships
+    };
+
+    // Cache enhanced data
+    await cache.set(cacheKey, baseData, config.ttl);
+  }
+
+  return baseData;
+}
+```
+
+### Core Interfaces
+
+```typescript
+interface GeneratedEntityRequest extends MCPRequest {
+  entityType: string;
+  entityId: string;
+  filters?: FilterContext;
+  semanticConfig?: {
+    minSimilarity?: number;     // Default: 0.75
+    maxResults?: number;        // Default: 20
+    includeFiltered?: boolean;  // Default: true
+    crossEntitySearch?: boolean;// Default: false
+  };
+  context?: {
+    userContext?: Record<string, any>;
+    systemContext?: Record<string, any>;
+  };
+}
+
+// All our specific requests extend this base
+interface GenerateRoleRequest extends GeneratedEntityRequest {
+  entityType: 'role';
+  // Role-specific additions if needed
+}
+
+interface GenerateTransitionRequest extends GeneratedEntityRequest {
+  entityType: 'transition';
+  sourceEntityId: string;
+  targetEntityId: string;
+  // Transition-specific additions if needed
+}
+
+interface GenerateCapabilityRequest extends GeneratedEntityRequest {
+  entityType: 'capability';
+  // Capability-specific additions if needed
+}
+```
+
+### Updated Implementation Using Standard Request
+
+```typescript
+// Update our main function to use the standard request
+async function generateEntityData(request: GeneratedEntityRequest): Promise<GeneratedEntityData> {
+  const { entityType, entityId, filters, semanticConfig, context } = request;
+
+  // Load entity data
+  const entityData = await loadEntityData(entityType, entityId);
+
+  // Find semantic relationships if configured
+  let semanticRelationships = [];
+  if (semanticConfig) {
+    semanticRelationships = await findEmergentRelationships({
+      entityType,
+      entityId,
+      filters: filters || {},
+      semanticConfig
+    });
+  }
+
+  // Generate content
+  const content = await generateEntityContent({
+    entity: entityData,
+    semanticInsights: semanticRelationships,
+    context: {
+      filters,
+      ...context
+    }
+  });
+
+  return {
+    entityType,
+    content,
+    metadata: {
+      generatedAt: new Date().toISOString(),
+      version: CURRENT_VERSION,
+      filters,
+      semanticConfig
+    }
+  };
+}
+
+// Example usage for different entity types
+async function generateRole(request: GenerateRoleRequest) {
+  return generateEntityData(request);
+}
+
+async function generateTransition(request: GenerateTransitionRequest) {
+  // Special handling for transitions that have source and target
+  const enhancedRequest = {
+    ...request,
+    entityId: `${request.sourceEntityId}-${request.targetEntityId}`,
+    context: {
+      ...request.context,
+      sourceEntity: await loadEntityData('role', request.sourceEntityId),
+      targetEntity: await loadEntityData('role', request.targetEntityId)
+    }
+  };
+  
+  return generateEntityData(enhancedRequest);
+}
+
+// Edge function handler using standard request
+export async function generateEntityHandler(req: Request) {
+  const request: GeneratedEntityRequest = await req.json();
+  
+  // Validate request
+  validateGeneratedEntityRequest(request);
+  
+  // Check cache using standardized request
+  const cacheKey = generateCacheKey(request);
+  const cached = await checkEntityCache(cacheKey);
+  if (cached && !isStale(cached)) {
+    return cached;
+  }
+  
+  // Generate fresh data
+  const data = await generateEntityData(request);
+  
+  // Cache result
+  await cacheEntityData(cacheKey, data);
+  
+  return data;
+}
+
+// Batch processing with standard request
+async function batchGenerateEntityData(requests: GeneratedEntityRequest[]) {
+  return Promise.all(
+    requests.map(request => generateEntityData(request))
+  );
+}
+```
+
+### Cache Key Generation with Standard Request
+
+```typescript
+function generateCacheKey(request: GeneratedEntityRequest): string {
+  const {
+    entityType,
+    entityId,
+    filters,
+    semanticConfig
+  } = request;
+
+  // Create deterministic filter hash
+  const filterHash = filters ? createFilterHash(filters) : 'no-filters';
+  
+  // Create semantic config hash if present
+  const semanticHash = semanticConfig ? createSemanticHash(semanticConfig) : 'no-semantic';
+
+  return `${entityType}:${entityId}:${filterHash}:${semanticHash}`;
+}
+```
+
+### Standardized Action Interfaces
+
+```typescript
+// Base request interface all actions should extend
+interface MCPActionRequest extends MCPRequest {
+  args?: Record<string, any>;     // Action-specific arguments
+  context: {                      // Shared context
+    sessionId: string;
+    mode: 'candidate' | 'hiring' | 'analyst' | 'general';
+    filters?: FilterContext;      // Standard filters
+    userContext?: Record<string, any>;
+    systemContext?: Record<string, any>;
+  };
+  supabase: SupabaseClient;       // Database client
+}
+
+// Example action-specific request
+interface GetRoleDetailsRequest extends MCPActionRequest {
+  args: {
+    roleId: string;
+    includeCapabilities?: boolean;
+    includeSkills?: boolean;
+  };
+}
+
+// Example transition-specific request
+interface GetTransitionDetailsRequest extends MCPActionRequest {
+  args: {
+    sourceRoleId: string;
+    targetRoleId: string;
+    assessmentType?: 'full' | 'quick';
+  };
+}
+```
+
+### Action Implementation Pattern
+
+All actions should follow this standard pattern:
+
+```typescript
+import { z } from "zod";
+
+export const actionId = 'getEntityDetails';
+
+// 1. Define args schema
+export const argsSchema = z.object({
+  entityId: z.string().uuid("Must be a valid UUID"),
+  includeRelated: z.boolean().optional().default(true),
+  depth: z.number().min(1).max(3).optional().default(1)
+});
+
+// 2. Type inference from schema
+type Args = z.infer<typeof argsSchema>;
+
+// 3. Standard action implementation
+export const action: MCPActionV2 = {
+  id: actionId,
+  title: "Get Entity Details",
+  description: "Retrieves detailed information about an entity",
+  applicableRoles: ["analyst", "general"],
+  capabilityTags: ["Entity Analysis"],
+  tags: ["entity", "details"],
+  usesAI: false,
+  argsSchema,
+  
+  // 4. Default args function (optional)
+  getDefaultArgs: (context: Record<string, any>): Partial<Args> => ({
+    includeRelated: true,
+    depth: 1
+  }),
+
+  // 5. Main action function
+  actionFn: async (request: MCPActionRequest): Promise<MCPResponse> => {
+    // Validate args
+    const args = argsSchema.parse(request.args);
+    
+    // Access context safely
+    const { filters, userContext } = request.context;
+    
+    // Implementation
+    const result = await generateEntityData({
+      entityType: 'entity',
+      entityId: args.entityId,
+      filters,
+      context: {
+        ...userContext,
+        depth: args.depth
+      }
+    });
+
+    return {
+      success: true,
+      data: result
+    };
+  }
+};
+```
+
+### Action Registration
+
+Actions must be registered in the `actionRegistry.ts`:
+
+```typescript
+import { action as getEntityDetails } from './getEntityDetails/action.ts';
+
+const actions: MCPActionV2[] = [
+  getEntityDetails,
+  // ... other actions
+];
+```
+
+### Key Standardization Points
+
+1. **Request Structure**
+   ```typescript
+   // CORRECT ✅
+   actionFn: async (request: MCPActionRequest) => {
+     const { args, context, supabase } = request;
+   }
+
+   // INCORRECT ❌
+   actionFn: async ({ entityId, filters, supabase }) => {
+     // Don't destructure at top level
+   }
+   ```
+
+2. **Args Validation**
+   ```typescript
+   // CORRECT ✅
+   const args = argsSchema.parse(request.args);
+
+   // INCORRECT ❌
+   const { entityId = request.args.entityId } = request.args;
+   ```
+
+3. **Context Usage**
+   ```typescript
+   // CORRECT ✅
+   const { filters, userContext } = request.context;
+
+   // INCORRECT ❌
+   const { filters } = request; // Don't access at top level
+   ```
+
+4. **Filter Handling**
+   ```typescript
+   // CORRECT ✅
+   const result = await generateEntityData({
+     filters: request.context.filters,
+     // ... other params
+   });
+
+   // INCORRECT ❌
+   const result = await generateEntityData({
+     filters: request.filters, // Wrong path
+     // ... other params
+   });
+   ```
+
+### Common Issues to Avoid
+
+1. **Infrastructure Access**
+   ```typescript
+   // WRONG: Don't include infrastructure in args schema
+   const argsSchema = z.object({
+     supabase: z.any(),     // ❌ Wrong
+     sessionId: z.string()  // ❌ Wrong
+   });
+
+   // CORRECT: Access from request
+   const { supabase, sessionId } = request; // ✅ Correct
+   ```
+
+2. **Context Mixing**
+   ```typescript
+   // WRONG: Don't mix context and args
+   const argsSchema = z.object({
+     entityId: z.string(),
+     userContext: z.any()  // ❌ Wrong
+   });
+
+   // CORRECT: Keep separate
+   const argsSchema = z.object({
+     entityId: z.string()  // ✅ Correct
+   });
+   // Then access context from request.context
+   ```
+
+3. **Filter Access**
+   ```typescript
+   // WRONG: Don't include filters in args
+   const argsSchema = z.object({
+     entityId: z.string(),
+     filters: z.any()  // ❌ Wrong
+   });
+
+   // CORRECT: Access from context
+   const { filters } = request.context;  // ✅ Correct
+   ```
