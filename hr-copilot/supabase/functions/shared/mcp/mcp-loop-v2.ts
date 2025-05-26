@@ -448,7 +448,7 @@ ${JSON.stringify(tools)}
       ]
     }, {
       model: 'openai:gpt-3.5-turbo',
-      temperature: 0.2,
+      temperature: 0,
       max_tokens: 1000,
       supabase: this.supabase,
       sessionId: this.context.sessionId || 'default',
