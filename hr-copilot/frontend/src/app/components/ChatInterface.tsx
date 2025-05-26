@@ -208,26 +208,6 @@ export default function ChatInterface({
     if (inputValue.trim() && !isLoading) {
       setHasUserInteracted(true); // Mark as interacted when user sends a message
       onSendMessage(inputValue.trim());
-
-      // Prepare request body
-      const requestBody = {
-        action: 'postMessage',
-        sessionId,
-        message: inputValue.trim()
-      };
-
-      console.log('Sending chat request:', requestBody);
-
-      // Make the API call
-      fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-
       setInputValue('');
     }
   };
