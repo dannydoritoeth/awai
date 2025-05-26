@@ -7,6 +7,7 @@ import { generateEmbedding } from '../../../semanticSearch.ts';
 import { Tables } from '../../../embeddings.ts';
 import { z } from "https://deno.land/x/zod/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { ActionButtons } from '../../../utils/markdown/renderMarkdownActionButton.ts';
 
 // Define SemanticMatch interface locally since it's not exported
 interface SemanticMatch {
@@ -83,7 +84,7 @@ export async function getSemanticDiscoveryMatchesBase(
 
         const matches = await getSemanticMatches(effectiveSupabase, {
           embedding: queryEmbedding,
-          entityTypes: [table.slice(0, -1) as 'role' | 'skill' | 'capability' | 'company' | 'profile'],
+          tables: [table],
           limit: Math.ceil(limit / targetTables.length),
           minScore: threshold
         });
@@ -121,11 +122,11 @@ export async function getSemanticDiscoveryMatchesBase(
       await logAgentProgress(
         supabase,
         request.sessionId,
-        aiResponse.output,
+        "Starting semantic discovery search...",
         { 
           phase: 'complete',
           analysisDetails: {
-            message: aiResponse.output
+            message: "Starting semantic discovery search..."
           }
         }
       );
@@ -259,12 +260,19 @@ export const getSemanticDiscoveryMatches: MCPActionV2 = {
       const markdownSummary = [
         `# Search Results Summary\n`,
         `Found **${matches.length}** relevant matches across **${Object.keys(matchesByType).length}** categories.\n`,
-        ...Object.entries(matchesByType).map(([type, typeMatches]) => (
-          `## ${type.charAt(0).toUpperCase() + type.slice(1)}s\n` +
-          typeMatches.map(match => 
-            `- **${match.name}** (Similarity: ${(match.similarity * 100).toFixed(1)}%)`
-          ).join('\n')
-        ))
+        ...Object.entries(matchesByType).map(([type, typeMatches]) => {
+          const section = [`## ${type.charAt(0).toUpperCase() + type.slice(1)}s\n`];
+          
+          typeMatches.forEach(match => {
+            section.push(`- **${match.name}** (Similarity: ${(match.similarity * 100).toFixed(1)}%)`);
+            // Add action button for roles
+            if (type === 'role') {
+              section.push(ActionButtons.learnMoreAboutRole(match.id, match.name));
+            }
+          });
+          
+          return section.join('\n');
+        })
       ].join('\n');
 
       // Log completion with markdown

@@ -40,12 +40,14 @@ import { generateCapabilityHeatmapByCompany } from './generateCapabilityHeatmapB
 import { getProfileContextAction } from './getProfileContext/action.ts';
 import { explainMatch } from './explainMatch/action.ts';
 import { getSemanticDiscoveryMatches } from './getSemanticDiscoveryMatches/action.ts';
+import { replyFromMemory } from './replyFromMemory/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
+import { Tables } from '../../embeddings.ts';
 
 const semanticDiscoverySchema = z.object({
   queryText: z.string().min(1, "Query text cannot be empty").describe("The text to search for matches"),
-  targetTables: z.array(z.string()).optional(),
+  targetTables: z.array(z.enum(['roles', 'capabilities', 'skills', 'agent_actions'] as const)).optional(),
   limit: z.number().positive().optional(),
   threshold: z.number().min(0).max(1).optional()
 });
@@ -100,7 +102,8 @@ const actions: MCPActionV2[] = [
   // generateCapabilityInsights,
   getProfileContextAction,
   explainMatch,
-  getSemanticDiscoveryMatchesWithMeta
+  getSemanticDiscoveryMatchesWithMeta,
+  replyFromMemory
 //   getSuggestedCareerPaths
 ];
 

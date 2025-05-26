@@ -361,6 +361,17 @@ export class McpLoopRunner {
     // Construct Planner Prompt
     const systemPrompt = `You are a structured planning agent. Your task is to solve the user's query by selecting and sequencing appropriate tools from the list below.
 
+    User Context:
+    - action: ${this.request.action || 'N/A'}
+    - sessionId: ${this.request.sessionId || 'N/A'}
+    - profileId: ${this.request.profileId || this.context.profileId || 'N/A'}
+    - roleId: ${this.request.roleId || this.context.roleId || 'N/A'}
+    - roleTitle: ${this.context.roleTitle || 'N/A'}
+    - actionId: ${this.context.actionId || 'N/A'}
+    - mode: ${this.request.mode || 'N/A'}
+    - companyIds: ${JSON.stringify(this.request.companyIds || this.context.companyIds || [])}
+
+
     🔁 Follow this process:
     1. Read the user context and determine what has already been done and what the user is asking for.
     2. Select up to 3 tools that help solve the user's request.
@@ -394,26 +405,17 @@ export class McpLoopRunner {
     🚫 If a required input is missing or a prerequisite hasn't run and can't be included, SKIP the tool.
     
     ✅ Success Criteria:
+    - You must respond with a JSON array of tools ONLY. Do not include markdown, code blocks, or extra text.
     - You must include all tools that have \`requiredPrerequisites\` BEFORE the main tool you're planning.
     - You must include all tools that have \`suggestedPrerequisites\` if they're relevant.
-    - If in discovery mode, avoid profile/role-specific tools and focus on semantic routing tools like \`getSemanticDiscoveryMatches\`.
+    - If in general/discovery mode, avoid profile/role-specific tools and focus on semantic routing tools like \`getSemanticDiscoveryMatches\`.
+    - You are encouraged to use the replyFromMemory tool to provide additional context from previous conversations.
     
     Available tools:
 ${JSON.stringify(tools)}
     `;
 
-    const userPrompt = `
-    This is the request context from the user:
-    - action: ${this.request.action || 'N/A'}
-    - sessionId: ${this.request.sessionId || 'N/A'}
-    - message: ${this.request.messages?.[this.request.messages.length - 1]?.content || this.context.latestMessage || 'N/A'}
-    - profileId: ${this.request.profileId || this.context.profileId || 'N/A'}
-    - roleId: ${this.request.roleId || this.context.roleId || 'N/A'}
-    - roleTitle: ${this.context.roleTitle || 'N/A'}
-    - actionId: ${this.context.actionId || 'N/A'}
-    - mode: ${this.request.mode || 'N/A'}
-    - companyIds: ${JSON.stringify(this.request.companyIds || this.context.companyIds || [])}
-    `;
+    const userPrompt = this.request.messages?.[this.request.messages.length - 1]?.content || this.context.latestMessage || 'N/A';
 
     console.log('About to invoke planner with prompt:', {
       systemPrompt,
