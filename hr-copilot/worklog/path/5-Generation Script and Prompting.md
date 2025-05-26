@@ -2,54 +2,172 @@
 
 ### Purpose
 
-This document outlines the backend generation logic used to populate key data entities like `general_roles`, transitions, and taxonomy metadata using semantic clustering and prompt-based AI generation.
+This document outlines the backend generation logic used to populate key data entities and their relationships using semantic clustering, embeddings, and prompt-based AI generation.
 
 ---
 
-### General Role Generation
+### Core Generation Scripts
 
-#### Script: `generateGeneralRoles`
+#### 1. `generateGeneralRoles`
+
+**Purpose:** Create normalized role types across departments
 
 **Steps:**
-
-1. Embed all `roles` (title + description)
-2. Cluster semantically similar roles
-3. Assign a canonical label (e.g. “Policy Officer G6/7”)
-4. Create `general_roles` with average embedding
+1. Embed all `roles` (title + description) using OpenAI embeddings
+2. Cluster semantically similar roles (cosine similarity > 0.85)
+3. Assign canonical labels (e.g., "Policy Officer G6/7")
+4. Create `general_roles` entries with:
+   - Average embedding of cluster
+   - Normalized classification band
+   - Functional family
 5. Link `roles.general_role_id`
+6. Generate taxonomies and link via `general_role_taxonomies`
 
-#### Outputs:
-
-* `general_roles`
-* Role-to-general-role links
-
----
-
-### Prompt Template for General Role
-
-**System Prompt:**
-
-> You are a classification and workforce analyst. Group NSW Government job titles into generalized roles based on function (e.g. Policy, Project Delivery). Normalize role groups first, then infer typical classification levels using the table below.
-
-**Example Instruction:**
-
+**Example Prompt:**
 ```md
-Role titles:
-- Senior Policy Advisor
-- Policy Analyst Grade 6
-- Legislative Policy Officer
+System: You are a classification and workforce analyst. Group NSW Government job titles into generalized roles based on function (e.g., Policy, Project Delivery). Normalize role groups first, then infer typical classification levels.
 
-Return JSON format:
+Input roles:
+- Senior Policy Advisor (Grade 9/10)
+- Policy Analyst Grade 6
+- Legislative Policy Officer Grade 7/8
+- Principal Policy Officer
+
+Output format:
 {
-  "classifications": [
-    {"roleTitle": "Policy Analyst Grade 6", "taxonomyGroups": ["Policy"]}
+  "generalRole": {
+    "title": "Policy Officer",
+    "classificationBand": "G6-8",
+    "family": "Policy & Legislation",
+    "taxonomies": ["Policy Development", "Government Services"]
+  },
+  "variants": [
+    {"title": "Policy Analyst", "typicalGrade": "G6"},
+    {"title": "Senior Policy Officer", "typicalGrade": "G7/8"},
+    {"title": "Principal Policy Officer", "typicalGrade": "G9/10"}
   ]
 }
 ```
 
+#### 2. `generateTransitions`
+
+**Purpose:** Identify and characterize possible role transitions
+
+**Steps:**
+1. Calculate pairwise similarity between general_roles
+2. For high-similarity pairs (>0.75):
+   - Generate transition metadata
+   - Calculate capability/skill gaps
+   - Create development recommendations
+3. Store in `general_role_transitions`
+
+**Example Prompt:**
+```md
+System: Analyze the transition path between these two roles, focusing on capability gaps and development needs.
+
+Source Role: Policy Officer G6/7
+{role details...}
+
+Target Role: Senior Policy Officer G9/10
+{role details...}
+
+Required Output:
+{
+  "transitionSummary": "string",
+  "gapScore": number,
+  "similarityScore": number,
+  "capabilityGaps": [{
+    "capability": "string",
+    "currentLevel": "string",
+    "requiredLevel": "string",
+    "developmentActions": ["string"]
+  }],
+  "recommendedActions": ["string"]
+}
+```
+
+
+
 ---
 
-### Classification Mapping Table
+### Content Generation Scripts
+
+#### 1. `generatePageContent`
+
+**Purpose:** Generate structured content for entity pages
+
+**Steps:**
+1. Load entity and related data
+2. Find semantic matches
+3. Generate content sections
+4. Store in `generated_content`
+
+**Base Prompt Template:**
+```md
+System: Generate structured content for a {entityType} page. Focus on accurate, helpful information that aids career planning.
+
+Entity: {entityData}
+Related Items: {semanticMatches}
+Context: {additionalContext}
+
+Required sections:
+1. Overview/Summary
+2. Key Relationships
+3. Development Pathways
+4. Insights & Recommendations
+
+Output must match interface:
+{typescript interface for entity type}
+```
+
+#### 2. `refreshContent`
+
+**Purpose:** Smart refresh of generated content
+
+**Triggers:**
+- Entity data changes
+- Related entity updates
+- Classification system changes
+- Periodic refresh (30 days)
+
+**Process:**
+1. Check content age and dependencies
+2. Identify affected content
+3. Queue regeneration tasks
+4. Update with version tracking
+
+---
+
+### Embedding Strategy
+
+All semantic objects use OpenAI embeddings (1536 dimensions):
+
+**Embedding Templates:**
+```md
+Roles:
+{title} - {grade} - {primary_purpose}
+Key responsibilities: {responsibilities}
+Required capabilities: {capabilities}
+
+Capabilities:
+{name} - {group}
+Description: {description}
+Behavioral indicators: {indicators}
+
+Skills:
+{name} - {category}
+Description: {description}
+Usage examples: {examples}
+
+Taxonomies:
+{name} - {type}
+Description: {description}
+Related terms: {terms}
+```
+
+---
+
+### Classification Mapping
 
 Used during clustering to infer normalized bands:
 
@@ -119,6 +237,33 @@ Used during clustering to infer normalized bands:
 | ACT          | Exec Level 2        | SES2        | Executive Level 2          |
 | ACT          | Exec Level 3        | SES3        | Executive Level 3          |
 
+Use this mapping to support generating a field like classification_band with values such as "Mid Level (e.g., G6/7, APS5/6)".
+
+Only generate a classification_band after clustering roles by function.
+The generateGeneralRoles script is responsible for clustering and creating entries in the general_roles table. It works by:
+
+Embedding Role Titles and Descriptions: All role titles and descriptions are embedded using a vector embedding model (e.g., OpenAI, Cohere).
+
+Clustering Similar Roles: Roles with high semantic similarity are grouped into candidate clusters.
+
+Assigning Canonical Labels: A generalized role title is assigned to each cluster, such as "Policy Officer G7/8" or "Project Manager G6/7".
+
+Generating General Role Entries: For each cluster, a new entry in the general_roles table is created with metadata such as classification_band, family, and average embedding.
+
+Linking Roles: All original roles within each cluster are updated with a general_role_id linking them to the new generalized role.
+
+This script allows downstream systems to:
+
+Generate reusable development plans
+
+Enable generalized transitions
+
+Aggregate statistics across agencies
+
+Support filtering and capability analytics by general role
+
+This process runs regularly to ensure new or changed roles are properly clustered and linked.
+
 ---
 
 ### Other Planned Generators
@@ -128,7 +273,7 @@ Used during clustering to infer normalized bands:
 * From pairwise general\_roles with high similarity
 * Generates:
 
-  * Summary of what’s required to make the move
+  * Summary of what's required to make the move
   * Readiness score
   * Skill/capability gaps
   * Suggested development plan
@@ -162,3 +307,100 @@ Used during clustering to infer normalized bands:
 * Regeneration can be triggered manually or scheduled
 * Prompt templates should be versioned and traceable
 * Model choice (e.g. `gpt-4`, `claude`) should be logged in metadata
+
+#### Version Control
+- Prompt templates versioned in git
+- Generated content includes prompt version
+- Model versions logged in metadata
+
+#### Quality Assurance
+- Semantic validation of outputs
+- Consistency checks across related entities
+- Human review for taxonomy changes
+
+#### Regeneration Rules
+- Entity update → regenerate content
+- Taxonomy change → refresh affected roles
+- Classification change → update role bands
+- New roles → rerun clustering
+
+#### Performance Optimization
+- Batch similar generation tasks
+- Cache intermediate embeddings
+- Use parallel processing for independence tasks
+- Smart invalidation based on dependency graph
+
+---
+
+### Monitoring & Logging
+
+Each generation task logs:
+```json
+{
+  "taskId": "uuid",
+  "type": "generation|refresh|update",
+  "entity": {
+    "type": "string",
+    "id": "uuid"
+  },
+  "model": {
+    "embedding": "text-embedding-ada-002",
+    "generation": "gpt-4-turbo"
+  },
+  "timing": {
+    "started_at": "timestamp",
+    "completed_at": "timestamp"
+  },
+  "stats": {
+    "tokens": number,
+    "cost": number,
+    "cacheHits": number
+  }
+}
+```
+
+### Entity Data Generation Scripts
+
+#### 1. `generateEntityData`
+
+**Purpose:** Generate structured data for any entity type
+
+**Steps:**
+1. Load entity and related data
+2. Find semantic matches and relationships
+3. Generate entity-specific data
+4. Store in `generated_content` with embeddings
+
+**Base Prompt Template:**
+```md
+System: Generate structured data for {entityType}. Focus on accurate, comprehensive information that supports career intelligence.
+
+Entity: {entityData}
+Related Entities: {semanticMatches}
+Context: {additionalContext}
+
+Required data structure:
+1. Core Attributes
+2. Relationships & Connections
+3. Career Pathways
+4. Insights & Analytics
+
+Output must match interface:
+{typescript interface for entity type}
+```
+
+#### 2. `refreshEntityData`
+
+**Purpose:** Smart refresh of entity data
+
+**Triggers:**
+- Entity data changes
+- Related entity updates
+- Classification system changes
+- Periodic refresh (30 days)
+
+**Process:**
+1. Check data age and dependencies
+2. Identify affected entities
+3. Queue entity regeneration tasks
+4. Update embeddings and version tracking
