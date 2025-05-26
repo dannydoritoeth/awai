@@ -44,6 +44,7 @@ import { replyFromMemory } from './replyFromMemory/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 import { Tables } from '../../embeddings.ts';
+import { getGeneralRoles } from './getGeneralRoles/action.ts';
 
 const semanticDiscoverySchema = z.object({
   queryText: z.string().min(1, "Query text cannot be empty").describe("The text to search for matches"),
@@ -103,7 +104,8 @@ const actions: MCPActionV2[] = [
   getProfileContextAction,
   explainMatch,
   getSemanticDiscoveryMatchesWithMeta,
-  replyFromMemory
+  replyFromMemory,
+  getGeneralRoles
 //   getSuggestedCareerPaths
 ];
 
