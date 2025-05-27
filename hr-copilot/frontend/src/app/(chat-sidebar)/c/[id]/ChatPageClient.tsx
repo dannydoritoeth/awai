@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import UnifiedResultsView from '@/app/components/UnifiedResultsView';
+import UnifiedResultsView from '../../components/UnifiedResultsView';
 import { supabase } from '@/lib/supabase';
 
 interface RoleData {

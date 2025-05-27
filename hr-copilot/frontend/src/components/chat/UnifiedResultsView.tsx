@@ -1,11 +1,13 @@
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
-import ChatInterface from './ChatInterface';
-import MatchesPanel from './MatchesPanel';
+import ChatInterface from '@/components/chat/ChatInterface';
+import MatchesPanel from '@/components/chat/MatchesPanel';
 import { getSessionMessages } from '@/lib/api/chat';
 import type { ChatMessage, Match as ApiMatch, ResponseData } from '@/types/chat';
 import { generateActionMessage } from '@/lib/messageUtils';
 
-interface Match {
+export interface Match {
   id: string;
   name: string;
   matchPercentage: number;
@@ -19,7 +21,7 @@ interface ExtendedApiMatch extends ApiMatch {
   type?: 'role' | 'profile';
 }
 
-interface ProfileData {
+export interface ProfileData {
   id: string;
   name: string;
   currentRole?: string;
@@ -40,7 +42,7 @@ interface ProfileData {
   additionalContext?: string;
 }
 
-interface RoleData {
+export interface RoleData {
   id: string;
   title: string;
   company: string;
@@ -86,7 +88,6 @@ export default function UnifiedResultsView({
   const containerRef = useRef<HTMLDivElement>(null);
   const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<ChatMessage | null>(null);
-  const pendingRoleMatches = useRef<Match[]>([]);
 
   useEffect(() => {
     console.log('ProfileData changed:', {
@@ -401,7 +402,7 @@ export default function UnifiedResultsView({
       )}
 
       {/* Additional Context Section */}
-      <div className="space-y-3 border-t border-gray-200 pt-6">
+      <div>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-gray-900">Additional Context</h3>
           <button
@@ -497,37 +498,10 @@ export default function UnifiedResultsView({
     // No-op as this will be handled by the panel's onAction
   };
 
-  // Add a function to handle new role matches
   const handleRoleMatchFound = (match: Match) => {
-    console.log('handleRoleMatchFound called with:', match);
-    
-    setMatches(prevMatches => {
-      console.log('Current matches state:', prevMatches);
-      
-      // Check if we already have this match using both ID and type
-      const existingMatchIndex = prevMatches.findIndex(m => 
-        m.id === match.id && m.type === match.type
-      );
-      console.log('Existing match index:', existingMatchIndex);
-      
-      if (existingMatchIndex >= 0) {
-        // If we already have this exact match (same ID and type), don't add it again
-        console.log('Match already exists, skipping');
-        return prevMatches;
-      }
-      
-      // Add new match and sort by match percentage
-      const newMatches = [...prevMatches, match].sort((a, b) => b.matchPercentage - a.matchPercentage);
-      console.log('Final matches state:', newMatches);
-      
-      // Update tab after matches are updated
-      if (newMatches.length > 0 && activeTab !== 'matches') {
-        console.log('Setting active tab to matches');
-        setTimeout(() => setActiveTab('matches'), 0);
-      }
-      
-      return newMatches;
-    });
+    if (onRoleMatchFound) {
+      onRoleMatchFound(match);
+    }
   };
 
   return (
@@ -539,11 +513,6 @@ export default function UnifiedResultsView({
             messages={messages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading || isWaitingForResponse || (messages.length === 0 && isInitializing)}
-            sessionId={sessionId}
-            profileId={profileData?.id}
-            profileData={profileData}
-            roleData={roleData}
-            onRoleMatchFound={handleRoleMatchFound}
           />
         </div>
       </div>
@@ -608,11 +577,6 @@ export default function UnifiedResultsView({
           {activeTab === 'matches' && matches.length > 0 && (
             <MatchesPanel
               matches={matches}
-              onExplainMatch={handleExplainMatch}
-              onDevelopmentPath={handleDevelopmentPath}
-              onCompare={handleCompare}
-              sessionId={sessionId}
-              profileId={profileData?.id}
               onAction={(action: string, match: Match) => {
                 // Ensure we have a profileId for actions that require it
                 if (action === 'explain' && !profileData?.id) {

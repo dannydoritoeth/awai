@@ -2,9 +2,9 @@
 
 import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import UnifiedResultsView from '../components/UnifiedResultsView';
-import ProfileFinder from '../components/ProfileFinder';
-import RoleFinder from '../components/RoleFinder';
+import UnifiedResultsView from '@/components/chat/UnifiedResultsView';
+import ProfileFinder from '@/app/components/ProfileFinder';
+import RoleFinder from '@/app/components/RoleFinder';
 import { startSession } from '@/lib/api/chat';
 import { getBrowserSessionId } from '@/lib/browserSession';
 import { events, EVENT_NAMES } from '@/lib/events';
