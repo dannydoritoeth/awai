@@ -44,15 +44,15 @@ import { replyFromMemory } from './replyFromMemory/action.ts';
 // import { getSuggestedCareerPaths } from './getSuggestedCareerPaths/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 import { Tables } from '../../embeddings.ts';
-import { getGeneralRoles } from './getGeneralRoles/action.ts';
-import { getSpecificRole } from './getSpecificRole/action.ts';
-import { getRoleTransitions } from './getRoleTransitions/action.ts';
-import { getPossibleTransitions } from './getPossibleTransitions/action.ts';
-import { getTransitionRequirements } from './getTransitionRequirements/action.ts';
-import { action as getCompanies } from './getCompanies/action.ts';
-import { action as getCompany } from './getCompany/action.ts';
-import { action as getSkills } from './getSkills/action.ts';
-import { action as getTaxonomies } from './getTaxonomies/action.ts';
+// import { getGeneralRoles } from './getGeneralRoles/action.ts';
+// import { getSpecificRole } from './getSpecificRole/action.ts';
+// import { getRoleTransitions } from './getRoleTransitions/action.ts';
+// import { getPossibleTransitions } from './getPossibleTransitions/action.ts';
+// import { getTransitionRequirements } from './getTransitionRequirements/action.ts';
+// import { action as getCompanies } from './getCompanies/action.ts';
+// import { action as getCompany } from './getCompany/action.ts';
+// import { action as getSkills } from './getSkills/action.ts';
+// import { action as getTaxonomies } from './getTaxonomies/action.ts';
 
 const semanticDiscoverySchema = z.object({
   queryText: z.string().min(1, "Query text cannot be empty").describe("The text to search for matches"),
@@ -113,15 +113,15 @@ const actions: MCPActionV2[] = [
   explainMatch,
   getSemanticDiscoveryMatchesWithMeta,
   replyFromMemory,
-  getGeneralRoles,
-  getSpecificRole,
-  getRoleTransitions,
-  getPossibleTransitions,
-  getTransitionRequirements,
-  getCompanies,
-  getCompany,
-  getSkills,
-  getTaxonomies
+  // getGeneralRoles,
+  // getSpecificRole,
+  // getRoleTransitions,
+  // getPossibleTransitions,
+  // getTransitionRequirements,
+  // getCompanies,
+  // getCompany,
+  // getSkills,
+  // getTaxonomies
 ];
 
 /**
