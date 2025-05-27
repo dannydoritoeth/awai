@@ -45,6 +45,10 @@ import { replyFromMemory } from './replyFromMemory/action.ts';
 import { MCPActionV2, ToolMetadataV2 } from '../types/action.ts';
 import { Tables } from '../../embeddings.ts';
 import { getGeneralRoles } from './getGeneralRoles/action.ts';
+import { getSpecificRole } from './getSpecificRole/action.ts';
+import { getRoleTransitions } from './getRoleTransitions/action.ts';
+import { getPossibleTransitions } from './getPossibleTransitions/action.ts';
+import { getTransitionRequirements } from './getTransitionRequirements/action.ts';
 
 const semanticDiscoverySchema = z.object({
   queryText: z.string().min(1, "Query text cannot be empty").describe("The text to search for matches"),
@@ -105,7 +109,11 @@ const actions: MCPActionV2[] = [
   explainMatch,
   getSemanticDiscoveryMatchesWithMeta,
   replyFromMemory,
-  getGeneralRoles
+  getGeneralRoles,
+  getSpecificRole,
+  getRoleTransitions,
+  getPossibleTransitions,
+  getTransitionRequirements
 //   getSuggestedCareerPaths
 ];
 

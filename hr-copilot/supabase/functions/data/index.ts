@@ -6,6 +6,8 @@ import { generateCapabilityHeatmapByDivisionBase } from '../shared/mcp/actions/g
 import { generateCapabilityHeatmapByRegionBase } from '../shared/mcp/actions/generateCapabilityHeatmapByRegion/action.ts';
 import { generateCapabilityHeatmapByCompanyBase } from '../shared/mcp/actions/generateCapabilityHeatmapByCompany/action.ts';
 import { summarizeHeatmapData } from '../shared/mcp/actions/utils.ts';
+import { getGeneralRoles } from '../shared/mcp/actions/getGeneralRoles/action.ts';
+import { getSpecificRole } from '../shared/mcp/actions/getSpecificRole/action.ts';
 
 interface DataRequest {
   insightId: string;
@@ -17,6 +19,19 @@ interface DataRequest {
   searchTerm?: string;
   limit?: number;
   offset?: number;
+  filters?: {
+    taxonomies?: string[];
+    regions?: string[];
+    divisions?: string[];
+    employmentTypes?: string[];
+    capabilities?: string[];
+    skills?: string[];
+  };
+  // Specific role params
+  roleId?: string;
+  includeSkills?: boolean;
+  includeCapabilities?: boolean;
+  includeDocuments?: boolean;
 }
 
 serve(async (req) => {
@@ -38,39 +53,33 @@ serve(async (req) => {
     // Execute insight query
     let data;
     switch (input.insightId) {
+      case 'getSpecificRole': {
+        const response = await getSpecificRole.actionFn({
+          supabase: supabaseClient,
+          args: {
+            roleId: input.roleId,
+            includeSkills: input.includeSkills,
+            includeCapabilities: input.includeCapabilities,
+            includeDocuments: input.includeDocuments
+          }
+        });
+        data = response.data;
+        if (!response.success) throw new Error(response.error?.message);
+        break;
+      }
       case 'getGeneralRoles': {
-        let query = supabaseClient
-          .from('general_roles')
-          .select('*');
-
-        // Apply filters
-        if (input.functionArea) {
-          query = query.eq('function_area', input.functionArea);
-        }
-        if (input.classificationLevel) {
-          query = query.eq('classification_level', input.classificationLevel);
-        }
-        if (input.searchTerm) {
-          query = query.textSearch('search_vector', input.searchTerm);
-        }
-
-        // Add pagination
-        if (input.limit) {
-          query = query.limit(input.limit);
-        }
-        if (typeof input.offset === 'number') {
-          query = query.range(
-            input.offset,
-            input.offset + (input.limit || 10) - 1
-          );
-        }
-
-        // Default ordering
-        query = query.order('title', { ascending: true });
-
-        const { data: roles, error } = await query;
-        if (error) throw error;
-        data = roles;
+        const response = await getGeneralRoles.actionFn({
+          supabase: supabaseClient,
+          args: {
+            functionArea: input.functionArea,
+            classificationLevel: input.classificationLevel,
+            searchTerm: input.searchTerm,
+            limit: input.limit,
+            offset: input.offset
+          }
+        });
+        data = response.data;
+        if (!response.success) throw new Error(response.error?.message);
         break;
       }
       case 'generateCapabilityHeatmapByTaxonomy':

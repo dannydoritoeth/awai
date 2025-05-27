@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 
-interface GeneralRole {
+export interface GeneralRole {
   id: string;
   title: string;
   description: string | null;
@@ -8,20 +8,186 @@ interface GeneralRole {
   classification_level: string;
   created_at: string;
   updated_at: string;
+  similar_roles?: string[];
+  role_category?: string;
+  semantic_keywords?: string[];
 }
 
-interface GeneralRolesParams {
+export interface FilterOption {
+  id: string;
+  label: string;
+}
+
+export interface RoleFilters {
+  taxonomies?: string[]; // UUIDs
+  regions?: string[]; // UUIDs
+  divisions?: string[]; // UUIDs
+  employmentTypes?: string[]; // UUIDs
+  capabilities?: string[]; // UUIDs
+  skills?: string[]; // UUIDs
+  companies?: string[]; // UUIDs
+}
+
+export interface GeneralRolesParams {
   functionArea?: string;
   classificationLevel?: string;
   searchTerm?: string;
   limit?: number;
   offset?: number;
+  filters?: RoleFilters;
 }
 
-interface DataResponse<T> {
+export interface DataResponse<T> {
   success: boolean;
   data: T | null;
   error: string | null;
+}
+
+export interface Division {
+  id: string;
+  name: string;
+  cluster: string;
+  agency: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+}
+
+export interface Capability {
+  id: string;
+  name: string;
+  group_name: string;
+  description: string | null;
+  type: string;
+  level: string;
+}
+
+export interface Document {
+  document_id: string;
+  document_url: string;
+  document_type: string;
+  title: string;
+}
+
+export interface Role {
+  id: string;
+  title: string;
+  division: {
+    id: string;
+    name: string;
+    cluster?: string;
+    agency?: string;
+  };
+  grade_band?: string;
+  location?: string;
+  primary_purpose?: string;
+  reporting_line?: string;
+  direct_reports?: string;
+  budget_responsibility?: string;
+  anzsco_code?: string;
+  pcat_code?: string;
+  date_approved?: string;
+  source_document_url?: string;
+  skills?: Skill[];
+  capabilities?: Capability[];
+  documents?: Document[];
+}
+
+interface SpecificRoleResponse {
+  role: Role;
+  skills?: Skill[];
+  capabilities?: Capability[];
+  documents?: Document[];
+}
+
+export interface TransitionType {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface Requirement {
+  id: string;
+  name: string;
+  description: string;
+  requirement_type: string;
+  required_level: string;
+  is_mandatory: boolean;
+}
+
+export interface Transition {
+  id: string;
+  from_role: Role;
+  to_role: Role;
+  transition_type: TransitionType;
+  frequency: number;
+  success_rate: number;
+  avg_time_months: number;
+  requirements?: Requirement[];
+}
+
+export interface TransitionHistory {
+  id: string;
+  from_role: Role;
+  to_role: Role;
+  transition_type: TransitionType;
+  start_date: string;
+  end_date?: string;
+  status: string;
+  success_rating?: number;
+  feedback?: string;
+}
+
+export interface TransitionFilters {
+  transitionTypes?: string[];
+  status?: string[];
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+}
+
+export interface GetRoleTransitionsParams {
+  roleId: string;
+  direction?: 'from' | 'to' | 'both';
+  includeRequirements?: boolean;
+  includeHistory?: boolean;
+  limit?: number;
+  offset?: number;
+  filters?: TransitionFilters;
+}
+
+export interface GetPossibleTransitionsParams {
+  roleId: string;
+  profileId?: string;
+  maxSuggestions?: number;
+  considerFactors?: {
+    skills?: boolean;
+    experience?: boolean;
+    qualifications?: boolean;
+    interests?: boolean;
+    careerGoals?: boolean;
+  };
+}
+
+export interface TransitionSuggestion {
+  role: Role;
+  transitionType: string;
+  matchScore: number;
+  reasons: string[];
+  developmentAreas: string[];
+  estimatedPreparationTime: string;
+  suggestedLearningPath: string[];
+  riskAssessment: {
+    successFactors: string[];
+    challenges: string[];
+    mitigationStrategies: string[];
+    historicalSuccessRate: number;
+  };
 }
 
 export async function getGeneralRoles(params: GeneralRolesParams = {}): Promise<DataResponse<GeneralRole[]>> {
@@ -35,6 +201,40 @@ export async function getGeneralRoles(params: GeneralRolesParams = {}): Promise<
       body: JSON.stringify({
         insightId: 'getGeneralRoles',
         ...params
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
+    };
+  }
+}
+
+export async function getRole(roleId: string, options: {
+  includeSkills?: boolean;
+  includeCapabilities?: boolean;
+  includeDocuments?: boolean;
+} = {}): Promise<DataResponse<SpecificRoleResponse>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        insightId: 'getRole',
+        roleId,
+        ...options
       }),
     });
 
@@ -75,4 +275,148 @@ export async function getClassificationLevels(): Promise<string[]> {
 
   if (error) throw error;
   return data.map(row => row.type);
+}
+
+// Add helper functions to get filter options
+export async function getTaxonomies(): Promise<FilterOption[]> {
+  const { data, error } = await supabase
+    .from('taxonomies')
+    .select('id, name')
+    .order('name');
+
+  if (error) throw error;
+  return data.map(row => ({ id: row.id, label: row.name }));
+}
+
+export async function getRegions(): Promise<FilterOption[]> {
+  const { data, error } = await supabase
+    .from('regions')
+    .select('id, name')
+    .order('name');
+
+  if (error) throw error;
+  return data.map(row => ({ id: row.id, label: row.name }));
+}
+
+export async function getDivisions(): Promise<FilterOption[]> {
+  const { data, error } = await supabase
+    .from('divisions')
+    .select('id, name')
+    .order('name');
+
+  if (error) throw error;
+  return data.map(row => ({ id: row.id, label: row.name }));
+}
+
+export async function getEmploymentTypes(): Promise<FilterOption[]> {
+  const { data, error } = await supabase
+    .from('employment_types')
+    .select('id, type')
+    .order('type');
+
+  if (error) throw error;
+  return data.map(row => ({ id: row.id, label: row.type }));
+}
+
+export async function getCompanies(): Promise<FilterOption[]> {
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id, name')
+    .order('name');
+
+  if (error) throw error;
+  return data.map(row => ({ id: row.id, label: row.name }));
+}
+
+export async function getRoleTransitions(params: GetRoleTransitionsParams): Promise<DataResponse<{
+  transitions: Transition[];
+  history?: TransitionHistory[];
+}>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        insightId: 'getRoleTransitions',
+        ...params
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
+    };
+  }
+}
+
+export async function getPossibleTransitions(params: GetPossibleTransitionsParams): Promise<DataResponse<{
+  structured: TransitionSuggestion[];
+  raw: string;
+}>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        insightId: 'getPossibleTransitions',
+        ...params
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
+    };
+  }
+}
+
+export async function getSpecificRole(roleId: string): Promise<DataResponse<Role>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        insightId: 'getSpecificRole',
+        roleId
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
+    };
+  }
 } 

@@ -138,36 +138,44 @@ To build a public-facing, AI-powered career exploration and workforce mobility p
 
 ## Implementation Progress Tracker
 
-| Entity/Feature              | Phase  | DB Schema | Base Data | UI Components | Filters | AI Enhancement | Action Registry | Tests | Done |
+| Entity/Feature              | Phase  | DB Schema | Action | Action Registry | UI Components | Filters | AI Enhancement | Tests | Done |
 |----------------------------|:------:|:---------:|:---------:|:-------------:|:-------:|:--------------:|:---------------:|:-----:|:----:|
 | **Phase 1 Features**       |        |           |           |               |         |                |                 |       |      |
-| General Roles              |   1    |           |           |               |         |                |                 |       |      |
-| Specific Roles             |   1    |           |           |               |         |                |                 |       |      |
-| Role Transitions           |   1    |           |           |               |         |                |                 |       |      |
-| Capabilities               |   1    |           |           |               |         |                |                 |       |      |
-| Data Edge Function         |   1    |           |           |               |         |                |                 |       |      |
-| Frontend Data Service      |   1    |           |           |               |         |                |                 |       |      |
-| Filter System              |   1    |           |           |               |         |                |                 |       |      |
-| Caching Layer              |   1    |           |           |               |         |                |                 |       |      |
+| General Roles              |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |     N/A         |  ✅   |  ✅  |
+| Specific Roles             |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |     N/A         |  ✅   |  ✅  |
+| Role Transitions           |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      ✅         |  ⬜   |  🟨  |
+| Capabilities               |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      ⬜         |  ✅   |  ✅  |
+| Data Edge Function         |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      N/A        |  ✅   |  ✅  |
+| Frontend Data Service      |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      N/A        |  ✅   |  ✅  |
+| Filter System              |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      N/A        |  ✅   |  ✅  |
+| Caching Layer              |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       N/A      |      N/A        |  ✅   |  ✅  |
 | **Phase 2 Features**       |        |           |           |               |         |                |                 |       |      |
-| Skills                     |   2    |           |           |               |         |                |                 |       |      |
-| Taxonomies                 |   2    |           |           |               |         |                |                 |       |      |
-| Capability Requirements    |   2    |           |           |               |         |                |                 |       |      |
-| Skill Requirements         |   2    |           |           |               |         |                |                 |       |      |
-| Error Handling             |   2    |           |           |               |         |                |                 |       |      |
-| Monitoring                 |   2    |           |           |               |         |                |                 |       |      |
+| Companies                  |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
+| Skills                     |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Taxonomies                 |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
+| Capability Requirements    |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Skill Requirements         |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Error Handling             |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
+| Monitoring                 |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       N/A      |      N/A        |  ⬜   |  ⬜  |
 | **Phase 3 Features**       |        |           |           |               |         |                |                 |       |      |
-| Career Pathways            |   3    |           |           |               |         |                |                 |       |      |
-| Capability Heatmaps        |   3    |           |           |               |         |                |                 |       |      |
-| Skill Gap Analysis         |   3    |           |           |               |         |                |                 |       |      |
-| Performance Optimization   |   3    |           |           |               |         |                |                 |       |      |
-| Documentation             |   3    |           |           |               |         |                |                 |       |      |
+| Career Pathways            |   3    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Capability Heatmaps        |   3    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Skill Gap Analysis         |   3    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Performance Optimization   |   3    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       N/A      |      N/A        |  ⬜   |  ⬜  |
+| Documentation             |   3    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       N/A      |      N/A        |  ⬜   |  ⬜  |
 
 ### Legend
 - ⬜ Not Started
 - 🟨 In Progress
 - ✅ Complete
 - ❌ Blocked
+- N/A Not Applicable
+
+### Recent Updates:
+- Role Transitions: DB Schema, Actions, and Action Registry completed
+- Role Transitions: UI Components, Filters, and AI Enhancement in progress
+- General Roles & Specific Roles: Marked AI Enhancement as N/A (data-driven features)
+- Added N/A status to features where AI Enhancement or Filters are not applicable
 
 ### Dependencies
 ```mermaid
