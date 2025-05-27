@@ -55,6 +55,8 @@ export interface Skill {
   name: string;
   category: string;
   description: string | null;
+  source?: string;
+  is_occupation_specific?: boolean;
 }
 
 export interface Capability {
@@ -190,6 +192,40 @@ export interface TransitionSuggestion {
   };
 }
 
+export interface Company {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyFilters {
+  searchTerm?: string;
+  divisions?: string[];
+}
+
+export interface TaxonomyFilters {
+  searchTerm?: string;
+  taxonomyType?: string;
+}
+
+export interface Taxonomy {
+  id: string;
+  name: string;
+  description: string | null;
+  taxonomy_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SkillFilters {
+  searchTerm?: string;
+  categories?: string[];
+  isOccupationSpecific?: boolean;
+}
+
 export async function getGeneralRoles(params: GeneralRolesParams = {}): Promise<DataResponse<GeneralRole[]>> {
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
@@ -278,15 +314,7 @@ export async function getClassificationLevels(): Promise<string[]> {
 }
 
 // Add helper functions to get filter options
-export async function getTaxonomies(): Promise<FilterOption[]> {
-  const { data, error } = await supabase
-    .from('taxonomies')
-    .select('id, name')
-    .order('name');
-
-  if (error) throw error;
-  return data.map(row => ({ id: row.id, label: row.name }));
-}
+// Replaced with new implementation with filters
 
 export async function getRegions(): Promise<FilterOption[]> {
   const { data, error } = await supabase
@@ -311,21 +339,185 @@ export async function getDivisions(): Promise<FilterOption[]> {
 export async function getEmploymentTypes(): Promise<FilterOption[]> {
   const { data, error } = await supabase
     .from('employment_types')
-    .select('id, type')
-    .order('type');
-
-  if (error) throw error;
-  return data.map(row => ({ id: row.id, label: row.type }));
-}
-
-export async function getCompanies(): Promise<FilterOption[]> {
-  const { data, error } = await supabase
-    .from('companies')
     .select('id, name')
     .order('name');
 
   if (error) throw error;
   return data.map(row => ({ id: row.id, label: row.name }));
+}
+
+export async function getCompanies(filters?: CompanyFilters): Promise<DataResponse<Company[]>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getCompanies',
+        filters
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.companies,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch companies'
+    };
+  }
+}
+
+export async function getCompany(companyId: string): Promise<DataResponse<Company>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getCompany',
+        companyId
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.company,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch company'
+    };
+  }
+}
+
+export async function getTaxonomies(filters?: TaxonomyFilters): Promise<DataResponse<Taxonomy[]>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getTaxonomies',
+        filters
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.taxonomies,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch taxonomies'
+    };
+  }
+}
+
+export async function getTaxonomy(taxonomyId: string): Promise<DataResponse<Taxonomy>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getTaxonomy',
+        taxonomyId
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.taxonomy,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch taxonomy'
+    };
+  }
+}
+
+export async function getSkills(filters?: SkillFilters): Promise<DataResponse<Skill[]>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getSkills',
+        filters
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.skills,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch skills'
+    };
+  }
+}
+
+export async function getSkill(skillId: string): Promise<DataResponse<Skill>> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'getSkill',
+        skillId
+      }),
+    });
+
+    const data = await response.json();
+    return {
+      success: true,
+      data: data.skill,
+      error: null
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to fetch skill'
+    };
+  }
 }
 
 export async function getRoleTransitions(params: GetRoleTransitionsParams): Promise<DataResponse<{

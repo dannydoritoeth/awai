@@ -150,11 +150,9 @@ To build a public-facing, AI-powered career exploration and workforce mobility p
 | Filter System              |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       ✅       |      N/A        |  ✅   |  ✅  |
 | Caching Layer              |   1    |    ✅    |    ✅    |      ✅      |   ✅    |       N/A      |      N/A        |  ✅   |  ✅  |
 | **Phase 2 Features**       |        |           |           |               |         |                |                 |       |      |
-| Companies                  |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
-| Skills                     |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
-| Taxonomies                 |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
-| Capability Requirements    |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
-| Skill Requirements         |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      ⬜         |  ⬜   |  ⬜  |
+| Companies                  |   2    |    ✅    |    ✅    |      ✅      |   ✅    |       ⬜       |      N/A        |  ⬜   |  🟨  |
+| Skills                     |   2    |    ✅    |    ⬜    |      ⬜      |   ✅    |       ⬜       |      ⬜         |  ⬜   |  🟨  |
+| Taxonomies                 |   2    |    ✅    |    ⬜    |      ⬜      |   ✅    |       ⬜       |      N/A        |  ⬜   |  🟨  |
 | Error Handling             |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       ⬜       |      N/A        |  ⬜   |  ⬜  |
 | Monitoring                 |   2    |    ⬜    |    ⬜    |      ⬜      |   ⬜    |       N/A      |      N/A        |  ⬜   |  ⬜  |
 | **Phase 3 Features**       |        |           |           |               |         |                |                 |       |      |
