@@ -6,26 +6,44 @@ import Image from 'next/image';
 export default function Home() {
   return (
     <main className="min-h-screen bg-white">
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-8 pt-8 relative">
-        {/* Logo */}
-        <div className="absolute right-0 top-8">
-          <Image
-            src="/nsw-logo.png"
-            alt="NSW Government Logo"
-            width={200}
-            height={75}
-            className="h-auto"
-            priority
-          />
+      {/* Header */}
+      <div className="max-w-6xl mx-auto px-8 pt-8">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-4">
+            <Image
+              src="/nswgov-logo.png"
+              alt="NSW Government Logo"
+              width={75}
+              height={35}
+              className="h-auto"
+              priority
+            />
+            <div className="max-w-xl pt-8 pl-5">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-900">TalentPathAI Demo</h1>
+                <div className="group relative">
+                  <button className="text-gray-400 hover:text-gray-600" aria-label="Information about TalentPathAI Demo">
+                    <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div className="invisible group-hover:visible absolute left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-sm text-gray-600 z-10">
+                    <b>What is TalentPathAI?</b><br/>
+                    This prototype explores role mobility and career pathways across NSW Government. See how AI can identify internal movement opportunities, uncover skill gaps, and streamline hiring using real job data.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <Link href="#" className="pt-10 pr-10 text-blue-600 hover:text-blue-800">Feedback</Link>
         </div>
 
         <h1 className="text-4xl font-bold mb-12 text-gray-900 mt-24">What would you like to do?</h1>
 
         {/* Main Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          <Link href="/c?context=role" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/c?context=role" className="block h-full">
+            <div className="bg-white border-2 border-blue-100 p-6 rounded-lg shadow-sm hover:border-blue-500 transition-all h-full flex flex-col">
               <div className="mb-4">
                 <svg className="w-8 h-8 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -36,8 +54,8 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link href="/c?context=profile" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/c?context=profile" className="block h-full">
+            <div className="bg-white border-2 border-green-100 p-6 rounded-lg shadow-sm hover:border-green-500 transition-all h-full flex flex-col">
               <div className="mb-4">
                 <svg className="w-8 h-8 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -48,8 +66,8 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link href="/insights" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/insights" className="block h-full">
+            <div className="bg-white border-2 border-purple-100 p-6 rounded-lg shadow-sm hover:border-purple-500 transition-all h-full flex flex-col">
               <div className="mb-4">
                 <svg className="w-8 h-8 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -60,8 +78,8 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link href="/c?context=chat" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/c?context=chat" className="block h-full">
+            <div className="bg-white border-2 border-orange-100 p-6 rounded-lg shadow-sm hover:border-orange-500 transition-all h-full flex flex-col">
               <div className="mb-4">
                 <svg className="w-8 h-8 text-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -74,12 +92,12 @@ export default function Home() {
         </div>
 
         {/* Exploration Section */}
-        <h2 className="text-3xl font-bold mb-8 text-gray-900">Explore NSW careers by...</h2>
+        <h2 className="text-3xl font-bold mb-8 text-gray-900">Explore NSW Government careers by...</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Career Type */}
-          <Link href="/taxonomies?type=career" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/taxonomies?type=career" className="block h-full">
+            <div className="bg-white border-2 border-red-100 p-6 rounded-lg shadow-sm hover:border-red-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-red-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -93,8 +111,8 @@ export default function Home() {
           </Link>
 
           {/* Where You Work */}
-          <Link href="/taxonomies?type=location" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/taxonomies?type=location" className="block h-full">
+            <div className="bg-white border-2 border-green-100 p-6 rounded-lg shadow-sm hover:border-green-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-green-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -109,8 +127,8 @@ export default function Home() {
           </Link>
 
           {/* Agency or Department */}
-          <Link href="/companies" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/companies" className="block h-full">
+            <div className="bg-white border-2 border-blue-100 p-6 rounded-lg shadow-sm hover:border-blue-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-blue-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -124,8 +142,8 @@ export default function Home() {
           </Link>
 
           {/* Skills You Have */}
-          <Link href="/skills" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/skills" className="block h-full">
+            <div className="bg-white border-2 border-red-100 p-6 rounded-lg shadow-sm hover:border-red-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-red-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -134,13 +152,13 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900">Skills You Have</h3>
               </div>
-              <p className="text-gray-700">Start from what you&apos;re good att</p>
+              <p className="text-gray-700">Start from what you&apos;re good at</p>
             </div>
           </Link>
 
           {/* What You Want to Learn */}
-          <Link href="/capabilities" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/capabilities" className="block h-full">
+            <div className="bg-white border-2 border-blue-100 p-6 rounded-lg shadow-sm hover:border-blue-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-blue-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -154,8 +172,8 @@ export default function Home() {
           </Link>
 
           {/* People Like You */}
-          <Link href="/transitions" className="block">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm hover:shadow-md transition-all">
+          <Link href="/transitions" className="block h-full">
+            <div className="bg-white border-2 border-gray-100 p-6 rounded-lg shadow-sm hover:border-gray-500 transition-all h-full">
               <div className="flex items-center gap-4 mb-4">
                 <div className="bg-gray-100 p-3 rounded-lg">
                   <svg className="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
