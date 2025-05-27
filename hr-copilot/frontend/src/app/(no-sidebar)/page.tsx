@@ -187,6 +187,13 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="mt-16 py-8 border-t border-gray-100">
+        <div className="max-w-6xl mx-auto px-8">
+          {/* Empty footer for spacing */}
+        </div>
+      </footer>
     </main>
   );
 } 
