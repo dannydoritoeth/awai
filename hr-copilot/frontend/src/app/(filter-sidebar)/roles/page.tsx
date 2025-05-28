@@ -1,90 +1,98 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { getRoles, type Role } from '@/lib/services/roles';
 
 export default function RolesPage() {
-  const searchParams = useSearchParams();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'specific'>('general');
 
   useEffect(() => {
-    async function loadRoles() {
+    const loadRoles = async () => {
       try {
         setLoading(true);
-        const filters = {
-          taxonomy: searchParams.get('taxonomy') || undefined,
-          band: searchParams.get('band') || undefined,
-          agency: searchParams.get('agency') || undefined,
-        };
-        const data = await getRoles(filters);
-        setRoles(data);
-      } catch (error) {
-        console.error('Error loading roles:', error);
+        const data = await getRoles({ type: activeTab });
+        setRoles(data || []);
+      } catch (err) {
+        console.error('Error loading roles:', err);
+        setError('Failed to load roles');
       } finally {
         setLoading(false);
       }
-    }
+    };
+
     loadRoles();
-  }, [searchParams]);
+  }, [activeTab]);
 
   if (loading) {
     return (
       <div className="p-4">
-        <div className="animate-pulse space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-32 bg-gray-100 rounded-lg"></div>
-          ))}
-        </div>
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">Loading roles...</h1>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">Error</h1>
+        <p className="text-red-500">{error}</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-8 text-gray-900">Roles</h1>
-      
-      <div className="grid gap-6">
-        {roles.map((role) => (
-          <Link 
-            key={role.id} 
-            href={`/roles/${role.id}`}
-            className="block bg-white border border-gray-200 rounded-lg p-6 hover:border-blue-500 transition-colors"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">{role.title}</h2>
-                <p className="text-gray-600 mb-4">{role.summary}</p>
-                <div className="flex gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                    {role.band}
-                  </span>
-                  {role.agencies.map((agency) => (
-                    <span 
-                      key={agency}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                    >
-                      {agency}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <svg className="w-5 h-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-            </div>
-          </Link>
-        ))}
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-2 text-gray-900">Roles</h1>
+      <p className="text-gray-900 mb-6">Browse available roles and their requirements</p>
 
-        {roles.length === 0 && (
-          <div className="text-center py-12">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No roles found</h3>
-            <p className="text-gray-600">Try adjusting your filters to see more results.</p>
+      <Tabs defaultValue={activeTab} onValueChange={(value) => setActiveTab(value as 'general' | 'specific')}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="general">General Roles</TabsTrigger>
+          <TabsTrigger value="specific">Specific Roles</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general">
+          <div className="grid gap-4">
+            {roles.map((role) => (
+              <Link key={role.id} href={`/roles/${role.id}`}>
+                <Card className="p-4 hover:bg-gray-50 cursor-pointer">
+                  <h3 className="font-medium text-gray-900">{role.title}</h3>
+                  {role.description && (
+                    <p className="text-gray-900 mt-2">{role.description}</p>
+                  )}
+                </Card>
+              </Link>
+            ))}
+            {roles.length === 0 && (
+              <p className="text-gray-900">No general roles found.</p>
+            )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="specific">
+          <div className="grid gap-4">
+            {roles.map((role) => (
+              <Link key={role.id} href={`/roles/${role.id}`}>
+                <Card className="p-4 hover:bg-gray-50 cursor-pointer">
+                  <h3 className="font-medium text-gray-900">{role.title}</h3>
+                  {role.description && (
+                    <p className="text-gray-900 mt-2">{role.description}</p>
+                  )}
+                </Card>
+              </Link>
+            ))}
+            {roles.length === 0 && (
+              <p className="text-gray-900">No specific roles found.</p>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 

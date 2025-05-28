@@ -9,15 +9,18 @@ CREATE TABLE general_roles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Add full text search index
-ALTER TABLE general_roles ADD COLUMN search_vector tsvector 
-    GENERATED ALWAYS AS (
-        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-        setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-        setweight(to_tsvector('english', coalesce(function_area, '')), 'C')
-    ) STORED;
+ALTER TABLE general_roles ADD COLUMN embedding vector(1536);
+CREATE INDEX ON general_roles USING ivfflat (embedding vector_cosine_ops);
 
-CREATE INDEX general_roles_search_idx ON general_roles USING GIN (search_vector);
+
+-- -- Add full text search index
+-- ALTER TABLE general_roles ADD COLUMN search_vector tsvector 
+--     GENERATED ALWAYS AS (
+--         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+--         setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
+--         setweight(to_tsvector('english', coalesce(function_area, '')), 'C')
+--     ) STORED;
+
 
 -- Add RLS policies
 ALTER TABLE general_roles ENABLE ROW LEVEL SECURITY;
@@ -39,11 +42,7 @@ CREATE POLICY "Allow authenticated update"
     USING (true) 
     WITH CHECK (true);
 
--- Add updated_at trigger
-CREATE TRIGGER set_updated_at
-    BEFORE UPDATE ON general_roles
-    FOR EACH ROW
-    EXECUTE FUNCTION moddatetime();
+
 
 -- Create types table for controlled vocabularies
 CREATE TABLE general_role_types (

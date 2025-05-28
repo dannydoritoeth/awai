@@ -1,60 +1,41 @@
-import { supabase } from '../supabase';
+import { dataEdge } from '../data-edge';
 
 export interface Role {
   id: string;
   title: string;
-  summary: string;
-  description: string;
-  band: string;
-  agencies: string[];
+  description: string | null;
+  is_specific: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleWithSkills extends Role {
+  skills: Array<{
+    id: string;
+    name: string;
+    category: string;
+    required_level: number;
+  }>;
 }
 
 export interface RoleFilters {
-  taxonomy?: string;
-  band?: string;
-  agency?: string;
+  type?: 'general' | 'specific';
+  searchTerm?: string;
+  [key: string]: string | undefined;
 }
 
-export async function getRoles(filters: RoleFilters = {}) {
-  let query = supabase.from('roles').select('*');
-
-  if (filters.taxonomy) {
-    query = query.eq('taxonomy', filters.taxonomy);
-  }
-  if (filters.band) {
-    query = query.eq('band', filters.band);
-  }
-  if (filters.agency) {
-    query = query.contains('agencies', [filters.agency]);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as Role[];
+export async function getRoles(filters?: RoleFilters) {
+  return dataEdge({ 
+    insightId: 'getRoles',
+    params: filters
+  }) as Promise<Role[]>;
 }
 
 export async function getRole(id: string) {
-  const { data, error } = await supabase
-    .from('roles')
-    .select(`
-      *,
-      transitions:role_transitions(
-        to_role_id,
-        from_role_id,
-        frequency
-      )
-    `)
-    .eq('id', id)
-    .single();
-
-  if (error) throw error;
-  return data as Role & {
-    transitions: {
-      to_role_id: string;
-      from_role_id: string;
-      frequency: number;
-    }[];
-  };
+  return dataEdge({ 
+    insightId: 'getRole',
+    params: { id }
+  }) as Promise<RoleWithSkills>;
 }
 
 export async function getTaxonomies() {

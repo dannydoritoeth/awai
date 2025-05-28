@@ -8,7 +8,18 @@ interface DataEdgeParams {
     divisions?: string[];
     cluster?: string;
     agency?: string;
+    type?: 'general' | 'specific';
     [key: string]: unknown;
+  };
+}
+
+interface RoleSkill {
+  skill_id: string;
+  required_level: number;
+  skills: {
+    id: string;
+    name: string;
+    category: string;
   };
 }
 
@@ -40,6 +51,84 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
     return data;
   }
 
+  // Handle roles directly
+  if (insightId === 'getRoles') {
+    if (params.type === 'general') {
+      const { data, error } = await supabase
+        .from('general_roles')
+        .select('id, title, description, function_area, classification_level, created_at, updated_at')
+        .order('title');
+
+      if (error) throw new Error(error.message);
+      return data.map(role => ({
+        ...role,
+        is_specific: false
+      }));
+    } else {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id, title, description, division_id, grade_band, created_at, updated_at')
+        .order('title');
+
+      if (error) throw new Error(error.message);
+      return data.map(role => ({
+        ...role,
+        is_specific: true
+      }));
+    }
+  }
+
+  if (insightId === 'getRole' && params.id) {
+    // Try general roles first
+    const { data: generalRole, error: generalError } = await supabase
+      .from('general_roles')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (!generalError && generalRole) {
+      return {
+        ...generalRole,
+        is_specific: false,
+        skills: [] // TODO: Add general role skills when implemented
+      };
+    }
+
+    // If not found in general roles, try specific roles
+    const { data: specificRole, error: specificError } = await supabase
+      .from('roles')
+      .select(`
+        *,
+        role_skills (
+          skill_id,
+          required_level,
+          skills (
+            id,
+            name,
+            category
+          )
+        )
+      `)
+      .eq('id', params.id)
+      .single();
+
+    if (specificError) throw new Error(specificError.message);
+    
+    if (specificRole) {
+      return {
+        ...specificRole,
+        is_specific: true,
+        skills: (specificRole.role_skills as RoleSkill[])?.map(rs => ({
+          ...rs.skills,
+          required_level: rs.required_level
+        })) || [],
+        role_skills: undefined
+      };
+    }
+
+    throw new Error('Role not found');
+  }
+
   // For other insights, use the Edge Function
   const { data, error } = await supabase.functions.invoke('data', {
     body: {
@@ -65,5 +154,5 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
   }
 
   console.log('Data Edge Response:', data);
-  return data.data; // Extract the data from the wrapper object
+  return data.data;
 } 
