@@ -1,117 +1,103 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getTaxonomies, getBands, getAgencies } from '@/lib/services/roles';
+import { useState, useEffect } from 'react';
+import { getDivisions, type Division } from '@/lib/services/divisions';
+import { getCategories } from '@/lib/services/categories';
+import { Select } from '@/components/ui/select';
 
 interface FilterOption {
   id: string;
   name: string;
 }
 
-export default function RoleFilters() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+interface Filters {
+  taxonomy: string;
+  agency: string;
+}
 
-  const [taxonomies, setTaxonomies] = useState<FilterOption[]>([]);
-  const [bands, setBands] = useState<FilterOption[]>([]);
-  const [agencies, setAgencies] = useState<FilterOption[]>([]);
+interface RoleFiltersProps {
+  onFilterChange: (filters: Filters) => void;
+}
+
+export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
   const [loading, setLoading] = useState(true);
+  const [taxonomies, setTaxonomies] = useState<FilterOption[]>([]);
+  const [agencies, setAgencies] = useState<string[]>([]);
+  const [selectedTaxonomy, setSelectedTaxonomy] = useState('');
+  const [selectedAgency, setSelectedAgency] = useState('');
 
   useEffect(() => {
-    async function loadFilterOptions() {
+    const loadFilterOptions = async () => {
       try {
-        const [taxonomyData, bandData, agencyData] = await Promise.all([
-          getTaxonomies(),
-          getBands(),
-          getAgencies(),
-        ]);
-        setTaxonomies(taxonomyData);
-        setBands(bandData);
-        setAgencies(agencyData);
+        setLoading(true);
+        
+        // Load taxonomies
+        const taxonomyData = await getCategories('taxonomy');
+        setTaxonomies(taxonomyData.map((t: FilterOption) => ({
+          id: t.id,
+          name: t.name
+        })));
+
+        // Load divisions for agencies
+        const divisionData = await getDivisions();
+        const agencies = divisionData.map((d: Division) => d.agency);
+        setAgencies([...new Set<string>(agencies)]);
       } catch (error) {
-        console.error('Error loading filter options:', error);
+        console.error('Error loading filter options:', error instanceof Error ? error.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
-    }
+    };
+
     loadFilterOptions();
   }, []);
 
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams);
-      if (value) {
-        params.set(name, value);
-      } else {
-        params.delete(name);
-      }
-      return params.toString();
-    },
-    [searchParams]
-  );
+  const handleTaxonomyChange = (value: string) => {
+    setSelectedTaxonomy(value);
+    onFilterChange({
+      taxonomy: value,
+      agency: selectedAgency
+    });
+  };
 
-  const handleFilterChange = (name: string, value: string) => {
-    router.push(pathname + '?' + createQueryString(name, value));
+  const handleAgencyChange = (value: string) => {
+    setSelectedAgency(value);
+    onFilterChange({
+      taxonomy: selectedTaxonomy,
+      agency: value
+    });
   };
 
   if (loading) {
-    return <div className="p-4">Loading filters...</div>;
+    return <div className="animate-pulse space-y-4">
+      <div className="h-10 bg-gray-100 rounded"></div>
+      <div className="h-10 bg-gray-100 rounded"></div>
+    </div>;
   }
 
   return (
-    <div className="space-y-6">
-      {/* Taxonomy Filter */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Function/Theme</h3>
-        <select
-          className="w-full rounded-md border border-gray-300 py-2 px-3"
-          value={searchParams.get('taxonomy') || ''}
-          onChange={(e) => handleFilterChange('taxonomy', e.target.value)}
-        >
-          <option value="">All Functions</option>
-          {taxonomies.map((taxonomy) => (
-            <option key={taxonomy.id} value={taxonomy.id}>
-              {taxonomy.name}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="space-y-4">
+      <Select
+        label="Function Area"
+        value={selectedTaxonomy}
+        onChange={handleTaxonomyChange}
+        options={taxonomies.map(t => ({
+          value: t.id,
+          label: t.name
+        }))}
+        placeholder="Select function area"
+      />
 
-      {/* Band Filter */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Classification Band</h3>
-        <select
-          className="w-full rounded-md border border-gray-300 py-2 px-3"
-          value={searchParams.get('band') || ''}
-          onChange={(e) => handleFilterChange('band', e.target.value)}
-        >
-          <option value="">All Bands</option>
-          {bands.map((band) => (
-            <option key={band.id} value={band.id}>
-              {band.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Agency Filter */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Agency</h3>
-        <select
-          className="w-full rounded-md border border-gray-300 py-2 px-3"
-          value={searchParams.get('agency') || ''}
-          onChange={(e) => handleFilterChange('agency', e.target.value)}
-        >
-          <option value="">All Agencies</option>
-          {agencies.map((agency) => (
-            <option key={agency.id} value={agency.id}>
-              {agency.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Select
+        label="Agency"
+        value={selectedAgency}
+        onChange={handleAgencyChange}
+        options={agencies.map(agency => ({
+          value: agency,
+          label: agency
+        }))}
+        placeholder="Select agency"
+      />
     </div>
   );
 } 

@@ -64,12 +64,12 @@ export default function CompaniesPage() {
           <Link key={company.id} href={`/companies/${company.id}`}>
             <Card className="h-full hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold mb-2">{company.name}</h2>
+                <h2 className="text-xl font-semibold mb-2 text-gray-900">{company.name}</h2>
                 {company.description && (
-                  <p className="text-gray-600 mb-4 line-clamp-3">{company.description}</p>
+                  <p className="text-gray-900 mb-4 line-clamp-3">{company.description}</p>
                 )}
                 {company.website && (
-                  <p className="text-sm text-blue-600 hover:underline truncate">
+                  <p className="text-sm text-blue-900 hover:underline truncate">
                     {company.website}
                   </p>
                 )}
@@ -81,7 +81,7 @@ export default function CompaniesPage() {
         {companies.length === 0 && (
           <div className="text-center py-12">
             <h3 className="text-lg font-medium text-gray-900 mb-2">No companies found</h3>
-            <p className="text-gray-600">Try adjusting your search terms</p>
+            <p className="text-gray-700">Try adjusting your search terms</p>
           </div>
         )}
       </div>

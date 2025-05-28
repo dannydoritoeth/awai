@@ -59,6 +59,15 @@ interface Division {
   agency: string;
 }
 
+interface Capability {
+  id: string;
+  name: string;
+  group_name: string;
+  description: string | null;
+  type: string;
+  level: string;
+}
+
 interface RoleWithDivision {
   division: string;
 }
@@ -66,22 +75,12 @@ interface RoleWithDivision {
 const actions = {
   getCapabilities: async (supabase: any) => {
     const { data, error } = await supabase
-      .from('categories')
-      .select(`
-        *,
-        role_count:roles(count),
-        divisions:roles(division)
-      `)
-      .eq('type', 'capability');
+      .from('capabilities')
+      .select('*')
+      .order('name');
 
     if (error) throw error;
-    
-    // Process the data to get unique divisions and correct role count
-    return data.map((category: any) => ({
-      ...category,
-      role_count: category.role_count[0]?.count || 0,
-      divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
-    })) as Category[];
+    return data as Capability[];
   },
 
   getTaxonomies: async (supabase: any) => {

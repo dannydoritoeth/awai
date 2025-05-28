@@ -1,18 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import { getCompany, type Company } from '@/lib/services/companies';
 import { Card, CardContent } from '@/components/ui/card';
-import { getCompany } from '@/lib/services/data';
+import Link from 'next/link';
 
-import type { Company } from '@/lib/services/data';
-
-interface PageProps {
-  params: {
-    id: string;
-  };
-}
-
-export default function CompanyPage({ params }: PageProps) {
+export default function CompanyDetailPage() {
+  const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -20,13 +15,9 @@ export default function CompanyPage({ params }: PageProps) {
   useEffect(() => {
     const loadCompany = async () => {
       try {
-        const response = await getCompany(params.id);
-
-        if (response.success && response.data) {
-          setCompany(response.data);
-        } else {
-          setError(response.error || 'Failed to load company');
-        }
+        setLoading(true);
+        const data = await getCompany(id as string);
+        setCompany(data);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load company';
         setError(errorMessage);
@@ -36,10 +27,16 @@ export default function CompanyPage({ params }: PageProps) {
     };
 
     loadCompany();
-  }, [params.id]);
+  }, [id]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 bg-gray-100 rounded w-1/3"></div>
+        <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+        <div className="h-40 bg-gray-100 rounded mt-8"></div>
+      </div>
+    );
   }
 
   if (error) {
@@ -47,63 +44,50 @@ export default function CompanyPage({ params }: PageProps) {
   }
 
   if (!company) {
-    return <div>Company not found</div>;
+    return <div className="text-gray-900">Company not found</div>;
   }
 
   return (
-    <div className="container mx-auto py-8">
-      {/* Company Header */}
+    <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">{company.name}</h1>
+        <h1 className="text-3xl font-bold mb-2 text-gray-900">{company.name}</h1>
         {company.website && (
-          <a
-            href={company.website}
-            target="_blank"
+          <Link 
+            href={company.website} 
+            target="_blank" 
             rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
+            className="text-blue-900 hover:underline"
           >
             {company.website}
-          </a>
+          </Link>
         )}
       </div>
 
-      {/* Company Details */}
-      <div className="mb-8">
+      <div className="grid gap-6">
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4">About</h2>
-            {company.description ? (
-              <p className="text-gray-600">{company.description}</p>
-            ) : (
-              <p className="text-gray-500 italic">No description available</p>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Overview</h2>
+            {company.description && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Description</h3>
+                <p className="text-gray-900">{company.description}</p>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Divisions */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4">Divisions</h2>
-            <div className="space-y-4">
-              {/* TODO: Add divisions list when available */}
-              <p className="text-gray-500 italic">Divisions will be displayed here</p>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Created</h3>
+              <p className="text-gray-900">
+                {new Date(company.created_at).toLocaleDateString('en-AU', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Roles */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-2xl font-semibold mb-4">Available Roles</h2>
-          <div className="space-y-4">
-            {/* TODO: Add roles list when available */}
-            <p className="text-gray-500 italic">Roles will be displayed here</p>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Additional sections can be added here as needed */}
+      </div>
     </div>
   );
 } 
