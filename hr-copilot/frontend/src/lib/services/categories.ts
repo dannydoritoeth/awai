@@ -1,6 +1,14 @@
 import { supabase } from '../supabase';
 import { dataEdge } from '../data-edge';
 
+// Cache storage
+const cache: Record<string, {
+  data: any;
+  timestamp: number;
+}> = {};
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 export interface Category {
   id: string;
   name: string;
@@ -23,31 +31,47 @@ interface RoleWithDivision {
 }
 
 export async function getCategories(type: 'taxonomy' | 'skill' | 'capability') {
+  // Check cache first
+  const cacheKey = `categories_${type}`;
+  const now = Date.now();
+  const cached = cache[cacheKey];
+  
+  if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+    return cached.data;
+  }
+
+  let data;
   if (type === 'capability') {
-    return dataEdge({ insightId: 'getCapabilities' });
-  }
-  
-  if (type === 'taxonomy') {
-    return dataEdge({ insightId: 'getTaxonomies' });
+    data = await dataEdge({ insightId: 'getCapabilities' });
+  } else if (type === 'taxonomy') {
+    data = await dataEdge({ insightId: 'getTaxonomies' });
+  } else {
+    const { data: queryData, error } = await supabase
+      .from('categories')
+      .select(`
+        *,
+        role_count:roles(count),
+        divisions:roles(division)
+      `)
+      .eq('type', type);
+
+    if (error) throw error;
+    
+    // Process the data to get unique divisions and correct role count
+    data = queryData.map(category => ({
+      ...category,
+      role_count: category.role_count[0]?.count || 0,
+      divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
+    })) as CategoryWithStats[];
   }
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select(`
-      *,
-      role_count:roles(count),
-      divisions:roles(division)
-    `)
-    .eq('type', type);
+  // Update cache
+  cache[cacheKey] = {
+    data,
+    timestamp: now
+  };
 
-  if (error) throw error;
-  
-  // Process the data to get unique divisions and correct role count
-  return data.map(category => ({
-    ...category,
-    role_count: category.role_count[0]?.count || 0,
-    divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
-  })) as CategoryWithStats[];
+  return data;
 }
 
 export async function getCategory(id: string) {

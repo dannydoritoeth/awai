@@ -38,15 +38,6 @@ export async function getRole(id: string) {
   }) as Promise<RoleWithSkills>;
 }
 
-export async function getTaxonomies() {
-  const { data, error } = await supabase
-    .from('taxonomies')
-    .select('*');
-
-  if (error) throw error;
-  return data;
-}
-
 export async function getBands() {
   const { data, error } = await supabase
     .from('bands')

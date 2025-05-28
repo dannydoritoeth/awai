@@ -122,3 +122,7 @@ Enable deeper exploration by domain, capability, or skill.
 - Structured role data model
 - Efficient taxonomy relationships
 - Capability/skill framework integration
+
+
+Company 
+Division
