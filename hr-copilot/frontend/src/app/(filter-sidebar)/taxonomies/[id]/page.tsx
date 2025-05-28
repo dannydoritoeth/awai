@@ -39,7 +39,7 @@ export default function TaxonomyPage(props: PageProps) {
   }, [params.id]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <div className="text-gray-900">Loading...</div>;
   }
 
   if (error) {
@@ -47,7 +47,7 @@ export default function TaxonomyPage(props: PageProps) {
   }
 
   if (!taxonomy) {
-    return <div>Taxonomy not found</div>;
+    return <div className="text-gray-900">Taxonomy not found</div>;
   }
 
   return (
@@ -55,7 +55,7 @@ export default function TaxonomyPage(props: PageProps) {
       {/* Taxonomy Header */}
       <div className="mb-8">
         <div className="flex justify-between items-start">
-          <h1 className="text-3xl font-bold">{taxonomy.name}</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{taxonomy.name}</h1>
           <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
             {taxonomy.taxonomy_type}
           </span>
@@ -66,11 +66,11 @@ export default function TaxonomyPage(props: PageProps) {
       <div className="mb-8">
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4">About</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-gray-900">About</h2>
             {taxonomy.description ? (
-              <p className="text-gray-600">{taxonomy.description}</p>
+              <p className="text-gray-700">{taxonomy.description}</p>
             ) : (
-              <p className="text-gray-500 italic">No description available</p>
+              <p className="text-gray-700 italic">No description available</p>
             )}
           </CardContent>
         </Card>
@@ -80,10 +80,10 @@ export default function TaxonomyPage(props: PageProps) {
       <div className="mb-8">
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4">Related Roles</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-gray-900">Related Roles</h2>
             <div className="space-y-4">
               {/* TODO: Add related roles list when available */}
-              <p className="text-gray-500 italic">Related roles will be displayed here</p>
+              <p className="text-gray-700 italic">Related roles will be displayed here</p>
             </div>
           </CardContent>
         </Card>
@@ -92,18 +92,18 @@ export default function TaxonomyPage(props: PageProps) {
       {/* Usage Statistics */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-2xl font-semibold mb-4">Usage Statistics</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-gray-900">Usage Statistics</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2">Total Roles</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Total Roles</h3>
               <p className="text-3xl font-semibold text-blue-600">--</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2">Divisions</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Divisions</h3>
               <p className="text-3xl font-semibold text-blue-600">--</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2">Companies</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Companies</h3>
               <p className="text-3xl font-semibold text-blue-600">--</p>
             </div>
           </div>

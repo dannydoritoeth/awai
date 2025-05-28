@@ -9,7 +9,11 @@ export interface Category {
   parent_id?: string;
 }
 
-export interface CategoryWithStats extends Category {
+export interface CategoryWithStats {
+  id: string;
+  name: string;
+  description: string | null;
+  taxonomy_type?: string;
   role_count: number;
   divisions: string[];
 }

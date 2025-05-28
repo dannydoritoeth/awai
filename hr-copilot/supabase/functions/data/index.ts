@@ -169,14 +169,24 @@ const actions = {
 
   getTaxonomy: async (supabase: any, params: { id: string }) => {
     const { data, error } = await supabase
-      .from('categories')
+      .from('taxonomy')
       .select('*')
-      .eq('type', 'taxonomy')
       .eq('id', params.id)
       .single();
 
     if (error) throw error;
-    return data;
+
+    // Map the data to match the expected format
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      taxonomy_type: data.taxonomy_type,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      role_count: 0,
+      divisions: []
+    };
   },
 
   getCompanies: async (supabase: any, params: { searchTerm?: string; divisions?: string[] } = {}) => {
