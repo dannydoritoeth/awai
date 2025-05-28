@@ -10,28 +10,24 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-8 pt-8">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-4">
-            <Image
-              src="/nswgov-logo.png"
-              alt="NSW Government Logo"
-              width={75}
-              height={35}
-              className="h-auto"
-              priority
-            />
+
             <div className="max-w-xl pt-8 pl-5">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">TalentPathAI Demo</h1>
+                <h1 className="text-2xl font-bold text-gray-900">TalentPathAI Beta</h1>
                 <div className="group relative">
-                  <button className="text-gray-400 hover:text-gray-600" aria-label="Information about TalentPathAI Demo">
+                  <button className="text-gray-400 hover:text-gray-600" aria-label="Information about TalentPathAI Beta">
                     <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                     </svg>
                   </button>
                   <div className="invisible group-hover:visible absolute left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-sm text-gray-600 z-10">
                     <b>What is TalentPathAI?</b><br/>
-                    This prototype explores role mobility and career pathways across NSW Government. See how AI can identify internal movement opportunities, uncover skill gaps, and streamline hiring using real job data.
+                    This prototype explores role mobility and career pathways across large government and private organisations. See how AI can identify internal movement opportunities, uncover skill gaps, and streamline hiring.
                   </div>
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-600 mt-1 w-3/4">AI Powered Workforce Intelligence and Automation</p>
               </div>
             </div>
           </div>
@@ -92,8 +88,7 @@ export default function Home() {
         </div>
 
         {/* Exploration Section */}
-        <h2 className="text-3xl font-bold mb-8 text-gray-900">Explore NSW Government careers by...</h2>
-
+        <h2 className="text-3xl font-bold mb-8 text-gray-900">Explore careers by...</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Career Type */}
           <Link href="/taxonomies?type=career" className="block h-full">
