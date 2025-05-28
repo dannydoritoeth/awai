@@ -18,6 +18,29 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
     params
   });
 
+  // Handle skills directly
+  if (insightId === 'getSkills') {
+    const { data, error } = await supabase
+      .from('skills')
+      .select('*')
+      .order('name');
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  if (insightId === 'getSkill' && params.id) {
+    const { data, error } = await supabase
+      .from('skills')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  // For other insights, use the Edge Function
   const { data, error } = await supabase.functions.invoke('data', {
     body: {
       insightId,
