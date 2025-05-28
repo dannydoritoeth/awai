@@ -117,14 +117,23 @@ const actions = {
     return data.map((row: any) => ({ id: row.id, label: row.name }));
   },
 
-  getDivisions: async (supabase: any) => {
-    const { data, error } = await supabase
+  getDivisions: async (supabase: any, params?: { searchTerm?: string }) => {
+    console.log('Getting divisions with params:', params);
+    
+    let query = supabase
       .from('divisions')
-      .select('id, name')
+      .select('*')
       .order('name');
 
+    if (params?.searchTerm) {
+      query = query.ilike('name', `%${params.searchTerm}%`);
+    }
+
+    const { data, error } = await query;
+    console.log('Divisions query result:', { data: data?.length || 0, error });
+    
     if (error) throw error;
-    return data.map((row: any) => ({ id: row.id, label: row.name }));
+    return data;
   },
 
   getEmploymentTypes: async (supabase: any) => {

@@ -47,7 +47,7 @@ export default function DivisionsPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-2 text-gray-900">Divisions</h1>
-      <p className="text-gray-600 mb-8">Explore divisions and agencies across NSW Government</p>
+      <p className="text-gray-900 mb-8">Explore divisions and agencies across NSW Government</p>
       
       <div className="mb-8">
         <input
@@ -83,7 +83,7 @@ export default function DivisionsPage() {
         {divisions.length === 0 && (
           <div className="text-center py-12">
             <h3 className="text-lg font-medium text-gray-900 mb-2">No divisions found</h3>
-            <p className="text-gray-700">Try adjusting your search terms</p>
+            <p className="text-gray-900">Try adjusting your search terms</p>
           </div>
         )}
       </div>

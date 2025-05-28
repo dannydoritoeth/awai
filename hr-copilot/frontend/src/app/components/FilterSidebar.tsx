@@ -89,7 +89,7 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 p-8">
+        <div className="flex-1">
           {children}
         </div>
       </div>
