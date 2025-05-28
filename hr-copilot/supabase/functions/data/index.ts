@@ -2,6 +2,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
 
+interface RoleWithDivision {
+  division: string;
+}
+
 interface DataRequest {
   insightId: string;
   companyIds?: string[];
@@ -59,10 +63,6 @@ interface Capability {
   description: string | null;
   type: string;
   level: string;
-}
-
-interface RoleWithDivision {
-  division: string;
 }
 
 const actions = {
@@ -137,24 +137,46 @@ const actions = {
     return data.map((row: any) => ({ id: row.id, label: row.name }));
   },
 
-  getTaxonomies: async (supabase: any) => {
+  getTaxonomies: async (supabase: any, params?: { searchTerm?: string; taxonomyType?: string }) => {
+    let query = supabase
+      .from('taxonomy')
+      .select('*')
+      .order('name');
+
+    if (params?.searchTerm) {
+      query = query.ilike('name', `%${params.searchTerm}%`);
+    }
+
+    if (params?.taxonomyType) {
+      query = query.eq('taxonomy_type', params.taxonomyType);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Map the data to match the expected format
+    return data.map((taxonomy: any) => ({
+      id: taxonomy.id,
+      name: taxonomy.name,
+      description: taxonomy.description,
+      taxonomy_type: taxonomy.taxonomy_type,
+      created_at: taxonomy.created_at,
+      updated_at: taxonomy.updated_at,
+      role_count: 0,
+      divisions: []
+    }));
+  },
+
+  getTaxonomy: async (supabase: any, params: { id: string }) => {
     const { data, error } = await supabase
       .from('categories')
-      .select(`
-        *,
-        role_count:roles(count),
-        divisions:roles(division)
-      `)
-      .eq('type', 'taxonomy');
+      .select('*')
+      .eq('type', 'taxonomy')
+      .eq('id', params.id)
+      .single();
 
     if (error) throw error;
-    
-    // Process the data to get unique divisions and correct role count
-    return data.map((category: any) => ({
-      ...category,
-      role_count: category.role_count[0]?.count || 0,
-      divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
-    })) as Category[];
+    return data;
   },
 
   getCompanies: async (supabase: any, params: { searchTerm?: string; divisions?: string[] } = {}) => {
@@ -205,7 +227,14 @@ serve(async (req) => {
   }
 
   try {
-    const { insightId, params } = await req.json();
+    const requestBody = await req.json();
+    console.log('Edge Function Request:', requestBody);
+
+    const { insightId, params } = requestBody;
+
+    if (!insightId) {
+      throw new Error('insightId is required');
+    }
 
     // Create Supabase client
     const supabase = createClient(
@@ -216,14 +245,16 @@ serve(async (req) => {
     // Get the action function
     const actionFn = actions[insightId as keyof typeof actions];
     if (!actionFn) {
+      console.error(`Action not found: ${insightId}`);
       throw new Error(`Action ${insightId} not found`);
     }
 
     // Execute the action
     const data = await actionFn(supabase, params);
+    console.log('Edge Function Response:', data);
 
     return new Response(
-      JSON.stringify(data),
+      JSON.stringify({ data }),
       { 
         headers: { 
           ...corsHeaders,
@@ -232,8 +263,12 @@ serve(async (req) => {
       },
     );
   } catch (error) {
+    console.error('Edge Function Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'An unknown error occurred',
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { 
         status: 400,
         headers: { 

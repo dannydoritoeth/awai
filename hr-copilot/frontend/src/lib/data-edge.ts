@@ -13,6 +13,11 @@ interface DataEdgeParams {
 }
 
 export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
+  console.log('Data Edge Request:', {
+    insightId,
+    params
+  });
+
   const { data, error } = await supabase.functions.invoke('data', {
     body: {
       insightId,
@@ -26,10 +31,16 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
     throw new Error(error.message || 'Failed to fetch data');
   }
 
-  if (data && typeof data === 'object' && 'error' in data) {
-    console.error('Data Edge Response Error:', data.error);
-    throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to fetch data');
+  if (!data) {
+    console.error('Data Edge Response: No data received');
+    throw new Error('No data received from Edge Function');
   }
 
-  return data;
+  if ('error' in data) {
+    console.error('Data Edge Response Error:', data.error);
+    throw new Error(typeof data.error === 'string' ? data.error : 'Failed to fetch data');
+  }
+
+  console.log('Data Edge Response:', data);
+  return data.data; // Extract the data from the wrapper object
 } 

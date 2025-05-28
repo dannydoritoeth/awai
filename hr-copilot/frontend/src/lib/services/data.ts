@@ -210,6 +210,7 @@ export interface CompanyFilters {
 export interface TaxonomyFilters {
   searchTerm?: string;
   taxonomyType?: string;
+  [key: string]: unknown;
 }
 
 export interface Taxonomy {
@@ -398,22 +399,13 @@ export async function getCompany(companyId: string): Promise<DataResponse<Compan
 
 export async function getTaxonomies(filters?: TaxonomyFilters): Promise<DataResponse<Taxonomy[]>> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        action: 'getTaxonomies',
-        filters
-      }),
+    const data = await dataEdge({
+      insightId: 'getTaxonomies',
+      params: filters
     });
-
-    const data = await response.json();
     return {
       success: true,
-      data: data.taxonomies,
+      data,
       error: null
     };
   } catch (error) {
@@ -427,22 +419,13 @@ export async function getTaxonomies(filters?: TaxonomyFilters): Promise<DataResp
 
 export async function getTaxonomy(taxonomyId: string): Promise<DataResponse<Taxonomy>> {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        action: 'getTaxonomy',
-        taxonomyId
-      }),
+    const data = await dataEdge({
+      insightId: 'getTaxonomy',
+      params: { id: taxonomyId }
     });
-
-    const data = await response.json();
     return {
       success: true,
-      data: data.taxonomy,
+      data,
       error: null
     };
   } catch (error) {
