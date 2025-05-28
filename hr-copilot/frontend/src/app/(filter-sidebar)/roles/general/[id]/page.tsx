@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { getRole, getRoleTransitions } from '@/lib/services/data';
 import Link from 'next/link';
 import type { Transition, Capability, Skill } from '@/lib/services/data';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 interface SpecificRoleResponse {
@@ -60,7 +60,8 @@ interface GeneralRoleDetails {
   developmentTips?: string[];
 }
 
-export default function GeneralRolePage({ params }: PageProps) {
+export default function GeneralRolePage(props: PageProps) {
+  const params = use(props.params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<GeneralRoleDetails | null>(null);

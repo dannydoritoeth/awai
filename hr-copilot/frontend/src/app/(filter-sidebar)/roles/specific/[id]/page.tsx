@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { getRole } from '@/lib/services/data';
 import Link from 'next/link';
 import type { Role, Capability, Skill } from '@/lib/services/data';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 interface SpecificRoleResponse {
@@ -18,7 +18,8 @@ interface SpecificRoleResponse {
   skills?: Skill[];
 }
 
-export default function SpecificRolePage({ params }: PageProps) {
+export default function SpecificRolePage(props: PageProps) {
+  const params = use(props.params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<SpecificRoleResponse | null>(null);

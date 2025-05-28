@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getRoleTransitions, getRole } from '@/lib/services/data';
@@ -8,10 +8,10 @@ import Link from 'next/link';
 import type { Role, Transition, Capability, Skill } from '@/lib/services/data';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     source_id: string;
     target_id: string;
-  };
+  }>;
 }
 
 interface TransitionDetails extends Transition {
@@ -38,7 +38,8 @@ interface TransitionDetails extends Transition {
   }[];
 }
 
-export default function TransitionPage({ params }: PageProps) {
+export default function TransitionPage(props: PageProps) {
+  const params = use(props.params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sourceRole, setSourceRole] = useState<Role | null>(null);

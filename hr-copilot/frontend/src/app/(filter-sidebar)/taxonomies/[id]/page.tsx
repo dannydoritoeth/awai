@@ -1,17 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { getTaxonomy } from '@/lib/services/data';
 import type { Taxonomy } from '@/lib/services/data';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function TaxonomyPage({ params }: PageProps) {
+export default function TaxonomyPage(props: PageProps) {
+  const params = use(props.params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
