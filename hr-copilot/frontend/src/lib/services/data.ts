@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { dataEdge } from '../data-edge';
 
 export interface GeneralRole {
   id: string;
@@ -317,33 +318,24 @@ export async function getClassificationLevels(): Promise<string[]> {
 // Replaced with new implementation with filters
 
 export async function getRegions(): Promise<FilterOption[]> {
-  const { data, error } = await supabase
-    .from('regions')
-    .select('id, name')
-    .order('name');
-
-  if (error) throw error;
-  return data.map(row => ({ id: row.id, label: row.name }));
+  const data = await dataEdge({
+    insightId: 'getRegions'
+  });
+  return data;
 }
 
 export async function getDivisions(): Promise<FilterOption[]> {
-  const { data, error } = await supabase
-    .from('divisions')
-    .select('id, name')
-    .order('name');
-
-  if (error) throw error;
-  return data.map(row => ({ id: row.id, label: row.name }));
+  const data = await dataEdge({
+    insightId: 'getDivisions'
+  });
+  return data;
 }
 
 export async function getEmploymentTypes(): Promise<FilterOption[]> {
-  const { data, error } = await supabase
-    .from('employment_types')
-    .select('id, name')
-    .order('name');
-
-  if (error) throw error;
-  return data.map(row => ({ id: row.id, label: row.name }));
+  const data = await dataEdge({
+    insightId: 'getEmploymentTypes'
+  });
+  return data;
 }
 
 export async function getCompanies(filters?: CompanyFilters): Promise<DataResponse<Company[]>> {

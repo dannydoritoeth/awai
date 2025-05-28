@@ -7,6 +7,11 @@ export interface Capability {
   description: string | null;
   type: string;
   level: string;
+  roles?: {
+    id: string;
+    title: string;
+    required_level: string;
+  }[];
 }
 
 export async function getCapabilities() {
@@ -16,8 +21,14 @@ export async function getCapabilities() {
 }
 
 export async function getCapability(id: string) {
-  return dataEdge({ 
+  const response = await dataEdge({ 
     insightId: 'getCapability',
     params: { id }
   });
+
+  if (!response) {
+    throw new Error('Failed to fetch capability');
+  }
+
+  return response as Capability;
 } 

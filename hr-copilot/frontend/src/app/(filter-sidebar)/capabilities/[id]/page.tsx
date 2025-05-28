@@ -2,18 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import type { Capability } from '@/lib/services/capabilities';
+import { getCapability, type Capability } from '@/lib/services/capabilities';
 import { useParams } from 'next/navigation';
 
 interface Role {
   id: string;
   title: string;
-  division: string;
+  required_level: string;
 }
 
 interface CapabilityDetails extends Capability {
   roles?: Role[];
-  relatedSkills?: string[];
   levelDefinitions?: {
     level: string;
     description: string;
@@ -30,53 +29,11 @@ export default function CapabilityPage() {
   useEffect(() => {
     const loadCapability = async () => {
       try {
-        // TODO: Replace with actual API call once available
-        const mockCapability: CapabilityDetails = {
-          id: params.id as string,
-          name: "Strategic Planning",
-          group_name: "Leadership",
-          description: "Ability to develop and execute organizational strategies",
-          type: "Core",
-          level: "Advanced",
-          levelDefinitions: [
-            {
-              level: "Foundational",
-              description: "Basic understanding of strategic planning concepts",
-              indicators: [
-                "Can participate in strategic planning sessions",
-                "Understands basic strategic frameworks",
-                "Can contribute to departmental planning"
-              ]
-            },
-            {
-              level: "Intermediate",
-              description: "Can lead strategic planning for small teams",
-              indicators: [
-                "Develops team-level strategies",
-                "Aligns team goals with organizational objectives",
-                "Monitors and reports on strategic progress"
-              ]
-            },
-            {
-              level: "Advanced",
-              description: "Leads strategic planning for large divisions",
-              indicators: [
-                "Sets organizational strategic direction",
-                "Leads enterprise-wide strategic initiatives",
-                "Innovates strategic planning approaches"
-              ]
-            }
-          ],
-          relatedSkills: [
-            "Business Analysis",
-            "Change Management",
-            "Risk Assessment",
-            "Stakeholder Management"
-          ]
-        };
-
-        setCapability(mockCapability);
-      } catch {
+        setLoading(true);
+        const data = await getCapability(params.id as string);
+        setCapability(data);
+      } catch (error) {
+        console.error('Error loading capability:', error);
         setError('Failed to load capability');
       } finally {
         setLoading(false);
@@ -112,53 +69,65 @@ export default function CapabilityPage() {
           <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
             {capability.type}
           </span>
+          {capability.level && (
+            <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
+              Level: {capability.level}
+            </span>
+          )}
         </div>
-        <p className="text-gray-900 text-lg">{capability.description}</p>
+        {capability.description && (
+          <p className="text-gray-900 text-lg">{capability.description}</p>
+        )}
       </div>
+
+      {/* Related Roles */}
+      {capability.roles && capability.roles.length > 0 && (
+        <div className="mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">Related Roles</h2>
+              <div className="space-y-2">
+                {capability.roles.map((role) => (
+                  <div key={role.id} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium text-gray-900">{role.title}</h3>
+                      {role.required_level && (
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+                          Required Level: {role.required_level}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Level Definitions */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-900">Level Definitions</h2>
-            <div className="space-y-6">
-              {capability.levelDefinitions?.map((level) => (
-                <div key={level.level} className="p-4 bg-gray-50 rounded-lg">
-                  <h3 className="text-xl font-semibold mb-2 text-gray-900">{level.level}</h3>
-                  <p className="text-gray-900 mb-4">{level.description}</p>
-                  <div className="space-y-2">
-                    {level.indicators.map((indicator, index) => (
-                      <div key={index} className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
-                        <p className="text-gray-900">{indicator}</p>
-                      </div>
-                    ))}
+      {capability.levelDefinitions && capability.levelDefinitions.length > 0 && (
+        <div className="mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900">Level Definitions</h2>
+              <div className="space-y-4">
+                {capability.levelDefinitions.map((def) => (
+                  <div key={def.level} className="p-4 bg-gray-50 rounded-lg">
+                    <h3 className="font-medium text-gray-900 mb-2">{def.level}</h3>
+                    <p className="text-gray-700 mb-4">{def.description}</p>
+                    <ul className="list-disc list-inside space-y-2">
+                      {def.indicators.map((indicator, index) => (
+                        <li key={index} className="text-gray-700">{indicator}</li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Related Skills */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900">Related Skills</h2>
-            <div className="flex flex-wrap gap-2">
-              {capability.relatedSkills?.map((skill) => (
-                <span 
-                  key={skill} 
-                  className="bg-gray-100 text-gray-900 px-3 py-1 rounded-full text-sm"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 } 

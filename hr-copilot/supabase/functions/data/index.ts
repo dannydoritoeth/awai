@@ -1,13 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from '../shared/cors.ts';
-import { generateCapabilityHeatmapByTaxonomyBase } from '../shared/mcp/actions/generateCapabilityHeatmapByTaxonomy/action.ts';
-import { generateCapabilityHeatmapByDivisionBase } from '../shared/mcp/actions/generateCapabilityHeatmapByDivision/action.ts';
-import { generateCapabilityHeatmapByRegionBase } from '../shared/mcp/actions/generateCapabilityHeatmapByRegion/action.ts';
-import { generateCapabilityHeatmapByCompanyBase } from '../shared/mcp/actions/generateCapabilityHeatmapByCompany/action.ts';
-import { summarizeHeatmapData } from '../shared/mcp/actions/utils.ts';
-import { getGeneralRoles } from '../shared/mcp/actions/getGeneralRoles/action.ts';
-import { getSpecificRole } from '../shared/mcp/actions/getSpecificRole/action.ts';
 
 interface DataRequest {
   insightId: string;
@@ -83,6 +76,67 @@ const actions = {
     return data as Capability[];
   },
 
+  getCapability: async (supabase: any, params: { id: string }) => {
+    const { data: capability, error } = await supabase
+      .from('capabilities')
+      .select(`
+        *,
+        role_capabilities!inner (
+          role:roles!inner(id, title),
+          level
+        )
+      `)
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw error;
+
+    // Transform the data to include roles that require this capability
+    const roles = capability.role_capabilities.map((rc: any) => ({
+      id: rc.role.id,
+      title: rc.role.title,
+      required_level: rc.level
+    }));
+
+    // Remove the nested data from the response
+    const { role_capabilities, ...capabilityData } = capability;
+
+    return {
+      ...capabilityData,
+      roles
+    };
+  },
+
+  getRegions: async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('regions')
+      .select('id, name')
+      .order('name');
+
+    if (error) throw error;
+    return data.map((row: any) => ({ id: row.id, label: row.name }));
+  },
+
+  getDivisions: async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('divisions')
+      .select('id, name')
+      .order('name');
+
+    if (error) throw error;
+    return data.map((row: any) => ({ id: row.id, label: row.name }));
+  },
+
+  getEmploymentTypes: async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('employment_types')
+      .select('id, name')
+      .order('name');
+
+    if (error) throw error;
+    return data.map((row: any) => ({ id: row.id, label: row.name }));
+  },
+
   getTaxonomies: async (supabase: any) => {
     const { data, error } = await supabase
       .from('categories')
@@ -130,29 +184,6 @@ const actions = {
 
     if (error) throw error;
     return data as Company;
-  },
-
-  getDivisions: async (supabase: any, params: { searchTerm?: string; cluster?: string; agency?: string } = {}) => {
-    let query = supabase
-      .from('divisions')
-      .select('*')
-      .order('name');
-
-    if (params.searchTerm) {
-      query = query.or(`name.ilike.%${params.searchTerm}%,agency.ilike.%${params.searchTerm}%`);
-    }
-
-    if (params.cluster) {
-      query = query.eq('cluster', params.cluster);
-    }
-
-    if (params.agency) {
-      query = query.eq('agency', params.agency);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data as Division[];
   },
 
   getDivision: async (supabase: any, params: { id: string }) => {
