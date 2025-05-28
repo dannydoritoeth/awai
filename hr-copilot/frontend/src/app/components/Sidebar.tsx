@@ -299,7 +299,7 @@ export default function Sidebar({
         className={`flex-1 min-h-screen transition-all duration-300 bg-gray-50 ${isMenuOpen ? 'ml-64' : 'ml-0'}`}
       >
         {/* Top Bar */}
-        <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
+        <div className="sticky top-0 z-40 flex items-center h-15 bg-white border-b border-gray-200">
           <div className={`flex items-center ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
               {pathname.includes('/c/') ? 'TalentPathAI' : pathname.includes('role-finder') ? 'Role Finder' : 'TalentPathAI'}

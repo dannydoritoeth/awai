@@ -34,6 +34,140 @@ interface DataRequest {
   includeDocuments?: boolean;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+  type: 'taxonomy' | 'skill' | 'capability';
+  parent_id?: string;
+  role_count: number;
+  divisions: string[];
+}
+
+interface Company {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  created_at: string;
+}
+
+interface Division {
+  id: string;
+  name: string;
+  cluster: string;
+  agency: string;
+}
+
+interface RoleWithDivision {
+  division: string;
+}
+
+const actions = {
+  getCapabilities: async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select(`
+        *,
+        role_count:roles(count),
+        divisions:roles(division)
+      `)
+      .eq('type', 'capability');
+
+    if (error) throw error;
+    
+    // Process the data to get unique divisions and correct role count
+    return data.map((category: any) => ({
+      ...category,
+      role_count: category.role_count[0]?.count || 0,
+      divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
+    })) as Category[];
+  },
+
+  getTaxonomies: async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select(`
+        *,
+        role_count:roles(count),
+        divisions:roles(division)
+      `)
+      .eq('type', 'taxonomy');
+
+    if (error) throw error;
+    
+    // Process the data to get unique divisions and correct role count
+    return data.map((category: any) => ({
+      ...category,
+      role_count: category.role_count[0]?.count || 0,
+      divisions: [...new Set(category.divisions.map((d: RoleWithDivision) => d.division))],
+    })) as Category[];
+  },
+
+  getCompanies: async (supabase: any, params: { searchTerm?: string; divisions?: string[] } = {}) => {
+    let query = supabase
+      .from('companies')
+      .select('*');
+
+    if (params.searchTerm) {
+      query = query.ilike('name', `%${params.searchTerm}%`);
+    }
+
+    if (params.divisions?.length) {
+      query = query.in('division_id', params.divisions);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data as Company[];
+  },
+
+  getCompany: async (supabase: any, params: { id: string }) => {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw error;
+    return data as Company;
+  },
+
+  getDivisions: async (supabase: any, params: { searchTerm?: string; cluster?: string; agency?: string } = {}) => {
+    let query = supabase
+      .from('divisions')
+      .select('*')
+      .order('name');
+
+    if (params.searchTerm) {
+      query = query.or(`name.ilike.%${params.searchTerm}%,agency.ilike.%${params.searchTerm}%`);
+    }
+
+    if (params.cluster) {
+      query = query.eq('cluster', params.cluster);
+    }
+
+    if (params.agency) {
+      query = query.eq('agency', params.agency);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data as Division[];
+  },
+
+  getDivision: async (supabase: any, params: { id: string }) => {
+    const { data, error } = await supabase
+      .from('divisions')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw error;
+    return data as Division;
+  }
+};
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -41,105 +175,42 @@ serve(async (req) => {
   }
 
   try {
-    // Get request body
-    const input: DataRequest = await req.json();
+    const { insightId, params } = await req.json();
 
     // Create Supabase client
-    const supabaseClient = createClient(
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Execute insight query
-    let data;
-    switch (input.insightId) {
-      case 'getSpecificRole': {
-        const response = await getSpecificRole.actionFn({
-          supabase: supabaseClient,
-          args: {
-            roleId: input.roleId,
-            includeSkills: input.includeSkills,
-            includeCapabilities: input.includeCapabilities,
-            includeDocuments: input.includeDocuments
-          }
-        });
-        data = response.data;
-        if (!response.success) throw new Error(response.error?.message);
-        break;
-      }
-      case 'getGeneralRoles': {
-        const response = await getGeneralRoles.actionFn({
-          supabase: supabaseClient,
-          args: {
-            functionArea: input.functionArea,
-            classificationLevel: input.classificationLevel,
-            searchTerm: input.searchTerm,
-            limit: input.limit,
-            offset: input.offset
-          }
-        });
-        data = response.data;
-        if (!response.success) throw new Error(response.error?.message);
-        break;
-      }
-      case 'generateCapabilityHeatmapByTaxonomy':
-        if (!input.companyIds?.length) throw new Error('At least one companyId is required');
-        data = await generateCapabilityHeatmapByTaxonomyBase(supabaseClient, input.companyIds);
-        break;
-      case 'generateCapabilityHeatmapByDivision':
-        if (!input.companyIds?.length) throw new Error('At least one companyId is required');
-        data = await generateCapabilityHeatmapByDivisionBase(supabaseClient, input.companyIds);
-        break;
-      case 'generateCapabilityHeatmapByRegion':
-        if (!input.companyIds?.length) throw new Error('At least one companyId is required');
-        data = await generateCapabilityHeatmapByRegionBase(supabaseClient, input.companyIds);
-        break;
-      case 'generateCapabilityHeatmapByCompany':
-        if (!input.companyIds?.length) throw new Error('At least one companyId is required');
-        data = await generateCapabilityHeatmapByCompanyBase(supabaseClient, input.companyIds);
-        break;
-      default:
-        throw new Error(`Unsupported insight: ${input.insightId}`);
+    // Get the action function
+    const actionFn = actions[insightId as keyof typeof actions];
+    if (!actionFn) {
+      throw new Error(`Action ${insightId} not found`);
     }
 
-    // Get both raw and summarized data for heatmaps
-    const response = input.insightId.startsWith('generateCapabilityHeatmap') 
-      ? {
-          raw: data,
-          summarized: summarizeHeatmapData(data)
-        }
-      : data;
+    // Execute the action
+    const data = await actionFn(supabase, params);
 
-    // Return success response
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: response,
-        error: null
-      }),
-      {
-        headers: {
+      JSON.stringify(data),
+      { 
+        headers: { 
           ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-  } catch (error) {
-    // Return error response
-    return new Response(
-      JSON.stringify({
-        success: false,
-        data: null,
-        error: error.message
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        status: 400
-      }
+      },
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 400,
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      },
     );
   }
 }); 
