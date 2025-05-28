@@ -3,7 +3,7 @@ import { dataEdge } from '../data-edge';
 export interface Role {
   id: string;
   title: string;
-  description: string | null;
+  description?: string | null;
   is_specific: boolean;
   created_at: string;
   updated_at: string;

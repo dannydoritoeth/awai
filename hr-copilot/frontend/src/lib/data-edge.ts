@@ -15,7 +15,6 @@ interface DataEdgeParams {
 
 interface RoleSkill {
   skill_id: string;
-  required_level: number;
   skills: {
     id: string;
     name: string;
@@ -67,7 +66,7 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
     } else {
       const { data, error } = await supabase
         .from('roles')
-        .select('id, title, description, division_id, grade_band, created_at, updated_at')
+        .select('id, title, division_id, grade_band, created_at, updated_at')
         .order('title');
 
       if (error) throw new Error(error.message);
@@ -101,7 +100,6 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
         *,
         role_skills (
           skill_id,
-          required_level,
           skills (
             id,
             name,
@@ -120,7 +118,7 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
         is_specific: true,
         skills: (specificRole.role_skills as RoleSkill[])?.map(rs => ({
           ...rs.skills,
-          required_level: rs.required_level
+          required_level: 1 // Default level since our schema doesn't have this field yet
         })) || [],
         role_skills: undefined
       };
