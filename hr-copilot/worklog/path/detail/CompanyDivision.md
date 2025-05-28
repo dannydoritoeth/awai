@@ -17,6 +17,12 @@
 
 ---
 
+Internal Match Insights
+📍 "There are 5 people across NSW Government who match this role with >70% alignment."
+🧠 "Most matches come from Environment and Planning, and Treasury."
+🔗 [Explore people insights →]
+
+
 🔒 **Detailed Insights**  
 Want to see which roles are duplicated, dead-ends, or poorly scoped?
 

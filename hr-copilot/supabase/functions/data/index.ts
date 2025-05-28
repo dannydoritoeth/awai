@@ -227,6 +227,65 @@ const actions = {
 
     if (error) throw error;
     return data as Division;
+  },
+
+  getInstitutions: async (supabase: any, params?: { searchTerm?: string }) => {
+    let query = supabase
+      .from('institutions')
+      .select(`
+        *,
+        companies:companies (
+          id,
+          name,
+          description,
+          divisions:divisions (
+            id,
+            name,
+            cluster,
+            agency
+          )
+        )
+      `)
+      .order('name');
+
+    if (params?.searchTerm) {
+      query = query.ilike('name', `%${params.searchTerm}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data.map((institution: any) => ({
+      ...institution,
+      company_count: institution.companies?.length || 0,
+      division_count: institution.companies?.reduce((acc: number, company: any) => 
+        acc + (company.divisions?.length || 0), 0) || 0,
+      companies: undefined // Remove nested data from response
+    }));
+  },
+
+  getInstitution: async (supabase: any, params: { id: string }) => {
+    const { data, error } = await supabase
+      .from('institutions')
+      .select(`
+        *,
+        companies:companies (
+          id,
+          name,
+          description,
+          divisions:divisions (
+            id,
+            name,
+            cluster,
+            agency
+          )
+        )
+      `)
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };
 
