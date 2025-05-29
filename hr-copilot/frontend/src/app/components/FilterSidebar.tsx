@@ -176,7 +176,7 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
         <div className="flex flex-col h-full w-80">
           {/* Header */}
           <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Filter Panel</h2>
+            <h2 className="text-lg font-semibold text-gray-900">-</h2>
           </div>
 
           {/* Filters */}
