@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { getDivisions, type Division } from '@/lib/services/divisions';
 import { getCategories } from '@/lib/services/categories';
-import { Select } from '@/components/ui/select';
+import { CustomSelect } from '@/components/ui/custom-select';
 
 interface FilterOption {
   id: string;
   name: string;
 }
 
-interface Filters {
+export interface Filters {
   taxonomy: string;
   agency: string;
 }
@@ -77,7 +77,7 @@ export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
 
   return (
     <div className="space-y-4">
-      <Select
+      <CustomSelect
         label="Function Area"
         value={selectedTaxonomy}
         onChange={handleTaxonomyChange}
@@ -88,7 +88,7 @@ export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
         placeholder="Select function area"
       />
 
-      <Select
+      <CustomSelect
         label="Agency"
         value={selectedAgency}
         onChange={handleAgencyChange}

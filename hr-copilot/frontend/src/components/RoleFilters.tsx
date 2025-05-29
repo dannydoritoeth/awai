@@ -23,6 +23,11 @@ interface RoleFiltersSidebarProps {
   onFiltersChange: (filters: RoleFilters) => void;
 }
 
+export interface Filters {
+  taxonomy: string;
+  agency: string;
+}
+
 export function RoleFiltersSidebar({ onFiltersChange }: RoleFiltersSidebarProps) {
   const [taxonomies, setTaxonomies] = useState<FilterOption[]>([]);
   const [regions, setRegions] = useState<FilterOption[]>([]);

@@ -220,6 +220,8 @@ export interface Taxonomy {
   taxonomy_type: string;
   created_at: string;
   updated_at: string;
+  role_count: number;
+  divisions: string[];
 }
 
 export interface SkillFilters {
