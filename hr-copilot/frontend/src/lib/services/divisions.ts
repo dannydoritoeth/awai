@@ -40,8 +40,7 @@ export async function getDivision(id: string) {
     const data = await dataEdge({ 
       insightId: 'getDivision',
       params: { 
-        id,
-        includeCompany: true
+        id
       }
     });
 

@@ -153,6 +153,28 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
     throw new Error('Role not found');
   }
 
+  // Handle divisions directly
+  if (insightId === 'getDivision' && params.id) {
+    const { data, error } = await supabase
+      .from('divisions')
+      .select(`
+        *,
+        company:companies!company_id (
+          id,
+          name,
+          institution:institutions!institution_id (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', params.id)
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
   // For other insights, use the Edge Function
   const { data, error } = await supabase.functions.invoke('data', {
     body: {
