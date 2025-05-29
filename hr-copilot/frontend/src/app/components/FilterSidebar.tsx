@@ -17,7 +17,6 @@ interface FilterOption {
 interface Filters {
   division?: string;
   capability?: string;
-  skill?: string;
   careerType?: string;
 }
 
@@ -37,7 +36,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
   const [filters, setFilters] = useState<Filters>({});
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [capabilities, setCapabilities] = useState<FilterOption[]>([]);
-  const [skills, setSkills] = useState<FilterOption[]>([]);
   const [careerTypes, setCareerTypes] = useState<FilterOption[]>([]);
 
   useEffect(() => {
@@ -49,7 +47,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
 
         // Load all filter options
         console.log('Fetching data from services...');
-        const [divisionData, taxonomyData, capabilityData, skillData] = await Promise.all([
+        const [divisionData, taxonomyData, capabilityData] = await Promise.all([
           getDivisions().catch(err => {
             console.error('Error loading divisions:', err);
             return [];
@@ -60,10 +58,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
           }),
           getCategories('capability').catch(err => {
             console.error('Error loading capabilities:', err);
-            return [];
-          }),
-          getCategories('skill').catch(err => {
-            console.error('Error loading skills:', err);
             return [];
           })
         ]);
@@ -84,7 +78,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
         
         setCareerTypes(transformToFilterOptions(taxonomyData));
         setCapabilities(transformToFilterOptions(capabilityData));
-        setSkills(transformToFilterOptions(skillData));
 
         // Set initial capability filter if we're on a capability page
         if (pathname.includes('/capabilities/') && params.id) {
@@ -121,9 +114,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
       case 'capability':
         updateOptions(capabilities, setCapabilities);
         break;
-      case 'skill':
-        updateOptions(skills, setSkills);
-        break;
       case 'careerType':
         updateOptions(careerTypes, setCareerTypes);
         break;
@@ -146,7 +136,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
     
     // Reset all checked states
     setCapabilities(capabilities.map(c => ({ ...c, checked: false })));
-    setSkills(skills.map(s => ({ ...s, checked: false })));
     setCareerTypes(careerTypes.map(t => ({ ...t, checked: false })));
   };
 
@@ -188,12 +177,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
               title="Capabilities"
               options={capabilities}
               onChange={(id, checked) => handleFilterChange('capability', id, checked)}
-            />
-
-            <CheckboxGroup
-              title="Skills"
-              options={skills}
-              onChange={(id, checked) => handleFilterChange('skill', id, checked)}
             />
 
             <CheckboxGroup
