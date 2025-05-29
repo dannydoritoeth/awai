@@ -27,6 +27,8 @@ interface FilterSidebarProps {
 }
 
 export default function FilterSidebar({ children, onFiltersChange }: FilterSidebarProps) {
+  console.log('FilterSidebar rendered');
+  
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const pathname = usePathname();
   const params = useParams();
@@ -66,7 +68,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
           })
         ]);
 
-        console.log('Received division data:', divisionData);
+        console.log('Received division data:', JSON.stringify(divisionData, null, 2));
 
         // Transform data to FilterOption format with checked state
         const transformToFilterOptions = (items: { id: string; name: string }[]): FilterOption[] => {
@@ -78,6 +80,8 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
         };
 
         setDivisions(divisionData);
+        console.log('Set divisions state:', divisionData);
+        
         setCareerTypes(transformToFilterOptions(taxonomyData));
         setCapabilities(transformToFilterOptions(capabilityData));
         setSkills(transformToFilterOptions(skillData));
