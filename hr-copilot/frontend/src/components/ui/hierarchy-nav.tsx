@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react';
 import { Button } from './button';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { type Division } from '@/lib/services/divisions';
+import { useRouter } from 'next/navigation';
 
 interface HierarchyNavProps {
   divisions: Division[];
-  onSelect: (id: string) => void;
 }
 
-export function HierarchyNav({ divisions, onSelect }: HierarchyNavProps) {
+export function HierarchyNav({ divisions }: HierarchyNavProps) {
+  const router = useRouter();
   console.log('HierarchyNav rendered with divisions:', divisions);
 
   const [currentLevel, setCurrentLevel] = useState<'institution' | 'company' | 'division'>('institution');
@@ -95,15 +96,27 @@ export function HierarchyNav({ divisions, onSelect }: HierarchyNavProps) {
   const handleSelect = (id: string, name: string, level: 'institution' | 'company' | 'division') => {
     console.log('Selected item:', { id, name, level });
     if (level === 'institution') {
-      setSelectedInstitution(id);
-      setCurrentLevel('company');
-      setHistory(prev => [...prev, { level: 'institution', name }]);
+      if (id === 'no-institution') {
+        // Just expand the view for "Other Companies"
+        setSelectedInstitution(id);
+        setCurrentLevel('company');
+        setHistory(prev => [...prev, { level: 'institution', name }]);
+      } else {
+        // Navigate to institution page and expand view
+        router.push(`/institutions/${id}`);
+        setSelectedInstitution(id);
+        setCurrentLevel('company');
+        setHistory(prev => [...prev, { level: 'institution', name }]);
+      }
     } else if (level === 'company') {
+      // Navigate to company page and expand view
+      router.push(`/companies/${id}`);
       setSelectedCompany(id);
       setCurrentLevel('division');
       setHistory(prev => [...prev, { level: 'company', name }]);
     } else {
-      onSelect(id);
+      // Navigate to division detail page
+      router.push(`/divisions/${id}`);
     }
   };
 
@@ -126,7 +139,7 @@ export function HierarchyNav({ divisions, onSelect }: HierarchyNavProps) {
       {currentLevel !== 'institution' && (
         <div className="flex items-center gap-2 mb-2">
           <Button
-            variant="link"	
+            variant="outline"
             className="text-[14px] text-blue-600 hover:text-blue-800 p-0 h-auto"
             onClick={handleBack}
           >

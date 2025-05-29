@@ -15,7 +15,6 @@ interface FilterOption {
 }
 
 interface Filters {
-  division?: string;
   capability?: string;
   careerType?: string;
 }
@@ -169,7 +168,6 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
               <h3 className="text-[14px] font-medium text-gray-900 mb-2">Organization</h3>
               <HierarchyNav
                 divisions={divisions}
-                onSelect={(id: string) => handleFilterChange('division', id, true)}
               />
             </div>
 
