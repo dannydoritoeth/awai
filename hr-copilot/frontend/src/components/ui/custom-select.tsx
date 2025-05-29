@@ -31,12 +31,16 @@ export function CustomSelect({
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-900">{label}</label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
+        <SelectTrigger className="bg-white border-gray-200 text-gray-900">
+          <SelectValue placeholder={placeholder} className="text-gray-500" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-white border-gray-200">
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem 
+              key={option.value} 
+              value={option.value}
+              className="text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:text-gray-900"
+            >
               {option.label}
             </SelectItem>
           ))}

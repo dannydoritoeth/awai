@@ -17,13 +17,14 @@ export interface Filters {
 
 interface RoleFiltersProps {
   onFilterChange: (filters: Filters) => void;
+  selectedTaxonomyId?: string;
 }
 
-export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
+export default function RoleFilters({ onFilterChange, selectedTaxonomyId }: RoleFiltersProps) {
   const [loading, setLoading] = useState(true);
   const [taxonomies, setTaxonomies] = useState<FilterOption[]>([]);
   const [agencies, setAgencies] = useState<string[]>([]);
-  const [selectedTaxonomy, setSelectedTaxonomy] = useState('');
+  const [selectedTaxonomy, setSelectedTaxonomy] = useState(selectedTaxonomyId || '');
   const [selectedAgency, setSelectedAgency] = useState('');
 
   useEffect(() => {
@@ -52,6 +53,13 @@ export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
     loadFilterOptions();
   }, []);
 
+  // Update selected taxonomy when prop changes
+  useEffect(() => {
+    if (selectedTaxonomyId) {
+      setSelectedTaxonomy(selectedTaxonomyId);
+    }
+  }, [selectedTaxonomyId]);
+
   const handleTaxonomyChange = (value: string) => {
     setSelectedTaxonomy(value);
     onFilterChange({
@@ -76,9 +84,9 @@ export default function RoleFilters({ onFilterChange }: RoleFiltersProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-white p-4 rounded-lg shadow-sm">
       <CustomSelect
-        label="Function Area"
+        label="Career Type"
         value={selectedTaxonomy}
         onChange={handleTaxonomyChange}
         options={taxonomies.map(t => ({

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import RoleFilters from './RoleFilters';
+import type { Filters } from './RoleFilters';
 
 const STORAGE_KEYS = {
   FILTER_MENU_OPEN: 'hr_copilot_filter_menu_open',
@@ -28,6 +29,9 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const pathname = usePathname();
 
+  // Extract taxonomy ID from pathname if we're on a taxonomy detail page
+  const taxonomyId = pathname.match(/\/taxonomies\/([^\/]+)/)?.[1];
+
   useEffect(() => {
     setIsClient(true);
     setIsMenuOpen(getStoredValue(STORAGE_KEYS.FILTER_MENU_OPEN, true));
@@ -37,6 +41,11 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
     if (!isClient) return;
     localStorage.setItem(STORAGE_KEYS.FILTER_MENU_OPEN, JSON.stringify(isMenuOpen));
   }, [isClient, isMenuOpen]);
+
+  const handleFilterChange = (filters: Filters) => {
+    console.log('Filters changed:', filters);
+    // TODO: Implement filter handling
+  };
 
   // Helper function to get the page title based on the pathname
   const getPageTitle = () => {
@@ -72,7 +81,10 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
 
           {/* Filters */}
           <div className="flex-1 overflow-y-auto p-6">
-            <RoleFilters />
+            <RoleFilters 
+              onFilterChange={handleFilterChange}
+              selectedTaxonomyId={taxonomyId}
+            />
           </div>
         </div>
       </div>
