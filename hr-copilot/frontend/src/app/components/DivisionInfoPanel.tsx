@@ -1,4 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
+import Link from 'next/link';
 import type { Division } from '@/lib/services/divisions';
 
 interface DivisionInfoPanelProps {
@@ -23,6 +24,17 @@ export default function DivisionInfoPanel({ division }: DivisionInfoPanelProps) 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Agency</h3>
                 <p className="mt-1 text-gray-900">{division.agency}</p>
+              </div>
+            )}
+            {division.company && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Company</h3>
+                <Link 
+                  href={`/companies/${division.company.id}`}
+                  className="mt-1 text-blue-600 hover:underline block"
+                >
+                  {division.company.name}
+                </Link>
               </div>
             )}
           </div>

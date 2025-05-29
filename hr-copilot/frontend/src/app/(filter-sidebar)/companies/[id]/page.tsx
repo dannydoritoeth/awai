@@ -6,6 +6,7 @@ import { useFilterStore } from '@/lib/stores/filter-store';
 import CompanyAIInsights from '@/app/components/CompanyAIInsights';
 import CompanyInfoPanel from '@/app/components/CompanyInfoPanel';
 import type { Company } from '@/lib/services/companies';
+import Link from 'next/link';
 
 interface PageProps {
   params: Promise<{
@@ -71,6 +72,17 @@ export default function CompanyPage(props: PageProps) {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-6">
+          {/* Breadcrumb Navigation */}
+          {company.institution && (
+            <div className="text-sm text-gray-600 mb-2">
+              <Link 
+                href={`/institutions/${company.institution.id}`}
+                className="hover:text-blue-600 hover:underline"
+              >
+                {company.institution.name}
+              </Link>
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-gray-900">{company.name}</h1>
           {company.logo_url && (
             <img 
@@ -93,21 +105,27 @@ export default function CompanyPage(props: PageProps) {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Divisions</h2>
             <div className="grid gap-4">
               {company.divisions.map((division) => (
-                <div key={division.id} className="bg-white rounded-lg shadow-sm p-6">
-                  <h3 className="text-xl font-semibold text-gray-900">{division.name}</h3>
-                  <div className="mt-2 flex gap-2">
-                    {division.cluster && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
-                        {division.cluster}
-                      </span>
-                    )}
-                    {division.agency && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
-                        {division.agency}
-                      </span>
-                    )}
+                <Link 
+                  key={division.id} 
+                  href={`/divisions/${division.id}`}
+                  className="block"
+                >
+                  <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+                    <h3 className="text-xl font-semibold text-gray-900">{division.name}</h3>
+                    <div className="mt-2 flex gap-2">
+                      {division.cluster && (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+                          {division.cluster}
+                        </span>
+                      )}
+                      {division.agency && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
+                          {division.agency}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

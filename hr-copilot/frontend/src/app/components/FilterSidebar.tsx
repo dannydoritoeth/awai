@@ -76,7 +76,7 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
         const transformDivisions = (items: Division[]): FilterOption[] => {
           return items.map(item => ({
             id: item.id,
-            name: item.agency
+            name: item.name
           }));
         };
 

@@ -8,6 +8,14 @@ export interface Division {
   company_id: string | null;
   created_at: string;
   updated_at: string;
+  company?: {
+    id: string;
+    name: string;
+    institution?: {
+      id: string;
+      name: string;
+    };
+  };
 }
 
 export interface DivisionFilters {
@@ -28,8 +36,18 @@ export async function getDivisions(filters?: DivisionFilters) {
 }
 
 export async function getDivision(id: string) {
-  return dataEdge({ 
-    insightId: 'getDivision',
-    params: { id }
-  }) as Promise<Division>;
+  try {
+    const data = await dataEdge({ 
+      insightId: 'getDivision',
+      params: { 
+        id,
+        includeCompany: true
+      }
+    });
+
+    return data;
+  } catch (error) {
+    console.error('Error in getDivision:', error);
+    throw error;
+  }
 } 

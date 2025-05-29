@@ -65,6 +65,15 @@ export async function getCategories(type: 'taxonomy' | 'skill' | 'capability') {
           return [];
         });
       console.log('Received taxonomies data:', data);
+    } else if (type === 'skill') {
+      console.log('Fetching skills from dataEdge');
+      const response = await dataEdge({ insightId: 'getSkills' })
+        .catch(err => {
+          console.error('Error in dataEdge getSkills:', err);
+          return { success: false, data: [], error: err.message };
+        });
+      data = response.success ? response.data : [];
+      console.log('Received skills data:', data);
     } else {
       console.log('Fetching from categories table');
       const { data: queryData, error } = await supabase

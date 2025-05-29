@@ -6,6 +6,7 @@ import { useFilterStore } from '@/lib/stores/filter-store';
 import DivisionAIInsights from '@/app/components/DivisionAIInsights';
 import DivisionInfoPanel from '@/app/components/DivisionInfoPanel';
 import type { Division } from '@/lib/services/divisions';
+import Link from 'next/link';
 
 interface PageProps {
   params: Promise<{
@@ -68,6 +69,30 @@ export default function DivisionPage(props: PageProps) {
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-6">
+          {/* Breadcrumb Navigation */}
+          {(division.company || division.company?.institution) && (
+            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+              {division.company?.institution && (
+                <>
+                  <Link 
+                    href={`/institutions/${division.company.institution.id}`}
+                    className="hover:text-blue-600 hover:underline"
+                  >
+                    {division.company.institution.name}
+                  </Link>
+                  <span>›</span>
+                </>
+              )}
+              {division.company && (
+                <Link 
+                  href={`/companies/${division.company.id}`}
+                  className="hover:text-blue-600 hover:underline"
+                >
+                  {division.company.name}
+                </Link>
+              )}
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-gray-900">{division.name}</h1>
           <div className="mt-2 flex gap-2">
             {division.cluster && (

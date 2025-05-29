@@ -7,6 +7,11 @@ export interface Company {
   website_url: string | null;
   logo_url: string | null;
   created_at: string;
+  institution_id: string | null;
+  institution?: {
+    id: string;
+    name: string;
+  };
   divisions?: Array<{
     id: string;
     name: string;
@@ -34,7 +39,8 @@ export async function getCompany(id: string) {
       insightId: 'getCompany',
       params: { 
         id,
-        includeDivisions: true
+        includeDivisions: true,
+        includeInstitution: true
       }
     });
 

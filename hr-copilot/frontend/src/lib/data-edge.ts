@@ -32,22 +32,48 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
   if (insightId === 'getSkills') {
     const { data, error } = await supabase
       .from('skills')
-      .select('*')
+      .select(`
+        id,
+        name,
+        category,
+        description,
+        source,
+        is_occupation_specific,
+        created_at,
+        updated_at
+      `)
       .order('name');
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      success: true,
+      data,
+      error: null
+    };
   }
 
   if (insightId === 'getSkill' && params.id) {
     const { data, error } = await supabase
       .from('skills')
-      .select('*')
+      .select(`
+        id,
+        name,
+        category,
+        description,
+        source,
+        is_occupation_specific,
+        created_at,
+        updated_at
+      `)
       .eq('id', params.id)
       .single();
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      success: true,
+      data,
+      error: null
+    };
   }
 
   // Handle roles directly
