@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useParams } from 'next/navigation';
-import { CustomSelect } from '@/components/ui/custom-select';
 import { Button } from '@/components/ui/button';
-import { getDivisions } from '@/lib/services/divisions';
+import { getDivisions, type Division } from '@/lib/services/divisions';
 import { getCategories } from '@/lib/services/categories';
-import type { Division } from '@/lib/services/divisions';
-import type { Category } from '@/lib/services/categories';
+import { CheckboxGroup } from '@/components/ui/checkbox-group';
+import { HierarchyNav } from '@/components/ui/hierarchy-nav';
 
 interface FilterOption {
   id: string;
   name: string;
+  checked: boolean;
 }
 
 interface Filters {
@@ -23,16 +23,17 @@ interface Filters {
 
 interface FilterSidebarProps {
   children: React.ReactNode;
+  onFiltersChange?: (filters: Filters) => void;
 }
 
-export default function FilterSidebar({ children }: FilterSidebarProps) {
+export default function FilterSidebar({ children, onFiltersChange }: FilterSidebarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(true);
   const pathname = usePathname();
   const params = useParams();
 
   // Filter states
   const [filters, setFilters] = useState<Filters>({});
-  const [divisions, setDivisions] = useState<FilterOption[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [capabilities, setCapabilities] = useState<FilterOption[]>([]);
   const [skills, setSkills] = useState<FilterOption[]>([]);
   const [careerTypes, setCareerTypes] = useState<FilterOption[]>([]);
@@ -65,44 +66,21 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
           })
         ]);
 
-        console.log('Received data:', {
-          divisions: divisionData,
-          taxonomy: taxonomyData,
-          capabilities: capabilityData,
-          skills: skillData
-        });
+        console.log('Received division data:', divisionData);
 
-        // Transform data to FilterOption format
-        const transformDivisions = (items: Division[]): FilterOption[] => {
+        // Transform data to FilterOption format with checked state
+        const transformToFilterOptions = (items: { id: string; name: string }[]): FilterOption[] => {
           return items.map(item => ({
             id: item.id,
-            name: item.name
+            name: item.name,
+            checked: false
           }));
         };
 
-        const transformCategories = (items: Category[]): FilterOption[] => {
-          return items.map(item => ({
-            id: item.id,
-            name: item.name
-          }));
-        };
-
-        const transformedDivisions = transformDivisions(divisionData);
-        const transformedCareerTypes = transformCategories(taxonomyData);
-        const transformedCapabilities = transformCategories(capabilityData);
-        const transformedSkills = transformCategories(skillData);
-
-        console.log('Transformed data:', {
-          divisions: transformedDivisions,
-          careerTypes: transformedCareerTypes,
-          capabilities: transformedCapabilities,
-          skills: transformedSkills
-        });
-
-        setDivisions(transformedDivisions);
-        setCareerTypes(transformedCareerTypes);
-        setCapabilities(transformedCapabilities);
-        setSkills(transformedSkills);
+        setDivisions(divisionData);
+        setCareerTypes(transformToFilterOptions(taxonomyData));
+        setCapabilities(transformToFilterOptions(capabilityData));
+        setSkills(transformToFilterOptions(skillData));
 
         // Set initial capability filter if we're on a capability page
         if (pathname.includes('/capabilities/') && params.id) {
@@ -118,42 +96,54 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
         }
       } catch (error) {
         console.error('Error in loadFilterOptions:', error);
-        if (error instanceof Error) {
-          console.error('Error details:', {
-            message: error.message,
-            stack: error.stack
-          });
-        }
       }
     };
 
     loadFilterOptions();
   }, [pathname, params.id]);
 
-  const handleFilterChange = (key: keyof Filters, value: string) => {
-    console.log('Changing filter:', { key, value });
-    setFilters(prev => {
-      const newFilters = {
-        ...prev,
-        [key]: value
-      };
-      console.log('New filters state:', newFilters);
-      return newFilters;
-    });
+  const handleFilterChange = (type: keyof Filters, id: string, checked: boolean) => {
+    console.log('Changing filter:', { type, id, checked });
+    
+    // Update the checked state in the corresponding filter options
+    const updateOptions = (options: FilterOption[], setOptions: (options: FilterOption[]) => void) => {
+      const newOptions = options.map(option => 
+        option.id === id ? { ...option, checked } : option
+      );
+      setOptions(newOptions);
+    };
+
+    switch (type) {
+      case 'capability':
+        updateOptions(capabilities, setCapabilities);
+        break;
+      case 'skill':
+        updateOptions(skills, setSkills);
+        break;
+      case 'careerType':
+        updateOptions(careerTypes, setCareerTypes);
+        break;
+    }
+
+    // Update the filters state
+    const newFilters = {
+      ...filters,
+      [type]: checked ? id : undefined
+    };
+    setFilters(newFilters);
+    onFiltersChange?.(newFilters);
   };
 
   const handleClearFilters = () => {
     console.log('Clearing all filters');
-    setFilters({});
-  };
-
-  // Helper function to get the page title based on the pathname
-  const getPageTitle = () => {
-    if (pathname.includes('/taxonomies')) return 'Career Types';
-    if (pathname.includes('/skills')) return 'Skills';
-    if (pathname.includes('/capabilities')) return 'Capabilities';
-    if (pathname.includes('/roles')) return 'Roles';
-    return 'TalentPathAI';
+    const newFilters = {};
+    setFilters(newFilters);
+    onFiltersChange?.(newFilters as Filters);
+    
+    // Reset all checked states
+    setCapabilities(capabilities.map(c => ({ ...c, checked: false })));
+    setSkills(skills.map(s => ({ ...s, checked: false })));
+    setCareerTypes(careerTypes.map(t => ({ ...t, checked: false })));
   };
 
   return (
@@ -170,72 +160,49 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
 
       {/* Sidebar */}
       <div 
-        className={`fixed top-0 left-0 h-full bg-white text-gray-900 transition-all duration-300 z-40 border-r border-gray-200
-          ${isMenuOpen ? 'w-80' : 'w-0 overflow-hidden'}`}
+        className={`fixed top-0 left-0 h-full bg-white text-gray-900 transition-all duration-300 z-4 border-r border-gray-200
+          ${isMenuOpen ? 'w-[235px]' : 'w-0 overflow-hidden'}`}
       >
-        <div className="flex flex-col h-full w-80">
+        <div className="flex flex-col h-full w-[235px]">
           {/* Header */}
-          <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">-</h2>
+          <div className="p-4 border-b border-gray-200 h-16">
+            <h2 className="text-[14px] font-medium text-gray-900">.</h2>
           </div>
 
           {/* Filters */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Division */}
-            <div className="space-y-4">
-              <CustomSelect
-                label="Division"
-                value={filters.division || ''}
-                onChange={(value) => handleFilterChange('division', value)}
-                options={divisions.map(d => ({
-                  value: d.id,
-                  label: d.name
-                }))}
-                placeholder="Select division"
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Hierarchy Navigation */}
+            <div className="mb-6">
+              <h3 className="text-[14px] font-medium text-gray-900 mb-2">Organization</h3>
+              <HierarchyNav
+                divisions={divisions}
+                onSelect={(id: string) => handleFilterChange('division', id, true)}
               />
             </div>
 
-            {/* Other Filters */}
-            <div className="space-y-4">
-              <CustomSelect
-                label="Capability"
-                value={filters.capability || ''}
-                onChange={(value) => handleFilterChange('capability', value)}
-                options={capabilities.map(c => ({
-                  value: c.id,
-                  label: c.name
-                }))}
-                placeholder="Select capability"
-              />
+            <CheckboxGroup
+              title="Capabilities"
+              options={capabilities}
+              onChange={(id, checked) => handleFilterChange('capability', id, checked)}
+            />
 
-              <CustomSelect
-                label="Skill"
-                value={filters.skill || ''}
-                onChange={(value) => handleFilterChange('skill', value)}
-                options={skills.map(s => ({
-                  value: s.id,
-                  label: s.name
-                }))}
-                placeholder="Select skill"
-              />
+            <CheckboxGroup
+              title="Skills"
+              options={skills}
+              onChange={(id, checked) => handleFilterChange('skill', id, checked)}
+            />
 
-              <CustomSelect
-                label="Career Type"
-                value={filters.careerType || ''}
-                onChange={(value) => handleFilterChange('careerType', value)}
-                options={careerTypes.map(t => ({
-                  value: t.id,
-                  label: t.name
-                }))}
-                placeholder="Select career type"
-              />
-            </div>
+            <CheckboxGroup
+              title="Career Types"
+              options={careerTypes}
+              onChange={(id, checked) => handleFilterChange('careerType', id, checked)}
+            />
 
             {/* Clear Filters Button */}
             <Button
               onClick={handleClearFilters}
               variant="outline"
-              className="w-full"
+              className="w-full text-[14px]"
             >
               Clear Filters
             </Button>
@@ -244,12 +211,12 @@ export default function FilterSidebar({ children }: FilterSidebarProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isMenuOpen ? 'ml-80' : 'ml-0'}`}>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isMenuOpen ? 'ml-[235px]' : 'ml-0'}`}>
         {/* Top Bar */}
         <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
           <div className={`flex items-center ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
-              {getPageTitle()}
+              {pathname.split('/')[1]?.charAt(0).toUpperCase() + pathname.split('/')[1]?.slice(1) || 'TalentPathAI'}
             </div>
           </div>
         </div>

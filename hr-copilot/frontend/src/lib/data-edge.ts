@@ -154,11 +154,42 @@ export async function dataEdge({ insightId, params = {} }: DataEdgeParams) {
   }
 
   // Handle divisions directly
+  if (insightId === 'getDivisions') {
+    console.log('Fetching divisions with company and institution data...');
+    const { data, error } = await supabase
+      .from('divisions')
+      .select(`
+        id,
+        name,
+        company_id,
+        company:companies!company_id (
+          id,
+          name,
+          institution_id,
+          institution:institutions!institution_id (
+            id,
+            name
+          )
+        )
+      `)
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching divisions:', error);
+      throw new Error(error.message);
+    }
+    
+    console.log('Divisions data:', data);
+    return data;
+  }
+
   if (insightId === 'getDivision' && params.id) {
     const { data, error } = await supabase
       .from('divisions')
       .select(`
-        *,
+        id,
+        name,
+        company_id,
         company:companies!company_id (
           id,
           name,
