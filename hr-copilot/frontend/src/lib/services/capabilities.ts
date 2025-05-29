@@ -7,6 +7,11 @@ export interface Capability {
   description: string | null;
   type: string;
   level: string;
+  levelDefinitions?: {
+    level: string;
+    description: string;
+    indicators: string[];
+  }[];
   roles?: {
     id: string;
     title: string;
