@@ -4,24 +4,40 @@ export interface Role {
   id: string;
   title: string;
   description?: string | null;
+  function_area?: string;
+  grade_band?: string;
+  primary_purpose?: string;
+  reporting_line?: string;
+  direct_reports?: string;
+  budget_responsibility?: string;
   is_specific: boolean;
   created_at: string;
   updated_at: string;
-}
-
-export interface RoleWithSkills extends Role {
-  skills: Array<{
+  capabilities?: Array<{
+    id: string;
+    name: string;
+    group_name: string;
+    description?: string;
+    type: string;
+    level: string;
+  }>;
+  skills?: Array<{
     id: string;
     name: string;
     category: string;
-    required_level: number;
+    description?: string;
   }>;
 }
 
 export interface RoleFilters {
-  type?: 'general' | 'specific';
-  searchTerm?: string;
-  [key: string]: string | undefined;
+  taxonomies?: string[];
+  regions?: string[];
+  divisions?: string[];
+  employmentTypes?: string[];
+  capabilities?: string[];
+  skills?: string[];
+  companies?: string[];
+  [key: string]: unknown;
 }
 
 export async function getRoles(filters?: RoleFilters) {
@@ -31,11 +47,15 @@ export async function getRoles(filters?: RoleFilters) {
   }) as Promise<Role[]>;
 }
 
-export async function getRole(id: string) {
-  return dataEdge({ 
+export async function getRole(id: string, options?: {
+  includeSkills?: boolean;
+  includeCapabilities?: boolean;
+}) {
+  const response = await dataEdge({ 
     insightId: 'getRole',
-    params: { id }
-  }) as Promise<RoleWithSkills>;
+    params: { id, ...options }
+  });
+  return response as Role;
 }
 
 export async function getBands() {

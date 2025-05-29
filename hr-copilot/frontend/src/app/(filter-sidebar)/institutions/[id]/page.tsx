@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { getInstitution, type InstitutionDetail } from '@/lib/services/institutions';
+import { useFilterStore } from '@/lib/stores/filter-store';
+import InstitutionAIInsights from '@/app/components/InstitutionAIInsights';
+import InstitutionInfoPanel from '@/app/components/InstitutionInfoPanel';
 
 interface PageProps {
   params: Promise<{
@@ -15,6 +17,7 @@ export default function InstitutionPage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [institution, setInstitution] = useState<InstitutionDetail | null>(null);
+  const setFilters = useFilterStore(state => state.setFilters);
 
   useEffect(() => {
     async function loadInstitution() {
@@ -22,6 +25,10 @@ export default function InstitutionPage(props: PageProps) {
         setLoading(true);
         const data = await getInstitution(params.id);
         setInstitution(data);
+        // Set the institution filter
+        setFilters({
+          institution: params.id
+        });
       } catch (error) {
         console.error('Error loading institution:', error);
         setError(error instanceof Error ? error.message : 'Failed to load institution');
@@ -30,7 +37,14 @@ export default function InstitutionPage(props: PageProps) {
       }
     }
     loadInstitution();
-  }, [params.id]);
+
+    // Clear the filter when unmounting
+    return () => {
+      setFilters({
+        institution: undefined
+      });
+    };
+  }, [params.id, setFilters]);
 
   if (loading) {
     return <div className="animate-pulse space-y-4">
@@ -48,49 +62,33 @@ export default function InstitutionPage(props: PageProps) {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+    <div className="flex min-h-screen">
+      {/* Main Content Area */}
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{institution.name}</h1>
-          {institution.description && (
-            <p className="mt-2 text-gray-600">{institution.description}</p>
+          {institution.logo_url && (
+            <img 
+              src={institution.logo_url} 
+              alt={`${institution.name} logo`}
+              className="mt-4 w-20 h-20 object-contain"
+            />
           )}
         </div>
-        {institution.logo_url && (
-          <img 
-            src={institution.logo_url} 
-            alt={`${institution.name} logo`}
-            className="w-20 h-20 object-contain"
-          />
-        )}
-      </div>
 
-      {/* Quick Stats */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Companies</h3>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">{institution.companies.length}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Total Divisions</h3>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">
-                {institution.companies.reduce((acc, company) => acc + (company.divisions?.length || 0), 0)}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* AI Insights */}
+        <InstitutionAIInsights 
+          institutionId={institution.id} 
+          institutionName={institution.name}
+        />
 
-      {/* Companies List */}
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Companies</h2>
-        <div className="grid gap-4">
-          {institution.companies.map((company) => (
-            <Card key={company.id}>
-              <CardContent className="p-6">
+        {/* Companies List */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Companies</h2>
+          <div className="grid gap-4">
+            {institution.companies.map((company) => (
+              <div key={company.id} className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="text-xl font-semibold text-gray-900">{company.name}</h3>
                 {company.description && (
                   <p className="mt-1 text-gray-600">{company.description}</p>
@@ -112,17 +110,22 @@ export default function InstitutionPage(props: PageProps) {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
 
-          {institution.companies.length === 0 && (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No companies found</h3>
-              <p className="text-gray-600">This institution doesn&apos;t have any companies yet.</p>
-            </div>
-          )}
+            {institution.companies.length === 0 && (
+              <div className="text-center py-12 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No companies found</h3>
+                <p className="text-gray-600">This institution doesn&apos;t have any companies yet.</p>
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Right Info Panel */}
+      <div className="w-80 flex-shrink-0 p-8">
+        <InstitutionInfoPanel institution={institution} />
       </div>
     </div>
   );

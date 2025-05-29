@@ -1,41 +1,57 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { getDivision, type Division } from '@/lib/services/divisions';
-import { Card, CardContent } from '@/components/ui/card';
+import { useState, useEffect, use } from 'react';
+import { getDivision } from '@/lib/services/divisions';
+import { useFilterStore } from '@/lib/stores/filter-store';
+import DivisionAIInsights from '@/app/components/DivisionAIInsights';
+import DivisionInfoPanel from '@/app/components/DivisionInfoPanel';
+import type { Division } from '@/lib/services/divisions';
 
-export default function DivisionDetailPage() {
-  const { id } = useParams();
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default function DivisionPage(props: PageProps) {
+  const params = use(props.params);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [division, setDivision] = useState<Division | null>(null);
+  const setFilters = useFilterStore(state => state.setFilters);
 
   useEffect(() => {
-    const loadDivision = async () => {
+    async function loadDivision() {
       try {
         setLoading(true);
-        const data = await getDivision(id as string);
+        const data = await getDivision(params.id);
         setDivision(data);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load division';
-        setError(errorMessage);
+        // Set the division filter
+        setFilters({
+          division: params.id
+        });
+      } catch (error) {
+        console.error('Error loading division:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load division');
       } finally {
         setLoading(false);
       }
-    };
-
+    }
     loadDivision();
-  }, [id]);
+
+    // Clear the filter when unmounting
+    return () => {
+      setFilters({
+        division: undefined
+      });
+    };
+  }, [params.id, setFilters]);
 
   if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-gray-100 rounded w-1/3"></div>
-        <div className="h-4 bg-gray-100 rounded w-2/3"></div>
-        <div className="h-40 bg-gray-100 rounded mt-8"></div>
-      </div>
-    );
+    return <div className="animate-pulse space-y-4">
+      <div className="h-20 bg-gray-100 rounded-lg"></div>
+      <div className="h-40 bg-gray-100 rounded-lg"></div>
+    </div>;
   }
 
   if (error) {
@@ -47,41 +63,45 @@ export default function DivisionDetailPage() {
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 text-gray-900">{division.name}</h1>
-        <div className="flex gap-2">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-900">
-            {division.agency}
-          </span>
-          {division.cluster && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-900">
-              {division.cluster}
-            </span>
-          )}
+    <div className="flex min-h-screen">
+      {/* Main Content Area */}
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{division.name}</h1>
+          <div className="mt-2 flex gap-2">
+            {division.cluster && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+                {division.cluster}
+              </span>
+            )}
+            {division.agency && (
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
+                {division.agency}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* AI Insights */}
+        <DivisionAIInsights 
+          divisionId={division.id} 
+          divisionName={division.name}
+        />
+
+        {/* Roles Section - Placeholder for now */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Roles</h2>
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No roles found</h3>
+            <p className="text-gray-600">This division doesn&apos;t have any roles yet.</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-6">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900">Overview</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">Agency</h3>
-                <p className="mt-1 text-gray-900">{division.agency}</p>
-              </div>
-              {division.cluster && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">Cluster</h3>
-                  <p className="mt-1 text-gray-900">{division.cluster}</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Additional sections can be added here as needed */}
+      {/* Right Info Panel */}
+      <div className="w-80 flex-shrink-0 p-8">
+        <DivisionInfoPanel division={division} />
       </div>
     </div>
   );

@@ -68,7 +68,7 @@ export async function getCategories(type: 'taxonomy' | 'skill' | 'capability') {
     } else {
       console.log('Fetching from categories table');
       const { data: queryData, error } = await supabase
-        .from('categories')
+        .from('taxonomy')
         .select(`
           *,
           role_count:roles(count),

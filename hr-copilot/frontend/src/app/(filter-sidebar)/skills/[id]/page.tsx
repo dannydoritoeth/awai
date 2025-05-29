@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { getSkill, type Skill } from '@/lib/services/skills';
+import { getSkill } from '@/lib/services/skills';
+import { useFilterStore } from '@/lib/stores/filter-store';
+import SkillAIInsights from '@/app/components/SkillAIInsights';
+import SkillInfoPanel from '@/app/components/SkillInfoPanel';
+import type { Skill } from '@/lib/services/skills';
 
 interface PageProps {
   params: Promise<{
@@ -15,134 +18,93 @@ export default function SkillPage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [skill, setSkill] = useState<Skill | null>(null);
+  const setFilters = useFilterStore(state => state.setFilters);
 
   useEffect(() => {
-    const loadSkill = async () => {
+    async function loadSkill() {
       try {
         setLoading(true);
         const data = await getSkill(params.id);
         setSkill(data);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load skill';
-        setError(errorMessage);
+        // Set the skill filter
+        setFilters({
+          skill: params.id
+        });
+      } catch (error) {
+        console.error('Error loading skill:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load skill');
       } finally {
         setLoading(false);
       }
-    };
-
+    }
     loadSkill();
-  }, [params.id]);
+
+    // Clear the filter when unmounting
+    return () => {
+      setFilters({
+        skill: undefined
+      });
+    };
+  }, [params.id, setFilters]);
 
   if (loading) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">Loading skill...</h1>
-      </div>
-    );
+    return <div className="animate-pulse space-y-4">
+      <div className="h-20 bg-gray-100 rounded-lg"></div>
+      <div className="h-40 bg-gray-100 rounded-lg"></div>
+    </div>;
   }
 
   if (error) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">Error</h1>
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
+    return <div className="text-red-500">{error}</div>;
   }
 
   if (!skill) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">Not Found</h1>
-        <p className="text-gray-900">Skill not found.</p>
-      </div>
-    );
+    return <div className="text-gray-900">Skill not found</div>;
   }
 
   return (
-    <div className="container mx-auto py-8">
-      {/* Skill Header */}
-      <div className="mb-8">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 text-gray-900">{skill.name}</h1>
-            <div className="flex gap-2">
-              <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm">
-                {skill.category}
+    <div className="flex min-h-screen">
+      {/* Main Content Area */}
+      <div className="flex-1 p-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{skill.name}</h1>
+          <div className="mt-2 flex gap-2">
+            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+              {skill.category}
+            </span>
+            {skill.is_occupation_specific !== undefined && (
+              <span className={`px-2 py-1 rounded text-sm ${
+                skill.is_occupation_specific 
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-green-100 text-green-700'
+              }`}>
+                {skill.is_occupation_specific ? 'Occupation Specific' : 'General'}
               </span>
-              {skill.is_occupation_specific && (
-                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
-                  Occupation Specific
-                </span>
-              )}
-            </div>
+            )}
+          </div>
+        </div>
+
+        {/* AI Insights */}
+        <SkillAIInsights 
+          skillId={skill.id} 
+          skillName={skill.name}
+        />
+
+        {/* Related Roles Section - Placeholder for now */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Related Roles</h2>
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No roles found</h3>
+            <p className="text-gray-600">This skill is not currently linked to any roles.</p>
           </div>
         </div>
       </div>
 
-      {/* Skill Details */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900">About</h2>
-            {skill.description ? (
-              <p className="text-gray-900">{skill.description}</p>
-            ) : (
-              <p className="text-gray-700 italic">No description available</p>
-            )}
-            {skill.source && (
-              <p className="mt-4 text-sm text-gray-700">Source: {skill.source}</p>
-            )}
-          </CardContent>
-        </Card>
+      {/* Right Info Panel */}
+      <div className="w-80 flex-shrink-0 p-8">
+        <SkillInfoPanel skill={skill} />
       </div>
-
-      {/* Related Roles */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900">Related Roles</h2>
-            <div className="space-y-4">
-              {/* TODO: Add related roles list when available */}
-              <p className="text-gray-700 italic">Related roles will be displayed here</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Development Resources */}
-      <div className="mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-900">Development Resources</h2>
-            <div className="space-y-4">
-              {/* TODO: Add development resources when available */}
-              <p className="text-gray-700 italic">Development resources will be displayed here</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Usage Statistics */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-900">Usage Statistics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2 text-gray-900">Total Roles</h3>
-              <p className="text-3xl font-semibold text-blue-600">--</p>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2 text-gray-900">Required Level</h3>
-              <p className="text-3xl font-semibold text-blue-600">--</p>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium mb-2 text-gray-900">Demand Trend</h3>
-              <p className="text-3xl font-semibold text-blue-600">--</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 } 
