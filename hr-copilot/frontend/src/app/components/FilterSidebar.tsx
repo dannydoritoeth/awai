@@ -139,7 +139,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen">
       {/* Menu Toggle Button */}
       <button
         onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -152,7 +152,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
 
       {/* Sidebar */}
       <div 
-        className={`fixed top-0 left-0 h-full bg-white text-gray-900 transition-all duration-300 z-4 border-r border-gray-200
+        className={`top-0 left-0 h-full bg-white text-gray-900 transition-all duration-300 z-4 border-r border-gray-200
           ${isMenuOpen ? 'w-[235px]' : 'w-0 overflow-hidden'}`}
       >
         <div className="flex flex-col h-full w-[235px]">
@@ -196,10 +196,10 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
       </div>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isMenuOpen ? 'ml-[235px]' : 'ml-0'}`}>
+      <div className={`flex-1 flex flex-col min-h-screen bg-white transition-all duration-300 ${isMenuOpen ? 'ml-[0px]' : 'ml-0'}`}>
         {/* Top Bar */}
-        <div className="sticky top-0 z-40 flex items-center h-16 bg-white border-b border-gray-200">
-          <div className={`flex items-center ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
+        <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
+          <div className={`flex items-center h-16 ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
               {pathname.split('/')[1]?.charAt(0).toUpperCase() + pathname.split('/')[1]?.slice(1) || 'TalentPathAI'}
             </div>
@@ -207,7 +207,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
         </div>
 
         {/* Page Content */}
-        <div className="flex-1">
+        <div className="flex-1 bg-white">
           {children}
         </div>
       </div>

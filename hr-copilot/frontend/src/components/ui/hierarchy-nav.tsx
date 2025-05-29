@@ -80,16 +80,26 @@ export function HierarchyNav({ divisions }: HierarchyNavProps) {
 
   const handleBack = () => {
     console.log('Navigating back from level:', currentLevel);
-    const previousLevel = history[history.length - 1];
-    setHistory(prev => prev.slice(0, -1));
     
-    if (previousLevel.level === 'institution') {
+    if (currentLevel === 'division') {
+      // Going back to company view
+      const company = currentCompany;
+      if (company) {
+        router.push(`/companies/${company.id}`);
+      }
+      setCurrentLevel('company');
+      setSelectedCompany(null);
+      setHistory(prev => prev.slice(0, -1));
+    } else if (currentLevel === 'company') {
+      // Going back to institution view
+      const institution = currentInstitution;
+      if (institution && institution.id !== 'no-institution') {
+        router.push(`/institutions/${institution.id}`);
+      }
       setCurrentLevel('institution');
       setSelectedInstitution(null);
       setSelectedCompany(null);
-    } else if (previousLevel.level === 'company') {
-      setCurrentLevel('company');
-      setSelectedCompany(null);
+      setHistory(prev => prev.slice(0, -1));
     }
   };
 
@@ -139,7 +149,7 @@ export function HierarchyNav({ divisions }: HierarchyNavProps) {
       {currentLevel !== 'institution' && (
         <div className="flex items-center gap-2 mb-2">
           <Button
-            variant="outline"
+            variant="link"
             className="text-[14px] text-blue-600 hover:text-blue-800 p-0 h-auto"
             onClick={handleBack}
           >
