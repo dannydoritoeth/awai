@@ -29,8 +29,30 @@ export async function getCompanies(filters?: CompanyFilters) {
 }
 
 export async function getCompany(id: string) {
-  return dataEdge({ 
-    insightId: 'getCompany',
-    params: { id }
-  });
+  try {
+    const data = await dataEdge({ 
+      insightId: 'getCompany',
+      params: { 
+        id,
+        includeDivisions: true
+      }
+    });
+
+    return {
+      success: true,
+      data: {
+        ...data,
+        website_url: data.website_url || data.website,
+        divisions: data.divisions || []
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error('Error in getCompany:', error);
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to load company'
+    };
+  }
 } 
