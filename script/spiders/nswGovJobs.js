@@ -19,14 +19,26 @@ export class NSWJobSpider {
     "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes"
   ];
   #documentHandler;
+  #rateLimitDelay = 2000; // Base delay between requests
+  #rateLimitJitter = 1000; // Random jitter to add to delay
 
   constructor(options = {}) {
     this.browser = null;
     this.page = null;
     this.maxJobs = options.maxJobs || 5;
     this.pageSize = 25; // Default page size
-    this.currentJobCount = 0;
+    this.currentJobCount = 0; // Initialize counter
     this.#documentHandler = new DocumentHandler();
+  }
+
+  /**
+   * @description Adds a delay between requests with jitter
+   * @returns {Promise<void>}
+   */
+  async #addRateLimitDelay() {
+    const jitter = Math.random() * this.#rateLimitJitter;
+    const delay = this.#rateLimitDelay + jitter;
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
   /**
@@ -51,7 +63,7 @@ export class NSWJobSpider {
     logger.info(`"${this.#name}" spider launched.`);
     try {
       this.browser = await puppeteer.launch({
-        headless: 'new'
+        ...settings, // Use settings from settings.js which includes headless: false
       });
       this.page = await this.browser.newPage();
       
@@ -133,30 +145,9 @@ export class NSWJobSpider {
           logger.info(`Found elements with 'count' in class name: ${classes}`);
         }
 
-        // Get total job count with more robust selector matching
-        const totalJobs = await this.page.evaluate(() => {
-          const possibleElements = [
-            document.querySelector('[class*="search-results-count"]'),
-            document.querySelector('[class*="result-count"]'),
-            document.querySelector('.total-count'),
-            Array.from(document.querySelectorAll('*'))
-              .find(el => el.textContent?.includes('jobs match'))
-          ];
-
-          const element = possibleElements.find(el => el?.textContent);
-          const text = element?.textContent || '';
-          console.log('Found results text:', text);
-
-          const matches = text.match(/(\d+)(?:\s+jobs?|(\s+results?)|(\s+match))/i);
-          return matches ? parseInt(matches[1]) : 0;
-        });
-
-        logger.info(`Total jobs found in text: ${totalJobs}`);
-
-        while (this.currentJobCount < this.maxJobs) {
-          logger.info(`Processing page ${currentPage}`);
+        while (allJobs.length < this.maxJobs) {
+          logger.info(`Processing page ${currentPage}, current job count: ${allJobs.length}/${this.maxJobs}`);
           
-          // Wait for job cards and log count
           try {
             await this.page.waitForSelector('[class*="job-card"], [class*="search-result"]', { timeout: 10000 });
             const jobCardsCount = await this.page.$$eval('[class*="job-card"], [class*="search-result"]', cards => cards.length);
@@ -168,27 +159,34 @@ export class NSWJobSpider {
           
           const jobs = await this.#scrapeJobs();
           if (jobs && jobs.length > 0) {
-            logger.info(`Successfully scraped ${jobs.length} jobs from page ${currentPage}`);
-            allJobs = [...allJobs, ...jobs];
-            this.currentJobCount += jobs.length;
+            // Only add up to maxJobs
+            const remainingSlots = this.maxJobs - allJobs.length;
+            const jobsToAdd = jobs.slice(0, remainingSlots);
+            
+            allJobs = [...allJobs, ...jobsToAdd];
+            
+            logger.info(`Added ${jobsToAdd.length} jobs from page ${currentPage}. Total jobs: ${allJobs.length}/${this.maxJobs}`);
+            
+            if (allJobs.length >= this.maxJobs) {
+              logger.info(`Reached maximum job limit of ${this.maxJobs}. Stopping crawl.`);
+              break;
+            }
           } else {
             logger.warn(`No jobs found on page ${currentPage}, checking page content`);
             const pageContent = await this.page.content();
             logger.info(`Page ${currentPage} content length: ${pageContent.length} characters`);
             break;
           }
-          
-          if (this.currentJobCount >= this.maxJobs) {
-            logger.info(`Reached maximum job limit of ${this.maxJobs}`);
-            break;
-          }
 
           // Try to find and click the next button
           try {
-            // Wait for the next button to be visible
+            if (allJobs.length >= this.maxJobs) {
+              logger.info(`Job limit reached (${allJobs.length}/${this.maxJobs}). Stopping pagination.`);
+              break;
+            }
+
             await this.page.waitForSelector('button[aria-label="Pagination - Go to Next"]', { timeout: 5000 });
             
-            // Check if the button is disabled
             const isDisabled = await this.page.evaluate(() => {
               const nextButton = document.querySelector('button[aria-label="Pagination - Go to Next"]');
               return nextButton?.classList.contains('disabled') || nextButton?.hasAttribute('disabled');
@@ -199,14 +197,12 @@ export class NSWJobSpider {
               break;
             }
 
-            // Click the next button and wait for navigation
             logger.info('Clicking next page button...');
             await Promise.all([
               this.page.waitForNavigation({ waitUntil: 'networkidle0' }),
               this.page.click('button[aria-label="Pagination - Go to Next"]')
             ]);
 
-            // Add a small delay to ensure content is loaded
             await this.page.waitForTimeout(2000);
             
             currentPage++;
@@ -217,13 +213,15 @@ export class NSWJobSpider {
           }
         }
 
+        // Ensure we only return maxJobs number of jobs
+        const finalJobs = allJobs.slice(0, this.maxJobs);
+
         logger.info('----------------------------------------');
         logger.info(`Total pages processed: ${currentPage}`);
-        logger.info(`Total jobs found: ${allJobs.length} / ${totalJobs}`);
-        logger.info(`Jobs processed: ${allJobs.length}`);
+        logger.info(`Total jobs scraped: ${finalJobs.length} / ${this.maxJobs}`);
         logger.info('----------------------------------------');
 
-        return allJobs;
+        return finalJobs;
       }
       return [];
     } catch (error) {
@@ -236,20 +234,21 @@ export class NSWJobSpider {
 
   async #scrapeJobs() {
     try {
-      // Wait for job cards with a more flexible selector
-      await this.page.waitForSelector('[class*="job-card"], [class*="search-result"]', { timeout: 10000 });
+      // Wait for job cards with a more specific selector - using a more precise selector
+      await this.page.waitForSelector('.job-card, .search-result-card', { timeout: 30000 });
       
-      // Get all job listings data
-      const jobListings = await this.page.evaluate(() => {
+      // Get all job listings data, but limit to maxJobs
+      const jobListings = await this.page.evaluate((maxJobs) => {
         // Helper function to safely get text content
         const getText = (element, selector) => {
           const el = element.querySelector(selector);
           return el ? el.textContent.trim() : '';
         };
 
-        // Try multiple selectors for job cards
-        const cards = Array.from(document.querySelectorAll('[class*="job-card"], [class*="search-result"]'));
-        console.log(`Found ${cards.length} potential job cards`); // Debug log
+        // Use more specific selectors for job cards
+        const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'))
+          .slice(0, maxJobs); // Limit the number of cards we process
+        console.log(`Processing ${cards.length} job cards`); // Debug log
 
         return cards.map(element => {
           // Get title and URL - try multiple possible selectors
@@ -316,18 +315,30 @@ export class NSWJobSpider {
             institution: 'NSW Government'
           };
         }).filter(job => job.title && job.jobId); // Only return jobs with at least a title and ID
-      });
+      }, this.maxJobs);
 
-      // Fetch job details for each listing
+      // Fetch job details for each listing with rate limiting
       const jobsWithDetails = [];
       for (const job of jobListings) {
         try {
+          // Add rate limiting delay before fetching details
+          await this.#addRateLimitDelay();
+          
           const details = await this.#scrapeJobDetails(job.sourceUrl, job.jobId);
           if (details) {
-            jobsWithDetails.push({
+            const jobWithDetails = {
               ...job,
               details
-            });
+            };
+            jobsWithDetails.push(jobWithDetails);
+
+            // Upsert to staging_jobs as we process each job
+            try {
+              await this.#upsertToStagingJobs(jobWithDetails);
+              logger.info(`Successfully upserted job ${job.jobId} to staging_jobs`);
+            } catch (error) {
+              logger.error(`Error upserting job ${job.jobId} to staging_jobs:`, error);
+            }
           } else {
             jobsWithDetails.push(job);
           }
@@ -353,56 +364,134 @@ export class NSWJobSpider {
    */
   async #scrapeJobDetails(jobUrl, jobId) {
     try {
-      // Create a new page for each job detail to avoid context issues
-      const detailPage = await this.browser.newPage();
-      await detailPage.goto(jobUrl);
+      logger.info(`Scraping details for job ${jobId} from ${jobUrl}`);
       
-      // Wait for job details content
-      await detailPage.waitForSelector('.job-details-content, .job-view-content', { timeout: 10000 });
+      await this.page.goto(jobUrl, { 
+        waitUntil: 'networkidle0',
+        timeout: 60000 
+      });
 
-      const jobDetails = await detailPage.evaluate(() => {
-        // Get the full job description
-        const description = document.querySelector('.job-details-content, .job-view-content')?.innerHTML?.trim() || '';
-        
-        // Get additional details
-        const additionalDetails = Array.from(document.querySelectorAll('.job-details-content p, .job-view-content p'))
-          .map(p => p.textContent?.trim())
-          .filter(Boolean);
+      // Update selectors to match actual page structure
+      const possibleSelectors = [
+        '.job-detail-des',           // Primary selector for job details
+        '.wrap-content-jobdetail',   // Backup selector
+        '.wrap-jobdetail',           // Fallback selector
+        '.job-details',              // Keep some original selectors as fallback
+        '[class*="job-details"]',
+        'main article'
+      ];
+
+      let foundSelector = null;
+      for (const selector of possibleSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          foundSelector = selector;
+          logger.info(`Found job details using selector: ${foundSelector}`);
+          break;
+        } catch (e) {
+          logger.debug(`Selector ${selector} not found, trying next...`);
+          continue;
+        }
+      }
+
+      if (!foundSelector) {
+        logger.warn(`No job details selectors found for job ${jobId}`);
+        return null;
+      }
+
+      // Extract the job details with improved content gathering
+      const jobDetails = await this.page.evaluate((selector) => {
+        const detailsElement = document.querySelector(selector);
+        if (!detailsElement) return null;
+
+        // Get all text content within paragraphs and divs
+        const contentElements = Array.from(detailsElement.querySelectorAll('p, div'))
+          .filter(el => {
+            // Filter out empty elements and those that are just containers
+            const text = el.textContent?.trim();
+            return text && text.length > 0 && el.children.length < 3;
+          })
+          .map(el => el.textContent?.trim());
+
+        // Get specific job details from the table if available
+        const jobTable = document.querySelector('.table.table-striped.job-summary');
+        const tableDetails = {};
+        if (jobTable) {
+          const rows = jobTable.querySelectorAll('tr');
+          rows.forEach(row => {
+            const label = row.querySelector('td:first-child')?.textContent?.trim().replace(':', '') || '';
+            const value = row.querySelector('td:last-child')?.textContent?.trim() || '';
+            if (label && value) {
+              tableDetails[label.toLowerCase().replace(/\s+/g, '_')] = value;
+            }
+          });
+        }
+
+        // Get the full HTML content
+        const fullContent = detailsElement.innerHTML?.trim() || '';
 
         return {
-          description,
-          additionalDetails,
+          description: fullContent,
+          additionalDetails: contentElements,
+          tableDetails: tableDetails,
           metadata: {
-            lastScraped: new Date().toISOString()
+            lastScraped: new Date().toISOString(),
+            selector: selector
           }
         };
-      });
+      }, foundSelector);
+
+      if (!jobDetails) {
+        logger.warn(`Could not extract job details for job ${jobId}`);
+        return null;
+      }
 
       // Extract and process documents
       const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'nswgov');
-      const downloadedDocs = [];
+      const processedDocs = [];
       
       for (const doc of documents) {
         try {
-          const filename = await this.#documentHandler.downloadDocument(doc.url, jobId, doc.type);
-          if (filename) {
-            downloadedDocs.push({
-              filename,
-              type: doc.type,
-              title: doc.title,
-              url: doc.url
-            });
+          // Instead of downloading to file, get the document content
+          const response = await fetch(doc.url);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch document: ${response.statusText}`);
+          }
+
+          const contentType = response.headers.get('content-type');
+          const contentLength = response.headers.get('content-length');
+          const lastModified = response.headers.get('last-modified');
+
+          // Create document record
+          const documentRecord = {
+            jobId,
+            url: doc.url,
+            title: doc.title,
+            type: doc.type,
+            contentType,
+            contentLength: parseInt(contentLength) || 0,
+            lastModified: lastModified ? new Date(lastModified) : new Date(),
+            status: 'pending',
+            source: 'nswgov',
+            created_at: new Date(),
+            updated_at: new Date()
+          };
+
+          // Add to staging_documents
+          try {
+            await this.#upsertToStagingDocuments(documentRecord);
+            logger.info(`Successfully upserted document ${doc.title} for job ${jobId} to staging_documents`);
+            processedDocs.push(documentRecord);
+          } catch (error) {
+            logger.error(`Error upserting document to staging_documents for job ${jobId}:`, error);
           }
         } catch (error) {
-          logger.error(`Error downloading document for job ${jobId}:`, error);
+          logger.error(`Error processing document for job ${jobId}:`, error);
         }
       }
       
-      // Add downloaded documents to job details
-      jobDetails.documents = downloadedDocs;
-
-      // Close the detail page
-      await detailPage.close();
+      // Add processed documents to job details
+      jobDetails.documents = processedDocs;
 
       return jobDetails;
     } catch (error) {
@@ -434,6 +523,61 @@ export class NSWJobSpider {
       }
       logger.error('Error checking for next page:', error);
       return false;
+    }
+  }
+
+  /**
+   * Upserts a job to the staging_jobs collection
+   * @param {Object} job - The job to upsert
+   * @returns {Promise<void>}
+   */
+  async #upsertToStagingJobs(job) {
+    try {
+      // Assuming you have a database connection/client available
+      // You'll need to implement this based on your database setup
+      const stagingJob = {
+        ...job,
+        last_updated: new Date(),
+        status: 'pending'
+      };
+
+      // Example upsert operation - implement based on your actual database
+      await db.collection('staging_jobs').updateOne(
+        { jobId: job.jobId },
+        { $set: stagingJob },
+        { upsert: true }
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Upserts a document to the staging_documents collection
+   * @param {Object} document - The document to upsert
+   * @returns {Promise<void>}
+   */
+  async #upsertToStagingDocuments(document) {
+    try {
+      // Assuming you have a database connection/client available
+      // You'll need to implement this based on your database setup
+      const stagingDocument = {
+        ...document,
+        last_updated: new Date(),
+        status: 'pending'
+      };
+
+      // Example upsert operation - implement based on your actual database
+      await db.collection('staging_documents').updateOne(
+        { 
+          jobId: document.jobId,
+          url: document.url 
+        },
+        { $set: stagingDocument },
+        { upsert: true }
+      );
+    } catch (error) {
+      throw error;
     }
   }
 } 
