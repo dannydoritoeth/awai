@@ -8,15 +8,17 @@
     "dev": "ts-node-dev --respawn jobs/runDaily.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "latest",
-    "dotenv": "latest",
-    "zod": "^3.22.4",
-    "winston": "^3.11.0",
     "@google-cloud/vertexai": "^1.10.0",
-    "openai": "^4.24.1",
+    "@supabase/supabase-js": "latest",
     "chalk": "^5.3.0",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "latest",
+    "mammoth": "^1.9.1",
+    "openai": "^4.24.1",
+    "pdf2json": "^3.1.6",
     "puppeteer": "^21.5.0",
-    "cheerio": "^1.0.0-rc.12"
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "latest",

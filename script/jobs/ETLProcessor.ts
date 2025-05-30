@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger.js';
 import { z } from 'zod';
+import { DocumentProcessor } from "../utils/documentProcessor.js";
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const JobSchema = z.object({
     title: z.string(),
@@ -12,7 +15,10 @@ const JobSchema = z.object({
     jobId: z.string(),
     sourceUrl: z.string(),
     institution: z.string(),
-    source: z.string()
+    source: z.string(),
+    details: z.object({
+        documents: z.array(z.any())
+    }).optional()
 });
 
 type Department = {
@@ -20,8 +26,33 @@ type Department = {
     jobs: z.infer<typeof JobSchema>[];
 };
 
+type StagedJobRawData = {
+    title: string;
+    department: string;
+    department_name: string;
+    location: string;
+    close_date: string;
+    remuneration: string;
+    source_url: string;
+    raw_job: z.infer<typeof JobSchema>;
+};
+
+type StagedJob = {
+    id: number;
+    institution_id: string;
+    source_id: string;
+    original_id: string;
+    raw_data: StagedJobRawData;
+    processed: boolean;
+    processing_metadata?: Record<string, any>;
+    validation_status: string;
+    validation_timestamp?: string;
+    validation_errors?: Record<string, any>;
+};
+
 export class ETLProcessor {
     #supabase;
+    #documentProcessor;
 
     constructor() {
         if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
@@ -32,24 +63,214 @@ export class ETLProcessor {
             process.env.SUPABASE_URL,
             process.env.SUPABASE_KEY
         );
+        this.#documentProcessor = new DocumentProcessor();
     }
 
     async processInstitution(institutionId: string, departments: Department[]) {
         logger.info(`Processing institution ${institutionId}`);
 
         try {
-            for (const department of departments) {
-                const companyId = await this.#getOrCreateCompany({
-                    name: department.name,
-                    institutionId: institutionId
-                });
+            // First, stage all jobs
+            const stagedJobs = await this.#stageJobs(departments, institutionId);
+            logger.info(`Successfully staged ${stagedJobs} jobs`);
 
-                // Process jobs for this department
-                await this.#processJobs(companyId, department.jobs);
-            }
+            // Process any documents from the jobs
+            await this.#processDocuments(departments, institutionId);
+
+            // Then process staged jobs into final tables
+            await this.#processStaged(institutionId);
 
         } catch (error) {
             logger.error('Error processing institution:', { error });
+            throw error;
+        }
+    }
+
+    async #processDocuments(departments: Department[], institutionId: string) {
+        logger.info('Processing job documents...');
+        let totalDocuments = 0;
+
+        for (const dept of departments) {
+            for (const job of dept.jobs) {
+                if (job.details?.documents?.length) {
+                    try {
+                        const jobsDbPath = path.join(
+                            path.dirname(fileURLToPath(import.meta.url)), 
+                            "..", 
+                            "database", 
+                            "jobs",
+                            `nswgov-${new Date().toISOString().split('T')[0]}.json`
+                        );
+
+                        const stagedDocs = await this.#documentProcessor.processJobDocuments(jobsDbPath);
+                        totalDocuments += stagedDocs.length;
+                    } catch (error) {
+                        logger.error(`Error processing documents for job ${job.jobId}:`, { error });
+                    }
+                }
+            }
+        }
+
+        logger.info(`Processed ${totalDocuments} documents`);
+    }
+
+    async #stageJobs(departments: Department[], institutionId: string): Promise<number> {
+        let stagedCount = 0;
+
+        // Create a batch for staging
+        const stagingBatch = departments.flatMap(dept => 
+            dept.jobs.map(job => ({
+                institution_id: institutionId,
+                source_id: job.source,
+                original_id: job.jobId,
+                raw_data: {
+                    title: job.title,
+                    department: job.department,
+                    department_name: dept.name,
+                    location: job.location,
+                    close_date: job.closingDate,
+                    remuneration: job.salary,
+                    source_url: job.sourceUrl,
+                    raw_job: job
+                },
+                validation_status: 'pending',
+                processed: false, // Reset processed status on upsert
+                processing_metadata: {}, // Reset processing metadata on upsert
+                validation_errors: null // Reset validation errors on upsert
+            }))
+        );
+
+        // Upsert into staging table
+        const { data, error } = await this.#supabase
+            .from('staging_jobs')
+            .upsert(stagingBatch, {
+                onConflict: 'institution_id,external_id',
+                ignoreDuplicates: false // We want to update existing records
+            })
+            .select();
+
+        if (error) {
+            logger.error('Error staging jobs:', { error });
+            throw error;
+        }
+
+        return data?.length || 0;
+    }
+
+    async #processStaged(institutionId: string) {
+        logger.info(`Processing staged jobs for institution ${institutionId}`);
+
+        try {
+            // First process companies
+            await this.#processStageCompanies(institutionId);
+            
+            // Then process jobs
+            await this.#processStagedJobs(institutionId);
+
+            // Clear processed staging data
+            await this.#clearStaged(institutionId);
+
+        } catch (error) {
+            logger.error('Error processing staged data:', { error });
+            throw error;
+        }
+    }
+
+    async #processStageCompanies(institutionId: string) {
+        // Get unique companies from staging
+        const { data: stagedCompanies, error } = await this.#supabase
+            .from('staging_jobs')
+            .select('raw_data')
+            .eq('institution_id', institutionId);
+
+        if (error) throw error;
+
+        // Get unique department names from raw_data
+        const departmentNames = [...new Set(
+            stagedCompanies
+                ?.map(job => (job.raw_data as StagedJobRawData)?.department_name)
+                .filter(Boolean) || []
+        )];
+
+        for (const departmentName of departmentNames) {
+            await this.#getOrCreateCompany({
+                name: departmentName,
+                institutionId
+            });
+        }
+    }
+
+    async #processStagedJobs(institutionId: string) {
+        // Process in batches to avoid timeout
+        const batchSize = 100;
+        let processed = 0;
+        
+        while (true) {
+            const { data: batch, error } = await this.#supabase
+                .from('staging_jobs')
+                .select('*')
+                .eq('institution_id', institutionId)
+                .eq('processed', false)
+                .limit(batchSize);
+
+            if (error) throw error;
+            if (!batch?.length) break;
+
+            for (const stagedJob of batch) {
+                try {
+                    const companyId = await this.#getOrCreateCompany({
+                        name: stagedJob.raw_data.department_name,
+                        institutionId
+                    });
+
+                    const { data: existingJob } = await this.#supabase
+                        .from('jobs')
+                        .select('id, version')
+                        .eq('company_id', companyId)
+                        .eq('source_id', stagedJob.source_id)
+                        .eq('original_id', stagedJob.original_id)
+                        .single();
+
+                    if (existingJob) {
+                        await this.#updateJob(existingJob.id, stagedJob, companyId);
+                    } else {
+                        await this.#createJob(stagedJob, companyId);
+                    }
+
+                    // Mark as processed
+                    await this.#supabase
+                        .from('staging_jobs')
+                        .update({ 
+                            processed: true,
+                            processing_metadata: {
+                                ...stagedJob.processing_metadata,
+                                processed_at: new Date().toISOString()
+                            }
+                        })
+                        .eq('id', stagedJob.id);
+
+                    processed++;
+                } catch (err) {
+                    logger.error('Error processing staged job:', {
+                        error: err,
+                        jobId: stagedJob.original_id
+                    });
+                }
+            }
+
+            logger.info(`Processed ${processed} jobs from staging`);
+        }
+    }
+
+    async #clearStaged(institutionId: string) {
+        const { error } = await this.#supabase
+            .from('staging_jobs')
+            .delete()
+            .eq('institution_id', institutionId)
+            .eq('processed', true);
+
+        if (error) {
+            logger.error('Error clearing staged data:', { error });
             throw error;
         }
     }
@@ -62,7 +283,7 @@ export class ETLProcessor {
             .eq('institution_id', institutionId)
             .single();
 
-        if (searchError && searchError.code !== 'PGRST116') { // PGRST116 is "not found"
+        if (searchError && searchError.code !== 'PGRST116') {
             throw searchError;
         }
 
@@ -70,7 +291,6 @@ export class ETLProcessor {
             return existingCompany.id;
         }
 
-        // Create new company
         const { data: newCompany, error: createError } = await this.#supabase
             .from('companies')
             .insert({
@@ -88,79 +308,20 @@ export class ETLProcessor {
         return newCompany.id;
     }
 
-    async #processJobs(companyId: string, jobs: z.infer<typeof JobSchema>[]) {
-        let successCount = 0;
-        let errorCount = 0;
-        let updateCount = 0;
-
-        logger.info(`Processing ${jobs.length} jobs for company ${companyId}`);
-
-        for (const job of jobs) {
-            try {
-                // Validate job data
-                const validatedJob = JobSchema.parse(job);
-
-                // Check if job exists
-                const { data: existingJob } = await this.#supabase
-                    .from('jobs')
-                    .select('id, version')
-                    .eq('company_id', companyId)
-                    .eq('source_id', validatedJob.source)
-                    .eq('original_id', validatedJob.jobId)
-                    .single();
-
-                if (existingJob) {
-                    // Update existing job
-                    await this.#updateJob(existingJob.id, validatedJob, companyId);
-                    updateCount++;
-                    logger.info(`Updated existing job: ${validatedJob.jobId}`);
-                } else {
-                    // Create new job
-                    await this.#createJob(validatedJob, companyId);
-                    successCount++;
-                    logger.info(`Created new job: ${validatedJob.jobId}`);
-                }
-
-            } catch (err: any) {
-                errorCount++;
-                if (err?.name === 'ZodError') {
-                    logger.error('Job validation error:', {
-                        jobId: job.jobId,
-                        errors: err.errors
-                    });
-                } else {
-                    logger.error('Error processing job:', {
-                        error: err?.message || err,
-                        jobId: job.jobId,
-                        company: companyId
-                    });
-                }
-                // Continue with next job
-            }
-        }
-
-        logger.info('Job processing summary:', {
-            total: jobs.length,
-            created: successCount,
-            updated: updateCount,
-            errors: errorCount
-        });
-    }
-
-    async #createJob(job: z.infer<typeof JobSchema>, companyId: string) {
+    async #createJob(stagedJob: StagedJob, companyId: string) {
         const { error } = await this.#supabase
             .from('jobs')
             .insert({
                 company_id: companyId,
-                title: job.title,
-                source_id: job.source,
-                original_id: job.jobId,
-                source_url: job.sourceUrl,
-                department: job.department,
-                locations: [job.location],
-                close_date: new Date(job.closingDate),
-                remuneration: job.salary,
-                raw_json: job
+                title: stagedJob.raw_data.title,
+                source_id: stagedJob.source_id,
+                original_id: stagedJob.original_id,
+                source_url: stagedJob.raw_data.source_url,
+                department: stagedJob.raw_data.department,
+                locations: [stagedJob.raw_data.location],
+                close_date: new Date(stagedJob.raw_data.close_date),
+                remuneration: stagedJob.raw_data.remuneration,
+                raw_json: stagedJob.raw_data.raw_job
             });
 
         if (error) {
@@ -168,17 +329,17 @@ export class ETLProcessor {
         }
     }
 
-    async #updateJob(jobId: string, job: z.infer<typeof JobSchema>, companyId: string) {
+    async #updateJob(jobId: string, stagedJob: StagedJob, companyId: string) {
         const { error } = await this.#supabase
             .from('jobs')
             .update({
-                title: job.title,
-                source_url: job.sourceUrl,
-                department: job.department,
-                locations: [job.location],
-                close_date: new Date(job.closingDate),
-                remuneration: job.salary,
-                raw_json: job,
+                title: stagedJob.raw_data.title,
+                source_url: stagedJob.raw_data.source_url,
+                department: stagedJob.raw_data.department,
+                locations: [stagedJob.raw_data.location],
+                close_date: new Date(stagedJob.raw_data.close_date),
+                remuneration: stagedJob.raw_data.remuneration,
+                raw_json: stagedJob.raw_data.raw_job,
                 last_updated_at: new Date()
             })
             .eq('id', jobId);

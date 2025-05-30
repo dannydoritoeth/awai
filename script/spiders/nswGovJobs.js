@@ -18,78 +18,15 @@ export class NSWJobSpider {
   #allowedDomains = [
     "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes"
   ];
-  #cachedJobs = new Map();
   #documentHandler;
 
   constructor(options = {}) {
     this.browser = null;
     this.page = null;
-    this.maxJobs = options.maxJobs || 100;
+    this.maxJobs = options.maxJobs || 5;
     this.pageSize = 25; // Default page size
     this.currentJobCount = 0;
-    this.loadCache();
     this.#documentHandler = new DocumentHandler();
-  }
-
-  /**
-   * @description Loads previously scraped jobs from the cache
-   */
-  loadCache() {
-    try {
-      const cacheDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs");
-      
-      // Create directories if they don't exist
-      if (!fs.existsSync(cacheDir)) {
-        fs.mkdirSync(cacheDir, { recursive: true });
-        return;
-      }
-
-      // Read all JSON files in the jobs directory
-      const files = fs.readdirSync(cacheDir).filter(file => file.endsWith('.json'));
-      
-      for (const file of files) {
-        const content = fs.readFileSync(path.join(cacheDir, file), 'utf8');
-        const data = JSON.parse(content);
-        
-        // Add each job to the cache with its jobId as the key
-        if (data.jobs) {
-          data.jobs.forEach(job => {
-            if (job.jobId && job.details) {
-              this.#cachedJobs.set(job.jobId, {
-                lastScraped: data.metadata.date_scraped,
-                details: job.details
-              });
-            }
-          });
-        }
-      }
-      
-      logger.info(`Loaded ${this.#cachedJobs.size} jobs from cache`);
-    } catch (error) {
-      logger.warn(`Error loading cache: ${error.message}`);
-    }
-  }
-
-  /**
-   * @description Checks if a job needs to be re-scraped based on its ID and last scrape date
-   * @param {string} jobId - The job ID to check
-   * @returns {Object|null} Returns cached details if valid, null if needs re-scraping
-   */
-  #checkCache(jobId) {
-    if (!this.#cachedJobs.has(jobId)) return null;
-
-    const cached = this.#cachedJobs.get(jobId);
-    const lastScraped = new Date(cached.lastScraped);
-    const now = new Date();
-    
-    // Re-scrape if the cache is older than 24 hours
-    if (now - lastScraped > 24 * 60 * 60 * 1000) {
-      // Remove from cache if expired
-      this.#cachedJobs.delete(jobId);
-      return null;
-    }
-
-    return cached.details;
   }
 
   /**

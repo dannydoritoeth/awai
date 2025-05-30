@@ -7,6 +7,7 @@ import chalk from "chalk";
 import crypto from "crypto";
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
 // Load environment variables from .env file
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env') });
@@ -24,6 +25,12 @@ export class DocumentProcessor {
       throw new Error('OpenAI API key is required for structured data extraction. Please ensure OPENAI_API_KEY is set in your .env file.');
     }
     this.openai = new OpenAI({ apiKey: openaiApiKey });
+
+    // Initialize Supabase client
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+      throw new Error('Supabase credentials are required. Please ensure SUPABASE_URL and SUPABASE_KEY are set in your .env file.');
+    }
+    this.supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
     // Ensure the content directory exists
     if (!fs.existsSync(this.contentDir)) {
@@ -251,178 +258,138 @@ Return only the JSON object with the extracted data. If a field cannot be determ
   }
 
   /**
-   * @description Process all documents from a jobs database file
+   * @description Get or create the NSW Government institution
+   * @returns {Promise<string>} Institution ID
+   */
+  async #getOrCreateInstitution() {
+    const slug = 'nsw-gov';
+    const { data: institution, error: fetchError } = await this.supabase
+      .from('institutions')
+      .select('id')
+      .eq('slug', slug)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found" error
+      throw fetchError;
+    }
+
+    if (institution) {
+      return institution.id;
+    }
+
+    // Create the institution if it doesn't exist
+    const { data: newInstitution, error: insertError } = await this.supabase
+      .from('institutions')
+      .insert({
+        name: 'NSW Government',
+        slug: slug,
+        description: 'New South Wales Government Departments and Agencies',
+        website_url: 'https://www.nsw.gov.au'
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    return newInstitution.id;
+  }
+
+  /**
+   * @description Process documents from a jobs database file
    * @param {string} jobsDbPath - Path to the jobs database file
-   * @returns {Promise<Array>} Array of processed document records
+   * @returns {Promise<Array>} Array of processed document IDs
    */
   async processJobDocuments(jobsDbPath) {
+    console.log(chalk.blue(`\nProcessing documents from: ${path.basename(jobsDbPath)}`));
+    const processedDocs = [];
+
     try {
-      this.failedDocuments = [];
       const jobsData = JSON.parse(fs.readFileSync(jobsDbPath, 'utf8'));
-      const documents = [];
-      const processedFiles = new Set();
-      
-      let totalDocuments = 0;
-      let currentDocument = 0;
-      let skippedDocuments = 0;
-      
-      // Get the source and date from the filename
-      const sourceMatch = path.basename(jobsDbPath).match(/(nswgov|seek)/);
-      const source = sourceMatch ? sourceMatch[1] : 'unknown';
       const date = this.#getDateFromJobsFile(jobsDbPath);
+      const source = path.basename(jobsDbPath).startsWith('nswgov-') ? 'nsw-gov' : 'seek';
       
-      // Load previously processed documents from all dates
-      this.processedDocuments = this.#loadProcessedDocuments(source);
-      
-      // Count total documents first
-      for (const job of jobsData.jobs) {
-        if (job.details?.documents) {
-          totalDocuments += job.details.documents.length;
-        }
-      }
+      // Get or create the institution
+      const institutionId = await this.#getOrCreateInstitution();
 
-      console.log(chalk.cyan(`\nProcessing ${totalDocuments} documents from ${path.basename(jobsDbPath)}`));
-
-      for (const job of jobsData.jobs) {
-        if (!job.details?.documents) continue;
+      for (const job of jobsData.jobs || []) {
+        if (!job.details?.documents?.length) continue;
 
         for (const doc of job.details.documents) {
-          currentDocument++;
-          const documentId = this.#generateDocumentId(job.jobId, doc.filename);
+          const documentId = this.#generateDocumentId(job.id, doc.filename);
           
-          // Skip if document was already processed
-          if (this.processedDocuments.has(documentId)) {
-            console.log(chalk.yellow(`\nSkipping previously processed document [${currentDocument}/${totalDocuments}]: ${doc.filename}`));
-            skippedDocuments++;
-            continue;
-          }
-          
-          if (processedFiles.has(doc.filename)) {
-            console.log(chalk.yellow(`\nSkipping duplicate document [${currentDocument}/${totalDocuments}]: ${doc.filename}`));
-            continue;
-          }
-          processedFiles.add(doc.filename);
+          // Check if document already exists in staging
+          const { data: existingDoc } = await this.supabase
+            .from('staging_documents')
+            .select('id')
+            .eq('source_id', source)
+            .eq('external_id', documentId)
+            .single();
 
-          console.log(chalk.cyan(`\nProcessing document [${currentDocument}/${totalDocuments}]: ${doc.filename}`));
-          
-          const filePath = path.join(this.documentsDir, doc.filename);
-          if (!fs.existsSync(filePath)) {
-            console.log(chalk.red(`  ✗ File not found: ${filePath}`));
+          if (existingDoc) {
+            console.log(chalk.yellow(`  - Document ${doc.filename} already staged, skipping`));
             continue;
           }
 
-          let content = null;
+          // Stage the document
+          try {
+            const { data: stagedDoc, error } = await this.supabase
+              .from('staging_documents')
+              .insert({
+                institution_id: institutionId,
+                source_id: source,
+                external_id: documentId,
+                raw_content: {
+                  jobId: job.id,
+                  filename: doc.filename,
+                  sourceUrl: doc.url,
+                  filePath: doc.filePath,
+                  jobData: {
+                    title: job.title,
+                    department: job.department,
+                    closeDate: job.closeDate,
+                    jobId: job.id
+                  }
+                },
+                metadata: {
+                  file_type: path.extname(doc.filename).toLowerCase(),
+                  original_filename: doc.filename,
+                  source_url: doc.url
+                },
+                processing_status: 'pending'
+              })
+              .select()
+              .single();
 
-          if (doc.filename.toLowerCase().endsWith('.pdf')) {
-            content = await this.#extractPdfContent(filePath);
-          } else if (doc.filename.toLowerCase().match(/\.docx?$/)) {
-            content = await this.#extractWordContent(filePath);
-          }
-
-          if (content) {
-            const structuredData = await this.#extractStructuredData(content, {
-              jobId: job.jobId,
-              sourceUrl: doc.url,
-              filename: doc.filename
-            });
-
-            if (structuredData) {
-              console.log(chalk.green(`  ✓ Document processing complete`));
-            } else {
-              console.log(chalk.yellow(`  ! Document processed but structured data extraction failed`));
+            if (error) {
+              console.error(chalk.red(`  - Error staging document ${doc.filename}:`, error.message));
+              this.failedDocuments.push({
+                file: doc.filename,
+                error: error.message,
+                type: 'staging'
+              });
+              continue;
             }
 
-            documents.push({
-              id: documentId,
-              jobId: job.jobId,
-              filename: doc.filename,
-              type: doc.type,
-              title: doc.title,
-              content: content,
-              structuredData: structuredData,
-              metadata: {
-                sourceUrl: doc.url,
-                dateProcessed: new Date().toISOString(),
-                fileSize: fs.statSync(filePath).size,
-                mimeType: doc.filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/msword'
-              }
-            });
+            console.log(chalk.green(`  - Successfully staged document: ${doc.filename}`));
+            processedDocs.push(stagedDoc.id);
 
-            doc.documentId = documentId;
-          } else {
-            console.log(chalk.red(`  ✗ Failed to extract content from document`));
+          } catch (error) {
+            console.error(chalk.red(`  - Error processing document ${doc.filename}:`, error.message));
+            this.failedDocuments.push({
+              file: doc.filename,
+              error: error.message,
+              type: 'processing'
+            });
           }
         }
       }
-
-      // Save the updated jobs database with document IDs
-      fs.writeFileSync(jobsDbPath, JSON.stringify(jobsData, null, 2));
-
-      // Save the documents database with source-specific filename and the date from the jobs file
-      const documentsDbPath = path.join(
-        this.contentDir, 
-        `${source}-docs-${date}.json`
-      );
-      
-      // If the file exists, merge with existing documents
-      let existingDocuments = [];
-      if (fs.existsSync(documentsDbPath)) {
-        try {
-          const existing = JSON.parse(fs.readFileSync(documentsDbPath, 'utf8'));
-          existingDocuments = existing.documents || [];
-        } catch (error) {
-          console.log(chalk.yellow(`Warning: Could not load existing documents from ${documentsDbPath}: ${error.message}`));
-        }
-      }
-      
-      fs.writeFileSync(
-        documentsDbPath,
-        JSON.stringify({
-          metadata: {
-            totalDocuments: existingDocuments.length + documents.length,
-            dateProcessed: new Date().toISOString(),
-            sourceJobsFile: path.basename(jobsDbPath),
-            source: source
-          },
-          documents: [...existingDocuments, ...documents]
-        }, null, 2)
-      );
-
-      // Generate failed documents report if needed
-      if (this.failedDocuments.length > 0) {
-        const failedDocsPath = path.join(
-          this.contentDir, 
-          `${source}-failed-docs-${date}.json`
-        );
-        
-        fs.writeFileSync(
-          failedDocsPath,
-          JSON.stringify({
-            metadata: {
-              totalFailed: this.failedDocuments.length,
-              dateProcessed: new Date().toISOString(),
-              sourceJobsFile: path.basename(jobsDbPath),
-              source: source
-            },
-            failedDocuments: this.failedDocuments
-          }, null, 2)
-        );
-        
-        console.log(chalk.yellow(`\nWarning: Some documents failed to process:`));
-        console.log(chalk.yellow(`- Failed documents: ${this.failedDocuments.length}`));
-        console.log(chalk.yellow(`- Failed documents report saved to: ${failedDocsPath}`));
-      }
-
-      console.log(chalk.green(`\nDocument processing complete:`));
-      console.log(chalk.cyan(`- Processed ${documents.length} new documents`));
-      console.log(chalk.cyan(`- Skipped ${skippedDocuments} previously processed documents`));
-      console.log(chalk.cyan(`- Documents database saved to: ${documentsDbPath}`));
-      console.log(chalk.cyan(`- Updated jobs database with document IDs`));
-
-      return documents;
     } catch (error) {
-      console.log(chalk.red(`Error processing documents: ${error.message}`));
+      console.error(chalk.red(`Error reading jobs data:`, error.message));
       throw error;
     }
+
+    return processedDocs;
   }
 }
