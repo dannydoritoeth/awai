@@ -21,14 +21,43 @@ export class NSWJobSpider {
   #documentHandler;
   #rateLimitDelay = 2000; // Base delay between requests
   #rateLimitJitter = 1000; // Random jitter to add to delay
+  #supabase;
 
   constructor(options = {}) {
-    this.browser = null;
-    this.page = null;
-    this.maxJobs = options.maxJobs || 5;
-    this.pageSize = 25; // Default page size
-    this.currentJobCount = 0; // Initialize counter
-    this.#documentHandler = new DocumentHandler();
+    try {
+      this.browser = null;
+      this.page = null;
+      this.maxJobs = options.maxJobs || 1;
+      this.pageSize = 25; // Default page size
+      this.currentJobCount = 0; // Initialize counter
+      this.#documentHandler = new DocumentHandler();
+      
+      if (!options.supabase) {
+        throw new Error('Supabase client is required');
+      }
+      this.#supabase = options.supabase;
+
+      // Validate supabase connection
+      if (!this.#supabase.from) {
+        throw new Error('Invalid Supabase client provided');
+      }
+
+      // Get or validate institution_id
+      if (!options.institution_id) {
+        throw new Error('institution_id is required');
+      }
+      this.institution_id = options.institution_id;
+
+    } catch (error) {
+      logger.error('Error initializing NSWJobSpider:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
   }
 
   /**
@@ -62,8 +91,26 @@ export class NSWJobSpider {
   async launch() {
     logger.info(`"${this.#name}" spider launched.`);
     try {
+      // Validate supabase connection before proceeding
+      try {
+        const { data, error } = await this.#supabase.from('staging_jobs').select('count').limit(1);
+        if (error) {
+          throw new Error(`Supabase connection test failed: ${error.message}`);
+        }
+        logger.info('Supabase connection test successful');
+      } catch (error) {
+        logger.error('Supabase connection test failed:', {
+          error: {
+            message: error.message,
+            stack: error.stack,
+            details: error
+          }
+        });
+        throw error;
+      }
+
       this.browser = await puppeteer.launch({
-        ...settings, // Use settings from settings.js which includes headless: false
+        ...settings,
       });
       this.page = await this.browser.newPage();
       
@@ -73,7 +120,7 @@ export class NSWJobSpider {
       
       await this.page.goto(initialUrl);
       
-      // Log the actual URL after navigation (in case of redirects)
+      // Log the actual URL after navigation
       const currentUrl = this.page.url();
       logger.info(`Current URL after navigation: ${currentUrl}`);
       
@@ -98,9 +145,15 @@ export class NSWJobSpider {
       
       return await this.#crawl();
     } catch (error) {
-      logger.error('Spider launch error:', error);
+      logger.error('Spider launch error:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
       await this.#terminate();
-      return [];
+      throw error; // Re-throw the error to be handled by the caller
     }
   }
 
@@ -275,8 +328,12 @@ export class NSWJobSpider {
           const department = 
             getText(element, '.job-search-result-right h2') || 
             getText(element, '[class*="department"]') ||
-            getText(element, '[class*="agency"]');
+            getText(element, '[class*="agency"]') ||
+            'NSW Government'; // Fallback to prevent null
           
+          // Debug log for department
+          console.log(`Department found: ${department}`);
+
           // Get job type
           const jobType = 
             getText(element, '.job-search-result-right p span') ||
@@ -292,26 +349,29 @@ export class NSWJobSpider {
           // Get location
           const location = 
             getText(element, '.nsw-col p:nth-child(3) span') ||
-            getText(element, '[class*="location"]');
+            getText(element, '[class*="location"]') ||
+            'NSW'; // Fallback
           
           // Get salary
           const salary = 
             getText(element, '.salary') ||
             getText(element, '[class*="remuneration"]') ||
-            getText(element, '[class*="salary"]');
+            getText(element, '[class*="salary"]') ||
+            'Not specified'; // Fallback
 
-          console.log(`Scraped job: ${title} (${jobId})`); // Debug log
+          console.log(`Scraped job: ${title} (${jobId}) - Department: ${department}`); // Enhanced debug log
           
           return {
             title,
             department,
+            department_name: department, // Use the same department name
             location,
             salary,
             closingDate,
             jobId,
             sourceUrl: jobUrl,
             jobType,
-            source: 'iworkfor.nsw.gov.au',
+            source: 'nswgov',
             institution: 'NSW Government'
           };
         }).filter(job => job.title && job.jobId); // Only return jobs with at least a title and ID
@@ -446,29 +506,71 @@ export class NSWJobSpider {
         return null;
       }
 
-      // Extract and process documents
-      const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'nswgov');
-      const processedDocs = [];
+      // Improved document extraction
+      const documents = await this.page.evaluate(() => {
+        const extractLinks = () => {
+          const links = [];
+          // Find all links that might be documents
+          const allLinks = document.querySelectorAll('a');
+          
+          allLinks.forEach(link => {
+            const href = link.href;
+            const text = link.textContent?.trim();
+            if (!href || !text) return;
+
+            // Common document keywords
+            const docKeywords = ['position description', 'role description', 'pd', 'click here', 'view the role'];
+            const isDocLink = docKeywords.some(keyword => 
+              text.toLowerCase().includes(keyword) || 
+              href.toLowerCase().includes(keyword)
+            );
+
+            // Common document domains and paths
+            const docDomains = [
+              'files.jobs.nsw.gov.au',
+              'ocxz.cit.health.nsw.gov.au',
+              '/XXRecRequisitionPD',
+              '/excluded-apps'
+            ];
+            const isDocDomain = docDomains.some(domain => 
+              href.toLowerCase().includes(domain.toLowerCase())
+            );
+
+            if (isDocLink || isDocDomain) {
+              links.push({
+                url: href,
+                title: text || 'Document',
+                type: 'application/pdf' // Default to PDF, will be updated when fetched
+              });
+            }
+          });
+          return links;
+        };
+
+        return extractLinks();
+      });
+
+      logger.info(`Found ${documents.length} potential documents for job ${jobId}`);
       
+      const processedDocs = [];
       for (const doc of documents) {
         try {
-          // Instead of downloading to file, get the document content
+          // Fetch document metadata
           const response = await fetch(doc.url);
           if (!response.ok) {
-            throw new Error(`Failed to fetch document: ${response.statusText}`);
+            logger.warn(`Failed to fetch document ${doc.url}: ${response.statusText}`);
+            continue;
           }
 
           const contentType = response.headers.get('content-type');
           const contentLength = response.headers.get('content-length');
           const lastModified = response.headers.get('last-modified');
 
-          // Create document record
           const documentRecord = {
             jobId,
             url: doc.url,
             title: doc.title,
-            type: doc.type,
-            contentType,
+            type: contentType || doc.type,
             contentLength: parseInt(contentLength) || 0,
             lastModified: lastModified ? new Date(lastModified) : new Date(),
             status: 'pending',
@@ -477,25 +579,50 @@ export class NSWJobSpider {
             updated_at: new Date()
           };
 
-          // Add to staging_documents
           try {
             await this.#upsertToStagingDocuments(documentRecord);
-            logger.info(`Successfully upserted document ${doc.title} for job ${jobId} to staging_documents`);
+            logger.info(`Successfully upserted document "${doc.title}" for job ${jobId}`);
             processedDocs.push(documentRecord);
           } catch (error) {
-            logger.error(`Error upserting document to staging_documents for job ${jobId}:`, error);
+            logger.error('Error upserting document:', {
+              jobId,
+              docUrl: doc.url,
+              error: {
+                message: error.message,
+                stack: error.stack,
+                code: error.code,
+                details: error
+              }
+            });
           }
         } catch (error) {
-          logger.error(`Error processing document for job ${jobId}:`, error);
+          logger.error('Error processing document:', {
+            jobId,
+            docUrl: doc.url,
+            error: {
+              message: error.message,
+              stack: error.stack,
+              details: error
+            }
+          });
         }
       }
-      
+
       // Add processed documents to job details
       jobDetails.documents = processedDocs;
+      logger.info(`Successfully processed ${processedDocs.length} documents for job ${jobId}`);
 
       return jobDetails;
     } catch (error) {
-      logger.error(`Error scraping job details from ${jobUrl}:`, error);
+      logger.error(`Error scraping job details:`, {
+        jobId,
+        url: jobUrl,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
       return null;
     }
   }
@@ -533,21 +660,60 @@ export class NSWJobSpider {
    */
   async #upsertToStagingJobs(job) {
     try {
-      // Assuming you have a database connection/client available
-      // You'll need to implement this based on your database setup
+      if (!this.#supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
       const stagingJob = {
-        ...job,
-        last_updated: new Date(),
-        status: 'pending'
+        institution_id: this.institution_id,
+        source_id: 'nswgov',
+        original_id: job.jobId,
+        raw_data: {
+          title: job.title,
+          department: job.department,
+          department_name: job.department_name || job.department,
+          location: job.location,
+          close_date: job.closingDate,
+          remuneration: job.salary,
+          source_url: job.sourceUrl,
+          raw_job: job
+        },
+        processed: false,
+        validation_status: 'pending'
       };
 
-      // Example upsert operation - implement based on your actual database
-      await db.collection('staging_jobs').updateOne(
-        { jobId: job.jobId },
-        { $set: stagingJob },
-        { upsert: true }
-      );
+      // Log the job data before upserting
+      logger.debug('Attempting to upsert job:', {
+        jobId: job.jobId,
+        data: stagingJob
+      });
+
+      const { data, error } = await this.#supabase
+        .from('staging_jobs')
+        .upsert(
+          stagingJob,
+          { 
+            onConflict: 'institution_id,external_id',
+            returning: true 
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      logger.info(`Successfully upserted job ${job.jobId} to staging_jobs`);
+      return data;
     } catch (error) {
+      logger.error('Error in upsertToStagingJobs:', {
+        jobId: job.jobId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+          details: error
+        }
+      });
       throw error;
     }
   }
@@ -559,24 +725,62 @@ export class NSWJobSpider {
    */
   async #upsertToStagingDocuments(document) {
     try {
-      // Assuming you have a database connection/client available
-      // You'll need to implement this based on your database setup
+      if (!this.#supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
       const stagingDocument = {
-        ...document,
-        last_updated: new Date(),
-        status: 'pending'
+        institution_id: this.institution_id,
+        source_id: 'nswgov',
+        external_id: document.url,
+        raw_content: {
+          url: document.url,
+          title: document.title,
+          type: document.type,
+          lastModified: document.lastModified,
+          source: document.source
+        },
+        scraped_at: new Date(),
+        processing_status: 'pending',
+        metadata: {
+          jobId: document.jobId
+        }
       };
 
-      // Example upsert operation - implement based on your actual database
-      await db.collection('staging_documents').updateOne(
-        { 
-          jobId: document.jobId,
-          url: document.url 
-        },
-        { $set: stagingDocument },
-        { upsert: true }
-      );
+      // Log the document data before upserting
+      logger.debug('Attempting to upsert document:', {
+        jobId: document.jobId,
+        url: document.url,
+        data: stagingDocument
+      });
+
+      const { data, error } = await this.#supabase
+        .from('staging_documents')
+        .upsert(
+          stagingDocument,
+          { 
+            onConflict: 'institution_id,source_id,external_id',
+            returning: true 
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      logger.info(`Successfully upserted document "${document.title}" for job ${document.jobId}`);
+      return data;
     } catch (error) {
+      logger.error('Error in upsertToStagingDocuments:', {
+        jobId: document.jobId,
+        docUrl: document.url,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+          details: error
+        }
+      });
       throw error;
     }
   }

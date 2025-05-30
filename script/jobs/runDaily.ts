@@ -81,7 +81,11 @@ async function runDaily() {
         const processor = new ETLProcessor();
         
         // Initialize spider with desired job limit
-        const spider = new NSWJobSpider();
+        const spider = new NSWJobSpider({
+            maxJobs: 1,
+            supabase,
+            institution_id: institution.id
+        });
         
         // Run the spider to get jobs
         logger.info('Starting NSW Government jobs spider');

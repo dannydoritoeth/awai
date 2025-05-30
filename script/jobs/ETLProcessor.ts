@@ -94,16 +94,31 @@ export class ETLProcessor {
             for (const job of dept.jobs) {
                 if (job.details?.documents?.length) {
                     try {
-                        const jobsDbPath = path.join(
-                            path.dirname(fileURLToPath(import.meta.url)), 
-                            "..", 
-                            "database", 
-                            "jobs",
-                            `nswgov-${new Date().toISOString().split('T')[0]}.json`
-                        );
+                        // Get documents from staging_documents table
+                        const { data: stagedDocs, error } = await this.#supabase
+                            .from('staging_documents')
+                            .select('*')
+                            .eq('institution_id', institutionId)
+                            .eq('metadata->>jobId', job.jobId)
+                            .eq('processing_status', 'pending');
 
-                        const stagedDocs = await this.#documentProcessor.processJobDocuments(jobsDbPath);
-                        totalDocuments += stagedDocs.length;
+                        if (error) {
+                            throw error;
+                        }
+
+                        if (stagedDocs?.length) {
+                            totalDocuments += stagedDocs.length;
+                            
+                            // Update processing status
+                            await this.#supabase
+                                .from('staging_documents')
+                                .update({ 
+                                    processing_status: 'processed',
+                                    processed_at: new Date().toISOString()
+                                })
+                                .eq('institution_id', institutionId)
+                                .eq('metadata->>jobId', job.jobId);
+                        }
                     } catch (error) {
                         logger.error(`Error processing documents for job ${job.jobId}:`, { error });
                     }
@@ -218,8 +233,14 @@ export class ETLProcessor {
 
             for (const stagedJob of batch) {
                 try {
+                    // Log the raw data for debugging
+                    logger.info('Processing staged job:', {
+                        jobId: stagedJob.original_id,
+                        department: stagedJob.raw_data.department_name
+                    });
+
                     const companyId = await this.#getOrCreateCompany({
-                        name: stagedJob.raw_data.department_name,
+                        name: stagedJob.raw_data.department_name || 'NSW Government',
                         institutionId
                     });
 
@@ -237,28 +258,53 @@ export class ETLProcessor {
                         await this.#createJob(stagedJob, companyId);
                     }
 
-                    // Mark as processed
+                    // Mark as processed successfully
                     await this.#supabase
                         .from('staging_jobs')
                         .update({ 
                             processed: true,
                             processing_metadata: {
                                 ...stagedJob.processing_metadata,
-                                processed_at: new Date().toISOString()
+                                processed_at: new Date().toISOString(),
+                                status: 'success'
                             }
                         })
                         .eq('id', stagedJob.id);
 
                     processed++;
-                } catch (err) {
+                } catch (err: any) {
                     logger.error('Error processing staged job:', {
                         error: err,
                         jobId: stagedJob.original_id
                     });
+
+                    // Mark as processed with error
+                    try {
+                        await this.#supabase
+                            .from('staging_jobs')
+                            .update({ 
+                                processed: true,
+                                processing_metadata: {
+                                    ...stagedJob.processing_metadata,
+                                    processed_at: new Date().toISOString(),
+                                    status: 'error',
+                                    error: err.message || String(err)
+                                }
+                            })
+                            .eq('id', stagedJob.id);
+                    } catch (updateError) {
+                        logger.error('Error updating failed job status:', {
+                            error: updateError,
+                            jobId: stagedJob.original_id
+                        });
+                    }
                 }
             }
 
             logger.info(`Processed ${processed} jobs from staging`);
+            
+            // Break if we've processed less than the batch size
+            if (batch.length < batchSize) break;
         }
     }
 
