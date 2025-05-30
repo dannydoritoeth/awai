@@ -3,3 +3,4 @@ scrape/.env.local
 /hr-copilot/supabase/.temp
 script/.env.local
 /node_modules
+/script/supabase/.temp

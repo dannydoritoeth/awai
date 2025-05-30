@@ -46,13 +46,12 @@ Want to see which roles are duplicated, dead-ends, or poorly scoped?
 │                                                       │
 │ ┌──────────── Left Panel ─────────────┐ ┌───────────── Right Panel ─────────────┐
 │ │ 🎛️ Filter Panel                     │ │ 📘 Page Header: Title + Summary       │
-│ │ - Company                           │ │ 🔍 AI Insights (Job Seekers,          │
-│ │ - Division                          │ │     People Seekers, Decision Makers) │
+│ │ - Instituion > Company > Division
 │ │ - Capability                        │ │ 📚 Category Info (optional, not       │
 │ │ - Skill                             │ │     overly prominent)                │
-│ │ - Taxonomy                          │ │ 📄 List of General Roles              │
-│ │ - Classification Band              │ │    - Cards or Table                   │
-│ │ - Location                          │ │    - Paged / Scrollable               │
+│ │ - Career Type                          │ │ 📄 List of General Roles              │
+│ │ - Capabilties                         │ │    - Cards or Table                   │
+│ │ - Skills                            │ │    - Paged / Scrollable               │
 │ │ - Clear Filters                     │ │                                       │
 │ └────────────────────────────────────┘ └────────────────────────────────────────┘
 │                                                       │
