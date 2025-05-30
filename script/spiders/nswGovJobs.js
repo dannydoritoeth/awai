@@ -318,11 +318,96 @@ export class NSWJobSpider {
         }).filter(job => job.title && job.jobId); // Only return jobs with at least a title and ID
       });
 
-      logger.info(`Scraped ${jobListings.length} jobs from current page`);
-      return jobListings;
+      // Fetch job details for each listing
+      const jobsWithDetails = [];
+      for (const job of jobListings) {
+        try {
+          const details = await this.#scrapeJobDetails(job.sourceUrl, job.jobId);
+          if (details) {
+            jobsWithDetails.push({
+              ...job,
+              details
+            });
+          } else {
+            jobsWithDetails.push(job);
+          }
+        } catch (error) {
+          logger.error(`Error fetching details for job ${job.jobId}:`, error);
+          jobsWithDetails.push(job);
+        }
+      }
+
+      logger.info(`Scraped ${jobsWithDetails.length} jobs from current page`);
+      return jobsWithDetails;
     } catch (error) {
       logger.error(`Error scraping jobs: ${error.message}`);
       return [];
+    }
+  }
+
+  /**
+   * @description Scrapes detailed job information from the job page
+   * @param {string} jobUrl - URL of the job listing
+   * @param {string} jobId - ID of the job
+   * @returns {Promise<Object>} Detailed job information
+   */
+  async #scrapeJobDetails(jobUrl, jobId) {
+    try {
+      // Create a new page for each job detail to avoid context issues
+      const detailPage = await this.browser.newPage();
+      await detailPage.goto(jobUrl);
+      
+      // Wait for job details content
+      await detailPage.waitForSelector('.job-details-content, .job-view-content', { timeout: 10000 });
+
+      const jobDetails = await detailPage.evaluate(() => {
+        // Get the full job description
+        const description = document.querySelector('.job-details-content, .job-view-content')?.innerHTML?.trim() || '';
+        
+        // Get additional details
+        const additionalDetails = Array.from(document.querySelectorAll('.job-details-content p, .job-view-content p'))
+          .map(p => p.textContent?.trim())
+          .filter(Boolean);
+
+        return {
+          description,
+          additionalDetails,
+          metadata: {
+            lastScraped: new Date().toISOString()
+          }
+        };
+      });
+
+      // Extract and process documents
+      const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'nswgov');
+      const downloadedDocs = [];
+      
+      for (const doc of documents) {
+        try {
+          const filename = await this.#documentHandler.downloadDocument(doc.url, jobId, doc.type);
+          if (filename) {
+            downloadedDocs.push({
+              filename,
+              type: doc.type,
+              title: doc.title,
+              url: doc.url
+            });
+          }
+        } catch (error) {
+          logger.error(`Error downloading document for job ${jobId}:`, error);
+        }
+      }
+      
+      // Add downloaded documents to job details
+      jobDetails.documents = downloadedDocs;
+
+      // Close the detail page
+      await detailPage.close();
+
+      return jobDetails;
+    } catch (error) {
+      logger.error(`Error scraping job details from ${jobUrl}:`, error);
+      return null;
     }
   }
 
