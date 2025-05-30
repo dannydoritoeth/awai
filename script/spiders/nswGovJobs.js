@@ -7,598 +7,192 @@ import chalk from "chalk";
 import process from "process";
 import fetch from "node-fetch";
 import { DocumentHandler } from "../utils/documentHandler.js";
+import { logger } from '../utils/logger.js';
 
 /**
  * @description Scrapes jobs from NSW Government jobs website
  */
 export class NSWJobSpider {
   #name = "nsw gov jobs";
-  #baseUrl = "https://iworkfor.nsw.gov.au";
-  #allowedDomains = [
-    "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/department-of-climate-change,-energy,-the-environment-and-water-/all-categories/all-locations/all-worktypes?agenciesid=9116&sortby=RelevanceDesc"
-  ];
-  #cachedJobs = new Map();
-  #documentHandler;
+  #baseUrl = "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
 
-  constructor() {
+  constructor(options = {}) {
     this.browser = null;
     this.page = null;
-    this.pageSize = 25; // Default page size
-    this.loadCache();
-    this.#documentHandler = new DocumentHandler();
-    
-    // Ensure the files directory exists
-    const filesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs", "files");
-    if (!fs.existsSync(filesDir)) {
-      fs.mkdirSync(filesDir, { recursive: true });
-    }
+    this.maxJobs = options.maxJobs || 100; // Default to 100 jobs
+    this.pageSize = options.pageSize || 100; // Default page size
+    this.currentJobCount = 0;
   }
 
-  /**
-   * @description Loads previously scraped jobs from the cache
-   */
-  loadCache() {
-    try {
-      const cacheDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs");
-      
-      // Create directories if they don't exist
-      if (!fs.existsSync(cacheDir)) {
-        fs.mkdirSync(cacheDir, { recursive: true });
-        return;
-      }
-
-      // Read all JSON files in the jobs directory
-      const files = fs.readdirSync(cacheDir).filter(file => file.endsWith('.json'));
-      
-      for (const file of files) {
-        const content = fs.readFileSync(path.join(cacheDir, file), 'utf8');
-        const data = JSON.parse(content);
-        
-        // Add each job to the cache with its jobId as the key
-        if (data.jobs) {
-          data.jobs.forEach(job => {
-            if (job.jobId && job.details) {
-              this.#cachedJobs.set(job.jobId, {
-                lastScraped: data.metadata.date_scraped,
-                details: job.details
-              });
-            }
-          });
-        }
-      }
-      
-      console.log(chalk.cyan(`Loaded ${this.#cachedJobs.size} jobs from cache`));
-    } catch (error) {
-      console.log(chalk.yellow(`Error loading cache: ${error.message}`));
-    }
-  }
-
-  /**
-   * @description Checks if a job needs to be re-scraped based on its ID and last scrape date
-   * @param {string} jobId - The job ID to check
-   * @returns {Object|null} Returns cached details if valid, null if needs re-scraping
-   */
-  #checkCache(jobId) {
-    if (!this.#cachedJobs.has(jobId)) return null;
-
-    const cached = this.#cachedJobs.get(jobId);
-    const lastScraped = new Date(cached.lastScraped);
-    const now = new Date();
-    
-    // Re-scrape if the cache is older than 24 hours
-    if (now - lastScraped > 24 * 60 * 60 * 1000) {
-      // Remove from cache if expired
-      this.#cachedJobs.delete(jobId);
-      return null;
-    }
-
-    return cached.details;
-  }
-
-  /**
-   * @description Constructs the URL for a specific page
-   * @param {number} pageNumber - The page number to fetch
-   * @returns {string} The complete URL with pagination parameters
-   */
-  #getPageUrl(pageNumber) {
-    const baseUrl = this.#allowedDomains[0];
-    return `${baseUrl}&page=${pageNumber}&pagesize=${this.pageSize}`;
-  }
-
-  /**
-   * @description Set's up puppeteer browser settings.
-   */
   async launch() {
-    console.log(chalk.bold.magenta(`"${this.#name}" spider launched.`));
+    logger.info(`"${this.#name}" spider launched.`);
     try {
-      this.browser = await puppeteer.launch(settings);
+      this.browser = await puppeteer.launch({
+        headless: 'new'
+      });
       this.page = await this.browser.newPage();
-      await this.#crawl();
+      return await this.#crawl();
     } catch (error) {
-      console.log(chalk.red(error));
+      logger.error('Spider error:', error);
       await this.#terminate();
+      return [];
     }
   }
 
-  /**
-   * @description Creates the database path for storing scraped data
-   * @param {string} filename - The name of the file
-   * @param {string} type - The type of data (jobs or errors)
-   * @returns {string} The full path to save the file
-   */
-  #databasePath(filename, type = "jobs") {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const dbPath = path.join(__dirname, "..", "database", type, `nswgov-${filename}.json`);
-    console.log(chalk.cyan(`Database path: ${dbPath}`));
-    return dbPath;
-  }
-
-  /**
-   * @description Formats date strings
-   * @param {string} format - The desired format (date or timestamp)
-   * @returns {string} Formatted date string
-   */
-  #date(format = "date") {
-    const date = new Date();
-    const pad = (num) => num.toString().padStart(2, "0");
-    
-    if (format === "date") {
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    }
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
-  }
-
-  /**
-   * @description Terminates the browser instance
-   */
   async #terminate() {
     if (this.browser) {
       await this.browser.close();
-      console.log(chalk.bold.red(`"${this.#name}" spider terminated.`));
+      logger.info(`"${this.#name}" spider terminated.`);
     }
   }
 
-  /**
-   * @description Initiates crawling processes & procedures.
-   */
+  #getPageUrl(pageNumber) {
+    return `${this.#baseUrl}?page=${pageNumber}&pagesize=${this.pageSize}&sortby=RelevanceDesc`;
+  }
+
+  async #getTotalJobCount(page) {
+    try {
+      await page.waitForSelector('.search-results-count', { timeout: 5000 });
+      const countText = await page.$eval('.search-results-count', el => el.textContent);
+      const match = countText.match(/(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    } catch (error) {
+      logger.error('Error getting total job count:', error);
+      return 0;
+    }
+  }
+
   async #crawl() {
-    console.log(chalk.bold.magenta(`"${this.#name}" spider crawling.`));
+    logger.info(`"${this.#name}" spider crawling.`);
     try {
       if (this.page) {
         this.page.setDefaultNavigationTimeout(200000);
         
-        // Initialize empty array to store all jobs
         let allJobs = [];
         let currentPage = 1;
+        let consecutiveEmptyPages = 0;
 
-        // First, get the total number of jobs from the first page
-        await this.page.goto(this.#getPageUrl(1));
-        await this.page.waitForSelector('.job-card');
-        
-        const totalJobs = await this.page.evaluate(() => {
-          const resultsText = document.querySelector('div[b-n96x1o845s]')?.textContent;
-          const match = resultsText?.match(/(\d+)\s+jobs match/);
-          return match ? parseInt(match[1]) : 0;
-        });
-
-        const totalPages = Math.ceil(totalJobs / this.pageSize);
-        console.log(chalk.cyan(`Found ${totalJobs} total jobs across ${totalPages} pages`));
-
-        while (currentPage <= totalPages) {
-          console.log(chalk.cyan(`\nProcessing page ${currentPage} of ${totalPages}...`));
+        while (this.currentJobCount < this.maxJobs && consecutiveEmptyPages < 2) {
+          logger.info(`Processing page ${currentPage}`);
           
           if (currentPage > 1) {
-            // Add a delay between pages to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Rate limiting
             await this.page.goto(this.#getPageUrl(currentPage));
-            await this.page.waitForSelector('.job-card');
-            // Wait for dynamic content to load
-            await this.page.waitForTimeout(2000);
+          } else {
+            await this.page.goto(this.#getPageUrl(1));
+          }
+
+          // Wait for either job cards or no results message
+          try {
+            await Promise.race([
+              this.page.waitForSelector('.job-card', { timeout: 10000 }),
+              this.page.waitForSelector('.no-results', { timeout: 10000 })
+            ]);
+          } catch (error) {
+            logger.error(`Timeout waiting for job cards on page ${currentPage}`);
+            break;
           }
           
           const jobs = await this.#scrapeJobs();
           if (jobs && jobs.length > 0) {
-          allJobs = [...allJobs, ...jobs];
+            consecutiveEmptyPages = 0; // Reset counter when we find jobs
+            allJobs = [...allJobs, ...jobs];
+            this.currentJobCount += jobs.length;
+            logger.info(`Found ${jobs.length} jobs on page ${currentPage}. Total so far: ${this.currentJobCount}`);
           } else {
-            console.log(chalk.yellow(`Warning: No jobs found on page ${currentPage}`));
+            consecutiveEmptyPages++;
+            logger.warn(`No jobs found on page ${currentPage}. Empty pages: ${consecutiveEmptyPages}`);
+            if (consecutiveEmptyPages >= 2) {
+              logger.info('Two consecutive empty pages found, stopping pagination');
+              break;
+            }
           }
           
+          if (this.currentJobCount >= this.maxJobs) {
+            allJobs = allJobs.slice(0, this.maxJobs);
+            logger.info(`Reached maximum job limit of ${this.maxJobs}`);
+            break;
+          }
+
           currentPage++;
         }
 
-        // Log final statistics
-        console.log(chalk.cyan('\n----------------------------------------'));
-        console.log(chalk.cyan(`Total pages processed: ${totalPages}`));
-        console.log(chalk.cyan(`Total jobs found: ${allJobs.length} / ${totalJobs}`));
-        console.log(chalk.green(`Jobs created/updated: ${allJobs.length}`));
-        console.log(chalk.yellow(`Jobs skipped: 0`));
-        console.log(chalk.cyan('----------------------------------------'));
-        
-        // Save the scraped data
-        fs.writeFile(
-          this.#databasePath(this.#date("date")),
-          JSON.stringify({
-            metadata: {
-              total_jobs: allJobs.length,
-              expected_total_jobs: totalJobs,
-              total_pages: totalPages,
-              jobs_created: allJobs.length,
-              jobs_skipped: 0,
-              date_scraped: this.#date("timestamp")
-            },
-            jobs: allJobs
-          }, null, 2),
-          (error) => {
-            if (error) {
-              console.log(chalk.red(error.message));
-            } else {
-              console.log(chalk.green(`Jobs saved to database for ${this.#date("date")}`));
-            }
-          }
-        );
+        logger.info('Job Processing Summary:');
+        logger.info(`Total pages processed: ${currentPage}`);
+        logger.info(`Total jobs found: ${allJobs.length}`);
+        logger.info(`Jobs to process: ${allJobs.length}`);
 
-        await this.#terminate();
+        return allJobs;
       }
-    } catch (err) {
-      console.log(chalk.red(err));
+      return [];
+    } catch (error) {
+      logger.error('Crawl error:', error);
+      return [];
+    } finally {
       await this.#terminate();
-      
-      // Log errors
-      fs.writeFile(
-        this.#databasePath(`Error at ${this.#date("timestamp")}`, "errors"),
-        JSON.stringify(
-          {
-            text: err.message,
-            date: this.#date("date"),
-            metadata: {
-              total_jobs_attempted: 0,
-              jobs_created: 0,
-              jobs_skipped: 0,
-              pages_processed: 0,
-              error_occurred: true
-            }
-          },
-          null,
-          2
-        ),
-        (error) => error && console.log(chalk.red(error.message))
-      );
     }
   }
 
-  /**
-   * @description Scrapes job listings from the page
-   * @returns {Promise<Array>} Array of job objects
-   */
   async #scrapeJobs() {
     const jobs = [];
-    let totalJobs = 0;
-    let successfulScrapes = 0;
-    let failedScrapes = 0;
-    let skippedJobs = 0;
     
-    // Wait for job elements to load
-    await this.page.waitForSelector('.job-card');
-    
-    // Get all job listings data in one go
+    // Get all job listings data
     const jobListings = await this.page.evaluate(() => {
       return Array.from(document.querySelectorAll('.job-card')).map(element => {
-        // Title and URL
         const titleElement = element.querySelector('.card-header a');
         const title = titleElement?.querySelector('span')?.textContent?.trim() || '';
         const jobUrl = titleElement?.href || '';
         
-        // Job posting and closing date
         const dateText = element.querySelector('.card-body p')?.textContent?.trim() || '';
-        const [postingDate, closingDate] = dateText.replace('Job posting: ', '').replace('Closing date: ', '').split(' - ');
+        const [postingDate, closingDate] = dateText.split(' - ').map(d => d.replace(/^(Job posting: |Closing date: )/, ''));
         
-        // Categories
-        const categories = Array.from(element.querySelectorAll('.nsw-tertiary-blue span'))
-          .map(span => span.textContent?.trim())
-          .filter(text => text && !text.includes('\n'));
-        
-        // Location
-        const locations = Array.from(element.querySelectorAll('.nsw-col p:nth-child(3) span'))
-          .map(span => span.textContent?.trim())
-          .filter(text => text && text !== '');
-        
-        // Department
         const department = element.querySelector('.job-search-result-right h2')?.textContent?.trim() || '';
-        
-        // Job Type
         const jobType = element.querySelector('.job-search-result-right p span')?.textContent?.trim() || '';
-        
-        // Job ID
         const jobId = element.querySelector('.job-search-result-ref-no')?.textContent?.trim() || '';
-        
-        // Description snippet
-        const description = element.querySelector('.nsw-col p:nth-child(4)')?.textContent?.trim() || '';
+        const location = element.querySelector('.nsw-col p:nth-child(3) span')?.textContent?.trim() || '';
+        const salary = element.querySelector('.salary')?.textContent?.trim() || '';
         
         return {
           title,
-          postingDate,
-          closingDate,
-          categories,
-          locations,
           department,
-          jobType,
+          location,
+          salary,
+          closingDate,
           jobId,
-          jobUrl,
-          description
+          sourceUrl: jobUrl,
+          jobType,
+          source: 'iworkfor.nsw.gov.au',
+          institution: 'NSW Government'
         };
       });
     });
 
-    totalJobs = jobListings.length;
-    console.log(chalk.cyan(`Found ${totalJobs} job listings to process...`));
-    
-    // Process each job listing
-    for (const jobInfo of jobListings) {
-      try {
-        // Check cache before fetching details
-        const cachedDetails = this.#checkCache(jobInfo.jobId);
-        if (cachedDetails) {
-          jobInfo.details = cachedDetails;
-          skippedJobs++;
-          successfulScrapes++;
-          jobs.push(jobInfo);
-          process.stdout.write(`\rProcessed: ${successfulScrapes}/${totalJobs} jobs (${skippedJobs} from cache)`);
-          continue;
-        }
-
-        // Fetch detailed job information if not in cache
-        console.log(chalk.cyan(`\nFetching details for: ${jobInfo.title}`));
-        console.log(chalk.cyan(`Fetching details for job ID: ${jobInfo.jobId}`));
-        
-        const jobDetails = await this.#scrapeJobDetails(jobInfo.jobUrl, jobInfo.jobId);
-        
-        // Merge the job listing with its details
-        const completeJob = {
-          ...jobInfo,
-          details: jobDetails
-        };
-        
-        jobs.push(completeJob);
-        successfulScrapes++;
-        process.stdout.write(`\rProcessed: ${successfulScrapes}/${totalJobs} jobs (${skippedJobs} from cache)`);
-      } catch (error) {
-        failedScrapes++;
-        console.log(chalk.yellow(`\nError scraping job: ${error.message}`));
-      }
-    }
-    
-    console.log('\n');
-    console.log(chalk.cyan('Job Processing Summary:'));
-    console.log(chalk.green(`Successfully scraped: ${successfulScrapes} jobs`));
-    console.log(chalk.blue(`Jobs loaded from cache: ${skippedJobs}`));
-    console.log(chalk.yellow(`Failed to scrape: ${failedScrapes} jobs`));
-    
-    return jobs;
+    return jobListings;
   }
 
-  /**
-   * @description Downloads a document from a URL and saves it
-   * @param {string} url - The URL of the document
-   * @param {string} jobId - The job ID
-   * @param {string} docType - The type of document (e.g., 'role-description', 'statement-of-works')
-   * @returns {Promise<string>} The filename of the downloaded document
-   */
-  async #downloadDocument(url, jobId, docType) {
+  async #hasNextPage() {
     try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Failed to download document: ${response.statusText}`);
+      // Wait for pagination element
+      await this.page.waitForSelector('.pagination', { timeout: 5000 });
       
-      const contentType = response.headers.get('content-type');
-      const extension = contentType?.includes('pdf') ? 'pdf' : 'doc';
-      const filename = `${jobId}-${docType}.${extension}`;
-      const filePath = path.join(
-        path.dirname(fileURLToPath(import.meta.url)), 
-        "..", 
-        "database",
-        "jobs",
-        "files",
-        filename
-      );
+      // Get current page number from URL since the active class is not reliable
+      const url = this.page.url();
+      const currentPage = parseInt(new URL(url).searchParams.get('page')) || 1;
       
-      const buffer = await response.arrayBuffer();
-      fs.writeFileSync(filePath, Buffer.from(buffer));
-      console.log(chalk.green(`Downloaded document: ${filename}`));
+      // Check if there are more job cards than we've processed
+      const jobCards = await this.page.$$('.job-card');
+      const hasMoreJobs = jobCards.length === this.pageSize; // If we got a full page, there are likely more
       
-      return filename;
+      logger.info(`Current page: ${currentPage}, Has more jobs: ${hasMoreJobs}`);
+      
+      return hasMoreJobs;
     } catch (error) {
-      console.log(chalk.yellow(`Error downloading document from ${url}: ${error.message}`));
-      return null;
-    }
-  }
-
-  /**
-   * @description Extracts document URLs from the job description
-   * @param {string} description - The job description HTML
-   * @returns {Array<Object>} Array of document objects with url and type
-   */
-  #extractDocumentUrls(description) {
-    const patterns = [
-      // Pattern 1: "Role Description: <link>" with possible nested tags
-      /Role Description:\s*<[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 2: "To view the Role Description: <link>" with possible nested tags
-      /To view the Role Description:\s*<[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 3: "read the full Role Description: <link>" with possible nested tags
-      /read the full Role Description:\s*<[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 4: "Statement of Works: <link>" with possible nested tags
-      /Statement of Works:\s*<[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 5: Any link to dpie.nsw.gov.au with ?a=
-      /<a[^>]*?href="([^"]*?dpie\.nsw\.gov\.au\/\?a=[^"]*)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 6: Any link to dpie.nsw.gov.au word docs
-      /<a[^>]*?href="([^"]*?dpie\.nsw\.gov\.au\/__data\/assets\/word_doc\/[^"]*)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 7: Any link following "view the" or "read the" within same paragraph
-      /<p>[^<]*(?:view|read)\s+the[^<]*<a[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 8: Any link to dpie.nsw.gov.au in a paragraph containing "Role Description"
-      /<p>[^<]*Role Description[^<]*<a[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi,
-      // Pattern 9: Any link immediately following "Role Description"
-      /Role Description[^<]*<a[^>]*?href="([^"]+)"[^>]*?>(?:[^<]|<(?!\/a>)[^>]*>)*<\/a>/gi
-    ];
-    
-    const documents = [];
-    const seenUrls = new Set(); // To avoid duplicates
-    
-    for (const pattern of patterns) {
-      let match;
-      while ((match = pattern.exec(description)) !== null) {
-        const url = match[1];
-        // Skip if we've already found this URL
-        if (seenUrls.has(url)) continue;
-        
-        seenUrls.add(url);
-        
-        // Get the text content by removing all HTML tags
-        const textContent = match[0]
-          .replace(/<[^>]+>/g, '') // Remove all HTML tags
-          .replace(/Role Description:?\s*/gi, '') // Remove "Role Description:" prefix
-          .trim();
-        
-        // Determine document type
-        let type = 'role-description';
-        if (pattern.source.toLowerCase().includes('statement')) {
-          type = 'statement-of-works';
-        } else if (url.includes('word_doc')) {
-          type = 'document';
-        }
-        
-        documents.push({
-          url,
-          type,
-          title: textContent || 'Document'
-        });
+      if (error.name === 'TimeoutError') {
+        // No pagination found, assume no more pages
+        return false;
       }
-    }
-    
-    return documents;
-  }
-
-  async #scrapeJobDetails(jobUrl, jobId) {
-    // Check cache first
-    const cachedDetails = this.#checkCache(jobId);
-    if (cachedDetails) {
-      console.log(chalk.green(`Using cached data for job ID: ${jobId}`));
-      return cachedDetails;
-    }
-
-    try {
-      // Create a new page for each job detail to avoid context issues
-      const detailPage = await this.browser.newPage();
-      await detailPage.goto(jobUrl);
-      await detailPage.waitForSelector('.wrap-jobdetail');
-
-      const jobDetails = await detailPage.evaluate(() => {
-        // Get basic job information from the summary table
-        const getSummaryValue = (label) => {
-          const row = Array.from(document.querySelectorAll('.job-summary tr'))
-            .find(row => row.querySelector('td b')?.textContent?.trim().includes(label));
-          return row?.querySelectorAll('td')[1]?.textContent?.trim() || '';
-        };
-
-        // Get the full job description
-        const description = document.querySelector('.job-detail-des')?.innerHTML?.trim() || '';
-        
-        // Get organization details
-        const organization = getSummaryValue('Organisation / Entity:');
-        
-        // Get job category
-        const category = getSummaryValue('Job category:');
-        
-        // Get location
-        const location = getSummaryValue('Job location:');
-        
-        // Get work type
-        const workType = getSummaryValue('Work type:');
-        
-        // Get remuneration
-        const remuneration = getSummaryValue('Total remuneration package:');
-        
-        // Get closing date and time
-        const closingDateTime = getSummaryValue('Closing date:');
-
-        // Get contact information from the description
-        const contactInfo = {
-          name: '',
-          email: '',
-          phone: ''
-        };
-
-        // Extract contact details from description
-        const descriptionText = document.querySelector('.job-detail-des')?.textContent || '';
-        
-        // Look for email addresses
-        const emailMatch = descriptionText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-        if (emailMatch) {
-          contactInfo.email = emailMatch[0];
-        }
-
-        // Look for phone numbers
-        const phoneMatch = descriptionText.match(/\b\d{4}\s?\d{3}\s?\d{3}\b|\b\d{2}\s?\d{4}\s?\d{4}\b/);
-        if (phoneMatch) {
-          contactInfo.phone = phoneMatch[0];
-        }
-
-        // Look for contact name - usually near email or phone
-        const contactNameMatch = descriptionText.match(/contact\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i);
-        if (contactNameMatch) {
-          contactInfo.name = contactNameMatch[1];
-        }
-
-        // Get related jobs count if available
-        const relatedJobsMatch = document.querySelector('.callout__content')?.textContent.match(/currently\s+(\d+)\s+jobs/);
-        const relatedJobs = relatedJobsMatch ? parseInt(relatedJobsMatch[1]) : 0;
-
-        return {
-          organization,
-          category,
-          location,
-          workType,
-          remuneration,
-          closingDateTime,
-          description,
-          contactInfo,
-          relatedJobs,
-          metadata: {
-            lastScraped: new Date().toISOString()
-          }
-        };
-      });
-
-      // Extract and download documents using the document handler
-      const documents = this.#documentHandler.extractDocumentUrls(jobDetails.description, 'nswgov');
-      const downloadedDocs = [];
-      
-      for (const doc of documents) {
-        const filename = await this.#documentHandler.downloadDocument(doc.url, jobId, doc.type);
-        if (filename) {
-          downloadedDocs.push({
-            filename,
-            type: doc.type,
-            title: doc.title,
-            url: doc.url
-          });
-        }
-      }
-      
-      // Add downloaded documents to job details
-      jobDetails.documents = downloadedDocs;
-
-      // Close the detail page
-      await detailPage.close();
-
-      // Add to cache
-      this.#cachedJobs.set(jobId, {
-        lastScraped: new Date().toISOString(),
-        details: jobDetails
-      });
-
-      return jobDetails;
-    } catch (error) {
-      console.log(chalk.yellow(`Error scraping job details from ${jobUrl}: ${error.message}`));
-      return null;
+      logger.error('Error checking for next page:', error);
+      return false;
     }
   }
 } 

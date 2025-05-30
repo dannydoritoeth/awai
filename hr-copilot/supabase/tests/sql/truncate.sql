@@ -45,5 +45,6 @@ TRUNCATE TABLE
   roles,
   skills,
   taxonomy,
-  role_taxonomy
+  role_taxonomies,
+  general_role_types
 RESTART IDENTITY CASCADE;
