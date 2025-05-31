@@ -1,5 +1,6 @@
 
 
+
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -40,6 +41,78 @@ CREATE TYPE "public"."ai_model_provider" AS ENUM (
 
 
 ALTER TYPE "public"."ai_model_provider" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."archive_job"("p_job_id" "uuid", "p_reason" "text") RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    -- Update jobs table
+    UPDATE jobs 
+    SET 
+        is_archived = true,
+        last_updated_at = NOW()
+    WHERE id = p_job_id;
+
+    -- Create history record
+    INSERT INTO jobs_history (
+        id, 
+        version,
+        institution_id,
+        company_id,
+        division_id,
+        source_id,
+        original_id,
+        external_id,
+        title,
+        description,
+        open_date,
+        close_date,
+        department,
+        department_id,
+        job_type,
+        source_url,
+        remuneration,
+        recruiter,
+        locations,
+        raw_json,
+        changed_fields,
+        change_type,
+        change_reason,
+        created_by
+    )
+    SELECT 
+        id,
+        version + 1,
+        institution_id,
+        company_id,
+        division_id,
+        source_id,
+        original_id,
+        external_id,
+        title,
+        description,
+        open_date,
+        close_date,
+        department,
+        department_id,
+        job_type,
+        source_url,
+        remuneration,
+        recruiter,
+        locations,
+        to_jsonb(jobs.*) as raw_json,
+        ARRAY['is_archived'] as changed_fields,
+        'archive' as change_type,
+        p_reason as change_reason,
+        'system' as created_by
+    FROM jobs
+    WHERE id = p_job_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."archive_job"("p_job_id" "uuid", "p_reason" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."execute_sql"("sql" "text", "params" "jsonb") RETURNS "jsonb"
@@ -146,6 +219,33 @@ $_$;
 
 ALTER FUNCTION "public"."match_embeddings_by_vector"("p_query_embedding" "extensions"."vector", "p_table_name" "text", "p_match_threshold" double precision, "p_match_count" integer) OWNER TO "postgres";
 
+
+CREATE OR REPLACE FUNCTION "public"."update_job_version"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    NEW.version := OLD.version + 1;
+    NEW.last_updated_at := NOW();
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_job_version"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
+
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
@@ -158,7 +258,6 @@ CREATE TABLE IF NOT EXISTS "public"."agent_actions" (
     "target_type" "text",
     "target_id" "uuid",
     "outcome" "text",
-    "payload" "jsonb",
     "confidence_score" numeric,
     "session_id" "uuid",
     "timestamp" timestamp with time zone DEFAULT "now"(),
@@ -168,7 +267,8 @@ CREATE TABLE IF NOT EXISTS "public"."agent_actions" (
     "request" "jsonb",
     "request_hash" "text",
     "step_index" integer,
-    "response" "jsonb"
+    "response" "jsonb",
+    "user_id" "uuid"
 );
 
 
@@ -212,7 +312,10 @@ CREATE TABLE IF NOT EXISTS "public"."capabilities" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "normalized_key" "text"
 );
 
 
@@ -226,7 +329,9 @@ CREATE TABLE IF NOT EXISTS "public"."capability_levels" (
     "summary" "text",
     "behavioral_indicators" "text"[],
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -256,10 +361,10 @@ CREATE TABLE IF NOT EXISTS "public"."chat_messages" (
     "session_id" "uuid",
     "sender" "text",
     "message" "text" NOT NULL,
-    "tool_call" "jsonb",
-    "response_data" "jsonb",
     "timestamp" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
+    "user_id" "uuid",
+    "company_id" "uuid",
     CONSTRAINT "chat_messages_sender_check" CHECK (("sender" = ANY (ARRAY['user'::"text", 'assistant'::"text"])))
 );
 
@@ -276,7 +381,12 @@ CREATE TABLE IF NOT EXISTS "public"."companies" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "embedding_text_hash" "text",
-    "institution_id" "uuid"
+    "institution_id" "uuid",
+    "parent_company_id" "uuid",
+    "slug" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "raw_data" "jsonb"
 );
 
 
@@ -293,6 +403,8 @@ CREATE TABLE IF NOT EXISTS "public"."conversation_sessions" (
     "entity_id" "uuid",
     "status" "text" DEFAULT 'active'::"text",
     "browser_session_id" "text",
+    "user_id" "uuid",
+    "company_id" "uuid",
     CONSTRAINT "check_entity_id_required" CHECK (((("mode" = 'general'::"text") AND ("entity_id" IS NULL)) OR (("mode" <> 'general'::"text") AND ("entity_id" IS NOT NULL)))),
     CONSTRAINT "conversation_sessions_mode_check" CHECK (("mode" = ANY (ARRAY['candidate'::"text", 'hiring'::"text", 'general'::"text", 'analyst'::"text"])))
 );
@@ -316,7 +428,11 @@ CREATE TABLE IF NOT EXISTS "public"."divisions" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "slug" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "raw_data" "jsonb"
 );
 
 
@@ -358,7 +474,8 @@ CREATE TABLE IF NOT EXISTS "public"."institutions" (
     "logo_url" "text",
     "website_url" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "raw_data" "jsonb"
 );
 
 
@@ -370,7 +487,10 @@ CREATE TABLE IF NOT EXISTS "public"."job_documents" (
     "document_id" "uuid" NOT NULL,
     "document_url" "text",
     "document_type" "text",
-    "title" "text"
+    "title" "text",
+    "url" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -405,11 +525,51 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "source_id" "text",
+    "original_id" "text",
+    "version" integer DEFAULT 1,
+    "first_seen_at" timestamp without time zone DEFAULT "now"(),
+    "last_updated_at" timestamp without time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "raw_data" "jsonb"
 );
 
 
 ALTER TABLE "public"."jobs" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."jobs_history" (
+    "id" "uuid" NOT NULL,
+    "version" integer NOT NULL,
+    "institution_id" "uuid" NOT NULL,
+    "company_id" "uuid",
+    "division_id" "uuid",
+    "source_id" "text" NOT NULL,
+    "original_id" "text" NOT NULL,
+    "external_id" "text" NOT NULL,
+    "title" "text" NOT NULL,
+    "description" "text",
+    "open_date" "date",
+    "close_date" "date",
+    "department" "text",
+    "department_id" "text",
+    "job_type" "text",
+    "source_url" "text",
+    "remuneration" "text",
+    "recruiter" "jsonb",
+    "locations" "text"[],
+    "raw_json" "jsonb",
+    "changed_fields" "text"[],
+    "change_type" "text" NOT NULL,
+    "change_reason" "text",
+    "created_at" timestamp without time zone DEFAULT "now"(),
+    "created_by" "text"
+);
+
+
+ALTER TABLE "public"."jobs_history" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."profile_agent_actions" (
@@ -486,7 +646,9 @@ CREATE TABLE IF NOT EXISTS "public"."role_capabilities" (
     "role_id" "uuid" NOT NULL,
     "capability_id" "uuid" NOT NULL,
     "capability_type" "text" NOT NULL,
-    "level" "text"
+    "level" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -507,7 +669,9 @@ ALTER TABLE "public"."role_documents" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."role_skills" (
     "role_id" "uuid" NOT NULL,
-    "skill_id" "uuid" NOT NULL
+    "skill_id" "uuid" NOT NULL,
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -518,7 +682,9 @@ CREATE TABLE IF NOT EXISTS "public"."role_taxonomies" (
     "role_id" "uuid" NOT NULL,
     "taxonomy_id" "uuid" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -544,7 +710,11 @@ CREATE TABLE IF NOT EXISTS "public"."roles" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "normalized_key" "text",
+    "raw_data" "jsonb"
 );
 
 
@@ -582,6 +752,22 @@ CREATE TABLE IF NOT EXISTS "public"."taxonomy" (
 ALTER TABLE "public"."taxonomy" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."users" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "email" "text" NOT NULL,
+    "full_name" "text",
+    "role" "text",
+    "company_id" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "last_login_at" timestamp with time zone,
+    "metadata" "jsonb"
+);
+
+
+ALTER TABLE "public"."users" OWNER TO "postgres";
+
+
 ALTER TABLE ONLY "public"."agent_actions"
     ADD CONSTRAINT "agent_actions_pkey" PRIMARY KEY ("id");
 
@@ -597,8 +783,18 @@ ALTER TABLE ONLY "public"."capabilities"
 
 
 
+ALTER TABLE ONLY "public"."capabilities"
+    ADD CONSTRAINT "capabilities_unique_key" UNIQUE ("normalized_key", "company_id");
+
+
+
 ALTER TABLE ONLY "public"."capability_levels"
     ADD CONSTRAINT "capability_levels_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."capability_levels"
+    ADD CONSTRAINT "capability_levels_unique_external" UNIQUE ("capability_id", "level");
 
 
 
@@ -617,6 +813,11 @@ ALTER TABLE ONLY "public"."companies"
 
 
 
+ALTER TABLE ONLY "public"."companies"
+    ADD CONSTRAINT "companies_unique_external" UNIQUE ("institution_id", "slug");
+
+
+
 ALTER TABLE ONLY "public"."conversation_sessions"
     ADD CONSTRAINT "conversation_sessions_pkey" PRIMARY KEY ("id");
 
@@ -624,6 +825,16 @@ ALTER TABLE ONLY "public"."conversation_sessions"
 
 ALTER TABLE ONLY "public"."divisions"
     ADD CONSTRAINT "divisions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."divisions"
+    ADD CONSTRAINT "divisions_unique_external" UNIQUE ("company_id", "slug");
+
+
+
+ALTER TABLE ONLY "public"."job_documents"
+    ADD CONSTRAINT "documents_unique_external" UNIQUE ("job_id", "url");
 
 
 
@@ -662,8 +873,23 @@ ALTER TABLE ONLY "public"."job_skills"
 
 
 
+ALTER TABLE ONLY "public"."jobs_history"
+    ADD CONSTRAINT "jobs_history_pkey" PRIMARY KEY ("id", "version");
+
+
+
+ALTER TABLE ONLY "public"."jobs"
+    ADD CONSTRAINT "jobs_institution_source_original_unique" UNIQUE ("company_id", "source_id", "original_id");
+
+
+
 ALTER TABLE ONLY "public"."jobs"
     ADD CONSTRAINT "jobs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."jobs"
+    ADD CONSTRAINT "jobs_unique_external" UNIQUE ("company_id", "source_id", "original_id");
 
 
 
@@ -702,6 +928,11 @@ ALTER TABLE ONLY "public"."role_capabilities"
 
 
 
+ALTER TABLE ONLY "public"."role_capabilities"
+    ADD CONSTRAINT "role_capabilities_unique_external" UNIQUE ("role_id", "capability_id");
+
+
+
 ALTER TABLE ONLY "public"."role_documents"
     ADD CONSTRAINT "role_documents_pkey" PRIMARY KEY ("role_id", "document_id");
 
@@ -712,13 +943,28 @@ ALTER TABLE ONLY "public"."role_skills"
 
 
 
+ALTER TABLE ONLY "public"."role_skills"
+    ADD CONSTRAINT "role_skills_unique_external" UNIQUE ("role_id", "skill_id");
+
+
+
 ALTER TABLE ONLY "public"."role_taxonomies"
     ADD CONSTRAINT "role_taxonomies_pkey" PRIMARY KEY ("role_id", "taxonomy_id");
 
 
 
+ALTER TABLE ONLY "public"."role_taxonomies"
+    ADD CONSTRAINT "role_taxonomies_unique_external" UNIQUE ("role_id", "taxonomy_id");
+
+
+
 ALTER TABLE ONLY "public"."roles"
     ADD CONSTRAINT "roles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."roles"
+    ADD CONSTRAINT "roles_unique_key" UNIQUE ("normalized_key", "company_id");
 
 
 
@@ -729,6 +975,16 @@ ALTER TABLE ONLY "public"."skills"
 
 ALTER TABLE ONLY "public"."taxonomy"
     ADD CONSTRAINT "taxonomy_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_email_unique" UNIQUE ("email");
+
+
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
 
 
 
@@ -841,6 +1097,14 @@ CREATE INDEX "idx_divisions_embedding_hash" ON "public"."divisions" USING "btree
 
 
 CREATE INDEX "idx_jobs_embedding_hash" ON "public"."jobs" USING "btree" ("embedding_text_hash");
+
+
+
+CREATE INDEX "idx_jobs_history_created_at" ON "public"."jobs_history" USING "btree" ("created_at");
+
+
+
+CREATE INDEX "idx_jobs_history_id_version" ON "public"."jobs_history" USING "btree" ("id", "version" DESC);
 
 
 
@@ -1040,13 +1304,36 @@ CREATE OR REPLACE TRIGGER "handle_updated_at" BEFORE UPDATE ON "public"."skills"
 
 
 
+CREATE OR REPLACE TRIGGER "set_updated_at" BEFORE UPDATE ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+
+
+CREATE OR REPLACE TRIGGER "tr_update_job_version" BEFORE UPDATE ON "public"."jobs" FOR EACH ROW EXECUTE FUNCTION "public"."update_job_version"();
+
+
+
+ALTER TABLE ONLY "public"."agent_actions"
+    ADD CONSTRAINT "agent_actions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id");
+
+
+
 ALTER TABLE ONLY "public"."ai_model_invocations"
     ADD CONSTRAINT "ai_model_invocations_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."conversation_sessions"("id");
 
 
 
+ALTER TABLE ONLY "public"."capabilities"
+    ADD CONSTRAINT "capabilities_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
+
+
+
 ALTER TABLE ONLY "public"."capability_levels"
     ADD CONSTRAINT "capability_levels_capability_id_fkey" FOREIGN KEY ("capability_id") REFERENCES "public"."capabilities"("id");
+
+
+
+ALTER TABLE ONLY "public"."career_paths"
+    ADD CONSTRAINT "career_paths_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
 
 
 
@@ -1070,6 +1357,11 @@ ALTER TABLE ONLY "public"."companies"
 
 
 
+ALTER TABLE ONLY "public"."companies"
+    ADD CONSTRAINT "companies_parent_company_id_fkey" FOREIGN KEY ("parent_company_id") REFERENCES "public"."companies"("id");
+
+
+
 ALTER TABLE ONLY "public"."conversation_sessions"
     ADD CONSTRAINT "conversation_sessions_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id");
 
@@ -1077,6 +1369,26 @@ ALTER TABLE ONLY "public"."conversation_sessions"
 
 ALTER TABLE ONLY "public"."divisions"
     ADD CONSTRAINT "divisions_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
+
+
+
+ALTER TABLE ONLY "public"."chat_messages"
+    ADD CONSTRAINT "fk_chat_messages_company" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."chat_messages"
+    ADD CONSTRAINT "fk_chat_messages_user" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."conversation_sessions"
+    ADD CONSTRAINT "fk_conversation_sessions_company" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."conversation_sessions"
+    ADD CONSTRAINT "fk_conversation_sessions_user" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1200,6 +1512,11 @@ ALTER TABLE ONLY "public"."roles"
 
 
 
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id");
+
+
+
 CREATE POLICY "Allow authenticated insert" ON "public"."general_roles" FOR INSERT TO "authenticated" WITH CHECK (true);
 
 
@@ -1277,6 +1594,12 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."archive_job"("p_job_id" "uuid", "p_reason" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."archive_job"("p_job_id" "uuid", "p_reason" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."archive_job"("p_job_id" "uuid", "p_reason" "text") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."execute_sql"("sql" "text", "params" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "public"."execute_sql"("sql" "text", "params" "jsonb") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."execute_sql"("sql" "text", "params" "jsonb") TO "service_role";
@@ -1298,6 +1621,18 @@ GRANT ALL ON FUNCTION "public"."match_embeddings_by_id"("p_query_id" "uuid", "p_
 GRANT ALL ON FUNCTION "public"."match_embeddings_by_vector"("p_query_embedding" "extensions"."vector", "p_table_name" "text", "p_match_threshold" double precision, "p_match_count" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."match_embeddings_by_vector"("p_query_embedding" "extensions"."vector", "p_table_name" "text", "p_match_threshold" double precision, "p_match_count" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."match_embeddings_by_vector"("p_query_embedding" "extensions"."vector", "p_table_name" "text", "p_match_threshold" double precision, "p_match_count" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_job_version"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_job_version"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_job_version"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "anon";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
@@ -1391,6 +1726,12 @@ GRANT ALL ON TABLE "public"."jobs" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."jobs_history" TO "anon";
+GRANT ALL ON TABLE "public"."jobs_history" TO "authenticated";
+GRANT ALL ON TABLE "public"."jobs_history" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."profile_agent_actions" TO "anon";
 GRANT ALL ON TABLE "public"."profile_agent_actions" TO "authenticated";
 GRANT ALL ON TABLE "public"."profile_agent_actions" TO "service_role";
@@ -1466,6 +1807,12 @@ GRANT ALL ON TABLE "public"."skills" TO "service_role";
 GRANT ALL ON TABLE "public"."taxonomy" TO "anon";
 GRANT ALL ON TABLE "public"."taxonomy" TO "authenticated";
 GRANT ALL ON TABLE "public"."taxonomy" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."users" TO "anon";
+GRANT ALL ON TABLE "public"."users" TO "authenticated";
+GRANT ALL ON TABLE "public"."users" TO "service_role";
 
 
 

@@ -1,13 +1,21 @@
 DROP TABLE IF EXISTS 
+  ai_model_invocations,
   agent_actions,
   capabilities,
   capability_levels,
   career_paths,
   companies,
+  conversation_sessions,
+  chat_messages,
   divisions,
+  general_roles,
+  general_role_types,
+  institutions,
   jobs,
   job_documents,
   job_skills,
+  jobs_history,
+  job_taxonomies,
   profile_agent_actions,
   profile_capabilities,
   profile_career_paths,
@@ -17,8 +25,11 @@ DROP TABLE IF EXISTS
   role_capabilities,
   role_documents,
   role_skills,
+  role_taxonomies,
   roles,
-  skills
+  skills,
+  taxonomy,
+  users
 CASCADE;
 
 TRUNCATE TABLE 
