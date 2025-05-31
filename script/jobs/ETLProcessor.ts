@@ -181,25 +181,38 @@ export class ETLProcessor {
 
         // Create a batch for staging
         const stagingBatch = departments.flatMap(dept => 
-            dept.jobs.map(job => ({
-                institution_id: institutionId,
-                source_id: job.source,
-                original_id: job.jobId,
-                raw_data: {
-                    title: job.title,
-                    department: job.department,
-                    department_name: dept.name,
-                    location: job.location,
-                    close_date: job.closingDate,
-                    remuneration: job.salary,
-                    source_url: job.sourceUrl,
-                    raw_job: job
-                },
-                validation_status: 'pending',
-                processed: false,
-                processing_metadata: {}
-            }))
+            dept.jobs.map(job => {
+                // Ensure we have a valid original_id
+                const original_id = job.jobId || (job as any).id || `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                
+                return {
+                    institution_id: institutionId,
+                    source_id: job.source || 'nswgov',
+                    original_id,
+                    raw_data: {
+                        title: job.title,
+                        department: job.department,
+                        department_name: dept.name,
+                        location: job.location,
+                        close_date: job.closingDate,
+                        remuneration: job.salary,
+                        source_url: job.sourceUrl,
+                        source: job.source || 'nswgov',
+                        job_id: original_id, // Also store in raw_data for consistency
+                        raw_job: job
+                    },
+                    validation_status: 'pending',
+                    processed: false,
+                    processing_metadata: {}
+                };
+            })
         );
+
+        // Log the staging batch for debugging
+        logger.debug('Staging batch:', { 
+            count: stagingBatch.length,
+            sample: stagingBatch[0]
+        });
 
         // Upsert into staging table - let external_id be generated
         const { data, error } = await this.#supabase
@@ -281,6 +294,16 @@ export class ETLProcessor {
                         jobId: stagedJob.original_id,
                         department: stagedJob.raw_data.department_name
                     });
+
+                    // Ensure source_id is set
+                    if (!stagedJob.source_id) {
+                        stagedJob.source_id = 'nswgov';
+                        // Update the record with source_id
+                        await this.#supabase
+                            .from('staging_jobs')
+                            .update({ source_id: 'nswgov' })
+                            .eq('id', stagedJob.id);
+                    }
 
                     const companyId = await this.#getOrCreateCompany({
                         name: stagedJob.raw_data.department_name || 'NSW Government',
@@ -398,45 +421,91 @@ export class ETLProcessor {
     }
 
     async #createJob(stagedJob: StagedJob, companyId: string) {
-        const { error } = await this.#supabase
-            .from('jobs')
-            .insert({
+        try {
+            // Extract job data from raw_data, ensuring we have all required fields
+            const jobData = {
                 company_id: companyId,
-                title: stagedJob.raw_data.title,
+                title: stagedJob.raw_data.title || stagedJob.raw_data.raw_job?.title,
                 source_id: stagedJob.source_id,
                 original_id: stagedJob.original_id,
-                source_url: stagedJob.raw_data.source_url,
-                department: stagedJob.raw_data.department,
-                locations: [stagedJob.raw_data.location],
-                close_date: new Date(stagedJob.raw_data.close_date),
-                remuneration: stagedJob.raw_data.remuneration,
-                raw_json: stagedJob.raw_data.raw_job,
+                source_url: stagedJob.raw_data.source_url || stagedJob.raw_data.raw_job?.sourceUrl,
+                department: stagedJob.raw_data.department || stagedJob.raw_data.raw_job?.department,
+                locations: [stagedJob.raw_data.location || stagedJob.raw_data.raw_job?.location].filter(Boolean),
+                close_date: new Date(stagedJob.raw_data.close_date || stagedJob.raw_data.raw_job?.closingDate),
+                remuneration: stagedJob.raw_data.remuneration || stagedJob.raw_data.raw_job?.salary,
+                raw_json: stagedJob.raw_data,
                 first_seen_at: new Date(),
                 last_updated_at: new Date()
+            };
+
+            // Log the job data for debugging
+            logger.debug('Creating job with data:', {
+                jobId: stagedJob.original_id,
+                data: jobData
             });
 
-        if (error) {
+            const { error } = await this.#supabase
+                .from('jobs')
+                .insert(jobData);
+
+            if (error) {
+                throw error;
+            }
+
+            logger.info(`Successfully created job: ${stagedJob.original_id}`);
+        } catch (error) {
+            logger.error(`Error creating job ${stagedJob.original_id}:`, {
+                error,
+                stagedJob: {
+                    id: stagedJob.id,
+                    original_id: stagedJob.original_id,
+                    raw_data: stagedJob.raw_data
+                }
+            });
             throw error;
         }
     }
 
     async #updateJob(jobId: string, stagedJob: StagedJob, companyId: string) {
-        const { error } = await this.#supabase
-            .from('jobs')
-            .update({
+        try {
+            // Extract job data from raw_data, ensuring we have all required fields
+            const jobData = {
                 company_id: companyId,
-                title: stagedJob.raw_data.title,
-                source_url: stagedJob.raw_data.source_url,
-                department: stagedJob.raw_data.department,
-                locations: [stagedJob.raw_data.location],
-                close_date: new Date(stagedJob.raw_data.close_date),
-                remuneration: stagedJob.raw_data.remuneration,
-                raw_json: stagedJob.raw_data.raw_job,
+                title: stagedJob.raw_data.title || stagedJob.raw_data.raw_job?.title,
+                source_url: stagedJob.raw_data.source_url || stagedJob.raw_data.raw_job?.sourceUrl,
+                department: stagedJob.raw_data.department || stagedJob.raw_data.raw_job?.department,
+                locations: [stagedJob.raw_data.location || stagedJob.raw_data.raw_job?.location].filter(Boolean),
+                close_date: new Date(stagedJob.raw_data.close_date || stagedJob.raw_data.raw_job?.closingDate),
+                remuneration: stagedJob.raw_data.remuneration || stagedJob.raw_data.raw_job?.salary,
+                raw_json: stagedJob.raw_data,
                 last_updated_at: new Date()
-            })
-            .eq('id', jobId);
+            };
 
-        if (error) {
+            // Log the job data for debugging
+            logger.debug('Updating job with data:', {
+                jobId,
+                data: jobData
+            });
+
+            const { error } = await this.#supabase
+                .from('jobs')
+                .update(jobData)
+                .eq('id', jobId);
+
+            if (error) {
+                throw error;
+            }
+
+            logger.info(`Successfully updated job: ${jobId}`);
+        } catch (error) {
+            logger.error(`Error updating job ${jobId}:`, {
+                error,
+                stagedJob: {
+                    id: stagedJob.id,
+                    original_id: stagedJob.original_id,
+                    raw_data: stagedJob.raw_data
+                }
+            });
             throw error;
         }
     }
@@ -450,15 +519,19 @@ export class ETLProcessor {
             const analysis = await this.#extractCapabilitiesAndSkills(jobDescription);
             logger.info(`Extracted capabilities and skills for job ${jobId}:`, { analysis });
 
+            // Ensure source is set
+            const source = details.source || 'nswgov';
+
             // Store job details - only set source_id and original_id, let external_id be generated
             const { data: jobData, error: jobError } = await this.#supabase
                 .from('staging_jobs')
                 .upsert({
                     institution_id: this.#institutionId,
-                    source_id: 'nswgov',
+                    source_id: source,
                     original_id: jobId,
                     raw_data: {
                         ...details,
+                        source,
                         capabilities: analysis.capabilities,
                         skills: analysis.skills
                     },
