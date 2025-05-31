@@ -423,16 +423,18 @@ export class ETLProcessor {
     async #createJob(stagedJob: StagedJob, companyId: string) {
         try {
             // Extract job data from raw_data, ensuring we have all required fields
+            const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
+            
             const jobData = {
                 company_id: companyId,
-                title: stagedJob.raw_data.title || stagedJob.raw_data.raw_job?.title,
+                title: rawJob.title,
                 source_id: stagedJob.source_id,
                 original_id: stagedJob.original_id,
-                source_url: stagedJob.raw_data.source_url || stagedJob.raw_data.raw_job?.sourceUrl,
-                department: stagedJob.raw_data.department || stagedJob.raw_data.raw_job?.department,
-                locations: [stagedJob.raw_data.location || stagedJob.raw_data.raw_job?.location].filter(Boolean),
-                close_date: new Date(stagedJob.raw_data.close_date || stagedJob.raw_data.raw_job?.closingDate),
-                remuneration: stagedJob.raw_data.remuneration || stagedJob.raw_data.raw_job?.salary,
+                source_url: rawJob.source_url || rawJob.sourceUrl,
+                department: rawJob.department,
+                locations: [rawJob.location].filter(Boolean),
+                close_date: new Date(rawJob.closing_date || rawJob.closingDate),
+                remuneration: rawJob.salary || rawJob.remuneration,
                 raw_json: stagedJob.raw_data,
                 first_seen_at: new Date(),
                 last_updated_at: new Date()
@@ -469,14 +471,16 @@ export class ETLProcessor {
     async #updateJob(jobId: string, stagedJob: StagedJob, companyId: string) {
         try {
             // Extract job data from raw_data, ensuring we have all required fields
+            const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
+            
             const jobData = {
                 company_id: companyId,
-                title: stagedJob.raw_data.title || stagedJob.raw_data.raw_job?.title,
-                source_url: stagedJob.raw_data.source_url || stagedJob.raw_data.raw_job?.sourceUrl,
-                department: stagedJob.raw_data.department || stagedJob.raw_data.raw_job?.department,
-                locations: [stagedJob.raw_data.location || stagedJob.raw_data.raw_job?.location].filter(Boolean),
-                close_date: new Date(stagedJob.raw_data.close_date || stagedJob.raw_data.raw_job?.closingDate),
-                remuneration: stagedJob.raw_data.remuneration || stagedJob.raw_data.raw_job?.salary,
+                title: rawJob.title,
+                source_url: rawJob.source_url || rawJob.sourceUrl,
+                department: rawJob.department,
+                locations: [rawJob.location].filter(Boolean),
+                close_date: new Date(rawJob.closing_date || rawJob.closingDate),
+                remuneration: rawJob.salary || rawJob.remuneration,
                 raw_json: stagedJob.raw_data,
                 last_updated_at: new Date()
             };
