@@ -718,65 +718,69 @@ export class ETLProcessor {
             logger.info('Initializing capability levels...');
             
             const levels = [
-                { name: 'Foundational', order: 1, description: 'Basic level of capability' },
-                { name: 'Intermediate', order: 2, description: 'Moderate level of capability' },
-                { name: 'Adept', order: 3, description: 'Skilled level of capability' },
-                { name: 'Advanced', order: 4, description: 'High level of capability' },
-                { name: 'Highly Advanced', order: 5, description: 'Expert level of capability' }
+                { level: 'Foundational', summary: 'Basic level of capability', behavioral_indicators: [] },
+                { level: 'Intermediate', summary: 'Moderate level of capability', behavioral_indicators: [] },
+                { level: 'Adept', summary: 'Skilled level of capability', behavioral_indicators: [] },
+                { level: 'Advanced', summary: 'High level of capability', behavioral_indicators: [] },
+                { level: 'Highly Advanced', summary: 'Expert level of capability', behavioral_indicators: [] }
             ];
 
-            // Check if levels already exist
-            const { data: existingLevels, error: checkError } = await this.#supabase
+            // First, get all existing levels for this institution
+            const { data: existingLevels, error: fetchError } = await this.#supabase
                 .from('staging_capability_levels')
-                .select('name')
-                .limit(1);
+                .select('id, level')
+                .eq('institution_id', this.#institutionId);
 
-            if (checkError) {
-                if (checkError.code === '42P01') {
-                    // Table doesn't exist, create it first
-                    const createTableSQL = `
-                        CREATE TABLE IF NOT EXISTS public.staging_capability_levels (
-                            id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-                            name TEXT NOT NULL UNIQUE,
-                            order_num INTEGER NOT NULL,
-                            description TEXT,
-                            created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
-                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
-                        );
-                    `;
-
-                    const { error: createError } = await this.#supabase
-                        .rpc('create_staging_capability_levels_table', {
-                            sql_query: createTableSQL
-                        });
-
-                    if (createError) {
-                        throw createError;
-                    }
-
-                    logger.info('Created staging_capability_levels table');
-                } else {
-                    throw checkError;
-                }
+            if (fetchError) {
+                throw fetchError;
             }
 
-            // Insert or update the levels
+            // Create a map of existing levels
+            const existingLevelMap = new Map(
+                existingLevels?.map(level => [level.level, level.id]) || []
+            );
+
+            // Process each level
             for (const level of levels) {
-                const { error: upsertError } = await this.#supabase
-                    .from('staging_capability_levels')
-                    .upsert({
-                        name: level.name,
-                        order_num: level.order,
-                        description: level.description
-                    }, {
-                        onConflict: 'name'
-                    });
+                const existingId = existingLevelMap.get(level.level);
 
-                if (upsertError) {
-                    throw upsertError;
+                if (existingId) {
+                    // Update existing level
+                    const { error: updateError } = await this.#supabase
+                        .from('staging_capability_levels')
+                        .update({
+                            summary: level.summary,
+                            behavioral_indicators: level.behavioral_indicators,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', existingId);
+
+                    if (updateError) {
+                        throw updateError;
+                    }
+
+                    logger.info(`Updated capability level: ${level.level}`);
+                } else {
+                    // Insert new level
+                    const { error: insertError } = await this.#supabase
+                        .from('staging_capability_levels')
+                        .insert({
+                            institution_id: this.#institutionId,
+                            source_id: null, // This will be set when linking to specific capabilities
+                            capability_id: null, // This will be set when linking to specific capabilities
+                            level: level.level,
+                            summary: level.summary,
+                            behavioral_indicators: level.behavioral_indicators,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        });
+
+                    if (insertError) {
+                        throw insertError;
+                    }
+
+                    logger.info(`Created capability level: ${level.level}`);
                 }
-
-                logger.info(`Upserted capability level: ${level.name}`);
             }
 
             logger.info('Successfully initialized capability levels');
