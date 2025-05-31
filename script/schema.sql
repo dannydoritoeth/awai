@@ -299,7 +299,10 @@ CREATE TABLE IF NOT EXISTS "public"."capabilities" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "normalized_key" "text"
 );
 
 
@@ -313,7 +316,9 @@ CREATE TABLE IF NOT EXISTS "public"."capability_levels" (
     "summary" "text",
     "behavioral_indicators" "text"[],
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -363,7 +368,11 @@ CREATE TABLE IF NOT EXISTS "public"."companies" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "embedding_text_hash" "text",
-    "institution_id" "uuid"
+    "institution_id" "uuid",
+    "parent_company_id" "uuid",
+    "slug" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -403,7 +412,10 @@ CREATE TABLE IF NOT EXISTS "public"."divisions" (
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "slug" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -457,7 +469,10 @@ CREATE TABLE IF NOT EXISTS "public"."job_documents" (
     "document_id" "uuid" NOT NULL,
     "document_url" "text",
     "document_type" "text",
-    "title" "text"
+    "title" "text",
+    "url" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -497,7 +512,9 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "original_id" "text",
     "version" integer DEFAULT 1,
     "first_seen_at" timestamp without time zone DEFAULT "now"(),
-    "last_updated_at" timestamp without time zone DEFAULT "now"()
+    "last_updated_at" timestamp without time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -610,7 +627,9 @@ CREATE TABLE IF NOT EXISTS "public"."role_capabilities" (
     "role_id" "uuid" NOT NULL,
     "capability_id" "uuid" NOT NULL,
     "capability_type" "text" NOT NULL,
-    "level" "text"
+    "level" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -631,7 +650,9 @@ ALTER TABLE "public"."role_documents" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."role_skills" (
     "role_id" "uuid" NOT NULL,
-    "skill_id" "uuid" NOT NULL
+    "skill_id" "uuid" NOT NULL,
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -642,7 +663,9 @@ CREATE TABLE IF NOT EXISTS "public"."role_taxonomies" (
     "role_id" "uuid" NOT NULL,
     "taxonomy_id" "uuid" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -668,7 +691,10 @@ CREATE TABLE IF NOT EXISTS "public"."roles" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone,
+    "normalized_key" "text"
 );
 
 
@@ -721,8 +747,18 @@ ALTER TABLE ONLY "public"."capabilities"
 
 
 
+ALTER TABLE ONLY "public"."capabilities"
+    ADD CONSTRAINT "capabilities_unique_key" UNIQUE ("normalized_key", "company_id");
+
+
+
 ALTER TABLE ONLY "public"."capability_levels"
     ADD CONSTRAINT "capability_levels_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."capability_levels"
+    ADD CONSTRAINT "capability_levels_unique_external" UNIQUE ("capability_id", "level");
 
 
 
@@ -741,6 +777,11 @@ ALTER TABLE ONLY "public"."companies"
 
 
 
+ALTER TABLE ONLY "public"."companies"
+    ADD CONSTRAINT "companies_unique_external" UNIQUE ("institution_id", "slug");
+
+
+
 ALTER TABLE ONLY "public"."conversation_sessions"
     ADD CONSTRAINT "conversation_sessions_pkey" PRIMARY KEY ("id");
 
@@ -748,6 +789,16 @@ ALTER TABLE ONLY "public"."conversation_sessions"
 
 ALTER TABLE ONLY "public"."divisions"
     ADD CONSTRAINT "divisions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."divisions"
+    ADD CONSTRAINT "divisions_unique_external" UNIQUE ("company_id", "slug");
+
+
+
+ALTER TABLE ONLY "public"."job_documents"
+    ADD CONSTRAINT "documents_unique_external" UNIQUE ("job_id", "url");
 
 
 
@@ -801,6 +852,11 @@ ALTER TABLE ONLY "public"."jobs"
 
 
 
+ALTER TABLE ONLY "public"."jobs"
+    ADD CONSTRAINT "jobs_unique_external" UNIQUE ("company_id", "source_id", "original_id");
+
+
+
 ALTER TABLE ONLY "public"."profile_agent_actions"
     ADD CONSTRAINT "profile_agent_actions_pkey" PRIMARY KEY ("profile_id", "action_id");
 
@@ -836,6 +892,11 @@ ALTER TABLE ONLY "public"."role_capabilities"
 
 
 
+ALTER TABLE ONLY "public"."role_capabilities"
+    ADD CONSTRAINT "role_capabilities_unique_external" UNIQUE ("role_id", "capability_id");
+
+
+
 ALTER TABLE ONLY "public"."role_documents"
     ADD CONSTRAINT "role_documents_pkey" PRIMARY KEY ("role_id", "document_id");
 
@@ -846,13 +907,28 @@ ALTER TABLE ONLY "public"."role_skills"
 
 
 
+ALTER TABLE ONLY "public"."role_skills"
+    ADD CONSTRAINT "role_skills_unique_external" UNIQUE ("role_id", "skill_id");
+
+
+
 ALTER TABLE ONLY "public"."role_taxonomies"
     ADD CONSTRAINT "role_taxonomies_pkey" PRIMARY KEY ("role_id", "taxonomy_id");
 
 
 
+ALTER TABLE ONLY "public"."role_taxonomies"
+    ADD CONSTRAINT "role_taxonomies_unique_external" UNIQUE ("role_id", "taxonomy_id");
+
+
+
 ALTER TABLE ONLY "public"."roles"
     ADD CONSTRAINT "roles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."roles"
+    ADD CONSTRAINT "roles_unique_key" UNIQUE ("normalized_key", "company_id");
 
 
 
@@ -1213,6 +1289,11 @@ ALTER TABLE ONLY "public"."chat_messages"
 
 ALTER TABLE ONLY "public"."companies"
     ADD CONSTRAINT "companies_institution_id_fkey" FOREIGN KEY ("institution_id") REFERENCES "public"."institutions"("id");
+
+
+
+ALTER TABLE ONLY "public"."companies"
+    ADD CONSTRAINT "companies_parent_company_id_fkey" FOREIGN KEY ("parent_company_id") REFERENCES "public"."companies"("id");
 
 
 
