@@ -416,7 +416,7 @@ export class NSWJobSpider {
           await this.#addRateLimitDelay();
           
           const details = await this.#scrapeJobDetails(job.jobId, job.sourceUrl);
-          logger.info(`Scraped details for job ${job.jobId}:`, { details });
+          logger.info(`Scraped details for job ${job.jobId}:`);
           
           if (details) {
             const jobWithDetails = {
@@ -1604,7 +1604,6 @@ export class NSWJobSpider {
         .upsert({
           institution_id: this.#institutionId,
           source_id: 'nswgov',
-          external_id: jobId,
           raw_data: {
             id: jobId,
             title: details.title,
@@ -1674,7 +1673,7 @@ export class NSWJobSpider {
 
   async #processJob(jobId, jobDetails) {
     try {
-      logger.info(`Processing job ${jobId}...`, { jobDetails });
+      logger.info(`Processing job ${jobId}...`);
       
       // 1. First store the job details
       const jobData = await this.#processJobDetails(jobId, jobDetails);
