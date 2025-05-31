@@ -444,7 +444,7 @@ export class NSWJobSpider {
                 ...jobWithDetails,
                 company_id: company?.[0]?.id
               });
-              logger.info(`Job processing result:`, { processedJob });
+              logger.info(`Job processing result:`, { processedJob.job.jobId });
 
               jobsWithDetails.push(processedJob);
             } catch (processingError) {
@@ -1720,33 +1720,12 @@ export class NSWJobSpider {
         jobId,
         stagingJob
       });
-      
-      // First check if job exists
-      const { data: existingJob, error: selectError } = await this.#supabase
-        .from('staging_jobs')
-        .select('*')
-        .eq('institution_id', this.#institutionId)
-        .eq('source_id', 'nswgov')
-        .eq('original_id', jobId)
-        .maybeSingle();
 
-      if (selectError) {
-        logger.error('Error checking for existing job:', {
-          error: selectError,
-          jobId
-        });
-      }
-
-      logger.debug('Existing job check result:', {
-        exists: !!existingJob,
-        jobId
-      });
-
-      // Store job details
+      // Store job details with the correct conflict key
       const { data: jobData, error: jobError } = await this.#supabase
         .from('staging_jobs')
         .upsert(stagingJob, {
-          onConflict: 'institution_id,source_id,original_id',
+          onConflict: 'institution_id,external_id',
           returning: true
         });
 
@@ -1796,8 +1775,7 @@ export class NSWJobSpider {
         }
 
         logger.info('Successfully fetched job after upsert', {
-          jobId,
-          job: fetchedJob
+          jobId
         });
 
         return fetchedJob;
@@ -1839,216 +1817,101 @@ export class NSWJobSpider {
         source_id: 'nswgov',
         external_id: jobId,
         title: jobDetails.title,
-        department: jobDetails.department,
-        location: jobDetails.location,
         grade_band: jobDetails.salary,
+        location: jobDetails.location,
         primary_purpose: jobDetails.details?.description?.split('.')[0] || '',
         raw_data: jobDetails,
         processing_status: 'pending'
       };
 
+      logger.debug('Attempting to store role data:', {
+        jobId,
+        roleData
+      });
+
+      // First check if the role exists
+      const { data: existingRole, error: checkError } = await this.#supabase
+        .from('staging_roles')
+        .select('*')
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov')
+        .eq('external_id', jobId)
+        .maybeSingle();
+
+      if (checkError) {
+        logger.error(`Error checking for existing role ${jobId}:`, {
+          error: {
+            message: checkError.message,
+            details: checkError.details,
+            hint: checkError.hint,
+            code: checkError.code
+          }
+        });
+        throw checkError;
+      }
+
+      // Then perform the upsert
       const { data: role, error: roleError } = await this.#supabase
         .from('staging_roles')
         .upsert(roleData, {
-          onConflict: 'institution_id,external_id',
-          returning: true
+          onConflict: 'institution_id,source_id,external_id',
+          returning: 'representation'  // This ensures we get the full record back
         });
 
       if (roleError) {
         logger.error(`Error storing role data for ${jobId}:`, {
-          error: roleError.message
+          error: {
+            message: roleError.message,
+            details: roleError.details,
+            hint: roleError.hint,
+            code: roleError.code
+          },
+          roleData
         });
         throw roleError;
       }
 
       if (!role || !role[0]) {
-        throw new Error('Failed to store role data');
-      }
+        // If upsert didn't return data, try to fetch the role again
+        const { data: fetchedRole, error: fetchError } = await this.#supabase
+          .from('staging_roles')
+          .select('*')
+          .eq('institution_id', this.#institutionId)
+          .eq('source_id', 'nswgov')
+          .eq('external_id', jobId)
+          .maybeSingle();
 
-      logger.info(`Successfully stored role data for ${jobId}`);
-
-      // 3. Process capabilities if found
-      if (jobDetails.details?.skills?.length > 0) {
-        for (const skillText of jobDetails.details.skills) {
-          // Create skill record
-          const skillData = {
-            institution_id: this.#institutionId,
-            source_id: 'nswgov',
-            external_id: `skill_${skillText.toLowerCase().replace(/\s+/g, '_')}`,
-            name: skillText,
-            category: 'job_requirement',
-            description: skillText,
-            source: 'job_listing',
-            is_occupation_specific: true,
-            raw_data: { skill: skillText },
-            processing_status: 'pending'
-          };
-          
-          const { data: skill, error: skillError } = await this.#supabase
-            .from('staging_skills')
-            .upsert(skillData, {
-              onConflict: 'institution_id,source_id,external_id',
-              returning: true
-            });
-
-          if (skillError) {
-            logger.error(`Error storing skill data for ${jobId}:`, {
-              error: skillError,
-              skillData
-            });
-            continue;
-          }
-
-          if (skill?.[0]) {
-            const roleSkillData = {
-              institution_id: this.#institutionId,
-              source_id: 'nswgov',
-              role_id: role[0].id,
-              skill_id: skill[0].id,
-              processing_status: 'pending'
-            };
-
-            const { error: roleSkillError } = await this.#supabase
-              .from('staging_role_skills')
-              .upsert(roleSkillData, {
-                onConflict: 'institution_id,role_id,skill_id',
-                returning: true
-              });
-
-            if (roleSkillError) {
-              logger.error(`Error linking skill ${skillText} to role ${jobId}:`, {
-                error: roleSkillError,
-                roleSkillData
-              });
-              continue;
+        if (fetchError) {
+          logger.error(`Error fetching role after upsert for ${jobId}:`, {
+            error: {
+              message: fetchError.message,
+              details: fetchError.details,
+              hint: fetchError.hint,
+              code: fetchError.code
             }
-
-            logger.info(`Successfully linked skill ${skillText} to role ${jobId}`);
-          }
+          });
+          throw fetchError;
         }
-      }
 
-      // 4. Process taxonomies/categories if found
-      if (jobDetails.details?.category) {
-        const taxonomyData = {
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: `tax_${jobDetails.details.category.toLowerCase().replace(/\s+/g, '_')}`,
-          name: jobDetails.details.category,
-          description: `Job category: ${jobDetails.details.category}`,
-          taxonomy_type: 'job_category',
-          raw_data: { category: jobDetails.details.category },
-          processing_status: 'pending'
-        };
+        if (!fetchedRole) {
+          logger.error(`No role data found after upsert for ${jobId}:`, {
+            roleData,
+            existingRole,
+            response: { role, error: roleError }
+          });
+          throw new Error('Failed to store role data - could not verify role creation');
+        }
+
+        logger.info(`Retrieved role data after upsert for ${jobId}`, {
+          roleId: fetchedRole.id
+        });
         
-        const { data: taxonomy, error: taxonomyError } = await this.#supabase
-          .from('staging_taxonomies')
-          .upsert(taxonomyData, {
-            onConflict: 'institution_id,source_id,external_id',
-            returning: true
-          });
-
-        if (taxonomyError) {
-          logger.error(`Error storing taxonomy data for ${jobId}:`, {
-            error: taxonomyError,
-            taxonomyData
-          });
-        } else if (taxonomy?.[0]) {
-          const roleTaxonomyData = {
-            institution_id: this.#institutionId,
-            source_id: 'nswgov',
-            role_id: role[0].id,
-            taxonomy_id: taxonomy[0].id,
-            processing_status: 'pending'
-          };
-
-          const { error: roleTaxonomyError } = await this.#supabase
-            .from('staging_role_taxonomies')
-            .upsert(roleTaxonomyData, {
-              onConflict: 'institution_id,role_id,taxonomy_id',
-              returning: true
-            });
-
-          if (roleTaxonomyError) {
-            logger.error(`Error linking taxonomy ${jobDetails.details.category} to role ${jobId}:`, {
-              error: roleTaxonomyError,
-              roleTaxonomyData
-            });
-          } else {
-            logger.info(`Successfully linked taxonomy ${jobDetails.details.category} to role ${jobId}`);
-          }
-        }
+        return { job: jobData, role: fetchedRole };
       }
 
-      // 5. Process documents
-      if (jobDetails.details?.documents?.length > 0) {
-        for (const doc of jobDetails.details.documents) {
-          try {
-            const buffer = await this.#downloadDocument(doc.url);
-            const processedDoc = await this.#processDocumentContent(buffer, doc.type);
-            
-            if (processedDoc) {
-              const documentData = {
-                institution_id: this.#institutionId,
-                source_id: 'nswgov',
-                original_id: doc.url,
-                raw_content: {
-                  url: doc.url,
-                  type: doc.type,
-                  text: doc.text,
-                  content: processedDoc.content
-                },
-                processing_status: 'pending'
-              };
-
-              const { data: document, error: documentError } = await this.#supabase
-                .from('staging_documents')
-                .upsert(documentData, {
-                  onConflict: 'institution_id,source_id,external_id',
-                  returning: true
-                });
-
-              if (documentError) {
-                logger.error(`Error storing document for job ${jobId}:`, {
-                  error: documentError.message
-                });
-                continue;
-              }
-
-              if (document?.[0]) {
-                // Link document to job
-                const jobDocumentData = {
-                  institution_id: this.#institutionId,
-                  source_id: 'nswgov',
-                  job_id: jobId,
-                  document_id: document[0].id,
-                  processing_status: 'pending'
-                };
-
-                const { error: jobDocumentError } = await this.#supabase
-                  .from('staging_job_documents')
-                  .upsert(jobDocumentData, {
-                    onConflict: 'institution_id,job_id,document_id',
-                    returning: true
-                  });
-
-                if (jobDocumentError) {
-                  logger.error(`Error linking document to job ${jobId}:`, {
-                    error: jobDocumentError.message
-                  });
-                  continue;
-                }
-
-                logger.debug(`Document ${doc.url} linked to job ${jobId}`);
-              }
-            }
-          } catch (docError) {
-            logger.error(`Error processing document for job ${jobId}:`, {
-              error: docError.message
-            });
-          }
-        }
-      }
+      logger.info(`Successfully stored role data for ${jobId}`, {
+        roleId: role[0].id
+      });
 
       return { job: jobData, role: role[0] };
     } catch (error) {
