@@ -499,41 +499,128 @@ export class NSWJobSpider {
       logger.info(`Scraping details for job ${jobId} from ${url}`);
       
       await this.page.goto(url, { waitUntil: 'networkidle0' });
-      await this.page.waitForSelector('.job-detail-des', { timeout: 10000 });
       
-      logger.info('Found job details using selector: .job-detail-des');
+      // Try multiple selectors for job details
+      const detailsSelectors = [
+        '.job-detail-des',
+        '.job-details',
+        '[class*="job-detail"]',
+        '[class*="job-description"]'
+      ];
+      
+      let foundSelector = null;
+      for (const selector of detailsSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          foundSelector = selector;
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (!foundSelector) {
+        throw new Error('Could not find job details container with any known selector');
+      }
+      
+      logger.info(`Found job details using selector: ${foundSelector}`);
+      
+      // Log the HTML structure around the job details
+      const htmlStructure = await this.page.evaluate(() => {
+        const container = document.querySelector('.job-detail-des') || 
+                         document.querySelector('.job-details') ||
+                         document.querySelector('[class*="job-detail"]');
+        return container ? container.outerHTML.slice(0, 500) : 'Not found';
+      });
+      
+      logger.debug('Job details HTML structure:', {
+        jobId,
+        htmlStructure: htmlStructure.substring(0, 200) + '...' // Log first 200 chars
+      });
       
       const jobDetails = await this.page.evaluate(() => {
+        // Helper function to try multiple selectors
+        const getTextContent = (selectors) => {
+          for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              return element.textContent.trim();
+            }
+          }
+          return '';
+        };
+
         const details = {};
         
-        // Get basic details
-        details.title = document.querySelector('h1')?.textContent?.trim() || '';
-        details.department = document.querySelector('.agency-name')?.textContent?.trim() || '';
-        details.location = document.querySelector('.location')?.textContent?.trim() || '';
-        details.salary = document.querySelector('.salary')?.textContent?.trim() || '';
-        details.closingDate = document.querySelector('.closing-date')?.textContent?.trim() || '';
+        // Get basic details with multiple selector fallbacks
+        details.title = getTextContent(['h1', '.job-title', '[class*="title"]']);
+        details.department = getTextContent([
+          '.agency-name',
+          '.department-name',
+          '[class*="agency"]',
+          '[class*="department"]'
+        ]);
+        details.location = getTextContent([
+          '.location',
+          '[class*="location"]',
+          '[class*="address"]'
+        ]);
+        details.salary = getTextContent([
+          '.salary',
+          '[class*="salary"]',
+          '[class*="remuneration"]'
+        ]);
+        details.closingDate = getTextContent([
+          '.closing-date',
+          '[class*="closing"]',
+          '[class*="deadline"]'
+        ]);
         
         // Get role details
-        const roleElement = document.querySelector('.role-type, .position-type');
-        details.role = roleElement ? roleElement.textContent.trim() : 'Not specified';
+        details.role = getTextContent([
+          '.role-type',
+          '.position-type',
+          '[class*="role"]',
+          '[class*="position"]'
+        ]);
         
-        // Get description
-        const descriptionElement = document.querySelector('.job-detail-des');
-        details.description = descriptionElement ? descriptionElement.textContent.trim() : '';
+        // Get description - try multiple containers
+        const descriptionContent = getTextContent([
+          '.job-detail-des',
+          '.job-details',
+          '[class*="description"]',
+          '[class*="content"]'
+        ]);
+        details.description = descriptionContent;
 
         // Get skills and capabilities section
-        const skillsSection = document.querySelector('.capabilities, .skills, .requirements');
-        if (skillsSection) {
-          details.skills = Array.from(skillsSection.querySelectorAll('li'))
-            .map(li => li.textContent.trim())
-            .filter(text => text.length > 0);
+        const skillsContent = Array.from(document.querySelectorAll([
+          '.capabilities li',
+          '.skills li',
+          '.requirements li',
+          '[class*="skill"] li',
+          '[class*="capability"] li'
+        ].join(', '))).map(li => li.textContent.trim()).filter(text => text.length > 0);
+        
+        if (skillsContent.length > 0) {
+          details.skills = skillsContent;
         }
 
         // Get categories/classifications
-        const categoryElement = document.querySelector('.job-category, .classification');
-        details.category = categoryElement ? categoryElement.textContent.trim() : '';
+        details.category = getTextContent([
+          '.job-category',
+          '.classification',
+          '[class*="category"]',
+          '[class*="classification"]'
+        ]);
         
         return details;
+      });
+      
+      // Log what we found
+      logger.debug('Extracted job details:', {
+        jobId,
+        foundFields: Object.keys(jobDetails).filter(k => jobDetails[k] && jobDetails[k].length > 0)
       });
       
       // Add job ID and source URL
@@ -598,10 +685,15 @@ export class NSWJobSpider {
         throw new Error('Supabase client not initialized');
       }
 
+      // Validate required fields
+      if (!job.jobId) {
+        throw new Error('Job ID is required for staging jobs');
+      }
+
       const stagingJob = {
         institution_id: this.#institutionId,
         source_id: 'nswgov',
-        original_id: job.jobId,
+        original_id: job.jobId, // Ensure this is set from job.jobId
         raw_data: {
           title: job.title,
           department: job.department,
@@ -610,6 +702,7 @@ export class NSWJobSpider {
           close_date: job.closingDate,
           remuneration: job.salary,
           source_url: job.sourceUrl,
+          job_id: job.jobId, // Add jobId to raw_data as well
           raw_job: job
         },
         processed: false,
@@ -1596,41 +1689,70 @@ export class NSWJobSpider {
 
   async #processJobDetails(jobId, details) {
     try {
-      logger.info(`Processing job details for ${jobId}...`, { details });
+      // Log the exact data we're about to upsert
+      const stagingJob = {
+        institution_id: this.#institutionId,
+        source_id: 'nswgov',
+        original_id: jobId,
+        raw_data: {
+          id: jobId,
+          title: details.title,
+          department: details.department,
+          location: details.location,
+          salary: details.salary,
+          closing_date: details.closingDate,
+          description: details.description,
+          company_id: details.company_id,
+          source_url: details.sourceUrl,
+          job_type: details.jobType,
+          source: details.source,
+          institution: details.institution,
+          documents: details.details?.documents || [],
+          skills: details.details?.skills || [],
+          category: details.details?.category,
+          processing_status: 'pending'
+        },
+        processed: false,
+        validation_status: 'pending'
+      };
+
+      logger.debug('Attempting to upsert job with data:', {
+        jobId,
+        stagingJob
+      });
       
+      // First check if job exists
+      const { data: existingJob, error: selectError } = await this.#supabase
+        .from('staging_jobs')
+        .select('*')
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov')
+        .eq('original_id', jobId)
+        .maybeSingle();
+
+      if (selectError) {
+        logger.error('Error checking for existing job:', {
+          error: selectError,
+          jobId
+        });
+      }
+
+      logger.debug('Existing job check result:', {
+        exists: !!existingJob,
+        jobId
+      });
+
       // Store job details
       const { data: jobData, error: jobError } = await this.#supabase
         .from('staging_jobs')
-        .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          raw_data: {
-            id: jobId,
-            title: details.title,
-            department: details.department,
-            location: details.location,
-            salary: details.salary,
-            closing_date: details.closingDate,
-            description: details.description,
-            company_id: details.company_id,
-            source_url: details.sourceUrl,
-            job_type: details.jobType,
-            source: details.source,
-            institution: details.institution,
-            documents: details.details?.documents || [],
-            skills: details.details?.skills || [],
-            category: details.details?.category,
-            processing_status: 'pending'
-          },
-          processed: false,
-          validation_status: 'pending'
-        }, {
-          onConflict: 'institution_id,external_id',
+        .upsert(stagingJob, {
+          onConflict: 'institution_id,source_id,original_id',
           returning: true
         });
 
       if (jobError) {
-        logger.error('Error storing job details:', {
+        // Log more details about the error
+        logger.error('Supabase error storing job details:', {
           error: {
             name: jobError.name,
             message: jobError.message,
@@ -1639,33 +1761,62 @@ export class NSWJobSpider {
             code: jobError.code
           },
           jobId,
-          details
+          stagingJob
         });
         throw jobError;
       }
 
+      // If no error but also no data returned, try to fetch the record
       if (!jobData || !jobData[0]) {
-        throw new Error('No job data returned after upsert');
+        logger.warn('No data returned from upsert, attempting to fetch record...', {
+          jobId
+        });
+
+        const { data: fetchedJob, error: fetchError } = await this.#supabase
+          .from('staging_jobs')
+          .select('*')
+          .eq('institution_id', this.#institutionId)
+          .eq('source_id', 'nswgov')
+          .eq('original_id', jobId)
+          .maybeSingle();
+
+        if (fetchError) {
+          logger.error('Error fetching job after upsert:', {
+            error: fetchError,
+            jobId
+          });
+          throw new Error('Failed to verify job creation');
+        }
+
+        if (!fetchedJob) {
+          logger.error('Job not found after upsert:', {
+            jobId
+          });
+          throw new Error('Job not found after upsert');
+        }
+
+        logger.info('Successfully fetched job after upsert', {
+          jobId,
+          job: fetchedJob
+        });
+
+        return fetchedJob;
       }
 
       logger.info('Successfully stored job details', {
         jobId,
-        title: details.title,
-        department: details.department,
-        jobData: jobData[0]
+        stored_job: jobData[0]
       });
 
       return jobData[0];
     } catch (error) {
-      logger.error('Error processing job details:', {
+      logger.error('Error in processJobDetails:', {
         error: {
-          name: error.name,
           message: error.message,
           stack: error.stack,
-          cause: error.cause
+          details: error
         },
-        jobId,
-        details
+        jobId
       });
       throw error;
     }
@@ -1680,7 +1831,7 @@ export class NSWJobSpider {
       if (!jobData) {
         throw new Error('Failed to store job details');
       }
-      logger.info(`Successfully stored job details for ${jobId}`);
+      logger.debug(`Job details stored for ${jobId}`);
 
       // 2. Create/update the role
       const roleData = {
@@ -1705,8 +1856,7 @@ export class NSWJobSpider {
 
       if (roleError) {
         logger.error(`Error storing role data for ${jobId}:`, {
-          error: roleError,
-          roleData
+          error: roleError.message
         });
         throw roleError;
       }
@@ -1860,8 +2010,7 @@ export class NSWJobSpider {
 
               if (documentError) {
                 logger.error(`Error storing document for job ${jobId}:`, {
-                  error: documentError,
-                  documentData
+                  error: documentError.message
                 });
                 continue;
               }
@@ -1885,43 +2034,17 @@ export class NSWJobSpider {
 
                 if (jobDocumentError) {
                   logger.error(`Error linking document to job ${jobId}:`, {
-                    error: jobDocumentError,
-                    jobDocumentData
+                    error: jobDocumentError.message
                   });
                   continue;
                 }
 
-                // Link document to role
-                const roleDocumentData = {
-                  institution_id: this.#institutionId,
-                  source_id: 'nswgov',
-                  role_id: role[0].id,
-                  document_id: document[0].id,
-                  processing_status: 'pending'
-                };
-
-                const { error: roleDocumentError } = await this.#supabase
-                  .from('staging_role_documents')
-                  .upsert(roleDocumentData, {
-                    onConflict: 'institution_id,role_id,document_id',
-                    returning: true
-                  });
-
-                if (roleDocumentError) {
-                  logger.error(`Error linking document to role ${jobId}:`, {
-                    error: roleDocumentError,
-                    roleDocumentData
-                  });
-                  continue;
-                }
-
-                logger.info(`Successfully linked document ${doc.url} to job ${jobId} and role ${role[0].id}`);
+                logger.debug(`Document ${doc.url} linked to job ${jobId}`);
               }
             }
           } catch (docError) {
             logger.error(`Error processing document for job ${jobId}:`, {
-              error: docError,
-              document: doc
+              error: docError.message
             });
           }
         }
@@ -1930,12 +2053,7 @@ export class NSWJobSpider {
       return { job: jobData, role: role[0] };
     } catch (error) {
       logger.error(`Error processing job ${jobId}:`, {
-        error: {
-          message: error.message,
-          stack: error.stack,
-          cause: error.cause
-        },
-        jobDetails
+        error: error.message
       });
       throw error;
     }
