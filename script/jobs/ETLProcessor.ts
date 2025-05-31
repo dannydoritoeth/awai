@@ -28,14 +28,34 @@ type Department = {
 };
 
 type StagedJobRawData = {
-    title: string;
-    department: string;
-    department_name: string;
-    location: string;
-    close_date: string;
-    remuneration: string;
-    source_url: string;
-    raw_job: z.infer<typeof JobSchema>;
+    title?: string;
+    department?: string;
+    department_name?: string;
+    location?: string;
+    close_date?: string;
+    remuneration?: string;
+    source_url?: string;
+    raw_job?: {
+        job?: {
+            raw_data?: {
+                id: string;
+                title: string;
+                department: string;
+                location?: string;
+                salary: string;
+                closingDate: string;
+                sourceUrl: string;
+            }
+        };
+        role?: {
+            title: string;
+            department: string;
+            location?: string;
+            salary: string;
+            closingDate: string;
+            sourceUrl: string;
+        }
+    };
 };
 
 type StagedJob = {
@@ -425,16 +445,21 @@ export class ETLProcessor {
             // Extract job data from raw_data, ensuring we have all required fields
             const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
             
+            // Ensure we have a title
+            if (!rawJob.title) {
+                throw new Error('Job title is required');
+            }
+
             const jobData = {
                 company_id: companyId,
                 title: rawJob.title,
                 source_id: stagedJob.source_id,
                 original_id: stagedJob.original_id,
-                source_url: rawJob.source_url || rawJob.sourceUrl,
-                department: rawJob.department,
+                source_url: 'sourceUrl' in rawJob ? rawJob.sourceUrl : rawJob.source_url,
+                department: rawJob.department || '',
                 locations: [rawJob.location].filter(Boolean),
-                close_date: new Date(rawJob.closing_date || rawJob.closingDate),
-                remuneration: rawJob.salary || rawJob.remuneration,
+                close_date: new Date('closingDate' in rawJob ? rawJob.closingDate : (rawJob.close_date || new Date().toISOString())),
+                remuneration: 'salary' in rawJob ? rawJob.salary : (rawJob.remuneration || 'Not specified'),
                 raw_json: stagedJob.raw_data,
                 first_seen_at: new Date(),
                 last_updated_at: new Date()
@@ -473,14 +498,19 @@ export class ETLProcessor {
             // Extract job data from raw_data, ensuring we have all required fields
             const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
             
+            // Ensure we have a title
+            if (!rawJob.title) {
+                throw new Error('Job title is required');
+            }
+
             const jobData = {
                 company_id: companyId,
                 title: rawJob.title,
-                source_url: rawJob.source_url || rawJob.sourceUrl,
-                department: rawJob.department,
+                source_url: 'sourceUrl' in rawJob ? rawJob.sourceUrl : rawJob.source_url,
+                department: rawJob.department || '',
                 locations: [rawJob.location].filter(Boolean),
-                close_date: new Date(rawJob.closing_date || rawJob.closingDate),
-                remuneration: rawJob.salary || rawJob.remuneration,
+                close_date: new Date('closingDate' in rawJob ? rawJob.closingDate : (rawJob.close_date || new Date().toISOString())),
+                remuneration: 'salary' in rawJob ? rawJob.salary : (rawJob.remuneration || 'Not specified'),
                 raw_json: stagedJob.raw_data,
                 last_updated_at: new Date()
             };
