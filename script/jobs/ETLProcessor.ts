@@ -295,6 +295,7 @@ export class ETLProcessor {
         // Process in batches to avoid timeout
         const batchSize = 100;
         let processed = 0;
+        let skipped = 0;
         
         while (true) {
             const { data: batch, error } = await this.#supabase
@@ -309,6 +310,34 @@ export class ETLProcessor {
 
             for (const stagedJob of batch) {
                 try {
+                    // Check if job already exists and has been processed
+                    const { data: existingJob } = await this.#supabase
+                        .from('jobs')
+                        .select('id, version')
+                        .eq('source_id', stagedJob.source_id)
+                        .eq('original_id', stagedJob.original_id)
+                        .single();
+
+                    if (existingJob) {
+                        // Job already exists, mark as processed and skip
+                        await this.#supabase
+                            .from('staging_jobs')
+                            .update({ 
+                                processed: true,
+                                processing_metadata: {
+                                    ...stagedJob.processing_metadata,
+                                    processed_at: new Date().toISOString(),
+                                    status: 'skipped',
+                                    reason: 'Job already exists in database'
+                                }
+                            })
+                            .eq('id', stagedJob.id);
+                        
+                        skipped++;
+                        logger.info(`Skipped existing job: ${stagedJob.original_id}`);
+                        continue;
+                    }
+
                     // Log the raw data for debugging
                     logger.info('Processing staged job:', {
                         jobId: stagedJob.original_id,
@@ -330,19 +359,7 @@ export class ETLProcessor {
                         institutionId
                     });
 
-                    const { data: existingJob } = await this.#supabase
-                        .from('jobs')
-                        .select('id, version')
-                        .eq('company_id', companyId)
-                        .eq('source_id', stagedJob.source_id)
-                        .eq('original_id', stagedJob.original_id)
-                        .single();
-
-                    if (existingJob) {
-                        await this.#updateJob(existingJob.id, stagedJob, companyId);
-                    } else {
-                        await this.#createJob(stagedJob, companyId);
-                    }
+                    await this.#createJob(stagedJob, companyId);
 
                     // Mark as processed successfully
                     await this.#supabase
@@ -387,11 +404,13 @@ export class ETLProcessor {
                 }
             }
 
-            logger.info(`Processed ${processed} jobs from staging`);
+            logger.info(`Processed batch: ${processed} jobs processed, ${skipped} jobs skipped`);
             
             // Break if we've processed less than the batch size
             if (batch.length < batchSize) break;
         }
+
+        logger.info(`Finished processing: ${processed} jobs processed, ${skipped} jobs skipped`);
     }
 
     async #clearStaged(institutionId: string) {
@@ -482,57 +501,6 @@ export class ETLProcessor {
             logger.info(`Successfully created job: ${stagedJob.original_id}`);
         } catch (error) {
             logger.error(`Error creating job ${stagedJob.original_id}:`, {
-                error,
-                stagedJob: {
-                    id: stagedJob.id,
-                    original_id: stagedJob.original_id,
-                    raw_data: stagedJob.raw_data
-                }
-            });
-            throw error;
-        }
-    }
-
-    async #updateJob(jobId: string, stagedJob: StagedJob, companyId: string) {
-        try {
-            // Extract job data from raw_data, ensuring we have all required fields
-            const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
-            
-            // Ensure we have a title
-            if (!rawJob.title) {
-                throw new Error('Job title is required');
-            }
-
-            const jobData = {
-                company_id: companyId,
-                title: rawJob.title,
-                source_url: 'sourceUrl' in rawJob ? rawJob.sourceUrl : rawJob.source_url,
-                department: rawJob.department || '',
-                locations: [rawJob.location].filter(Boolean),
-                close_date: new Date('closingDate' in rawJob ? rawJob.closingDate : (rawJob.close_date || new Date().toISOString())),
-                remuneration: 'salary' in rawJob ? rawJob.salary : (rawJob.remuneration || 'Not specified'),
-                raw_json: stagedJob.raw_data,
-                last_updated_at: new Date()
-            };
-
-            // Log the job data for debugging
-            logger.debug('Updating job with data:', {
-                jobId,
-                data: jobData
-            });
-
-            const { error } = await this.#supabase
-                .from('jobs')
-                .update(jobData)
-                .eq('id', jobId);
-
-            if (error) {
-                throw error;
-            }
-
-            logger.info(`Successfully updated job: ${jobId}`);
-        } catch (error) {
-            logger.error(`Error updating job ${jobId}:`, {
                 error,
                 stagedJob: {
                     id: stagedJob.id,
