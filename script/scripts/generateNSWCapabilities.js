@@ -913,9 +913,8 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
             behavioral_indicators: level.behavioral_indicators,
             created_at: level.created_at,
             updated_at: level.updated_at,
-            raw_data: level
           }, {
-            onConflict: 'institution_id,source_id,external_id',
+            onConflict: 'id',
             returning: true
           });
 

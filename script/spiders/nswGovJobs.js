@@ -1478,7 +1478,7 @@ export class NSWJobSpider {
       fs.writeFileSync(tempFile, buffer);
 
       try {
-        if (type.includes('pdf')) {
+      if (type.includes('pdf')) {
           const pdfParser = new PDFParser(null, 1);
           content = await new Promise((resolve, reject) => {
             pdfParser.on("pdfParser_dataReady", pdfData => {
@@ -1495,7 +1495,7 @@ export class NSWJobSpider {
             pdfParser.on("pdfParser_dataError", errData => reject(errData));
             pdfParser.loadPDF(tempFile);
           });
-        } else if (type.includes('word') || type.includes('docx')) {
+      } else if (type.includes('word') || type.includes('docx')) {
           const result = await mammoth.extractRawText({ path: tempFile });
           content = result.value.trim();
         }
@@ -1663,7 +1663,7 @@ Format your response as a JSON object with:
               }
 
               logger.info(`Stored skill: ${skill.name} (${skill.category})`);
-            } catch (error) {
+    } catch (error) {
               logger.error('Error processing skill:', {
                 error,
                 skill
@@ -1709,7 +1709,6 @@ Format your response as a JSON object with:
           level: level.level,
           summary: level.summary,
           behavioral_indicators: level.behavioral_indicators,
-          raw_data: level,
           processing_status: 'pending'
         }, {
           onConflict: 'institution_id,source_id,external_id',
@@ -1826,29 +1825,29 @@ Format your response as a JSON object with:
     try {
       // Log the exact data we're about to upsert
       const stagingJob = {
-        institution_id: this.#institutionId,
-        source_id: 'nswgov',
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
         original_id: jobId,
-        raw_data: {
-          id: jobId,
-          title: details.title,
-          department: details.department,
-          location: details.location,
-          salary: details.salary,
-          closing_date: details.closingDate,
-          description: details.description,
-          company_id: details.company_id,
-          source_url: details.sourceUrl,
-          job_type: details.jobType,
+          raw_data: {
+            id: jobId,
+            title: details.title,
+            department: details.department,
+            location: details.location,
+            salary: details.salary,
+            closing_date: details.closingDate,
+            description: details.description,
+            company_id: details.company_id,
+            source_url: details.sourceUrl,
+            job_type: details.jobType,
           source: 'nswgov',
-          institution: details.institution,
-          documents: details.details?.documents || [],
-          skills: details.details?.skills || [],
-          category: details.details?.category,
-          processing_status: 'pending'
-        },
-        processed: false,
-        validation_status: 'pending'
+            institution: details.institution,
+            documents: details.details?.documents || [],
+            skills: details.details?.skills || [],
+            category: details.details?.category,
+            processing_status: 'pending'
+          },
+          processed: false,
+          validation_status: 'pending'
       };
 
       logger.debug('Attempting to upsert job with data:', {
@@ -1945,7 +1944,7 @@ Format your response as a JSON object with:
         capabilities: aiAnalysis.capabilities?.length || 0,
         skills: aiAnalysis.skills?.length || 0
       });
-
+      
       // 1. First store the job details
       const jobData = await this.#processJobDetails(jobId, jobDetails);
       if (!jobData) {

@@ -426,3 +426,36 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMIT; 
+
+
+CREATE TABLE IF NOT EXISTS "public"."staging_capability_levels" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "capability_id" "uuid",
+    "institution_id" "uuid",
+    "source_id" "text", 
+    "external_id" "text",
+    "level" "text",
+    "summary" "text",
+    "behavioral_indicators" "text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."staging_capability_levels" OWNER TO "postgres";
+
+-- ALTER TABLE ONLY "public"."staging_capability_levels"
+--     ADD CONSTRAINT "staging_capability_levels_capability_id_fkey" FOREIGN KEY ("capability_id") REFERENCES "public"."staging_capabilities"("id");
+
+
+CREATE OR REPLACE TRIGGER "handle_updated_at" BEFORE UPDATE ON "public"."staging_capability_levels" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+ALTER TABLE ONLY "public"."staging_capability_levels"
+    ADD CONSTRAINT "staging_capability_levels_pkey" PRIMARY KEY ("id");
+
+GRANT ALL ON TABLE "public"."staging_capability_levels" TO "anon";
+GRANT ALL ON TABLE "public"."staging_capability_levels" TO "authenticated";
+GRANT ALL ON TABLE "public"."staging_capability_levels" TO "service_role";
+
+ALTER TABLE staging_capability_levels
+ADD CONSTRAINT unique_capability_source UNIQUE (id);

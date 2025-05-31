@@ -14,6 +14,7 @@ const JobSchema = z.object({
     salary: z.string(),
     closingDate: z.string(),
     jobId: z.string(),
+    id: z.string().optional(),
     sourceUrl: z.string(),
     institution: z.string(),
     source: z.string(),
@@ -48,8 +49,8 @@ type StagedJobRawData = {
             }
         };
         role?: {
-            title: string;
-            department: string;
+    title: string;
+    department: string;
             location?: string;
             salary: string;
             closingDate: string;
@@ -137,6 +138,9 @@ export class ETLProcessor {
         logger.info(`Processing institution ${institutionId}`);
 
         try {
+            // Initialize capability levels first
+            await this.#initializeCapabilityLevels();
+
             // First, stage all jobs
             const stagedJobs = await this.#stageJobs(departments, institutionId);
             logger.info(`Successfully staged ${stagedJobs} jobs`);
@@ -202,30 +206,35 @@ export class ETLProcessor {
         // Create a batch for staging
         const stagingBatch = departments.flatMap(dept => 
             dept.jobs.map(job => {
-                // Ensure we have a valid original_id
-                const original_id = job.jobId || (job as any).id || `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                // Get the original job ID from the source
+                const original_id = job.jobId || job.id || (job as any).raw_data?.id;
                 
+                if (!original_id) {
+                    logger.warn('No original job ID found:', { job });
+                    return null;
+                }
+
                 return {
-                    institution_id: institutionId,
+                institution_id: institutionId,
                     source_id: job.source || 'nswgov',
                     original_id,
-                    raw_data: {
-                        title: job.title,
-                        department: job.department,
-                        department_name: dept.name,
-                        location: job.location,
-                        close_date: job.closingDate,
-                        remuneration: job.salary,
-                        source_url: job.sourceUrl,
+                raw_data: {
+                    title: job.title,
+                    department: job.department,
+                    department_name: dept.name,
+                    location: job.location,
+                    close_date: job.closingDate,
+                    remuneration: job.salary,
+                    source_url: job.sourceUrl,
                         source: job.source || 'nswgov',
-                        job_id: original_id, // Also store in raw_data for consistency
-                        raw_job: job
-                    },
-                    validation_status: 'pending',
+                        job_id: original_id, // Store the original ID here too
+                    raw_job: job
+                },
+                validation_status: 'pending',
                     processed: false,
                     processing_metadata: {}
                 };
-            })
+            }).filter(Boolean)
         );
 
         // Log the staging batch for debugging
@@ -234,7 +243,7 @@ export class ETLProcessor {
             sample: stagingBatch[0]
         });
 
-        // Upsert into staging table - let external_id be generated
+        // Upsert into staging table
         const { data, error } = await this.#supabase
             .from('staging_jobs')
             .upsert(stagingBatch)
@@ -310,13 +319,23 @@ export class ETLProcessor {
 
             for (const stagedJob of batch) {
                 try {
-                    // Check if job already exists and has been processed
+                    // Extract job data to check for duplicates
+                    const rawJob = stagedJob.raw_data.raw_job?.job?.raw_data || stagedJob.raw_data.raw_job?.role || stagedJob.raw_data;
+                    const title = rawJob.title;
+                    const department = rawJob.department || stagedJob.raw_data.department_name;
+
+                    if (!title) {
+                        throw new Error('Job title is required');
+                    }
+
+                    // Check if job already exists using title and department
                     const { data: existingJob } = await this.#supabase
                         .from('jobs')
                         .select('id, version')
                         .eq('source_id', stagedJob.source_id)
-                        .eq('original_id', stagedJob.original_id)
-                        .single();
+                        .eq('title', title)
+                        .eq('department', department)
+                        .maybeSingle();
 
                     if (existingJob) {
                         // Job already exists, mark as processed and skip
@@ -328,20 +347,22 @@ export class ETLProcessor {
                                     ...stagedJob.processing_metadata,
                                     processed_at: new Date().toISOString(),
                                     status: 'skipped',
-                                    reason: 'Job already exists in database'
+                                    reason: 'Job already exists in database',
+                                    existing_job_id: existingJob.id
                                 }
                             })
                             .eq('id', stagedJob.id);
                         
                         skipped++;
-                        logger.info(`Skipped existing job: ${stagedJob.original_id}`);
+                        logger.info(`Skipped existing job: ${title} in ${department}`);
                         continue;
                     }
 
                     // Log the raw data for debugging
                     logger.info('Processing staged job:', {
-                        jobId: stagedJob.original_id,
-                        department: stagedJob.raw_data.department_name
+                        title,
+                        department,
+                        source: stagedJob.source_id
                     });
 
                     // Ensure source_id is set
@@ -355,11 +376,11 @@ export class ETLProcessor {
                     }
 
                     const companyId = await this.#getOrCreateCompany({
-                        name: stagedJob.raw_data.department_name || 'NSW Government',
+                        name: department || 'NSW Government',
                         institutionId
                     });
 
-                    await this.#createJob(stagedJob, companyId);
+                        await this.#createJob(stagedJob, companyId);
 
                     // Mark as processed successfully
                     await this.#supabase
@@ -494,7 +515,7 @@ export class ETLProcessor {
                 .from('jobs')
                 .insert(jobData);
 
-            if (error) {
+        if (error) {
                 throw error;
             }
 
@@ -688,6 +709,79 @@ export class ETLProcessor {
             return jobData;
         } catch (error) {
             logger.error('Error processing job:', { error, job });
+            throw error;
+        }
+    }
+
+    async #initializeCapabilityLevels() {
+        try {
+            logger.info('Initializing capability levels...');
+            
+            const levels = [
+                { name: 'Foundational', order: 1, description: 'Basic level of capability' },
+                { name: 'Intermediate', order: 2, description: 'Moderate level of capability' },
+                { name: 'Adept', order: 3, description: 'Skilled level of capability' },
+                { name: 'Advanced', order: 4, description: 'High level of capability' },
+                { name: 'Highly Advanced', order: 5, description: 'Expert level of capability' }
+            ];
+
+            // Check if levels already exist
+            const { data: existingLevels, error: checkError } = await this.#supabase
+                .from('staging_capability_levels')
+                .select('name')
+                .limit(1);
+
+            if (checkError) {
+                if (checkError.code === '42P01') {
+                    // Table doesn't exist, create it first
+                    const createTableSQL = `
+                        CREATE TABLE IF NOT EXISTS public.staging_capability_levels (
+                            id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+                            name TEXT NOT NULL UNIQUE,
+                            order_num INTEGER NOT NULL,
+                            description TEXT,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+                        );
+                    `;
+
+                    const { error: createError } = await this.#supabase
+                        .rpc('create_staging_capability_levels_table', {
+                            sql_query: createTableSQL
+                        });
+
+                    if (createError) {
+                        throw createError;
+                    }
+
+                    logger.info('Created staging_capability_levels table');
+                } else {
+                    throw checkError;
+                }
+            }
+
+            // Insert or update the levels
+            for (const level of levels) {
+                const { error: upsertError } = await this.#supabase
+                    .from('staging_capability_levels')
+                    .upsert({
+                        name: level.name,
+                        order_num: level.order,
+                        description: level.description
+                    }, {
+                        onConflict: 'name'
+                    });
+
+                if (upsertError) {
+                    throw upsertError;
+                }
+
+                logger.info(`Upserted capability level: ${level.name}`);
+            }
+
+            logger.info('Successfully initialized capability levels');
+        } catch (error) {
+            logger.error('Error initializing capability levels:', { error });
             throw error;
         }
     }
