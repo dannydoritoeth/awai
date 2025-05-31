@@ -1,5 +1,6 @@
 
 
+
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -692,135 +693,6 @@ CREATE TABLE IF NOT EXISTS "public"."skills" (
 ALTER TABLE "public"."skills" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."staging_documents" (
-    "id" integer NOT NULL,
-    "institution_id" "uuid" NOT NULL,
-    "source_id" "text" NOT NULL,
-    "external_id" "text" NOT NULL,
-    "raw_content" "jsonb" NOT NULL,
-    "scraped_at" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "processed_at" timestamp without time zone,
-    "processing_status" "text" DEFAULT 'pending'::"text",
-    "error_details" "text",
-    "metadata" "jsonb"
-);
-
-
-ALTER TABLE "public"."staging_documents" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."staging_documents_id_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE "public"."staging_documents_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."staging_documents_id_seq" OWNED BY "public"."staging_documents"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."staging_failed_documents" (
-    "id" integer NOT NULL,
-    "document_id" integer,
-    "failure_timestamp" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "error_type" "text" NOT NULL,
-    "error_details" "text",
-    "retry_count" integer DEFAULT 0
-);
-
-
-ALTER TABLE "public"."staging_failed_documents" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."staging_failed_documents_id_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE "public"."staging_failed_documents_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."staging_failed_documents_id_seq" OWNED BY "public"."staging_failed_documents"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."staging_jobs" (
-    "id" integer NOT NULL,
-    "document_id" integer,
-    "institution_id" "uuid" NOT NULL,
-    "company_id" "uuid",
-    "division_id" "uuid",
-    "source_id" "text" NOT NULL,
-    "original_id" "text" NOT NULL,
-    "external_id" "text" GENERATED ALWAYS AS ((("source_id" || ':'::"text") || "original_id")) STORED,
-    "raw_data" "jsonb" NOT NULL,
-    "processed" boolean DEFAULT false,
-    "processing_metadata" "jsonb",
-    "validation_status" "text" DEFAULT 'pending'::"text",
-    "validation_timestamp" timestamp without time zone,
-    "validation_errors" "jsonb"
-);
-
-
-ALTER TABLE "public"."staging_jobs" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."staging_jobs_id_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE "public"."staging_jobs_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."staging_jobs_id_seq" OWNED BY "public"."staging_jobs"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."staging_validation_failures" (
-    "id" integer NOT NULL,
-    "staging_job_id" integer,
-    "validation_timestamp" timestamp without time zone DEFAULT "now"() NOT NULL,
-    "validation_type" "text" NOT NULL,
-    "field_name" "text",
-    "error_message" "text",
-    "raw_data" "jsonb"
-);
-
-
-ALTER TABLE "public"."staging_validation_failures" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."staging_validation_failures_id_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE "public"."staging_validation_failures_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."staging_validation_failures_id_seq" OWNED BY "public"."staging_validation_failures"."id";
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."taxonomy" (
     "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
     "name" "text" NOT NULL,
@@ -832,22 +704,6 @@ CREATE TABLE IF NOT EXISTS "public"."taxonomy" (
 
 
 ALTER TABLE "public"."taxonomy" OWNER TO "postgres";
-
-
-ALTER TABLE ONLY "public"."staging_documents" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."staging_documents_id_seq"'::"regclass");
-
-
-
-ALTER TABLE ONLY "public"."staging_failed_documents" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."staging_failed_documents_id_seq"'::"regclass");
-
-
-
-ALTER TABLE ONLY "public"."staging_jobs" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."staging_jobs_id_seq"'::"regclass");
-
-
-
-ALTER TABLE ONLY "public"."staging_validation_failures" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."staging_validation_failures_id_seq"'::"regclass");
-
 
 
 ALTER TABLE ONLY "public"."agent_actions"
@@ -1002,36 +858,6 @@ ALTER TABLE ONLY "public"."roles"
 
 ALTER TABLE ONLY "public"."skills"
     ADD CONSTRAINT "skills_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_documents"
-    ADD CONSTRAINT "staging_documents_institution_id_source_id_external_id_key" UNIQUE ("institution_id", "source_id", "external_id");
-
-
-
-ALTER TABLE ONLY "public"."staging_documents"
-    ADD CONSTRAINT "staging_documents_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_failed_documents"
-    ADD CONSTRAINT "staging_failed_documents_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_jobs"
-    ADD CONSTRAINT "staging_jobs_institution_id_external_id_key" UNIQUE ("institution_id", "external_id");
-
-
-
-ALTER TABLE ONLY "public"."staging_jobs"
-    ADD CONSTRAINT "staging_jobs_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_validation_failures"
-    ADD CONSTRAINT "staging_validation_failures_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1249,22 +1075,6 @@ COMMENT ON INDEX "public"."idx_skills_category" IS 'Improves performance of skil
 
 
 CREATE INDEX "idx_skills_embedding_hash" ON "public"."skills" USING "btree" ("embedding_text_hash");
-
-
-
-CREATE INDEX "idx_staging_documents_institution" ON "public"."staging_documents" USING "btree" ("institution_id");
-
-
-
-CREATE INDEX "idx_staging_documents_status" ON "public"."staging_documents" USING "btree" ("processing_status");
-
-
-
-CREATE INDEX "idx_staging_jobs_institution" ON "public"."staging_jobs" USING "btree" ("institution_id");
-
-
-
-CREATE INDEX "idx_staging_jobs_validation" ON "public"."staging_jobs" USING "btree" ("validation_status");
 
 
 
@@ -1533,21 +1343,6 @@ ALTER TABLE ONLY "public"."role_taxonomies"
 
 ALTER TABLE ONLY "public"."roles"
     ADD CONSTRAINT "roles_division_id_fkey" FOREIGN KEY ("division_id") REFERENCES "public"."divisions"("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_failed_documents"
-    ADD CONSTRAINT "staging_failed_documents_document_id_fkey" FOREIGN KEY ("document_id") REFERENCES "public"."staging_documents"("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_jobs"
-    ADD CONSTRAINT "staging_jobs_document_id_fkey" FOREIGN KEY ("document_id") REFERENCES "public"."staging_documents"("id");
-
-
-
-ALTER TABLE ONLY "public"."staging_validation_failures"
-    ADD CONSTRAINT "staging_validation_failures_staging_job_id_fkey" FOREIGN KEY ("staging_job_id") REFERENCES "public"."staging_jobs"("id");
 
 
 
@@ -1829,54 +1624,6 @@ GRANT ALL ON TABLE "public"."roles" TO "service_role";
 GRANT ALL ON TABLE "public"."skills" TO "anon";
 GRANT ALL ON TABLE "public"."skills" TO "authenticated";
 GRANT ALL ON TABLE "public"."skills" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."staging_documents" TO "anon";
-GRANT ALL ON TABLE "public"."staging_documents" TO "authenticated";
-GRANT ALL ON TABLE "public"."staging_documents" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."staging_documents_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."staging_documents_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."staging_documents_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."staging_failed_documents" TO "anon";
-GRANT ALL ON TABLE "public"."staging_failed_documents" TO "authenticated";
-GRANT ALL ON TABLE "public"."staging_failed_documents" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."staging_failed_documents_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."staging_failed_documents_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."staging_failed_documents_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."staging_jobs" TO "anon";
-GRANT ALL ON TABLE "public"."staging_jobs" TO "authenticated";
-GRANT ALL ON TABLE "public"."staging_jobs" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."staging_jobs_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."staging_jobs_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."staging_jobs_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."staging_validation_failures" TO "anon";
-GRANT ALL ON TABLE "public"."staging_validation_failures" TO "authenticated";
-GRANT ALL ON TABLE "public"."staging_validation_failures" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."staging_validation_failures_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."staging_validation_failures_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."staging_validation_failures_id_seq" TO "service_role";
 
 
 
