@@ -70,6 +70,8 @@ type StagedJob = {
     validation_status: string;
     validation_timestamp?: string;
     validation_errors?: Record<string, any>;
+    sync_status: string;
+    last_synced_at: string | null;
 };
 
 interface JobDetails {
@@ -165,9 +167,9 @@ export class ETLProcessor {
             for (const job of dept.jobs) {
                 if (job.details?.documents?.length) {
                     try {
-                        // Get documents from staging_documents table
-                        const { data: stagedDocs, error } = await this.#supabase
-                            .from('staging_documents')
+                        // Get documents from documents table
+                        const { data: docs, error } = await this.#supabase
+                            .from('documents')
                             .select('*')
                             .eq('institution_id', institutionId)
                             .eq('metadata->>jobId', job.jobId)
@@ -177,12 +179,12 @@ export class ETLProcessor {
                             throw error;
                         }
 
-                        if (stagedDocs?.length) {
-                            totalDocuments += stagedDocs.length;
+                        if (docs?.length) {
+                            totalDocuments += docs.length;
                             
                             // Update processing status
                             await this.#supabase
-                                .from('staging_documents')
+                                .from('documents')
                                 .update({ 
                                     processing_status: 'processed',
                                     processed_at: new Date().toISOString()
@@ -207,32 +209,36 @@ export class ETLProcessor {
         const stagingBatch = departments.flatMap(dept => 
             dept.jobs.map(job => {
                 // Get the original job ID from the source
-                const original_id = job.jobId || job.id || (job as any).raw_data?.id;
-                
-                if (!original_id) {
+                const rawId = job.jobId || job.id || (job as any).raw_data?.id;
+                if (!rawId) {
                     logger.warn('No original job ID found:', { job });
                     return null;
                 }
+                
+                const original_id = String(rawId);
+                const source_id = (job.source || 'nswgov') as string;
 
                 return {
-                institution_id: institutionId,
-                    source_id: job.source || 'nswgov',
+                    institution_id: institutionId,
+                    source_id,
                     original_id,
-                raw_data: {
-                    title: job.title,
-                    department: job.department,
-                    department_name: dept.name,
-                    location: job.location,
-                    close_date: job.closingDate,
-                    remuneration: job.salary,
-                    source_url: job.sourceUrl,
-                        source: job.source || 'nswgov',
-                        job_id: original_id, // Store the original ID here too
-                    raw_job: job
-                },
-                validation_status: 'pending',
+                    raw_data: {
+                        title: job.title,
+                        department: job.department,
+                        department_name: dept.name,
+                        location: job.location,
+                        close_date: job.closingDate,
+                        remuneration: job.salary,
+                        source_url: job.sourceUrl,
+                        source: source_id,
+                        job_id: original_id,
+                        raw_job: job
+                    },
+                    validation_status: 'pending',
                     processed: false,
-                    processing_metadata: {}
+                    processing_metadata: {},
+                    sync_status: 'pending',
+                    last_synced_at: null
                 };
             }).filter(Boolean)
         );
@@ -243,9 +249,9 @@ export class ETLProcessor {
             sample: stagingBatch[0]
         });
 
-        // Upsert into staging table
+        // Upsert into staging database
         const { data, error } = await this.#supabase
-            .from('staging_jobs')
+            .from('jobs')
             .upsert(stagingBatch)
             .select();
 
@@ -254,7 +260,8 @@ export class ETLProcessor {
             throw error;
         }
 
-        return data?.length || 0;
+        stagedCount = data?.length || 0;
+        return stagedCount;
     }
 
     async #processStaged(institutionId: string) {
@@ -279,7 +286,7 @@ export class ETLProcessor {
     async #processStageCompanies(institutionId: string) {
         // Get unique companies from staging
         const { data: stagedCompanies, error } = await this.#supabase
-            .from('staging_jobs')
+            .from('jobs')
             .select('raw_data')
             .eq('institution_id', institutionId);
 
@@ -293,10 +300,12 @@ export class ETLProcessor {
         )];
 
         for (const departmentName of departmentNames) {
-            await this.#getOrCreateCompany({
-                name: departmentName,
-                institutionId
-            });
+            if (departmentName) {  // Add null check to fix TypeScript error
+                await this.#getOrCreateCompany({
+                    name: departmentName,
+                    institutionId
+                });
+            }
         }
     }
 
@@ -547,7 +556,7 @@ export class ETLProcessor {
 
             // Store job details - only set source_id and original_id, let external_id be generated
             const { data: jobData, error: jobError } = await this.#supabase
-                .from('staging_jobs')
+                .from('jobs')
                 .upsert({
                     institution_id: this.#institutionId,
                     source_id: source,
@@ -560,7 +569,9 @@ export class ETLProcessor {
                     },
                     processed: false,
                     validation_status: 'pending',
-                    processing_metadata: {}
+                    processing_metadata: {},
+                    sync_status: 'pending',
+                    last_synced_at: null
                 })
                 .select()
                 .single();
@@ -632,9 +643,9 @@ export class ETLProcessor {
 
     async #upsertToStagingCapability(capabilityData: any) {
         const { data, error } = await this.#supabase
-            .from('staging_capabilities')
+            .from('capabilities')
             .upsert(capabilityData, {
-                onConflict: 'institution_id,source_id,external_id'
+                onConflict: 'normalized_key,company_id'
             });
 
         if (error) throw error;
@@ -643,9 +654,9 @@ export class ETLProcessor {
 
     async #upsertToStagingSkill(skillData: any) {
         const { data, error } = await this.#supabase
-            .from('staging_skills')
+            .from('skills')
             .upsert(skillData, {
-                onConflict: 'institution_id,source_id,external_id'
+                onConflict: 'id'
             });
 
         if (error) throw error;
@@ -727,7 +738,7 @@ export class ETLProcessor {
 
             // First, get all existing levels for this institution
             const { data: existingLevels, error: fetchError } = await this.#supabase
-                .from('staging_capability_levels')
+                .from('capability_levels')
                 .select('id, level')
                 .eq('institution_id', this.#institutionId);
 
@@ -747,7 +758,7 @@ export class ETLProcessor {
                 if (existingId) {
                     // Update existing level
                     const { error: updateError } = await this.#supabase
-                        .from('staging_capability_levels')
+                        .from('capability_levels')
                         .update({
                             summary: level.summary,
                             behavioral_indicators: level.behavioral_indicators,
@@ -763,7 +774,7 @@ export class ETLProcessor {
                 } else {
                     // Insert new level
                     const { error: insertError } = await this.#supabase
-                        .from('staging_capability_levels')
+                        .from('capability_levels')
                         .insert({
                             institution_id: this.#institutionId,
                             source_id: null, // This will be set when linking to specific capabilities

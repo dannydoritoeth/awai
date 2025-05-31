@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 // Database schemas
-export const StagingDocumentSchema = z.object({
+export const DocumentSchema = z.object({
     id: z.number().optional(),
     institution_id: z.string().uuid(),
     source_id: z.string(),
@@ -12,10 +12,12 @@ export const StagingDocumentSchema = z.object({
     processed_at: z.date().optional(),
     processing_status: z.string().default('pending'),
     error_details: z.string().optional(),
-    metadata: z.record(z.any()).optional()
+    metadata: z.record(z.any()).optional(),
+    sync_status: z.string().optional(),
+    last_synced_at: z.date().optional()
 });
 
-export const StagingJobSchema = z.object({
+export const JobSchema = z.object({
     id: z.number().optional(),
     document_id: z.number(),
     institution_id: z.string().uuid(),
@@ -28,33 +30,40 @@ export const StagingJobSchema = z.object({
     processing_metadata: z.record(z.any()).optional(),
     validation_status: z.string().default('pending'),
     validation_timestamp: z.date().optional(),
-    validation_errors: z.array(z.any()).optional()
+    validation_errors: z.array(z.any()).optional(),
+    sync_status: z.string().optional(),
+    last_synced_at: z.date().optional()
 });
 
-export type StagingDocument = z.infer<typeof StagingDocumentSchema>;
-export type StagingJob = z.infer<typeof StagingJobSchema>;
+export type Document = z.infer<typeof DocumentSchema>;
+export type Job = z.infer<typeof JobSchema>;
 
 export class ETLDatabase {
     private supabase: SupabaseClient;
 
     constructor() {
-        // Initialize Supabase client
-        this.supabase = createClient(
-            process.env.SUPABASE_URL!,
-            process.env.SUPABASE_KEY!
-        );
+        const stagingUrl = process.env.SUPABASE_STAGING_URL;
+        const stagingKey = process.env.SUPABASE_STAGING_KEY;
+
+        if (!stagingUrl || !stagingKey) {
+            throw new Error('Missing staging database configuration');
+        }
+
+        this.supabase = createClient(stagingUrl, stagingKey);
     }
 
     // Document Management
-    async insertDocument(doc: StagingDocument): Promise<number> {
+    async insertDocument(doc: Document): Promise<number> {
         const { data, error } = await this.supabase
-            .from('staging_documents')
+            .from('documents')
             .insert({
                 institution_id: doc.institution_id,
                 source_id: doc.source_id,
                 external_id: doc.external_id,
                 raw_content: doc.raw_content,
-                metadata: doc.metadata
+                metadata: doc.metadata,
+                sync_status: 'pending',
+                last_synced_at: null
             })
             .select('id')
             .single();
@@ -65,7 +74,7 @@ export class ETLDatabase {
 
     async updateDocumentStatus(id: number, status: string, error?: string): Promise<void> {
         const { error: updateError } = await this.supabase
-            .from('staging_documents')
+            .from('documents')
             .update({
                 processing_status: status,
                 error_details: error,
@@ -76,9 +85,9 @@ export class ETLDatabase {
         if (updateError) throw updateError;
     }
 
-    async getPendingDocuments(institutionId: string, limit: number = 100): Promise<StagingDocument[]> {
+    async getPendingDocuments(institutionId: string, limit: number = 100): Promise<Document[]> {
         const { data, error } = await this.supabase
-            .from('staging_documents')
+            .from('documents')
             .select('*')
             .eq('institution_id', institutionId)
             .eq('processing_status', 'pending')
@@ -89,9 +98,9 @@ export class ETLDatabase {
     }
 
     // Job Management
-    async insertStagingJob(job: StagingJob): Promise<number> {
+    async insertJob(job: Job): Promise<number> {
         const { data, error } = await this.supabase
-            .from('staging_jobs')
+            .from('jobs')
             .insert({
                 document_id: job.document_id,
                 institution_id: job.institution_id,
@@ -100,7 +109,9 @@ export class ETLDatabase {
                 source_id: job.source_id,
                 original_id: job.original_id,
                 raw_data: job.raw_data,
-                processing_metadata: job.processing_metadata
+                processing_metadata: job.processing_metadata,
+                sync_status: 'pending',
+                last_synced_at: null
             })
             .select('id')
             .single();
@@ -115,7 +126,7 @@ export class ETLDatabase {
         errors?: any[]
     ): Promise<void> {
         const { error } = await this.supabase
-            .from('staging_jobs')
+            .from('jobs')
             .update({
                 validation_status: status,
                 validation_timestamp: new Date().toISOString(),
@@ -126,13 +137,14 @@ export class ETLDatabase {
         if (error) throw error;
     }
 
-    async getValidatedJobs(institutionId: string, limit: number = 100): Promise<StagingJob[]> {
+    async getValidatedJobs(institutionId: string, limit: number = 100): Promise<Job[]> {
         const { data, error } = await this.supabase
-            .from('staging_jobs')
+            .from('jobs')
             .select('*')
             .eq('institution_id', institutionId)
             .eq('validation_status', 'valid')
             .eq('processed', false)
+            .eq('sync_status', 'pending')
             .limit(limit);
 
         if (error) throw error;
@@ -146,7 +158,7 @@ export class ETLDatabase {
         errorDetails: string
     ): Promise<void> {
         const { error } = await this.supabase
-            .from('staging_failed_documents')
+            .from('failed_documents')
             .insert({
                 document_id: documentId,
                 error_type: errorType,
@@ -164,9 +176,9 @@ export class ETLDatabase {
         rawData: any
     ): Promise<void> {
         const { error } = await this.supabase
-            .from('staging_validation_failures')
+            .from('validation_failures')
             .insert({
-                staging_job_id: jobId,
+                job_id: jobId,
                 validation_type: validationType,
                 field_name: fieldName,
                 error_message: errorMessage,
@@ -182,7 +194,7 @@ export class ETLDatabase {
         cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
         const { error } = await this.supabase
-            .from('staging_documents')
+            .from('documents')
             .delete()
             .eq('processing_status', 'processed')
             .lt('processed_at', cutoffDate.toISOString());
@@ -195,7 +207,7 @@ export class ETLDatabase {
         cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
         const { error } = await this.supabase
-            .from('staging_failed_documents')
+            .from('failed_documents')
             .delete()
             .lt('failure_timestamp', cutoffDate.toISOString());
 
@@ -206,7 +218,7 @@ export class ETLDatabase {
     async promoteJob(jobId: number): Promise<void> {
         // Start a Supabase transaction
         const { data: job, error: fetchError } = await this.supabase
-            .from('staging_jobs')
+            .from('jobs')
             .select('*')
             .eq('id', jobId)
             .single();
@@ -265,7 +277,7 @@ export class ETLDatabase {
 
         // Mark staging job as processed
         const { error: updateError } = await this.supabase
-            .from('staging_jobs')
+            .from('jobs')
             .update({ processed: true })
             .eq('id', jobId);
 

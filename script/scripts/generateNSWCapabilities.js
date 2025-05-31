@@ -796,7 +796,7 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
     
     // Check if capabilities already exist
     const { data: existingCapabilities, error: checkError } = await supabase
-      .from('staging_capabilities')
+      .from('capabilities')
       .select('count')
       .eq('institution_id', institutionId)
       .eq('source_id', 'nswgov')
@@ -827,7 +827,7 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
     for (const capability of capabilities) {
       try {
         const { data: capData, error: capError } = await supabase
-          .from('staging_capabilities')
+          .from('capabilities')
           .upsert({
             institution_id: institutionId,
             source_id: 'nswgov',
@@ -873,7 +873,7 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
 
     // Check if capability levels already exist
     const { data: existingLevels, error: checkLevelsError } = await supabase
-      .from('staging_capability_levels')
+      .from('capability_levels')
       .select('count')
       .eq('institution_id', institutionId)
       .eq('source_id', 'nswgov')
@@ -901,7 +901,7 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
     for (const level of capabilityLevels) {
       try {
         const { data: levelData, error: levelError } = await supabase
-          .from('staging_capability_levels')
+          .from('capability_levels')
           .upsert({
             id: level.id,
             institution_id: level.institution_id,
