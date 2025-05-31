@@ -670,7 +670,7 @@ export class NSWJobSpider {
   }
 
   /**
-   * Upserts a job to the staging_jobs collection
+   * Upserts a job to the staging jobs collection
    * @param {Object} job - The job to upsert
    * @returns {Promise<void>}
    */
@@ -748,7 +748,7 @@ export class NSWJobSpider {
   }
 
   /**
-   * Upserts a document to the staging_documents collection
+   * Upserts a document to the staging documents collection
    * @param {Object} document - The document to upsert
    * @returns {Promise<void>}
    */
@@ -876,9 +876,7 @@ export class NSWJobSpider {
       const { data, error } = await this.#supabase
         .from('roles')
         .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: role.id,
+          company_id: role.company_id,
           title: role.title,
           division_id: role.division_id,
           grade_band: role.grade_band,
@@ -886,10 +884,11 @@ export class NSWJobSpider {
           anzsco_code: role.anzsco_code,
           pcat_code: role.pcat_code,
           primary_purpose: role.primary_purpose,
-          raw_data: role,
-          processing_status: 'pending'
+          raw_data: role.raw_data,
+          sync_status: 'pending',
+          normalized_key: this.#normalizeRoleTitle(role.title)
         }, {
-          onConflict: 'institution_id,source_id,external_id',
+          onConflict: 'company_id,normalized_key',
           returning: true
         });
 
@@ -897,47 +896,85 @@ export class NSWJobSpider {
       logger.info(`Successfully upserted role: ${role.title}`);
       return data;
     } catch (error) {
-      logger.error('Error upserting role:', {
-        role: role.title,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
+      logger.error('Error upserting role:', { error, role: role.title });
       throw error;
     }
   }
 
-  async #upsertToStagingCapability(capability, companyData) {
+  /**
+   * Normalizes a role title to create a consistent key
+   * This helps match similar roles across different job postings
+   * @param {string} title - The role title to normalize
+   * @returns {string} - The normalized role key
+   */
+  #normalizeRoleTitle(title) {
+    if (!title) return '';
+    
+    // Convert to lowercase
+    let normalized = title.toLowerCase();
+    
+    // Remove common prefixes/suffixes
+    const prefixesToRemove = [
+      'senior', 'junior', 'lead', 'principal', 'head', 'chief',
+      'graduate', 'entry level', 'experienced', 'temporary', 'permanent',
+      'contract', 'casual', 'part time', 'full time'
+    ];
+    
+    const suffixesToRemove = [
+      'level 1', 'level 2', 'level 3', 'level 4', 'level 5',
+      'grade 1', 'grade 2', 'grade 3', 'grade 4', 'grade 5',
+      'i', 'ii', 'iii', 'iv', 'v'
+    ];
+    
+    // Remove prefixes
+    for (const prefix of prefixesToRemove) {
+      if (normalized.startsWith(prefix + ' ')) {
+        normalized = normalized.substring(prefix.length).trim();
+      }
+    }
+    
+    // Remove suffixes
+    for (const suffix of suffixesToRemove) {
+      if (normalized.endsWith(' ' + suffix)) {
+        normalized = normalized.substring(0, normalized.length - suffix.length).trim();
+      }
+    }
+    
+    // Remove special characters and extra spaces
+    normalized = normalized
+      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+      .replace(/\s+/g, '_')        // Replace spaces with underscores
+      .replace(/_+/g, '_')         // Replace multiple underscores with single
+      .replace(/^_+|_+$/g, '');    // Remove leading/trailing underscores
+    
+    return normalized;
+  }
+
+  async #upsertToStagingCapability(capability) {
     try {
-      // First check if capability exists
+      // First, check if capability exists
       const { data: existingCapability, error: checkError } = await this.#supabase
         .from('capabilities')
         .select('id')
         .eq('name', capability.name)
-        .eq('company_id', companyData[0].id)
         .maybeSingle();
 
       if (checkError) {
-        logger.error('Error checking existing capability:', {
-          error: checkError,
-          capability: capability.name
-        });
+        logger.error('Error checking existing capability:', { error: checkError, capability: capability.name });
         throw checkError;
       }
 
+      // Prepare capability data
       const capabilityData = {
         name: capability.name,
-        description: capability.description || '',
-        source_framework: 'NSW Government Capability Framework',
+        group_name: capability.group_name,
+        description: capability.description,
+        source_framework: 'NSW Public Sector Capability Framework',
         is_occupation_specific: false,
-        company_id: companyData[0].id,
-        level: capability.level,
-        behavioral_indicators: capability.behavioral_indicators || []
+        normalized_key: this.#normalizeRoleTitle(capability.name)
       };
 
-      let result;
+      let capabilityResult;
       if (existingCapability) {
         // Update existing capability
         const { data, error: updateError } = await this.#supabase
@@ -947,13 +984,10 @@ export class NSWJobSpider {
           .select();
 
         if (updateError) {
-          logger.error('Error updating capability:', {
-            error: updateError,
-            capability: capability.name
-          });
+          logger.error('Error updating capability:', { error: updateError, capability: capability.name });
           throw updateError;
         }
-        result = data;
+        capabilityResult = data;
         logger.info(`Successfully updated capability: ${capability.name}`);
       } else {
         // Insert new capability
@@ -963,26 +997,39 @@ export class NSWJobSpider {
           .select();
 
         if (insertError) {
-          logger.error('Error inserting capability:', {
-            error: insertError,
-            capability: capability.name
-          });
+          logger.error('Error inserting capability:', { error: insertError, capability: capability.name });
           throw insertError;
         }
-        result = data;
+        capabilityResult = data;
         logger.info(`Successfully inserted capability: ${capability.name}`);
       }
 
-      return result;
+      if (!capabilityResult || capabilityResult.length === 0) {
+        logger.error('Error storing capability:', { capability: capability.name, error: 'No data returned' });
+        throw new Error('No data returned from capability upsert');
+      }
+
+      // Then, upsert the capability level
+      const { data: levelData, error: levelError } = await this.#supabase
+        .from('capability_levels')
+        .upsert({
+          capability_id: capabilityResult[0].id,
+          level: capability.level,
+          summary: capability.description,
+          behavioral_indicators: capability.behavioral_indicators || []
+        }, {
+          onConflict: 'capability_id,level',
+          returning: true
+        });
+
+      if (levelError) {
+        logger.error('Error updating capability level:', { error: levelError, capability: capability.name });
+        throw levelError;
+      }
+
+      return capabilityResult;
     } catch (error) {
-      logger.error('Error storing capability:', {
-        capability: capability.name,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
+      logger.error('Error storing capability:', { capability: capability.name, error: { message: error.message, details: error } });
       throw error;
     }
   }
@@ -1006,7 +1053,7 @@ export class NSWJobSpider {
       }
 
       const skillData = {
-        name: skill.name,
+          name: skill.name,
         description: skill.description || '',
         source: 'job_description',
         is_occupation_specific: true,
@@ -1069,16 +1116,13 @@ export class NSWJobSpider {
       const { data, error } = await this.#supabase
         .from('taxonomies')
         .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: taxonomy.id,
           name: taxonomy.name,
           description: taxonomy.description,
           taxonomy_type: taxonomy.taxonomy_type,
           raw_data: taxonomy,
           processing_status: 'pending'
         }, {
-          onConflict: 'institution_id,source_id,external_id',
+          onConflict: 'name',
           returning: true
         });
 
@@ -1105,11 +1149,9 @@ export class NSWJobSpider {
         .upsert({
           job_id: jobId,
           document_id: documentId,
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
           processing_status: 'pending'
         }, {
-          onConflict: 'institution_id,job_id,document_id',
+          onConflict: 'job_id,document_id',
           returning: true
         });
 
@@ -1137,11 +1179,9 @@ export class NSWJobSpider {
         .upsert({
           role_id: roleId,
           document_id: documentId,
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
           processing_status: 'pending'
         }, {
-          onConflict: 'institution_id,role_id,document_id',
+          onConflict: 'role_id,document_id',
           returning: true
         });
 
@@ -1218,42 +1258,21 @@ export class NSWJobSpider {
         throw new Error('Role ID and Skill ID are required');
       }
 
-      logger.debug('Linking role skill:', {
-        roleId,
-        skillId
-      });
-
       const { data, error } = await this.#supabase
         .from('role_skills')
         .upsert({
           role_id: roleId,
-          skill_id: skillId
+          skill_id: skillId,
+          sync_status: 'pending'
         }, {
-          onConflict: 'role_id,skill_id'
-        })
-        .select();
-
-      if (error) {
-        logger.error('Error upserting role skill:', {
-          error,
-          roleId,
-          skillId
+          onConflict: 'role_id,skill_id',
+          returning: true
         });
-        throw error;
-      }
 
-      logger.info(`Successfully linked skill ${skillId} to role ${roleId}`);
+      if (error) throw error;
       return data;
     } catch (error) {
-      logger.error('Error upserting role skill:', {
-        roleId,
-        skillId,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
+      logger.error('Error upserting role skill:', { roleId, skillId, error });
       throw error;
     }
   }
@@ -1265,11 +1284,9 @@ export class NSWJobSpider {
         .upsert({
           role_id: roleId,
           taxonomy_id: taxonomyId,
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          processing_status: 'pending'
+          sync_status: 'pending'
         }, {
-          onConflict: 'institution_id,role_id,taxonomy_id',
+          onConflict: 'role_id,taxonomy_id',
           returning: true
         });
 
@@ -1295,16 +1312,13 @@ export class NSWJobSpider {
       const { data, error } = await this.#supabase
         .from('capability_levels')
         .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: level.id,
           capability_id: level.capability_id,
           level: level.level,
           summary: level.summary,
           behavioral_indicators: level.behavioral_indicators,
           processing_status: 'pending'
         }, {
-          onConflict: 'institution_id,source_id,external_id',
+          onConflict: 'capability_id,level',
           returning: true
         });
 
@@ -1539,7 +1553,7 @@ export class NSWJobSpider {
   }
 
   async #initializeNSWCapabilityFramework() {
-    logger.info('Initializing NSW Capability Framework...');
+      logger.info('Initializing NSW Capability Framework...');
     try {
         await generateNSWCapabilityData(this.#supabase, this.#institutionId);
     } catch (error) {
@@ -1549,7 +1563,7 @@ export class NSWJobSpider {
             hint: error.hint,
             message: error.message
         });
-        throw error;
+      throw error;
     }
   }
 
@@ -1643,171 +1657,52 @@ export class NSWJobSpider {
     }
   }
 
-  async #extractCapabilitiesAndSkills(content, companyData) {
+  async #extractCapabilitiesAndSkills(jobDescription, companyData) {
     try {
       logger.info('Starting AI analysis of job description...');
-      logger.debug('Content length for analysis:', { length: content?.length || 0 });
-
-      const response = await this.#openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert in analyzing job descriptions and extracting capabilities and skills based on the NSW Government Capability Framework. Your task is to:
-
-1. Extract capabilities that align with the NSW Government Capability Framework core capabilities:
-- Personal Attributes (e.g. Manage Self, Display Resilience and Courage)
-- Relationships (e.g. Communicate Effectively, Commit to Customer Service)
-- Results (e.g. Deliver Results, Think and Solve Problems)
-- Business Enablers (e.g. Technology, Finance)
-- People Management (e.g. Manage and Develop People)
-
-2. For each capability, determine the level (Foundational, Intermediate, Adept, Advanced, Highly Advanced) based on the role requirements and responsibilities.
-
-3. Extract technical and soft skills mentioned in the job description, including:
-- Technical skills (e.g. programming languages, tools, platforms)
-- Domain knowledge (e.g. industry-specific knowledge)
-- Soft skills (e.g. communication, teamwork)
-
-Format your response as a JSON object with:
-{
-  "capabilities": [
-    {
-      "name": "string (one of the core capabilities)",
-      "level": "string (Foundational, Intermediate, Adept, Advanced, or Highly Advanced)",
-      "description": "string (how this capability applies to the role)",
-      "behavioral_indicators": ["string (specific behaviors that demonstrate this capability)"]
-    }
-  ],
-  "skills": [
-    {
-      "name": "string (specific skill name)",
-      "description": "string (context of how the skill is used)",
-      "category": "string (Technical, Domain Knowledge, or Soft Skills)"
-    }
-  ]
-}`
-          },
-          {
-            role: "user",
-            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements:\n\n${content}`
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-        response_format: { type: "json_object" }
-      });
-
+      const aiResults = await this.#analyzeJobDescription(jobDescription);
       logger.info('Received AI analysis response');
-      
-      const result = response.choices[0].message.content;
-      if (!result) {
-        throw new Error('No content returned from OpenAI');
-      }
-      
-      try {
-        const parsed = JSON.parse(result);
-        logger.info('AI analysis results:', {
-          capabilitiesFound: parsed.capabilities?.length || 0,
-          skillsFound: parsed.skills?.length || 0
-        });
-        
-        // Process capabilities
-        if (parsed.capabilities?.length > 0) {
-          logger.info(`Processing ${parsed.capabilities.length} capabilities...`);
-          for (const capability of parsed.capabilities) {
-            try {
-              const capabilityData = {
-                name: capability.name,
-                description: capability.description || '',
-                source_framework: 'NSW Government Capability Framework',
-                is_occupation_specific: false,
-                company_id: companyData[0].id,
-                level: capability.level,
-                behavioral_indicators: capability.behavioral_indicators || []
-              };
-              
-              logger.debug('Upserting capability:', { capability: capabilityData.name });
-              const capabilityResult = await this.#upsertToStagingCapability(capabilityData, companyData);
-              
-              if (capabilityResult && capabilityResult[0]) {
-                logger.debug('Linking capability to role:', {
-                  roleId: this.#currentRoleId,
-                  capabilityId: capabilityResult[0].id,
-                  level: capability.level
-                });
-                
-                await this.#upsertToStagingRoleCapability(
-                  this.#currentRoleId,
-                  capabilityResult[0].id,
-                  'core',
-                  capability.level
-                );
-                
-                logger.info(`Successfully processed capability: ${capability.name}`);
-              }
-            } catch (error) {
-              logger.error(`Error processing capability:`, { error, capability });
-            }
-          }
-        }
-
-        // Process skills
-        if (parsed.skills?.length > 0) {
-          logger.info(`Processing ${parsed.skills.length} skills...`);
-          for (const skill of parsed.skills) {
-            try {
-              const skillData = {
-                name: skill.name,
-                description: skill.description || '',
-                source: 'job_description',
-                is_occupation_specific: true,
-                company_id: companyData[0].id,
-                category: skill.category || 'Technical'
-              };
-              
-              logger.debug('Upserting skill:', { skill: skillData.name });
-              const skillResult = await this.#upsertToStagingSkill(skillData, companyData);
-              
-              if (skillResult && skillResult[0]) {
-                logger.debug('Linking skill to role:', {
-                  roleId: this.#currentRoleId,
-                  skillId: skillResult[0].id
-                });
-                
-                await this.#upsertToStagingRoleSkill(
-                  this.#currentRoleId,
-                  skillResult[0].id
-                );
-                
-                logger.info(`Successfully processed skill: ${skill.name}`);
-              }
-            } catch (error) {
-              logger.error(`Error processing skill:`, { error, skill });
-            }
-          }
-        }
-
-        return {
-          capabilities: parsed.capabilities || [],
-          skills: parsed.skills || []
-        };
-      } catch (parseError) {
-        logger.error('Error parsing OpenAI response:', {
-          error: parseError,
-          response: result
-        });
-        return { capabilities: [], skills: [] };
-      }
-    } catch (error) {
-      logger.error('Error calling OpenAI:', {
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
+      logger.info('AI analysis results:', {
+        capabilitiesFound: aiResults.capabilities.length,
+        skillsFound: aiResults.skills.length
       });
-      return { capabilities: [], skills: [] };
+
+      // Process capabilities
+      logger.info(`Processing ${aiResults.capabilities.length} capabilities...`);
+      for (const capability of aiResults.capabilities) {
+        try {
+          logger.debug('Upserting capability:', { capability: capability.name });
+          const capabilityResult = await this.#upsertToStagingCapability(capability);
+          
+          if (capabilityResult && capabilityResult[0] && this.#currentRoleId) {
+            // Link capability to role
+            await this.#upsertToStagingRoleCapability(this.#currentRoleId, capabilityResult[0].id, capability.level);
+          }
+        } catch (error) {
+          logger.error('Error processing capability:', { error, capability });
+        }
+      }
+
+      // Process skills
+      logger.info(`Processing ${aiResults.skills.length} skills...`);
+      for (const skill of aiResults.skills) {
+        try {
+          logger.debug('Upserting skill:', { skill: skill.name });
+          const skillResult = await this.#upsertToStagingSkill(skill, companyData);
+          
+          if (skillResult && skillResult[0] && this.#currentRoleId) {
+            // Link skill to role
+            await this.#upsertToStagingRoleSkill(this.#currentRoleId, skillResult[0].id);
+          }
+        } catch (error) {
+          logger.error('Error processing skill:', { error, skill });
+        }
+      }
+
+      return aiResults;
+    } catch (error) {
+      logger.error('Error extracting capabilities and skills:', { error });
+      throw error;
     }
   }
 
@@ -1907,9 +1802,9 @@ Format your response as a JSON object with:
             .from('jobs')
             .select('id')
             .eq('company_id', companyData[0].id)
-            .eq('source_id', 'nswgov')
-            .eq('original_id', jobId)
-            .maybeSingle();
+          .eq('source_id', 'nswgov')
+          .eq('original_id', jobId)
+          .maybeSingle();
 
         if (checkError) {
             throw checkError;
@@ -1959,7 +1854,7 @@ Format your response as a JSON object with:
         return result;
     } catch (error) {
         logger.error('Error in processJobDetails:', { error, jobId });
-        throw error;
+      throw error;
     }
   }
 
@@ -1979,7 +1874,7 @@ Format your response as a JSON object with:
 
       // Get the job description from the nested structure
       const jobDescription = details.details?.description;
-      
+
       // 2. Create/update the role
       const roleData = {
         company_id: companyData[0].id,
@@ -1988,6 +1883,7 @@ Format your response as a JSON object with:
         location: details.location,
         primary_purpose: jobDescription ? jobDescription.split('.')[0] : '',
         source_id: 'nswgov',
+        external_id: jobId,
         raw_data: {
           ...details,
           company: companyData[0]
@@ -1995,25 +1891,46 @@ Format your response as a JSON object with:
       };
       
       const role = await this.#upsertToStagingRole(roleData);
-      if (!role || !role[0]) {
-        throw new Error('Failed to store role');
+      if (!role) {
+        logger.warn(`No role data returned for ${jobId}, but continuing processing`);
+      } else {
+        this.#currentRoleId = role[0].id;
+        logger.info(`Role stored with ID: ${role[0].id}`);
       }
-      this.#currentRoleId = role[0].id;
       
       // 3. Extract capabilities and skills using AI
       if (jobDescription) {
         logger.info(`Analyzing job description for ${jobId} (${jobDescription.length} characters)`);
         const aiResults = await this.#extractCapabilitiesAndSkills(jobDescription, companyData);
-        jobData.raw_data = {
-          ...jobData.raw_data,
-          capabilities: aiResults.capabilities,
-          skills: aiResults.skills
-        };
+        if (aiResults) {
+          jobData[0].raw_data = {
+            ...jobData[0].raw_data,
+            capabilities: aiResults.capabilities,
+            skills: aiResults.skills
+          };
+        }
+      }
+
+      // Add the processed role to the list for taxonomy processing
+      if (role && role[0]) {
+        this.#processedRoles.push({
+          id: role[0].id,
+          title: details.title,
+          department: details.department,
+          role: details.details?.role
+        });
       }
 
       return jobData;
     } catch (error) {
-      logger.error('Error processing job:', { error, job: jobId });
+      logger.error('Error processing job:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        },
+        job: jobId
+      });
       throw error;
     }
   }
@@ -2024,20 +1941,20 @@ Format your response as a JSON object with:
         const { data: existingFailure, error: checkError } = await this.#supabase
             .from('validation_failures')
             .select('id')
-            .eq('institution_id', this.#institutionId)
+        .eq('institution_id', this.#institutionId)
             .eq('source_id', job.source || 'nswgov')
             .eq('original_id', job.jobId)
             .single();
 
         if (checkError && checkError.code !== 'PGRST116') {
             logger.error('Error checking validation failure:', {
-                error: {
-                    message: checkError.message,
-                    details: checkError.details,
-                    hint: checkError.hint,
-                    code: checkError.code
-                }
-            });
+          error: {
+            message: checkError.message,
+            details: checkError.details,
+            hint: checkError.hint,
+            code: checkError.code
+          }
+        });
             return false;
         }
 
@@ -2053,7 +1970,7 @@ Format your response as a JSON object with:
 
             if (updateError) {
                 logger.error('Error updating validation failure:', {
-                    error: {
+          error: {
                         message: updateError.message,
                         details: updateError.details,
                         hint: updateError.hint,
@@ -2090,7 +2007,7 @@ Format your response as a JSON object with:
         logger.error('Error in job validation:', {
             error: error instanceof Error ? {
                 name: error.name,
-                message: error.message,
+          message: error.message,
                 stack: error.stack
             } : error,
             job
@@ -2105,5 +2022,89 @@ Format your response as a JSON object with:
 
   get currentRoleId() {
     return this.#currentRoleId;
+  }
+
+  async #analyzeJobDescription(content) {
+    try {
+      logger.debug('Content length for analysis:', { length: content?.length || 0 });
+      
+      const response = await this.#openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert in analyzing job descriptions and extracting capabilities and skills based on the NSW Government Capability Framework. Your task is to:
+
+1. Extract capabilities that align with the NSW Government Capability Framework core capabilities:
+- Personal Attributes (e.g. Manage Self, Display Resilience and Courage)
+- Relationships (e.g. Communicate Effectively, Commit to Customer Service)
+- Results (e.g. Deliver Results, Think and Solve Problems)
+- Business Enablers (e.g. Technology, Finance)
+- People Management (e.g. Manage and Develop People)
+
+2. For each capability, determine the level (Foundational, Intermediate, Adept, Advanced, Highly Advanced) based on the role requirements and responsibilities.
+
+3. Extract technical and soft skills mentioned in the job description, including:
+- Technical skills (e.g. programming languages, tools, platforms)
+- Domain knowledge (e.g. industry-specific knowledge)
+- Soft skills (e.g. communication, teamwork)
+
+Format your response as a JSON object with:
+{
+  "capabilities": [
+    {
+      "name": "string (one of the core capabilities)",
+      "level": "string (Foundational, Intermediate, Adept, Advanced, or Highly Advanced)",
+      "description": "string (how this capability applies to the role)",
+      "behavioral_indicators": ["string (specific behaviors that demonstrate this capability)"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "string (specific skill name)",
+      "description": "string (context of how the skill is used)",
+      "category": "string (Technical, Domain Knowledge, or Soft Skills)"
+    }
+  ]
+}`
+          },
+          {
+            role: "user",
+            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements:\n\n${content}`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }
+      });
+
+      const result = response.choices[0].message.content;
+      if (!result) {
+        throw new Error('No content returned from OpenAI');
+      }
+      
+      try {
+        const parsed = JSON.parse(result);
+        return {
+          capabilities: parsed.capabilities || [],
+          skills: parsed.skills || []
+        };
+      } catch (parseError) {
+        logger.error('Error parsing OpenAI response:', {
+          error: parseError,
+          response: result
+        });
+        return { capabilities: [], skills: [] };
+      }
+    } catch (error) {
+      logger.error('Error calling OpenAI:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      return { capabilities: [], skills: [] };
+    }
   }
 } 

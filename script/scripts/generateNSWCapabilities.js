@@ -842,7 +842,7 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
       },
       // ... more groups ...
     ];
-
+    
     // Insert capabilities and levels
     for (const group of capabilityGroups) {
       for (const capability of group.capabilities) {
@@ -866,8 +866,8 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
               details: capabilityError.details,
               hint: capabilityError.hint,
               code: capabilityError.code
-            }
-          });
+          }
+        });
           throw capabilityError;
         }
 
@@ -882,17 +882,17 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
               level: (i + 1).toString(),
               summary: capability.levels[i],
               behavioral_indicators: []
-            });
+          });
 
-          if (levelError) {
+        if (levelError) {
             logger.error('Error inserting capability level:', {
-              error: {
-                message: levelError.message,
-                details: levelError.details,
-                hint: levelError.hint,
+            error: {
+              message: levelError.message,
+              details: levelError.details,
+              hint: levelError.hint,
                 code: levelError.code
-              }
-            });
+            }
+          });
             throw levelError;
           }
         }
