@@ -282,31 +282,25 @@ export type Database = {
           embedding: string | null
           id: string
           message: string
-          response_data: Json | null
           sender: string | null
           session_id: string | null
           timestamp: string | null
-          tool_call: Json | null
         }
         Insert: {
           embedding?: string | null
           id?: string
           message: string
-          response_data?: Json | null
           sender?: string | null
           session_id?: string | null
           timestamp?: string | null
-          tool_call?: Json | null
         }
         Update: {
           embedding?: string | null
           id?: string
           message?: string
-          response_data?: Json | null
           sender?: string | null
           session_id?: string | null
           timestamp?: string | null
-          tool_call?: Json | null
         }
         Relationships: [
           {
