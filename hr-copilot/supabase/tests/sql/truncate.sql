@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS 
+TRUNCATE TABLE 
   ai_model_invocations,
   agent_actions,
   capabilities,
@@ -15,7 +15,6 @@ DROP TABLE IF EXISTS
   job_documents,
   job_skills,
   jobs_history,
-  job_taxonomies,
   profile_agent_actions,
   profile_capabilities,
   profile_career_paths,
@@ -30,32 +29,5 @@ DROP TABLE IF EXISTS
   skills,
   taxonomy,
   users
-CASCADE;
-
-TRUNCATE TABLE 
-  agent_actions,
-  capabilities,
-  capability_levels,
-  career_paths,
-  companies,
-  conversation_sessions,
-  chat_messages,
-  divisions,
-  jobs,
-  job_documents,
-  job_skills,
-  profile_agent_actions,
-  profile_capabilities,
-  profile_career_paths,
-  profile_job_interactions,
-  profile_skills,
-  profiles,
-  role_capabilities,
-  role_documents,
-  role_skills,
-  roles,
-  skills,
-  taxonomy,
-  role_taxonomies,
-  general_role_types
 RESTART IDENTITY CASCADE;
+

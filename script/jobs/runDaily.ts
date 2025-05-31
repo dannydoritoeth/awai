@@ -193,13 +193,7 @@ async function runDaily() {
             departmentJobs.get(job.department)!.push(job);
         }
         
-        // Process the jobs through ETL
-        logger.info('Processing jobs through ETL');
-        await processor.processInstitution(institution.id, Array.from(departmentJobs.entries()).map(([name, jobs]) => ({
-            name,
-            jobs
-        })));
-        
+        // The jobs have already been processed by the spider, no need to process them again
         logger.info('Daily ETL run completed successfully');
     } catch (error) {
         // Ensure error is properly formatted

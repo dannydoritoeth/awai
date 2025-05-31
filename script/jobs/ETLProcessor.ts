@@ -155,7 +155,6 @@ export class ETLProcessor {
                         const { data: existingJob, error: checkError } = await this.#supabase
                             .from('jobs')
                             .select('id, sync_status, last_synced_at')
-                            .eq('institution_id', institutionId)
                             .eq('source_id', job.source || 'nswgov')
                             .eq('original_id', job.jobId)
                             .single();
@@ -172,24 +171,42 @@ export class ETLProcessor {
                             continue;
                         }
 
+                        // Get or create company
+                        const companyData = await this.#getOrCreateCompany({
+                            name: dept.name || job.department || 'NSW Government',
+                            institutionId
+                        });
+
+                        const jobData = {
+                            company_id: companyData[0].id,
+                            source_id: job.source || 'nswgov',
+                            original_id: job.jobId,
+                            title: job.title,
+                            department: job.department,
+                            job_type: 'Full-Time',
+                            source_url: job.sourceUrl,
+                            remuneration: job.salary,
+                            close_date: job.closingDate ? new Date(job.closingDate) : null,
+                            locations: [job.location],
+                            sync_status: 'pending',
+                            last_synced_at: new Date().toISOString(),
+                            raw_data: {
+                                title: job.title,
+                                department: job.department,
+                                location: job.location,
+                                salary: job.salary,
+                                closingDate: job.closingDate,
+                                sourceUrl: job.sourceUrl,
+                                source: job.source || 'nswgov',
+                                institution: job.institution
+                            }
+                        };
+
                         if (existingJob) {
-                            // Update existing job's sync status and timestamp
+                            // Update existing job
                             const { error: updateError } = await this.#supabase
                                 .from('jobs')
-                                .update({
-                                    sync_status: 'pending',
-                                    last_synced_at: new Date().toISOString(),
-                                    raw_data: {
-                                        title: job.title,
-                                        department: job.department,
-                                        location: job.location,
-                                        salary: job.salary,
-                                        closingDate: job.closingDate,
-                                        sourceUrl: job.sourceUrl,
-                                        source: job.source || 'nswgov',
-                                        institution: job.institution
-                                    }
-                                })
+                                .update(jobData)
                                 .eq('id', existingJob.id);
 
                             if (updateError) {
@@ -201,28 +218,14 @@ export class ETLProcessor {
                                         code: updateError.code
                                     }
                                 });
+                            } else {
+                                logger.info(`Successfully updated job ${job.jobId}`);
                             }
                         } else {
                             // Insert new job
                             const { error: insertError } = await this.#supabase
                                 .from('jobs')
-                                .insert({
-                                    institution_id: institutionId,
-                                    source_id: job.source || 'nswgov',
-                                    original_id: job.jobId,
-                                    sync_status: 'pending',
-                                    last_synced_at: new Date().toISOString(),
-                                    raw_data: {
-                                        title: job.title,
-                                        department: job.department,
-                                        location: job.location,
-                                        salary: job.salary,
-                                        closingDate: job.closingDate,
-                                        sourceUrl: job.sourceUrl,
-                                        source: job.source || 'nswgov',
-                                        institution: job.institution
-                                    }
-                                });
+                                .insert(jobData);
 
                             if (insertError) {
                                 logger.error('Error inserting job:', {
@@ -233,6 +236,8 @@ export class ETLProcessor {
                                         code: insertError.code
                                     }
                                 });
+                            } else {
+                                logger.info(`Successfully inserted job ${job.jobId}`);
                             }
                         }
                     } catch (error) {
@@ -419,7 +424,7 @@ export class ETLProcessor {
             const { data: batch, error } = await this.#supabase
                 .from('jobs')
                 .select('*')
-                .eq('institution_id', institutionId)
+                .eq('source_id', 'nswgov')
                 .eq('processed', false)
                 .limit(batchSize);
 
@@ -489,7 +494,7 @@ export class ETLProcessor {
                         institutionId
                     });
 
-                        await this.#createJob(stagedJob, companyId);
+                    await this.#createJob(stagedJob, companyId);
 
                     // Mark as processed successfully
                     await this.#supabase
@@ -547,7 +552,7 @@ export class ETLProcessor {
         const { error } = await this.#supabase
             .from('jobs')
             .delete()
-            .eq('institution_id', institutionId)
+            .eq('source_id', 'nswgov')
             .eq('processed', true);
 
         if (error) {
@@ -624,7 +629,7 @@ export class ETLProcessor {
                 .from('jobs')
                 .insert(jobData);
 
-        if (error) {
+            if (error) {
                 throw error;
             }
 
@@ -658,7 +663,6 @@ export class ETLProcessor {
             const { data: jobData, error: jobError } = await this.#supabase
                 .from('jobs')
                 .upsert({
-                    institution_id: this.#institutionId,
                     source_id: source,
                     original_id: details.jobId,
                     raw_data: {
@@ -674,7 +678,7 @@ export class ETLProcessor {
                     sync_status: 'pending',
                     last_synced_at: null
                 }, {
-                    onConflict: 'institution_id,source_id,original_id'
+                    onConflict: 'company_id,source_id,original_id'
                 })
                 .select();
 
@@ -694,7 +698,6 @@ export class ETLProcessor {
                 const { data: fetchedJob, error: fetchError } = await this.#supabase
                     .from('jobs')
                     .select('*')
-                    .eq('institution_id', this.#institutionId)
                     .eq('source_id', source)
                     .eq('original_id', details.jobId)
                     .maybeSingle();
