@@ -5,6 +5,7 @@ import { DocumentProcessor } from "../utils/documentProcessor.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { OpenAI } from 'openai';
+import { Department as DepartmentType } from '../types/department.js';
 
 const JobSchema = z.object({
     title: z.string(),
@@ -120,11 +121,14 @@ export class ETLProcessor {
     #documentProcessor: DocumentProcessor;
     #institutionId: string;
     #openai: OpenAI;
+    #maxJobs: number;
 
-    constructor({ maxJobs = 10, supabase, institution_id }: { maxJobs?: number; supabase: SupabaseClient; institution_id: string }) {
-        if (!supabase) {
-            throw new Error('Supabase client is required');
-        }
+    constructor({ maxJobs = 10, supabase, institution_id }: {
+        maxJobs?: number;
+        supabase: SupabaseClient;
+        institution_id: string;
+    }) {
+        this.#maxJobs = maxJobs;
         this.#supabase = supabase;
         this.#institutionId = institution_id;
 
@@ -137,24 +141,120 @@ export class ETLProcessor {
     }
 
     async processInstitution(institutionId: string, departments: Department[]) {
-        logger.info(`Processing institution ${institutionId}`);
-
         try {
-            // Initialize capability levels first
-            await this.#initializeCapabilityLevels();
+            logger.info(`Processing institution ${institutionId}`);
+            
+            // Process each department's jobs
+            for (const dept of departments) {
+                logger.info(`Processing department: ${dept.name}`);
+                
+                // Process jobs for this department
+                for (const job of dept.jobs) {
+                    try {
+                        // Check if job already exists in staging
+                        const { data: existingJob, error: checkError } = await this.#supabase
+                            .from('jobs')
+                            .select('id, sync_status, last_synced_at')
+                            .eq('institution_id', institutionId)
+                            .eq('source_id', job.source || 'nswgov')
+                            .eq('original_id', job.jobId)
+                            .single();
 
-            // First, stage all jobs
-            const stagedJobs = await this.#stageJobs(departments, institutionId);
-            logger.info(`Successfully staged ${stagedJobs} jobs`);
+                        if (checkError && checkError.code !== 'PGRST116') {
+                            logger.error('Error checking existing job:', {
+                                error: {
+                                    message: checkError.message,
+                                    details: checkError.details,
+                                    hint: checkError.hint,
+                                    code: checkError.code
+                                }
+                            });
+                            continue;
+                        }
 
-            // Process any documents from the jobs
-            await this.#processDocuments(departments, institutionId);
+                        if (existingJob) {
+                            // Update existing job's sync status and timestamp
+                            const { error: updateError } = await this.#supabase
+                                .from('jobs')
+                                .update({
+                                    sync_status: 'pending',
+                                    last_synced_at: new Date().toISOString(),
+                                    raw_data: {
+                                        title: job.title,
+                                        department: job.department,
+                                        location: job.location,
+                                        salary: job.salary,
+                                        closingDate: job.closingDate,
+                                        sourceUrl: job.sourceUrl,
+                                        source: job.source || 'nswgov',
+                                        institution: job.institution
+                                    }
+                                })
+                                .eq('id', existingJob.id);
 
-            // Then process staged jobs into final tables
-            await this.#processStaged(institutionId);
+                            if (updateError) {
+                                logger.error('Error updating job:', {
+                                    error: {
+                                        message: updateError.message,
+                                        details: updateError.details,
+                                        hint: updateError.hint,
+                                        code: updateError.code
+                                    }
+                                });
+                            }
+                        } else {
+                            // Insert new job
+                            const { error: insertError } = await this.#supabase
+                                .from('jobs')
+                                .insert({
+                                    institution_id: institutionId,
+                                    source_id: job.source || 'nswgov',
+                                    original_id: job.jobId,
+                                    sync_status: 'pending',
+                                    last_synced_at: new Date().toISOString(),
+                                    raw_data: {
+                                        title: job.title,
+                                        department: job.department,
+                                        location: job.location,
+                                        salary: job.salary,
+                                        closingDate: job.closingDate,
+                                        sourceUrl: job.sourceUrl,
+                                        source: job.source || 'nswgov',
+                                        institution: job.institution
+                                    }
+                                });
 
+                            if (insertError) {
+                                logger.error('Error inserting job:', {
+                                    error: {
+                                        message: insertError.message,
+                                        details: insertError.details,
+                                        hint: insertError.hint,
+                                        code: insertError.code
+                                    }
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        logger.error('Error processing job:', {
+                            error: error instanceof Error ? {
+                                name: error.name,
+                                message: error.message,
+                                stack: error.stack
+                            } : error,
+                            job
+                        });
+                    }
+                }
+            }
         } catch (error) {
-            logger.error('Error processing institution:', { error });
+            logger.error('Error in ETL process:', {
+                error: error instanceof Error ? {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                } : error
+            });
             throw error;
         }
     }
@@ -317,7 +417,7 @@ export class ETLProcessor {
         
         while (true) {
             const { data: batch, error } = await this.#supabase
-                .from('staging_jobs')
+                .from('jobs')
                 .select('*')
                 .eq('institution_id', institutionId)
                 .eq('processed', false)
@@ -349,7 +449,7 @@ export class ETLProcessor {
                     if (existingJob) {
                         // Job already exists, mark as processed and skip
                         await this.#supabase
-                            .from('staging_jobs')
+                            .from('jobs')
                             .update({ 
                                 processed: true,
                                 processing_metadata: {
@@ -379,7 +479,7 @@ export class ETLProcessor {
                         stagedJob.source_id = 'nswgov';
                         // Update the record with source_id
                         await this.#supabase
-                            .from('staging_jobs')
+                            .from('jobs')
                             .update({ source_id: 'nswgov' })
                             .eq('id', stagedJob.id);
                     }
@@ -393,7 +493,7 @@ export class ETLProcessor {
 
                     // Mark as processed successfully
                     await this.#supabase
-                        .from('staging_jobs')
+                        .from('jobs')
                         .update({ 
                             processed: true,
                             processing_metadata: {
@@ -414,7 +514,7 @@ export class ETLProcessor {
                     // Mark as processed with error
                     try {
                         await this.#supabase
-                            .from('staging_jobs')
+                            .from('jobs')
                             .update({ 
                                 processed: true,
                                 processing_metadata: {
@@ -445,7 +545,7 @@ export class ETLProcessor {
 
     async #clearStaged(institutionId: string) {
         const { error } = await this.#supabase
-            .from('staging_jobs')
+            .from('jobs')
             .delete()
             .eq('institution_id', institutionId)
             .eq('processed', true);
@@ -554,35 +654,66 @@ export class ETLProcessor {
             // Ensure source is set
             const source = details.source || 'nswgov';
 
-            // Store job details - only set source_id and original_id, let external_id be generated
+            // Store job details with the correct conflict key
             const { data: jobData, error: jobError } = await this.#supabase
                 .from('jobs')
                 .upsert({
                     institution_id: this.#institutionId,
                     source_id: source,
-                    original_id: jobId,
+                    original_id: details.jobId,
                     raw_data: {
-                        ...details,
-                        source,
                         capabilities: analysis.capabilities,
-                        skills: analysis.skills
+                        skills: analysis.skills,
+                        ...details
                     },
                     processed: false,
-                    validation_status: 'pending',
                     processing_metadata: {},
+                    validation_status: 'pending',
+                    validation_timestamp: null,
+                    validation_errors: {},
                     sync_status: 'pending',
                     last_synced_at: null
+                }, {
+                    onConflict: 'institution_id,source_id,original_id'
                 })
-                .select()
-                .single();
+                .select();
 
             if (jobError) {
-                logger.error('Error storing job details:', { error: jobError, jobId, details });
+                logger.error('Error storing job:', {
+                    error: {
+                        message: jobError.message,
+                        details: jobError.details,
+                        hint: jobError.hint
+                    }
+                });
                 throw jobError;
             }
 
-            logger.info(`Successfully stored job details for ${jobId}`);
-            return jobData;
+            // If no data returned, try to fetch the record
+            if (!jobData || jobData.length === 0) {
+                const { data: fetchedJob, error: fetchError } = await this.#supabase
+                    .from('jobs')
+                    .select('*')
+                    .eq('institution_id', this.#institutionId)
+                    .eq('source_id', source)
+                    .eq('original_id', details.jobId)
+                    .maybeSingle();
+
+                if (fetchError) {
+                    logger.error('Error fetching job:', {
+                        error: {
+                            message: fetchError.message,
+                            details: fetchError.details,
+                            hint: fetchError.hint
+                        }
+                    });
+                    throw fetchError;
+                }
+
+                return fetchedJob;
+            }
+
+            return jobData[0];
         } catch (error) {
             logger.error('Error processing job details:', { error, jobId, details });
             throw error;

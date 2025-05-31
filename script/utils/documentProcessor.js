@@ -13,7 +13,10 @@ import { createClient } from '@supabase/supabase-js';
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env') });
 
 export class DocumentProcessor {
-  constructor() {
+  #supabase;
+  #institutionId;
+
+  constructor(supabase, institutionId) {
     this.documentsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "jobs", "files");
     this.contentDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database", "documents");
     this.failedDocuments = [];
@@ -30,12 +33,14 @@ export class DocumentProcessor {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
       throw new Error('Supabase credentials are required. Please ensure SUPABASE_URL and SUPABASE_KEY are set in your .env file.');
     }
-    this.supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    this.#supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
     // Ensure the content directory exists
     if (!fs.existsSync(this.contentDir)) {
       fs.mkdirSync(this.contentDir, { recursive: true });
     }
+
+    this.#institutionId = institutionId;
   }
 
   /**
@@ -263,7 +268,7 @@ Return only the JSON object with the extracted data. If a field cannot be determ
    */
   async #getOrCreateInstitution() {
     const slug = 'nsw-gov';
-    const { data: institution, error: fetchError } = await this.supabase
+    const { data: institution, error: fetchError } = await this.#supabase
       .from('institutions')
       .select('id')
       .eq('slug', slug)
@@ -278,7 +283,7 @@ Return only the JSON object with the extracted data. If a field cannot be determ
     }
 
     // Create the institution if it doesn't exist
-    const { data: newInstitution, error: insertError } = await this.supabase
+    const { data: newInstitution, error: insertError } = await this.#supabase
       .from('institutions')
       .insert({
         name: 'NSW Government',
@@ -320,7 +325,7 @@ Return only the JSON object with the extracted data. If a field cannot be determ
           const documentId = this.#generateDocumentId(job.id, doc.filename);
           
           // Check if document already exists in staging
-          const { data: existingDoc } = await this.supabase
+          const { data: existingDoc } = await this.#supabase
             .from('staging_documents')
             .select('id')
             .eq('source_id', source)
@@ -334,7 +339,7 @@ Return only the JSON object with the extracted data. If a field cannot be determ
 
           // Stage the document
           try {
-            const { data: stagedDoc, error } = await this.supabase
+            const { data: stagedDoc, error } = await this.#supabase
               .from('staging_documents')
               .insert({
                 institution_id: institutionId,
@@ -391,5 +396,64 @@ Return only the JSON object with the extracted data. If a field cannot be determ
     }
 
     return processedDocs;
+  }
+
+  async #upsertDocument(document) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('documents')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: document.id,
+          url: document.url,
+          text: document.text,
+          type: document.type,
+          raw_data: document,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id'
+        })
+        .select();
+
+      if (error) throw error;
+      logger.info(`Successfully upserted document: ${document.url}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting document:', {
+        document: document.url,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #getDocument(documentId) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('documents')
+        .select('*')
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov')
+        .eq('external_id', documentId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Error getting document:', {
+        documentId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
   }
 }

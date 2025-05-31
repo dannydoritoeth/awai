@@ -14,13 +14,15 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
 // Validate required environment variables
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
-    throw new Error('Missing required environment variables: SUPABASE_URL and SUPABASE_KEY must be set in .env.local');
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY || !process.env.SUPABASE_STAGING_URL || !process.env.SUPABASE_STAGING_KEY) {
+    throw new Error('Missing required environment variables: SUPABASE_URL, SUPABASE_KEY, SUPABASE_STAGING_URL, and SUPABASE_STAGING_KEY must be set in .env.local');
 }
 
 // Type assertion since we validated these above
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseKey = process.env.SUPABASE_KEY as string;
+const supabaseStagingUrl = process.env.SUPABASE_STAGING_URL as string;
+const supabaseStagingKey = process.env.SUPABASE_STAGING_KEY as string;
 
 // Define job type
 type Job = {
@@ -37,13 +39,14 @@ type Job = {
 
 async function runDaily() {
     try {
-        // Initialize Supabase client
+        // Initialize Supabase clients
         const supabase = createClient(supabaseUrl, supabaseKey);
+        const stagingSupabase = createClient(supabaseStagingUrl, supabaseStagingKey);
         
-        // Test Supabase connection
+        // Test Supabase connections
         const { error: testError } = await supabase.from('institutions').select('count').single();
         if (testError) {
-            logger.error('Failed to connect to Supabase:', {
+            logger.error('Failed to connect to live Supabase:', {
                 error: {
                     message: testError.message,
                     details: testError.details,
@@ -53,8 +56,21 @@ async function runDaily() {
             });
             throw testError;
         }
+
+        const { error: testStagingError } = await stagingSupabase.from('institutions').select('count').single();
+        if (testStagingError) {
+            logger.error('Failed to connect to staging Supabase:', {
+                error: {
+                    message: testStagingError.message,
+                    details: testStagingError.details,
+                    hint: testStagingError.hint,
+                    code: testStagingError.code
+                }
+            });
+            throw testStagingError;
+        }
         
-        // Get or create NSW Gov institution
+        // Get or create NSW Gov institution in both databases
         let { data: institution, error: institutionError } = await supabase
             .from('institutions')
             .select('id')
@@ -75,7 +91,7 @@ async function runDaily() {
                 .single();
                 
             if (createError) {
-                logger.error('Error creating institution:', {
+                logger.error('Error creating institution in live database:', {
                     error: {
                         message: createError.message,
                         details: createError.details,
@@ -87,9 +103,9 @@ async function runDaily() {
             }
             
             institution = newInstitution;
-            logger.info('Created NSW Gov institution');
+            logger.info('Created NSW Gov institution in live database');
         } else if (institutionError) {
-            logger.error('Error fetching institution:', {
+            logger.error('Error fetching institution from live database:', {
                 error: {
                     message: institutionError.message,
                     details: institutionError.details,
@@ -99,24 +115,49 @@ async function runDaily() {
             });
             throw institutionError;
         }
-        
+
+        // Create or update the institution in staging database
         if (!institution) {
-            const error = new Error('NSW Gov institution not found and could not be created');
+            const error = new Error('NSW Gov institution not found and could not be created in live database');
             logger.error(error.message);
             throw error;
         }
+
+        const { data: stagingInstitution, error: stagingInstitutionError } = await stagingSupabase
+            .from('institutions')
+            .upsert({
+                id: institution.id,
+                name: 'NSW Government',
+                slug: 'nsw-gov',
+                description: 'New South Wales Government',
+                website_url: 'https://www.nsw.gov.au'
+            })
+            .select('id')
+            .single();
+
+        if (stagingInstitutionError) {
+            logger.error('Error upserting institution in staging database:', {
+                error: {
+                    message: stagingInstitutionError.message,
+                    details: stagingInstitutionError.details,
+                    hint: stagingInstitutionError.hint,
+                    code: stagingInstitutionError.code
+                }
+            });
+            throw stagingInstitutionError;
+        }
         
-        // Initialize ETL processor
+        // Initialize ETL processor with both database connections
         const processor = new ETLProcessor({
             maxJobs: 1,
             supabase,
             institution_id: institution.id
         });
         
-        // Initialize spider with desired job limit
+        // Initialize spider with staging database connection
         const spider = new NSWJobSpider({
             maxJobs: 1,
-            supabase,
+            supabase: stagingSupabase,
             institution_id: institution.id
         });
         

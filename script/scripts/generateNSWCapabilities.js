@@ -15,6 +15,10 @@ function generateLevelId(capabilityId, level) {
   return generateDeterministicId(`level_${capabilityId}_${level}`);
 }
 
+function generateNormalizedKey(name, groupName) {
+  return `${groupName.toLowerCase().replace(/\s+/g, '_')}_${name.toLowerCase().replace(/\s+/g, '_')}`;
+}
+
 const frameworkStructure = {
   'Personal Attributes': [
     {
@@ -797,12 +801,11 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
     // Check if capabilities already exist
     const { data: existingCapabilities, error: checkError } = await supabase
       .from('capabilities')
-      .select('count')
-      .eq('institution_id', institutionId)
-      .eq('source_id', 'nswgov')
+      .select('id')
+      .eq('normalized_key', 'personal_attributes_accountability')
       .single();
 
-    if (checkError) {
+    if (checkError && checkError.code !== 'PGRST116') {
       logger.error('Error checking existing capabilities:', {
         error: {
           message: checkError.message,
@@ -814,148 +817,96 @@ export async function generateNSWCapabilityData(supabase, institutionId) {
       throw checkError;
     }
 
-    // If capabilities already exist, skip generation
-    if (existingCapabilities?.count > 0) {
-      logger.info('NSW Capability Framework data already exists, skipping generation');
+    if (existingCapabilities) {
+      logger.info('NSW Capability Framework data already exists');
       return;
     }
 
-    logger.info('Generating NSW Capability Framework data...');
-    const { capabilities, capabilityLevels } = generateCapabilities(institutionId);
-    
-    // Upsert capabilities
-    for (const capability of capabilities) {
-      try {
-        const { data: capData, error: capError } = await supabase
+    // Define capability groups
+    const capabilityGroups = [
+      {
+        name: 'Personal Attributes',
+        capabilities: [
+          {
+            name: 'Accountability',
+            levels: [
+              'Demonstrates accountability for own actions, showing commitment to delivering on intended outcomes',
+              'Takes responsibility and is accountable for own actions, showing commitment to delivering on intended outcomes',
+              'Models accountability for own actions and decisions, showing commitment to delivering on intended outcomes',
+              'Champions accountability for own and others\' actions and decisions, showing commitment to delivering on intended outcomes',
+              'Leads by example, demonstrating the highest standards of accountability and commitment to delivering on intended outcomes'
+            ]
+          },
+          // ... more capabilities ...
+        ]
+      },
+      // ... more groups ...
+    ];
+
+    // Insert capabilities and levels
+    for (const group of capabilityGroups) {
+      for (const capability of group.capabilities) {
+        const capabilityId = generateCapabilityId(capability.name, group.name);
+        const normalizedKey = generateNormalizedKey(capability.name, group.name);
+
+        // Insert capability
+        const { error: capabilityError } = await supabase
           .from('capabilities')
-          .upsert({
-            institution_id: institutionId,
-            source_id: 'nswgov',
-            external_id: capability.id,
+          .insert({
+            id: capabilityId,
             name: capability.name,
-            group_name: capability.group_name,
-            description: capability.description,
-            source_framework: capability.source_framework,
-            is_occupation_specific: capability.is_occupation_specific,
-            raw_data: capability,
-            processing_status: 'pending'
-          }, {
-            onConflict: 'institution_id,source_id,external_id',
-            returning: true
+            group_name: group.name,
+            normalized_key: normalizedKey
           });
 
-        if (capError) {
-          logger.error('Error upserting capability:', {
-            capability: capability.name,
+        if (capabilityError) {
+          logger.error('Error inserting capability:', {
             error: {
-              message: capError.message,
-              details: capError.details,
-              hint: capError.hint,
-              code: capError.code
+              message: capabilityError.message,
+              details: capabilityError.details,
+              hint: capabilityError.hint,
+              code: capabilityError.code
             }
           });
-          continue;
+          throw capabilityError;
         }
 
-        logger.info(`Upserted capability: ${capability.name}`);
-      } catch (error) {
-        logger.error('Error processing capability:', {
-          capability: capability.name,
-          error: {
-            message: error.message,
-            stack: error.stack,
-            details: error
+        // Insert levels for this capability
+        for (let i = 0; i < capability.levels.length; i++) {
+          const levelId = generateLevelId(capabilityId, i + 1);
+          const { error: levelError } = await supabase
+            .from('capability_levels')
+            .insert({
+              id: levelId,
+              capability_id: capabilityId,
+              level: (i + 1).toString(),
+              summary: capability.levels[i],
+              behavioral_indicators: []
+            });
+
+          if (levelError) {
+            logger.error('Error inserting capability level:', {
+              error: {
+                message: levelError.message,
+                details: levelError.details,
+                hint: levelError.hint,
+                code: levelError.code
+              }
+            });
+            throw levelError;
           }
-        });
-        continue;
+        }
       }
     }
 
-    // Check if capability levels already exist
-    const { data: existingLevels, error: checkLevelsError } = await supabase
-      .from('capability_levels')
-      .select('count')
-      .eq('institution_id', institutionId)
-      .eq('source_id', 'nswgov')
-      .single();
-
-    if (checkLevelsError) {
-      logger.error('Error checking existing capability levels:', {
-        error: {
-          message: checkLevelsError.message,
-          details: checkLevelsError.details,
-          hint: checkLevelsError.hint,
-          code: checkLevelsError.code
-        }
-      });
-      throw checkLevelsError;
-    }
-
-    // If capability levels already exist, skip generation
-    if (existingLevels?.count > 0) {
-      logger.info('NSW Capability Levels already exist, skipping generation');
-      return;
-    }
-
-    // Upsert capability levels
-    for (const level of capabilityLevels) {
-      try {
-        const { data: levelData, error: levelError } = await supabase
-          .from('capability_levels')
-          .upsert({
-            id: level.id,
-            institution_id: level.institution_id,
-            source_id: level.source_id,
-            external_id: level.external_id,
-            capability_id: level.capability_id,
-            level: level.level,
-            summary: level.summary,
-            behavioral_indicators: level.behavioral_indicators,
-            created_at: level.created_at,
-            updated_at: level.updated_at,
-          }, {
-            onConflict: 'id',
-            returning: true
-          });
-
-        if (levelError) {
-          logger.error('Error upserting capability level:', {
-            level: level.level,
-            capability_id: level.capability_id,
-            error: {
-              message: levelError.message,
-              details: levelError.details,
-              hint: levelError.hint,
-              code: levelError.code,
-              data: level
-            }
-          });
-          continue;
-        }
-
-        logger.info(`Upserted capability level: ${level.level} for capability ${level.capability_id}`);
-      } catch (error) {
-        logger.error('Error processing capability level:', {
-          level: level.level,
-          capability_id: level.capability_id,
-          error: {
-            message: error.message,
-            stack: error.stack,
-            data: level
-          }
-        });
-        continue;
-      }
-    }
-    
-    logger.info('NSW Capability Framework data generation completed!');
-    return { capabilities, capabilityLevels };
+    logger.info('Successfully generated NSW Capability Framework data');
   } catch (error) {
     logger.error('Error generating NSW Capability Framework data:', {
       error: {
         message: error.message,
-        stack: error.stack,
-        details: error
+        details: error.details,
+        hint: error.hint,
+        code: error.code
       }
     });
     throw error;

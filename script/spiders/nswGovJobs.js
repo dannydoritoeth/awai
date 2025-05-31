@@ -114,7 +114,7 @@ export class NSWJobSpider {
       
       // Validate supabase connection before proceeding
       try {
-        const { data, error } = await this.#supabase.from('staging_jobs').select('count').limit(1);
+        const { data, error } = await this.#supabase.from('jobs').select('count').limit(1);
         if (error) {
           throw new Error(`Supabase connection test failed: ${error.message}`);
         }
@@ -426,23 +426,13 @@ export class NSWJobSpider {
 
             try {
               // 1. Upsert company/department
-              const companyData = {
-                id: job.department_id || `dept_${job.department.toLowerCase().replace(/\s+/g, '_')}`,
-                department_id: job.department_id,
-                department: job.department,
-                name: job.department,
-                description: `${job.department} - NSW Government`,
-                website: 'https://www.nsw.gov.au'
-              };
-              
-              logger.info(`Upserting company data for ${job.jobId}:`, { companyData });
-              const company = await this.#upsertToStagingCompany(companyData);
-              logger.info(`Company upsert result:`, { company });
+              const companyData = await this.#upsertToStagingCompany(job);
+              logger.info(`Company upsert result:`, { companyData });
 
               // 2. Process the job
               const processedJob = await this.#processJob(job.jobId, {
                 ...jobWithDetails,
-                company_id: company?.[0]?.id
+                company_id: companyData[0]?.id
               });
               logger.info('Job processing result:', { jobId: processedJob?.job?.jobId });
 
@@ -723,7 +713,7 @@ export class NSWJobSpider {
       });
 
       const { data, error } = await this.#supabase
-        .from('staging_jobs')
+        .from('jobs')
         .upsert(
           stagingJob,
           { 
@@ -736,7 +726,7 @@ export class NSWJobSpider {
         throw error;
       }
 
-      logger.info(`Successfully upserted job ${job.jobId} to staging_jobs`);
+      logger.info(`Successfully upserted job ${job.jobId} to jobs`);
       return data;
     } catch (error) {
       logger.error('Error in upsertToStagingJobs:', {
@@ -789,7 +779,7 @@ export class NSWJobSpider {
       });
 
       const { data, error } = await this.#supabase
-        .from('staging_documents')
+        .from('documents')
         .upsert(
           stagingDocument,
           { 
@@ -821,28 +811,42 @@ export class NSWJobSpider {
 
   async #upsertToStagingCompany(company) {
     try {
+      if (!company) {
+        throw new Error('Company object is required');
+      }
+
+      // Ensure we have a valid company name
+      const companyName = (company.name || company.department || '').trim();
+      if (!companyName) {
+        throw new Error('Company name is required');
+      }
+
+      // Generate a slug from the company name
+      const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      
       const { data, error } = await this.#supabase
-        .from('staging_companies')
+        .from('companies')
         .upsert({
           institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: company.id || company.department_id,
-          name: company.name || company.department,
-          description: company.description,
-          website: company.website,
-          raw_data: company,
-          processing_status: 'pending'
+          name: companyName,
+          description: company.description || `${companyName} - NSW Government`,
+          website: company.website || 'https://www.nsw.gov.au',
+          slug: slug,
+          sync_status: 'pending',
+          last_synced_at: new Date().toISOString(),
+          raw_data: company
         }, {
-          onConflict: 'institution_id,source_id,external_id',
+          onConflict: 'institution_id,slug',
           returning: true
-        });
+        })
+        .select();
 
       if (error) throw error;
-      logger.info(`Successfully upserted company: ${company.name || company.department}`);
+      logger.info(`Successfully upserted company: ${companyName}`);
       return data;
     } catch (error) {
       logger.error('Error upserting company:', {
-        company: company.name || company.department,
+        company: company?.name || company?.department || 'Unknown',
         error: {
           message: error.message,
           stack: error.stack,
@@ -856,7 +860,7 @@ export class NSWJobSpider {
   async #upsertToStagingRole(role) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_roles')
+        .from('roles')
         .upsert({
           institution_id: this.#institutionId,
           source_id: 'nswgov',
@@ -891,85 +895,72 @@ export class NSWJobSpider {
     }
   }
 
-  async #upsertToStagingCapability(capability) {
+  async #upsertToStagingCapability(capability, companyData) {
     try {
-      const { data, error } = await this.#supabase
-        .from('staging_capabilities')
-        .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: capability.id,
-          name: capability.name,
-          group_name: capability.group_name,
-          description: capability.description,
-          source_framework: capability.source_framework,
-          is_occupation_specific: capability.is_occupation_specific,
-          raw_data: {
-            ...capability,
-            level: capability.level // Store level in raw_data
-          },
-          processing_status: 'pending'
-        }, {
-          onConflict: 'institution_id,source_id,external_id',
-          returning: true
-        });
+        const { data, error } = await this.#supabase
+            .from('capabilities')
+            .upsert({
+                name: capability.name,
+                description: capability.description || '',
+                source_framework: 'NSW Government Capability Framework',
+                is_occupation_specific: false,
+                normalized_key: capability.name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+                company_id: companyData[0].id
+            }, {
+                onConflict: 'normalized_key,company_id'
+            })
+            .select();
 
-      if (error) throw error;
-      logger.info(`Successfully upserted capability: ${capability.name}`);
-      return data;
+        if (error) throw error;
+        logger.info(`Successfully upserted capability: ${capability.name}`);
+        return data;
     } catch (error) {
-      logger.error('Error upserting capability:', {
-        capability: capability.name,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
-      throw error;
+        logger.error('Error storing capability:', {
+            capability: capability.name,
+            error: {
+                message: error.message,
+                stack: error.stack,
+                details: error
+            }
+        });
+        throw error;
     }
   }
 
-  async #upsertToStagingSkill(skill) {
+  async #upsertToStagingSkill(skill, companyData) {
     try {
-      const { data, error } = await this.#supabase
-        .from('staging_skills')
-        .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: skill.id,
-          name: skill.name,
-          category: skill.category,
-          description: skill.description,
-          source: skill.source,
-          is_occupation_specific: skill.is_occupation_specific,
-          raw_data: skill,
-          processing_status: 'pending'
-        }, {
-          onConflict: 'institution_id,source_id,external_id',
-          returning: true
-        });
+        const { data, error } = await this.#supabase
+            .from('skills')
+            .upsert({
+                name: skill.name,
+                description: skill.description || '',
+                source: skill.source || 'job_description',
+                is_occupation_specific: true,
+                company_id: companyData[0].id,
+                category: 'Technical'
+            })
+            .select();
 
-      if (error) throw error;
-      logger.info(`Successfully upserted skill: ${skill.name}`);
-      return data;
+        if (error) throw error;
+        logger.info(`Successfully upserted skill: ${skill.name}`);
+        return data;
     } catch (error) {
-      logger.error('Error upserting skill:', {
-        skill: skill.name,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
-      throw error;
+        logger.error('Error storing skill:', {
+            skill: skill.name,
+            error: {
+                message: error.message,
+                stack: error.stack,
+                details: error
+            }
+        });
+        throw error;
     }
   }
 
   async #upsertToStagingTaxonomy(taxonomy) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_taxonomies')
+        .from('taxonomies')
         .upsert({
           institution_id: this.#institutionId,
           source_id: 'nswgov',
@@ -1003,7 +994,7 @@ export class NSWJobSpider {
   async #upsertToStagingJobDocument(jobId, documentId) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_job_documents')
+        .from('job_documents')
         .upsert({
           job_id: jobId,
           document_id: documentId,
@@ -1035,7 +1026,7 @@ export class NSWJobSpider {
   async #upsertToStagingRoleDocument(roleId, documentId) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_role_documents')
+        .from('role_documents')
         .upsert({
           role_id: roleId,
           document_id: documentId,
@@ -1067,7 +1058,7 @@ export class NSWJobSpider {
   async #upsertToStagingRoleSkill(roleId, skillId) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_role_skills')
+        .from('role_skills')
         .upsert({
           role_id: roleId,
           skill_id: skillId,
@@ -1099,7 +1090,7 @@ export class NSWJobSpider {
   async #upsertToStagingRoleCapability(roleId, capabilityId, capabilityType, level) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_role_capabilities')
+        .from('role_capabilities')
         .upsert({
           role_id: roleId,
           capability_id: capabilityId,
@@ -1134,7 +1125,7 @@ export class NSWJobSpider {
   async #upsertToStagingRoleTaxonomy(roleId, taxonomyId) {
     try {
       const { data, error } = await this.#supabase
-        .from('staging_role_taxonomies')
+        .from('role_taxonomies')
         .upsert({
           role_id: roleId,
           taxonomy_id: taxonomyId,
@@ -1163,6 +1154,41 @@ export class NSWJobSpider {
     }
   }
 
+  async #upsertToStagingCapabilityLevel(level) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('capability_levels')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: level.id,
+          capability_id: level.capability_id,
+          level: level.level,
+          summary: level.summary,
+          behavioral_indicators: level.behavioral_indicators,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted capability level: ${level.level} for capability ${level.capability_id}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting capability level:', {
+        level: level.level,
+        capability_id: level.capability_id,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
   async #logProcessingStats() {
     try {
       logger.info('\n----------------------------------------');
@@ -1171,7 +1197,7 @@ export class NSWJobSpider {
 
       // 1. Companies
       const { count: companiesCount } = await this.#supabase
-        .from('staging_companies')
+        .from('companies')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1179,7 +1205,7 @@ export class NSWJobSpider {
 
       // 2. Divisions
       const { count: divisionsCount } = await this.#supabase
-        .from('staging_divisions')
+        .from('divisions')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1187,7 +1213,7 @@ export class NSWJobSpider {
 
       // 3. Roles
       const { count: rolesCount } = await this.#supabase
-        .from('staging_roles')
+        .from('roles')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1195,7 +1221,7 @@ export class NSWJobSpider {
 
       // 4. Capabilities
       const { count: capabilitiesCount } = await this.#supabase
-        .from('staging_capabilities')
+        .from('capabilities')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1203,7 +1229,7 @@ export class NSWJobSpider {
 
       // 5. Capability Levels
       const { count: capabilityLevelsCount } = await this.#supabase
-        .from('staging_capability_levels')
+        .from('capability_levels')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1211,7 +1237,7 @@ export class NSWJobSpider {
 
       // 6. Skills
       const { count: skillsCount } = await this.#supabase
-        .from('staging_skills')
+        .from('skills')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1219,7 +1245,7 @@ export class NSWJobSpider {
 
       // 7. Role Capabilities
       const { count: roleCapabilitiesCount } = await this.#supabase
-        .from('staging_role_capabilities')
+        .from('role_capabilities')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1227,7 +1253,7 @@ export class NSWJobSpider {
 
       // 8. Role Skills
       const { count: roleSkillsCount } = await this.#supabase
-        .from('staging_role_skills')
+        .from('role_skills')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1235,7 +1261,7 @@ export class NSWJobSpider {
 
       // 9. Jobs
       const { count: jobsCount } = await this.#supabase
-        .from('staging_jobs')
+        .from('jobs')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1243,7 +1269,7 @@ export class NSWJobSpider {
 
       // 10. Job Documents
       const { count: jobDocumentsCount } = await this.#supabase
-        .from('staging_job_documents')
+        .from('job_documents')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1251,7 +1277,7 @@ export class NSWJobSpider {
 
       // 11. Role Documents
       const { count: roleDocumentsCount } = await this.#supabase
-        .from('staging_role_documents')
+        .from('role_documents')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1259,7 +1285,7 @@ export class NSWJobSpider {
 
       // 12. Taxonomies
       const { count: taxonomiesCount } = await this.#supabase
-        .from('staging_taxonomies')
+        .from('taxonomies')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1267,7 +1293,7 @@ export class NSWJobSpider {
 
       // 13. Role Taxonomies
       const { count: roleTaxonomiesCount } = await this.#supabase
-        .from('staging_role_taxonomies')
+        .from('role_taxonomies')
         .select('*', { count: 'exact', head: true })
         .eq('institution_id', this.#institutionId)
         .eq('source_id', 'nswgov');
@@ -1421,15 +1447,17 @@ export class NSWJobSpider {
   }
 
   async #initializeNSWCapabilityFramework() {
+    logger.info('Initializing NSW Capability Framework...');
     try {
-      logger.info('Initializing NSW Capability Framework...');
-      const frameworkData = await generateNSWCapabilityData(this.#supabase, this.#institutionId);
-      
-      logger.info('NSW Capability Framework initialized successfully');
-      return frameworkData;
+        await generateNSWCapabilityData(this.#supabase, this.#institutionId);
     } catch (error) {
-      logger.error('Error initializing NSW Capability Framework:', error);
-      throw error;
+        logger.error('Error initializing NSW Capability Framework:', {
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+            message: error.message
+        });
+        throw error;
     }
   }
 
@@ -1523,43 +1551,18 @@ export class NSWJobSpider {
     }
   }
 
-  async #extractCapabilitiesAndSkills(content) {
+  async #extractCapabilitiesAndSkills(content, companyData) {
     try {
-      logger.info('Calling OpenAI to extract capabilities and skills...');
-      
       const response = await this.#openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: `You are an expert in analyzing job descriptions and role documents to extract capabilities and skills based on the NSW Government Capability Framework.
-
-Focus on these key areas:
-1. Core capabilities (e.g. 'Digital Literacy', 'Project Management', 'Stakeholder Management')
-2. Technical skills specific to the role
-3. Grade level indicators (Foundational, Intermediate, Adept, Advanced, Highly Advanced)
-
-Format your response as a JSON object with:
-{
-  "capabilities": [
-    {
-      "name": "string",
-      "level": "string (one of: Foundational, Intermediate, Adept, Advanced, Highly Advanced)",
-      "behavioral_indicators": ["string"]
-    }
-  ],
-  "skills": [
-    {
-      "name": "string",
-      "category": "string (e.g. Technical, Soft Skills, Domain Knowledge)",
-      "description": "string"
-    }
-  ]
-}`
+            content: `You are an expert in analyzing job descriptions and role documents to extract capabilities and skills based on the NSW Government Capability Framework. Extract capabilities with their levels (Foundational, Intermediate, Adept, Advanced, Highly Advanced) and any specific skills mentioned. Format your response as a JSON object with two arrays: 'capabilities' and 'skills'. For capabilities, include the name, level, and any behavioral indicators found. For skills, include the name and any relevant context.`
           },
           {
             role: "user",
-            content: `Extract capabilities and skills from this job description:\n\n${content}`
+            content: `Extract capabilities and skills from this document:\n\n${content}`
           }
         ],
         temperature: 0.3,
@@ -1568,63 +1571,29 @@ Format your response as a JSON object with:
       });
 
       const result = response.choices[0].message.content;
+      if (!result) {
+        throw new Error('No content returned from OpenAI');
+      }
       
       try {
         // Parse the response into structured data
         const parsed = JSON.parse(result);
         
-        logger.info('OpenAI extraction results:', {
-          capabilities: parsed.capabilities?.map(c => ({
-            name: c.name,
-            level: c.level
-          })),
-          skills: parsed.skills?.map(s => ({
-            name: s.name,
-            category: s.category
-          }))
-        });
-
         // Process capabilities
         if (parsed.capabilities?.length > 0) {
           for (const capability of parsed.capabilities) {
             try {
-              // Create or update capability
               const capabilityData = {
-                institution_id: this.#institutionId,
-                source_id: 'nswgov',
-                external_id: `cap_${capability.name.toLowerCase().replace(/\s+/g, '_')}`,
                 name: capability.name,
                 description: capability.description || '',
                 source_framework: 'NSW Government Capability Framework',
                 is_occupation_specific: false,
-                raw_data: {
-                  ...capability,
-                  level: capability.level // Store level in raw_data
-                },
-                processing_status: 'pending'
+                normalized_key: capability.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')
               };
-
-              const { data: storedCapability, error: capabilityError } = await this.#supabase
-                .from('staging_capabilities')
-                .upsert(capabilityData, {
-                  onConflict: 'institution_id,source_id,external_id',
-                  returning: true
-                });
-
-              if (capabilityError) {
-                logger.error('Error storing capability:', {
-                  error: capabilityError,
-                  capability: capabilityData
-                });
-                continue;
-              }
-
-              logger.info(`Stored capability: ${capability.name} at level ${capability.level}`);
+              
+              await this.#upsertToStagingCapability(capabilityData, companyData);
             } catch (error) {
-              logger.error('Error processing capability:', {
-                error,
-                capability
-              });
+              logger.error(`Error processing capability for job:`, { error, capability });
             }
           }
         }
@@ -1633,41 +1602,17 @@ Format your response as a JSON object with:
         if (parsed.skills?.length > 0) {
           for (const skill of parsed.skills) {
             try {
-              // Create or update skill
               const skillData = {
-                institution_id: this.#institutionId,
-                source_id: 'nswgov',
-                external_id: `skill_${skill.name.toLowerCase().replace(/\s+/g, '_')}`,
                 name: skill.name,
-                category: skill.category,
-                description: skill.description,
-                source: 'job_listing',
+                description: skill.description || '',
+                source: 'job_description',
                 is_occupation_specific: true,
-                raw_data: skill,
-                processing_status: 'pending'
+                category: 'Technical'
               };
-
-              const { data: storedSkill, error: skillError } = await this.#supabase
-                .from('staging_skills')
-                .upsert(skillData, {
-                  onConflict: 'institution_id,source_id,external_id',
-                  returning: true
-                });
-
-              if (skillError) {
-                logger.error('Error storing skill:', {
-                  error: skillError,
-                  skill: skillData
-                });
-                continue;
-              }
-
-              logger.info(`Stored skill: ${skill.name} (${skill.category})`);
-    } catch (error) {
-              logger.error('Error processing skill:', {
-                error,
-                skill
-              });
+              
+              await this.#upsertToStagingSkill(skillData, companyData);
+            } catch (error) {
+              logger.error(`Error processing skill for job:`, { error, skill });
             }
           }
         }
@@ -1676,10 +1621,10 @@ Format your response as a JSON object with:
           capabilities: parsed.capabilities || [],
           skills: parsed.skills || []
         };
-      } catch (error) {
+      } catch (parseError) {
         logger.error('Error parsing OpenAI response:', {
           error: {
-            message: error.message,
+            message: parseError instanceof Error ? parseError.message : String(parseError),
             response: result
           }
         });
@@ -1688,47 +1633,12 @@ Format your response as a JSON object with:
     } catch (error) {
       logger.error('Error calling OpenAI:', {
         error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          details: error instanceof Error ? error : undefined
         }
       });
       return { capabilities: [], skills: [] };
-    }
-  }
-
-  async #upsertToStagingCapabilityLevel(level) {
-    try {
-      const { data, error } = await this.#supabase
-        .from('staging_capability_levels')
-        .upsert({
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-          external_id: level.id,
-          capability_id: level.capability_id,
-          level: level.level,
-          summary: level.summary,
-          behavioral_indicators: level.behavioral_indicators,
-          processing_status: 'pending'
-        }, {
-          onConflict: 'institution_id,source_id,external_id',
-          returning: true
-        });
-
-      if (error) throw error;
-      logger.info(`Successfully upserted capability level: ${level.level} for capability ${level.capability_id}`);
-      return data;
-    } catch (error) {
-      logger.error('Error upserting capability level:', {
-        level: level.level,
-        capability_id: level.capability_id,
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        }
-      });
-      throw error;
     }
   }
 
@@ -1821,132 +1731,59 @@ Format your response as a JSON object with:
     }
   }
 
-  async #processJobDetails(jobId, details) {
+  async #processJobDetails(jobId, details, companyData) {
     try {
-      // Log the exact data we're about to upsert
-      const stagingJob = {
-          institution_id: this.#institutionId,
-          source_id: 'nswgov',
-        original_id: jobId,
-          raw_data: {
-            id: jobId,
-            title: details.title,
-            department: details.department,
-            location: details.location,
-            salary: details.salary,
-            closing_date: details.closingDate,
-            description: details.description,
-            company_id: details.company_id,
-            source_url: details.sourceUrl,
-            job_type: details.jobType,
-          source: 'nswgov',
-            institution: details.institution,
-            documents: details.details?.documents || [],
-            skills: details.details?.skills || [],
-            category: details.details?.category,
-            processing_status: 'pending'
-          },
-          processed: false,
-          validation_status: 'pending'
-      };
+        // Store job details with the correct conflict key
+        const { data: jobData, error: jobError } = await this.#supabase
+            .from('jobs')
+            .upsert({
+                company_id: companyData[0].id,
+                source_id: 'nswgov',
+                original_id: jobId,
+                title: details.title,
+                department: details.department,
+                job_type: details.jobType,
+                source_url: details.sourceUrl,
+                remuneration: details.salary,
+                close_date: details.closingDate ? new Date(details.closingDate) : null,
+                locations: [details.location],
+                sync_status: 'pending',
+                last_synced_at: new Date().toISOString(),
+                raw_data: details
+            }, {
+                onConflict: 'company_id,source_id,original_id'
+            })
+            .select();
 
-      logger.debug('Attempting to upsert job with data:', {
-        jobId,
-        stagingJob
-      });
-
-      // Store job details with the correct conflict key
-      const { data: jobData, error: jobError } = await this.#supabase
-        .from('staging_jobs')
-        .upsert(stagingJob, {
-          onConflict: 'institution_id,external_id',
-          returning: true
-        });
-
-      if (jobError) {
-        // Log more details about the error
-        logger.error('Supabase error storing job details:', {
-          error: {
-            name: jobError.name,
-            message: jobError.message,
-            details: jobError.details,
-            hint: jobError.hint,
-            code: jobError.code
-          },
-          jobId,
-          stagingJob
-        });
-        throw jobError;
-      }
-
-      // If no error but also no data returned, try to fetch the record
-      if (!jobData || !jobData[0]) {
-        logger.warn('No data returned from upsert, attempting to fetch record...', {
-          jobId
-        });
-
-        const { data: fetchedJob, error: fetchError } = await this.#supabase
-          .from('staging_jobs')
-          .select('*')
-          .eq('institution_id', this.#institutionId)
-          .eq('source_id', 'nswgov')
-          .eq('original_id', jobId)
-          .maybeSingle();
-
-        if (fetchError) {
-          logger.error('Error fetching job after upsert:', {
-            error: fetchError,
-            jobId
-          });
-          throw new Error('Failed to verify job creation');
+        if (jobError) {
+            logger.error('Supabase error storing job details:', { error: jobError, jobId, details });
+            throw jobError;
         }
 
-        if (!fetchedJob) {
-          logger.error('Job not found after upsert:', {
-            jobId
-          });
-          throw new Error('Job not found after upsert');
-        }
-
-        logger.info('Successfully fetched job after upsert', {
-          jobId
-        });
-
-        return fetchedJob;
-      }
-
-      logger.info('Successfully stored job details', {
-        jobId,
-        stored_job: jobData[0]
-      });
-
-      return jobData[0];
+        logger.info(`Successfully stored job details for ${jobId}`);
+        return jobData;
     } catch (error) {
-      logger.error('Error in processJobDetails:', {
-        error: {
-          message: error.message,
-          stack: error.stack,
-          details: error
-        },
-        jobId
-      });
-      throw error;
+        logger.error('Error in processJobDetails:', { error, jobId });
+        throw error;
     }
   }
 
-  async #processJob(jobId, jobDetails) {
+  async #processJob(jobId, details) {
     try {
       logger.info(`Processing job ${jobId}...`);
       
+      // First get the company data
+      const companyData = await this.#upsertToStagingCompany(details);
+      
       // Extract capabilities and skills from the job description
-      const aiAnalysis = await this.#extractCapabilitiesAndSkills(jobDetails.details?.description || '');
+      const aiAnalysis = await this.#extractCapabilitiesAndSkills(details.description, companyData);
       logger.info(`AI Analysis results for job ${jobId}:`, {
-        capabilities: aiAnalysis.capabilities?.length || 0,
-        skills: aiAnalysis.skills?.length || 0
+        capabilities: aiAnalysis.capabilities.length,
+        skills: aiAnalysis.skills.length
       });
       
       // 1. First store the job details
-      const jobData = await this.#processJobDetails(jobId, jobDetails);
+      const jobData = await this.#processJobDetails(jobId, details, companyData);
       if (!jobData) {
         throw new Error('Failed to store job details');
       }
@@ -1954,18 +1791,18 @@ Format your response as a JSON object with:
 
       // 2. Create/update the role
       const roleData = {
-        institution_id: this.#institutionId,
-        source_id: 'nswgov',
-        external_id: jobId,
-        title: jobDetails.title,
-        grade_band: jobDetails.salary,
-        location: jobDetails.location,
-        primary_purpose: jobDetails.details?.description?.split('.')[0] || '',
+        company_id: companyData[0].id,
+        title: details.title,
+        grade_band: details.salary,
+        location: details.location,
+        primary_purpose: details.description?.split('.')[0] || '',
         raw_data: {
-          ...jobDetails,
+          ...details,
           ai_analysis: aiAnalysis
         },
-        processing_status: 'pending'
+        sync_status: 'pending',
+        last_synced_at: new Date().toISOString(),
+        normalized_key: `${details.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${jobId}`
       };
 
       logger.debug('Attempting to store role data:', {
@@ -1975,11 +1812,10 @@ Format your response as a JSON object with:
 
       // First check if the role exists
       const { data: existingRole, error: checkError } = await this.#supabase
-        .from('staging_roles')
+        .from('roles')
         .select('*')
-        .eq('institution_id', this.#institutionId)
-        .eq('source_id', 'nswgov')
-        .eq('external_id', jobId)
+        .eq('company_id', companyData[0].id)
+        .eq('normalized_key', roleData.normalized_key)
         .maybeSingle();
 
       if (checkError) {
@@ -1996,9 +1832,9 @@ Format your response as a JSON object with:
 
       // Then perform the upsert
       const { data: role, error: roleError } = await this.#supabase
-        .from('staging_roles')
+        .from('roles')
         .upsert(roleData, {
-          onConflict: 'institution_id,source_id,external_id',
+          onConflict: 'company_id,normalized_key',
           returning: 'representation'
         });
 
@@ -2018,11 +1854,10 @@ Format your response as a JSON object with:
       if (!role || !role[0]) {
         // If upsert didn't return data, try to fetch the role again
         const { data: fetchedRole, error: fetchError } = await this.#supabase
-          .from('staging_roles')
+          .from('roles')
           .select('*')
-          .eq('institution_id', this.#institutionId)
-          .eq('source_id', 'nswgov')
-          .eq('external_id', jobId)
+          .eq('company_id', companyData[0].id)
+          .eq('normalized_key', roleData.normalized_key)
           .maybeSingle();
 
         if (fetchError) {
@@ -2062,16 +1897,15 @@ Format your response as a JSON object with:
 
       // Link capabilities and skills to the role
       await this.#linkCapabilitiesAndSkills(role[0].id, aiAnalysis);
-
+      
       return { job: jobData, role: role[0] };
     } catch (error) {
       logger.error(`Error processing job ${jobId}:`, {
         error: {
           message: error.message,
-          stack: error.stack,
-          details: error
+          stack: error.stack
         },
-        job: jobDetails
+        job: details
       });
       throw error;
     }
@@ -2104,6 +1938,87 @@ Format your response as a JSON object with:
         roleId,
         aiAnalysis
       });
+    }
+  }
+
+  async #validateJobData(job) {
+    try {
+        // Check if validation failure already exists
+        const { data: existingFailure, error: checkError } = await this.#supabase
+            .from('validation_failures')
+            .select('id')
+            .eq('institution_id', this.#institutionId)
+            .eq('source_id', job.source || 'nswgov')
+            .eq('original_id', job.jobId)
+            .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+            logger.error('Error checking validation failure:', {
+                error: {
+                    message: checkError.message,
+                    details: checkError.details,
+                    hint: checkError.hint,
+                    code: checkError.code
+                }
+            });
+            return false;
+        }
+
+        if (existingFailure) {
+            // Update existing validation failure
+            const { error: updateError } = await this.#supabase
+                .from('validation_failures')
+                .update({
+                    last_checked_at: new Date().toISOString(),
+                    raw_data: job
+                })
+                .eq('id', existingFailure.id);
+
+            if (updateError) {
+                logger.error('Error updating validation failure:', {
+                    error: {
+                        message: updateError.message,
+                        details: updateError.details,
+                        hint: updateError.hint,
+                        code: updateError.code
+                    }
+                });
+            }
+            return false;
+        }
+
+        // Insert new validation failure
+        const { error: insertError } = await this.#supabase
+            .from('validation_failures')
+            .insert({
+                institution_id: this.#institutionId,
+                source_id: job.source || 'nswgov',
+                original_id: job.jobId,
+                last_checked_at: new Date().toISOString(),
+                raw_data: job
+            });
+
+        if (insertError) {
+            logger.error('Error inserting validation failure:', {
+                error: {
+                    message: insertError.message,
+                    details: insertError.details,
+                    hint: insertError.hint,
+                    code: insertError.code
+                }
+            });
+        }
+        return false;
+    } catch (error) {
+        logger.error('Error in job validation:', {
+            error: error instanceof Error ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            } : error,
+            job
+        });
+        return false;
     }
   }
 } 
