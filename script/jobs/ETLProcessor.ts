@@ -1,9 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger.js';
 import { z } from 'zod';
 import { DocumentProcessor } from "../utils/documentProcessor.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { OpenAI } from 'openai';
 
 const JobSchema = z.object({
     title: z.string(),
@@ -50,19 +51,65 @@ type StagedJob = {
     validation_errors?: Record<string, any>;
 };
 
+interface JobDetails {
+    title: string;
+    department: string;
+    department_name?: string;
+    location: string;
+    salary: string;
+    closingDate: string;
+    jobId: string;
+    sourceUrl: string;
+    jobType: string;
+    source: string;
+    institution: string;
+    details?: {
+        description?: string;
+        documents?: Array<{
+            url: string;
+            text: string;
+            type: string;
+        }>;
+    };
+}
+
+interface CapabilityData {
+    name: string;
+    description?: string;
+    level?: string;
+    behavioral_indicators?: string[];
+}
+
+interface SkillData {
+    name: string;
+    description?: string;
+    context?: string;
+}
+
+interface ExtractedAnalysis {
+    capabilities: CapabilityData[];
+    skills: SkillData[];
+}
+
 export class ETLProcessor {
-    #supabase;
-    #documentProcessor;
+    #name = "nsw gov jobs";
+    #supabase: SupabaseClient;
+    #documentProcessor: DocumentProcessor;
+    #institutionId: string;
+    #openai: OpenAI;
 
-    constructor() {
-        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
-            throw new Error('Missing required environment variables: SUPABASE_URL and SUPABASE_KEY');
+    constructor({ maxJobs = 10, supabase, institution_id }: { maxJobs?: number; supabase: SupabaseClient; institution_id: string }) {
+        if (!supabase) {
+            throw new Error('Supabase client is required');
         }
+        this.#supabase = supabase;
+        this.#institutionId = institution_id;
 
-        this.#supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_KEY
-        );
+        // Initialize OpenAI
+        if (!process.env.OPENAI_API_KEY) {
+            throw new Error('OpenAI API key is required for content processing');
+        }
+        this.#openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         this.#documentProcessor = new DocumentProcessor();
     }
 
@@ -149,19 +196,15 @@ export class ETLProcessor {
                     raw_job: job
                 },
                 validation_status: 'pending',
-                processed: false, // Reset processed status on upsert
-                processing_metadata: {}, // Reset processing metadata on upsert
-                validation_errors: null // Reset validation errors on upsert
+                processed: false,
+                processing_metadata: {}
             }))
         );
 
-        // Upsert into staging table
+        // Upsert into staging table - let external_id be generated
         const { data, error } = await this.#supabase
             .from('staging_jobs')
-            .upsert(stagingBatch, {
-                onConflict: 'institution_id,external_id',
-                ignoreDuplicates: false // We want to update existing records
-            })
+            .upsert(stagingBatch)
             .select();
 
         if (error) {
@@ -367,7 +410,9 @@ export class ETLProcessor {
                 locations: [stagedJob.raw_data.location],
                 close_date: new Date(stagedJob.raw_data.close_date),
                 remuneration: stagedJob.raw_data.remuneration,
-                raw_json: stagedJob.raw_data.raw_job
+                raw_json: stagedJob.raw_data.raw_job,
+                first_seen_at: new Date(),
+                last_updated_at: new Date()
             });
 
         if (error) {
@@ -379,6 +424,7 @@ export class ETLProcessor {
         const { error } = await this.#supabase
             .from('jobs')
             .update({
+                company_id: companyId,
                 title: stagedJob.raw_data.title,
                 source_url: stagedJob.raw_data.source_url,
                 department: stagedJob.raw_data.department,
@@ -391,6 +437,182 @@ export class ETLProcessor {
             .eq('id', jobId);
 
         if (error) {
+            throw error;
+        }
+    }
+
+    async #processJobDetails(jobId: string, details: JobDetails) {
+        try {
+            logger.info(`Processing job details for ${jobId}...`, { details });
+
+            // First extract capabilities and skills using OpenAI
+            const jobDescription = details.details?.description || '';
+            const analysis = await this.#extractCapabilitiesAndSkills(jobDescription);
+            logger.info(`Extracted capabilities and skills for job ${jobId}:`, { analysis });
+
+            // Store job details - only set source_id and original_id, let external_id be generated
+            const { data: jobData, error: jobError } = await this.#supabase
+                .from('staging_jobs')
+                .upsert({
+                    institution_id: this.#institutionId,
+                    source_id: 'nswgov',
+                    original_id: jobId,
+                    raw_data: {
+                        ...details,
+                        capabilities: analysis.capabilities,
+                        skills: analysis.skills
+                    },
+                    processed: false,
+                    validation_status: 'pending',
+                    processing_metadata: {}
+                })
+                .select()
+                .single();
+
+            if (jobError) {
+                logger.error('Error storing job details:', { error: jobError, jobId, details });
+                throw jobError;
+            }
+
+            logger.info(`Successfully stored job details for ${jobId}`);
+            return jobData;
+        } catch (error) {
+            logger.error('Error processing job details:', { error, jobId, details });
+            throw error;
+        }
+    }
+
+    async #extractCapabilitiesAndSkills(content: string) {
+        try {
+            const response = await this.#openai.chat.completions.create({
+                model: "gpt-4-turbo-preview",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are an expert in analyzing job descriptions and role documents to extract capabilities and skills based on the NSW Government Capability Framework. Extract capabilities with their levels (Foundational, Intermediate, Adept, Advanced, Highly Advanced) and any specific skills mentioned. Format your response as a JSON object with two arrays: 'capabilities' and 'skills'. For capabilities, include the name, level, and any behavioral indicators found. For skills, include the name and any relevant context.`
+                    },
+                    {
+                        role: "user",
+                        content: `Extract capabilities and skills from this document:\n\n${content}`
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 1000,
+                response_format: { type: "json_object" }
+            });
+
+            const result = response.choices[0].message.content;
+            if (!result) {
+                throw new Error('No content returned from OpenAI');
+            }
+            
+            try {
+                // Parse the response into structured data
+                const parsed = JSON.parse(result);
+                return {
+                    capabilities: parsed.capabilities || [],
+                    skills: parsed.skills || []
+                };
+            } catch (parseError) {
+                logger.error('Error parsing OpenAI response:', {
+                    error: {
+                        message: parseError instanceof Error ? parseError.message : String(parseError),
+                        response: result
+                    }
+                });
+                return { capabilities: [], skills: [] };
+            }
+        } catch (error) {
+            logger.error('Error calling OpenAI:', {
+                error: {
+                    message: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    details: error instanceof Error ? error : undefined
+                }
+            });
+            return { capabilities: [], skills: [] };
+        }
+    }
+
+    async #upsertToStagingCapability(capabilityData: any) {
+        const { data, error } = await this.#supabase
+            .from('staging_capabilities')
+            .upsert(capabilityData, {
+                onConflict: 'institution_id,source_id,external_id'
+            });
+
+        if (error) throw error;
+        return data;
+    }
+
+    async #upsertToStagingSkill(skillData: any) {
+        const { data, error } = await this.#supabase
+            .from('staging_skills')
+            .upsert(skillData, {
+                onConflict: 'institution_id,source_id,external_id'
+            });
+
+        if (error) throw error;
+        return data;
+    }
+
+    async #processJob(job: JobDetails) {
+        try {
+            const jobId = job.jobId || '';
+            if (!jobId) {
+                throw new Error('Job ID is required');
+            }
+
+            // Process job details and get capabilities/skills
+            const jobData = await this.#processJobDetails(jobId, job);
+
+            // Process extracted capabilities
+            if (jobData.raw_data.capabilities?.length > 0) {
+                for (const capability of jobData.raw_data.capabilities) {
+                    try {
+                        const capabilityData = {
+                            institution_id: this.#institutionId,
+                            source_id: 'nswgov',
+                            external_id: `cap_${capability.name.toLowerCase().replace(/\s+/g, '_')}`,
+                            name: capability.name,
+                            description: capability.description || '',
+                            source_framework: 'NSW Government Capability Framework',
+                            is_occupation_specific: false,
+                            raw_data: capability
+                        };
+                        
+                        await this.#upsertToStagingCapability(capabilityData);
+                    } catch (error) {
+                        logger.error(`Error processing capability for job ${jobId}:`, { error });
+                    }
+                }
+            }
+
+            // Process extracted skills
+            if (jobData.raw_data.skills?.length > 0) {
+                for (const skill of jobData.raw_data.skills) {
+                    try {
+                        const skillData = {
+                            institution_id: this.#institutionId,
+                            source_id: 'nswgov',
+                            external_id: `skill_${skill.name.toLowerCase().replace(/\s+/g, '_')}`,
+                            name: skill.name,
+                            description: skill.description || '',
+                            source: 'job_description',
+                            is_occupation_specific: true,
+                            raw_data: skill
+                        };
+                        
+                        await this.#upsertToStagingSkill(skillData);
+                    } catch (error) {
+                        logger.error(`Error processing skill for job ${jobId}:`, { error });
+                    }
+                }
+            }
+
+            return jobData;
+        } catch (error) {
+            logger.error('Error processing job:', { error, job });
             throw error;
         }
     }

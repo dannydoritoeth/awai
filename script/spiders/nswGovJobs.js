@@ -8,6 +8,12 @@ import process from "process";
 import fetch from "node-fetch";
 import { DocumentHandler } from "../utils/documentHandler.js";
 import { logger } from '../utils/logger.js';
+import PDFParser from 'pdf2json';
+import mammoth from 'mammoth';
+import { OpenAI } from 'openai';
+import { generateNSWCapabilityData } from '../scripts/generateNSWCapabilities.js';
+import { generateTaxonomyData } from '../scripts/generateTaxonomyData.js';
+import os from 'os';
 
 /**
  * @description Scrapes jobs from NSW Government jobs website
@@ -22,20 +28,26 @@ export class NSWJobSpider {
   #rateLimitDelay = 2000; // Base delay between requests
   #rateLimitJitter = 1000; // Random jitter to add to delay
   #supabase;
+  #openai;
+  #processedRoles = [];
+  #maxJobs;
+  #institutionId;
+  #page;
+  #browser;
 
-  constructor(options = {}) {
+  constructor({ maxJobs = 10, supabase, institution_id }) {
     try {
       this.browser = null;
       this.page = null;
-      this.maxJobs = options.maxJobs || 1;
+      this.#maxJobs = maxJobs;
       this.pageSize = 25; // Default page size
       this.currentJobCount = 0; // Initialize counter
       this.#documentHandler = new DocumentHandler();
       
-      if (!options.supabase) {
+      if (!supabase) {
         throw new Error('Supabase client is required');
       }
-      this.#supabase = options.supabase;
+      this.#supabase = supabase;
 
       // Validate supabase connection
       if (!this.#supabase.from) {
@@ -43,10 +55,16 @@ export class NSWJobSpider {
       }
 
       // Get or validate institution_id
-      if (!options.institution_id) {
+      if (!institution_id) {
         throw new Error('institution_id is required');
       }
-      this.institution_id = options.institution_id;
+      this.#institutionId = institution_id;
+
+      // Initialize OpenAI
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error('OpenAI API key is required for content processing');
+      }
+      this.#openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     } catch (error) {
       logger.error('Error initializing NSWJobSpider:', {
@@ -91,6 +109,9 @@ export class NSWJobSpider {
   async launch() {
     logger.info(`"${this.#name}" spider launched.`);
     try {
+      // Initialize NSW Capability Framework first
+      await this.#initializeNSWCapabilityFramework();
+      
       // Validate supabase connection before proceeding
       try {
         const { data, error } = await this.#supabase.from('staging_jobs').select('count').limit(1);
@@ -143,7 +164,15 @@ export class NSWJobSpider {
       const jobCards = await this.page.$$('.job-card');
       logger.info(`Found ${jobCards.length} job cards on initial page`);
       
-      return await this.#crawl();
+      const jobs = await this.#crawl();
+
+      // Process taxonomies after all roles are collected
+      await this.#processTaxonomies(this.#processedRoles);
+
+      // Log processing stats at the end
+      await this.#logProcessingStats();
+
+      return jobs;
     } catch (error) {
       logger.error('Spider launch error:', {
         error: {
@@ -198,8 +227,8 @@ export class NSWJobSpider {
           logger.info(`Found elements with 'count' in class name: ${classes}`);
         }
 
-        while (allJobs.length < this.maxJobs) {
-          logger.info(`Processing page ${currentPage}, current job count: ${allJobs.length}/${this.maxJobs}`);
+        while (allJobs.length < this.#maxJobs) {
+          logger.info(`Processing page ${currentPage}, current job count: ${allJobs.length}/${this.#maxJobs}`);
           
           try {
             await this.page.waitForSelector('[class*="job-card"], [class*="search-result"]', { timeout: 10000 });
@@ -213,15 +242,15 @@ export class NSWJobSpider {
           const jobs = await this.#scrapeJobs();
           if (jobs && jobs.length > 0) {
             // Only add up to maxJobs
-            const remainingSlots = this.maxJobs - allJobs.length;
+            const remainingSlots = this.#maxJobs - allJobs.length;
             const jobsToAdd = jobs.slice(0, remainingSlots);
             
             allJobs = [...allJobs, ...jobsToAdd];
             
-            logger.info(`Added ${jobsToAdd.length} jobs from page ${currentPage}. Total jobs: ${allJobs.length}/${this.maxJobs}`);
+            logger.info(`Added ${jobsToAdd.length} jobs from page ${currentPage}. Total jobs: ${allJobs.length}/${this.#maxJobs}`);
             
-            if (allJobs.length >= this.maxJobs) {
-              logger.info(`Reached maximum job limit of ${this.maxJobs}. Stopping crawl.`);
+            if (allJobs.length >= this.#maxJobs) {
+              logger.info(`Reached maximum job limit of ${this.#maxJobs}. Stopping crawl.`);
               break;
             }
           } else {
@@ -233,8 +262,8 @@ export class NSWJobSpider {
 
           // Try to find and click the next button
           try {
-            if (allJobs.length >= this.maxJobs) {
-              logger.info(`Job limit reached (${allJobs.length}/${this.maxJobs}). Stopping pagination.`);
+            if (allJobs.length >= this.#maxJobs) {
+              logger.info(`Job limit reached (${allJobs.length}/${this.#maxJobs}). Stopping pagination.`);
               break;
             }
 
@@ -267,11 +296,11 @@ export class NSWJobSpider {
         }
 
         // Ensure we only return maxJobs number of jobs
-        const finalJobs = allJobs.slice(0, this.maxJobs);
+        const finalJobs = allJobs.slice(0, this.#maxJobs);
 
         logger.info('----------------------------------------');
         logger.info(`Total pages processed: ${currentPage}`);
-        logger.info(`Total jobs scraped: ${finalJobs.length} / ${this.maxJobs}`);
+        logger.info(`Total jobs scraped: ${finalJobs.length} / ${this.#maxJobs}`);
         logger.info('----------------------------------------');
 
         return finalJobs;
@@ -333,7 +362,7 @@ export class NSWJobSpider {
           
           // Debug log for department
           console.log(`Department found: ${department}`);
-
+          
           // Get job type
           const jobType = 
             getText(element, '.job-search-result-right p span') ||
@@ -375,255 +404,160 @@ export class NSWJobSpider {
             institution: 'NSW Government'
           };
         }).filter(job => job.title && job.jobId); // Only return jobs with at least a title and ID
-      }, this.maxJobs);
+      }, this.#maxJobs);
 
       // Fetch job details for each listing with rate limiting
       const jobsWithDetails = [];
       for (const job of jobListings) {
         try {
+          logger.info(`Processing job listing: ${JSON.stringify(job)}`);
+          
           // Add rate limiting delay before fetching details
           await this.#addRateLimitDelay();
           
-          const details = await this.#scrapeJobDetails(job.sourceUrl, job.jobId);
+          const details = await this.#scrapeJobDetails(job.jobId, job.sourceUrl);
+          logger.info(`Scraped details for job ${job.jobId}:`, { details });
+          
           if (details) {
             const jobWithDetails = {
               ...job,
               details
             };
-            jobsWithDetails.push(jobWithDetails);
 
-            // Upsert to staging_jobs as we process each job
             try {
-              await this.#upsertToStagingJobs(jobWithDetails);
-              logger.info(`Successfully upserted job ${job.jobId} to staging_jobs`);
-            } catch (error) {
-              logger.error(`Error upserting job ${job.jobId} to staging_jobs:`, error);
+              // 1. Upsert company/department
+              const companyData = {
+                id: job.department_id || `dept_${job.department.toLowerCase().replace(/\s+/g, '_')}`,
+                department_id: job.department_id,
+                department: job.department,
+                name: job.department,
+                description: `${job.department} - NSW Government`,
+                website: 'https://www.nsw.gov.au'
+              };
+              
+              logger.info(`Upserting company data for ${job.jobId}:`, { companyData });
+              const company = await this.#upsertToStagingCompany(companyData);
+              logger.info(`Company upsert result:`, { company });
+
+              // 2. Process the job
+              const processedJob = await this.#processJob(job.jobId, {
+                ...jobWithDetails,
+                company_id: company?.[0]?.id
+              });
+              logger.info(`Job processing result:`, { processedJob });
+
+              jobsWithDetails.push(processedJob);
+            } catch (processingError) {
+              logger.error(`Error processing job ${job.jobId}:`, {
+                error: {
+                  message: processingError.message,
+                  stack: processingError.stack,
+                  cause: processingError.cause
+                },
+                job: jobWithDetails
+              });
+              // Continue with next job
+              continue;
             }
-          } else {
-            jobsWithDetails.push(job);
           }
-        } catch (error) {
-          logger.error(`Error fetching details for job ${job.jobId}:`, error);
-          jobsWithDetails.push(job);
+        } catch (jobError) {
+          logger.error(`Error processing job listing ${job.jobId}:`, {
+            error: {
+              message: jobError.message,
+              stack: jobError.stack,
+              cause: jobError.cause
+            },
+            job
+          });
+          // Continue with next job
+          continue;
         }
       }
 
       logger.info(`Scraped ${jobsWithDetails.length} jobs from current page`);
       return jobsWithDetails;
     } catch (error) {
-      logger.error(`Error scraping jobs: ${error.message}`);
+      logger.error(`Error scraping jobs:`, {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+        }
+      });
       return [];
     }
   }
 
   /**
    * @description Scrapes detailed job information from the job page
-   * @param {string} jobUrl - URL of the job listing
    * @param {string} jobId - ID of the job
+   * @param {string} url - URL of the job listing
    * @returns {Promise<Object>} Detailed job information
    */
-  async #scrapeJobDetails(jobUrl, jobId) {
+  async #scrapeJobDetails(jobId, url) {
     try {
-      logger.info(`Scraping details for job ${jobId} from ${jobUrl}`);
+      logger.info(`Scraping details for job ${jobId} from ${url}`);
       
-      await this.page.goto(jobUrl, { 
-        waitUntil: 'networkidle0',
-        timeout: 60000 
-      });
-
-      // Update selectors to match actual page structure
-      const possibleSelectors = [
-        '.job-detail-des',           // Primary selector for job details
-        '.wrap-content-jobdetail',   // Backup selector
-        '.wrap-jobdetail',           // Fallback selector
-        '.job-details',              // Keep some original selectors as fallback
-        '[class*="job-details"]',
-        'main article'
-      ];
-
-      let foundSelector = null;
-      for (const selector of possibleSelectors) {
-        try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
-          foundSelector = selector;
-          logger.info(`Found job details using selector: ${foundSelector}`);
-          break;
-        } catch (e) {
-          logger.debug(`Selector ${selector} not found, trying next...`);
-          continue;
-        }
-      }
-
-      if (!foundSelector) {
-        logger.warn(`No job details selectors found for job ${jobId}`);
-        return null;
-      }
-
-      // Extract the job details with improved content gathering
-      const jobDetails = await this.page.evaluate((selector) => {
-        const detailsElement = document.querySelector(selector);
-        if (!detailsElement) return null;
-
-        // Get all text content within paragraphs and divs
-        const contentElements = Array.from(detailsElement.querySelectorAll('p, div'))
-          .filter(el => {
-            // Filter out empty elements and those that are just containers
-            const text = el.textContent?.trim();
-            return text && text.length > 0 && el.children.length < 3;
-          })
-          .map(el => el.textContent?.trim());
-
-        // Get specific job details from the table if available
-        const jobTable = document.querySelector('.table.table-striped.job-summary');
-        const tableDetails = {};
-        if (jobTable) {
-          const rows = jobTable.querySelectorAll('tr');
-          rows.forEach(row => {
-            const label = row.querySelector('td:first-child')?.textContent?.trim().replace(':', '') || '';
-            const value = row.querySelector('td:last-child')?.textContent?.trim() || '';
-            if (label && value) {
-              tableDetails[label.toLowerCase().replace(/\s+/g, '_')] = value;
-            }
-          });
-        }
-
-        // Get the full HTML content
-        const fullContent = detailsElement.innerHTML?.trim() || '';
-
-        return {
-          description: fullContent,
-          additionalDetails: contentElements,
-          tableDetails: tableDetails,
-          metadata: {
-            lastScraped: new Date().toISOString(),
-            selector: selector
-          }
-        };
-      }, foundSelector);
-
-      if (!jobDetails) {
-        logger.warn(`Could not extract job details for job ${jobId}`);
-        return null;
-      }
-
-      // Improved document extraction
-      const documents = await this.page.evaluate(() => {
-        const extractLinks = () => {
-          const links = [];
-          // Find all links that might be documents
-          const allLinks = document.querySelectorAll('a');
-          
-          allLinks.forEach(link => {
-            const href = link.href;
-            const text = link.textContent?.trim();
-            if (!href || !text) return;
-
-            // Common document keywords
-            const docKeywords = ['position description', 'role description', 'pd', 'click here', 'view the role'];
-            const isDocLink = docKeywords.some(keyword => 
-              text.toLowerCase().includes(keyword) || 
-              href.toLowerCase().includes(keyword)
-            );
-
-            // Common document domains and paths
-            const docDomains = [
-              'files.jobs.nsw.gov.au',
-              'ocxz.cit.health.nsw.gov.au',
-              '/XXRecRequisitionPD',
-              '/excluded-apps'
-            ];
-            const isDocDomain = docDomains.some(domain => 
-              href.toLowerCase().includes(domain.toLowerCase())
-            );
-
-            if (isDocLink || isDocDomain) {
-              links.push({
-                url: href,
-                title: text || 'Document',
-                type: 'application/pdf' // Default to PDF, will be updated when fetched
-              });
-            }
-          });
-          return links;
-        };
-
-        return extractLinks();
-      });
-
-      logger.info(`Found ${documents.length} potential documents for job ${jobId}`);
+      await this.page.goto(url, { waitUntil: 'networkidle0' });
+      await this.page.waitForSelector('.job-detail-des', { timeout: 10000 });
       
-      const processedDocs = [];
-      for (const doc of documents) {
-        try {
-          // Fetch document metadata
-          const response = await fetch(doc.url);
-          if (!response.ok) {
-            logger.warn(`Failed to fetch document ${doc.url}: ${response.statusText}`);
-            continue;
-          }
+      logger.info('Found job details using selector: .job-detail-des');
+      
+      const jobDetails = await this.page.evaluate(() => {
+        const details = {};
+        
+        // Get basic details
+        details.title = document.querySelector('h1')?.textContent?.trim() || '';
+        details.department = document.querySelector('.agency-name')?.textContent?.trim() || '';
+        details.location = document.querySelector('.location')?.textContent?.trim() || '';
+        details.salary = document.querySelector('.salary')?.textContent?.trim() || '';
+        details.closingDate = document.querySelector('.closing-date')?.textContent?.trim() || '';
+        
+        // Get role details
+        const roleElement = document.querySelector('.role-type, .position-type');
+        details.role = roleElement ? roleElement.textContent.trim() : 'Not specified';
+        
+        // Get description
+        const descriptionElement = document.querySelector('.job-detail-des');
+        details.description = descriptionElement ? descriptionElement.textContent.trim() : '';
 
-          const contentType = response.headers.get('content-type');
-          const contentLength = response.headers.get('content-length');
-          const lastModified = response.headers.get('last-modified');
-
-          const documentRecord = {
-            jobId,
-            url: doc.url,
-            title: doc.title,
-            type: contentType || doc.type,
-            contentLength: parseInt(contentLength) || 0,
-            lastModified: lastModified ? new Date(lastModified) : new Date(),
-            status: 'pending',
-            source: 'nswgov',
-            created_at: new Date(),
-            updated_at: new Date()
-          };
-
-          try {
-            await this.#upsertToStagingDocuments(documentRecord);
-            logger.info(`Successfully upserted document "${doc.title}" for job ${jobId}`);
-            processedDocs.push(documentRecord);
-          } catch (error) {
-            logger.error('Error upserting document:', {
-              jobId,
-              docUrl: doc.url,
-              error: {
-                message: error.message,
-                stack: error.stack,
-                code: error.code,
-                details: error
-              }
-            });
-          }
-        } catch (error) {
-          logger.error('Error processing document:', {
-            jobId,
-            docUrl: doc.url,
-            error: {
-              message: error.message,
-              stack: error.stack,
-              details: error
-            }
-          });
+        // Get skills and capabilities section
+        const skillsSection = document.querySelector('.capabilities, .skills, .requirements');
+        if (skillsSection) {
+          details.skills = Array.from(skillsSection.querySelectorAll('li'))
+            .map(li => li.textContent.trim())
+            .filter(text => text.length > 0);
         }
+
+        // Get categories/classifications
+        const categoryElement = document.querySelector('.job-category, .classification');
+        details.category = categoryElement ? categoryElement.textContent.trim() : '';
+        
+        return details;
+      });
+      
+      // Add job ID and source URL
+      jobDetails.jobId = jobId;
+      jobDetails.sourceUrl = url;
+      
+      // Find and process documents
+      const documents = await this.#findJobDocuments(jobId);
+      if (documents && documents.length > 0) {
+        jobDetails.documents = documents;
       }
-
-      // Add processed documents to job details
-      jobDetails.documents = processedDocs;
-      logger.info(`Successfully processed ${processedDocs.length} documents for job ${jobId}`);
-
+      
       return jobDetails;
     } catch (error) {
-      logger.error(`Error scraping job details:`, {
+      logger.error('Error scraping job details:', {
         jobId,
-        url: jobUrl,
+        url,
         error: {
           message: error.message,
           stack: error.stack,
           details: error
         }
       });
-      return null;
+      throw error;
     }
   }
 
@@ -665,7 +599,7 @@ export class NSWJobSpider {
       }
 
       const stagingJob = {
-        institution_id: this.institution_id,
+        institution_id: this.#institutionId,
         source_id: 'nswgov',
         original_id: job.jobId,
         raw_data: {
@@ -730,7 +664,7 @@ export class NSWJobSpider {
       }
 
       const stagingDocument = {
-        institution_id: this.institution_id,
+        institution_id: this.#institutionId,
         source_id: 'nswgov',
         external_id: document.url,
         raw_content: {
@@ -780,6 +714,1229 @@ export class NSWJobSpider {
           code: error.code,
           details: error
         }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingCompany(company) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_companies')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: company.id || company.department_id,
+          name: company.name || company.department,
+          description: company.description,
+          website: company.website,
+          raw_data: company,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted company: ${company.name || company.department}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting company:', {
+        company: company.name || company.department,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingRole(role) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_roles')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: role.id,
+          title: role.title,
+          division_id: role.division_id,
+          grade_band: role.grade_band,
+          location: role.location,
+          anzsco_code: role.anzsco_code,
+          pcat_code: role.pcat_code,
+          primary_purpose: role.primary_purpose,
+          raw_data: role,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted role: ${role.title}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting role:', {
+        role: role.title,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingCapability(capability) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_capabilities')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: capability.id,
+          name: capability.name,
+          group_name: capability.group_name,
+          description: capability.description,
+          source_framework: capability.source_framework,
+          is_occupation_specific: capability.is_occupation_specific,
+          raw_data: capability,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted capability: ${capability.name}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting capability:', {
+        capability: capability.name,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingSkill(skill) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_skills')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: skill.id,
+          name: skill.name,
+          category: skill.category,
+          description: skill.description,
+          source: skill.source,
+          is_occupation_specific: skill.is_occupation_specific,
+          raw_data: skill,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted skill: ${skill.name}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting skill:', {
+        skill: skill.name,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingTaxonomy(taxonomy) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_taxonomies')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: taxonomy.id,
+          name: taxonomy.name,
+          description: taxonomy.description,
+          taxonomy_type: taxonomy.taxonomy_type,
+          raw_data: taxonomy,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted taxonomy: ${taxonomy.name}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting taxonomy:', {
+        taxonomy: taxonomy.name,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingJobDocument(jobId, documentId) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_job_documents')
+        .upsert({
+          job_id: jobId,
+          document_id: documentId,
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,job_id,document_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted job document relationship: ${jobId} -> ${documentId}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting job document:', {
+        jobId,
+        documentId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingRoleDocument(roleId, documentId) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_role_documents')
+        .upsert({
+          role_id: roleId,
+          document_id: documentId,
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,role_id,document_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted role document relationship: ${roleId} -> ${documentId}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting role document:', {
+        roleId,
+        documentId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingRoleSkill(roleId, skillId) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_role_skills')
+        .upsert({
+          role_id: roleId,
+          skill_id: skillId,
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,role_id,skill_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted role skill relationship: ${roleId} -> ${skillId}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting role skill:', {
+        roleId,
+        skillId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingRoleCapability(roleId, capabilityId, capabilityType, level) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_role_capabilities')
+        .upsert({
+          role_id: roleId,
+          capability_id: capabilityId,
+          capability_type: capabilityType,
+          level: level,
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,role_id,capability_id,capability_type',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted role capability relationship: ${roleId} -> ${capabilityId} (${capabilityType})`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting role capability:', {
+        roleId,
+        capabilityId,
+        capabilityType,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #upsertToStagingRoleTaxonomy(roleId, taxonomyId) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_role_taxonomies')
+        .upsert({
+          role_id: roleId,
+          taxonomy_id: taxonomyId,
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,role_id,taxonomy_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted role taxonomy relationship: ${roleId} -> ${taxonomyId}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting role taxonomy:', {
+        roleId,
+        taxonomyId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #logProcessingStats() {
+    try {
+      logger.info('\n----------------------------------------');
+      logger.info('ETL Processing Summary:');
+      logger.info('----------------------------------------');
+
+      // 1. Companies
+      const { count: companiesCount } = await this.#supabase
+        .from('staging_companies')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Companies: ${companiesCount} records processed to staging`);
+
+      // 2. Divisions
+      const { count: divisionsCount } = await this.#supabase
+        .from('staging_divisions')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Divisions: ${divisionsCount} records processed to staging`);
+
+      // 3. Roles
+      const { count: rolesCount } = await this.#supabase
+        .from('staging_roles')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Roles: ${rolesCount} records processed to staging`);
+
+      // 4. Capabilities
+      const { count: capabilitiesCount } = await this.#supabase
+        .from('staging_capabilities')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Capabilities: ${capabilitiesCount} records processed to staging`);
+
+      // 5. Capability Levels
+      const { count: capabilityLevelsCount } = await this.#supabase
+        .from('staging_capability_levels')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Capability Levels: ${capabilityLevelsCount} records processed to staging`);
+
+      // 6. Skills
+      const { count: skillsCount } = await this.#supabase
+        .from('staging_skills')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Skills: ${skillsCount} records processed to staging`);
+
+      // 7. Role Capabilities
+      const { count: roleCapabilitiesCount } = await this.#supabase
+        .from('staging_role_capabilities')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Role Capabilities: ${roleCapabilitiesCount} records processed to staging`);
+
+      // 8. Role Skills
+      const { count: roleSkillsCount } = await this.#supabase
+        .from('staging_role_skills')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Role Skills: ${roleSkillsCount} records processed to staging`);
+
+      // 9. Jobs
+      const { count: jobsCount } = await this.#supabase
+        .from('staging_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Jobs: ${jobsCount} records processed to staging`);
+
+      // 10. Job Documents
+      const { count: jobDocumentsCount } = await this.#supabase
+        .from('staging_job_documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Job Documents: ${jobDocumentsCount} records processed to staging`);
+
+      // 11. Role Documents
+      const { count: roleDocumentsCount } = await this.#supabase
+        .from('staging_role_documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Role Documents: ${roleDocumentsCount} records processed to staging`);
+
+      // 12. Taxonomies
+      const { count: taxonomiesCount } = await this.#supabase
+        .from('staging_taxonomies')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Taxonomies: ${taxonomiesCount} records processed to staging`);
+
+      // 13. Role Taxonomies
+      const { count: roleTaxonomiesCount } = await this.#supabase
+        .from('staging_role_taxonomies')
+        .select('*', { count: 'exact', head: true })
+        .eq('institution_id', this.#institutionId)
+        .eq('source_id', 'nswgov');
+      logger.info(`✓ Role Taxonomies: ${roleTaxonomiesCount} records processed to staging`);
+
+      logger.info('----------------------------------------');
+      logger.info('Total Records by Type:');
+      logger.info('----------------------------------------');
+      logger.info(`Companies: ${companiesCount}`);
+      logger.info(`Divisions: ${divisionsCount}`);
+      logger.info(`Roles: ${rolesCount}`);
+      logger.info(`Capabilities: ${capabilitiesCount}`);
+      logger.info(`Capability Levels: ${capabilityLevelsCount}`);
+      logger.info(`Skills: ${skillsCount}`);
+      logger.info(`Role Capabilities: ${roleCapabilitiesCount}`);
+      logger.info(`Role Skills: ${roleSkillsCount}`);
+      logger.info(`Jobs: ${jobsCount}`);
+      logger.info(`Job Documents: ${jobDocumentsCount}`);
+      logger.info(`Role Documents: ${roleDocumentsCount}`);
+      logger.info(`Taxonomies: ${taxonomiesCount}`);
+      logger.info(`Role Taxonomies: ${roleTaxonomiesCount}`);
+      logger.info('----------------------------------------');
+
+    } catch (error) {
+      logger.error('Error getting processing stats:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+    }
+  }
+
+  /**
+   * Helper method to extract capabilities from job details
+   */
+  #extractCapabilities(details) {
+    const capabilities = [];
+    const capabilityKeywords = ['capability', 'competency', 'proficiency'];
+    
+    // Extract from table details
+    if (details.tableDetails?.capabilities) {
+      const tableCapabilities = details.tableDetails.capabilities.split(',').map(c => c.trim());
+      tableCapabilities.forEach(cap => {
+        capabilities.push({
+          id: `cap_${cap.toLowerCase().replace(/\s+/g, '_')}`,
+          name: cap,
+          source_framework: 'NSW Government Capability Framework',
+          is_occupation_specific: false
+        });
+      });
+    }
+
+    // Extract from additional details
+    details.additionalDetails?.forEach(detail => {
+      const lowerDetail = detail.toLowerCase();
+      if (capabilityKeywords.some(keyword => lowerDetail.includes(keyword))) {
+        // Use regex to extract capability and level if present
+        const match = detail.match(/([^:]+)(?::\s*)(.*)/);
+        if (match) {
+          capabilities.push({
+            id: `cap_${match[1].toLowerCase().replace(/\s+/g, '_')}`,
+            name: match[1].trim(),
+            description: match[2].trim(),
+            source_framework: 'NSW Government Capability Framework',
+            is_occupation_specific: false
+          });
+        }
+      }
+    });
+
+    return capabilities;
+  }
+
+  /**
+   * Helper method to extract skills from job details
+   */
+  #extractSkills(details) {
+    const skills = [];
+    const skillKeywords = ['skill', 'expertise', 'knowledge'];
+    
+    // Extract from table details
+    if (details.tableDetails?.skills) {
+      const tableSkills = details.tableDetails.skills.split(',').map(s => s.trim());
+      tableSkills.forEach(skill => {
+        skills.push({
+          id: `skill_${skill.toLowerCase().replace(/\s+/g, '_')}`,
+          name: skill,
+          source: 'NSW Government Job Description',
+          is_occupation_specific: true
+        });
+      });
+    }
+
+    // Extract from additional details
+    details.additionalDetails?.forEach(detail => {
+      const lowerDetail = detail.toLowerCase();
+      if (skillKeywords.some(keyword => lowerDetail.includes(keyword))) {
+        // Use regex to extract skill and description if present
+        const match = detail.match(/([^:]+)(?::\s*)(.*)/);
+        if (match) {
+          skills.push({
+            id: `skill_${match[1].toLowerCase().replace(/\s+/g, '_')}`,
+            name: match[1].trim(),
+            description: match[2].trim(),
+            source: 'NSW Government Job Description',
+            is_occupation_specific: true
+          });
+        }
+      }
+    });
+
+    return skills;
+  }
+
+  /**
+   * Helper method to extract taxonomies from job details
+   */
+  #extractTaxonomies(details) {
+    const taxonomies = [];
+    const taxonomyKeywords = ['category', 'classification', 'type'];
+    
+    // Extract from table details
+    if (details.tableDetails?.category) {
+      taxonomies.push({
+        id: `tax_${details.tableDetails.category.toLowerCase().replace(/\s+/g, '_')}`,
+        name: details.tableDetails.category,
+        taxonomy_type: 'job_category'
+      });
+    }
+
+    // Extract from additional details
+    details.additionalDetails?.forEach(detail => {
+      const lowerDetail = detail.toLowerCase();
+      if (taxonomyKeywords.some(keyword => lowerDetail.includes(keyword))) {
+        // Use regex to extract taxonomy and description if present
+        const match = detail.match(/([^:]+)(?::\s*)(.*)/);
+        if (match) {
+          taxonomies.push({
+            id: `tax_${match[1].toLowerCase().replace(/\s+/g, '_')}`,
+            name: match[1].trim(),
+            description: match[2].trim(),
+            taxonomy_type: 'job_category'
+          });
+        }
+      }
+    });
+
+    return taxonomies;
+  }
+
+  async #initializeNSWCapabilityFramework() {
+    try {
+      logger.info('Initializing NSW Capability Framework...');
+      const frameworkData = await generateNSWCapabilityData(this.#supabase, this.#institutionId);
+      
+      logger.info('NSW Capability Framework initialized successfully');
+      return frameworkData;
+    } catch (error) {
+      logger.error('Error initializing NSW Capability Framework:', error);
+      throw error;
+    }
+  }
+
+  async #processTaxonomies(roles) {
+    try {
+      logger.info('Processing role taxonomies...');
+      
+      if (!roles || roles.length === 0) {
+        logger.warn('No roles to process for taxonomies');
+        return;
+      }
+      
+      // Initialize taxonomy data structure
+      const taxonomyData = {
+        institution_id: this.#institutionId,
+        source_id: 'nswgov',
+        classifications: roles.map(role => ({
+          name: role.title || 'Unspecified Role',
+          department: role.department || 'Unspecified Department',
+          type: role.role || 'Unspecified Type'
+        }))
+      };
+      
+      // Generate and upsert taxonomy data
+      await generateTaxonomyData(this.#supabase, taxonomyData);
+      
+      logger.info('Taxonomy processing completed successfully');
+    } catch (error) {
+      logger.error('Error processing taxonomies:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #processDocumentContent(buffer, type) {
+    try {
+      let content = null;
+      
+      // Create a temporary file to store the buffer
+      const tempFile = path.join(os.tmpdir(), `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`);
+      fs.writeFileSync(tempFile, buffer);
+
+      try {
+        if (type.includes('pdf')) {
+          const pdfParser = new PDFParser(null, 1);
+          content = await new Promise((resolve, reject) => {
+            pdfParser.on("pdfParser_dataReady", pdfData => {
+              try {
+                const text = decodeURIComponent(pdfParser.getRawTextContent())
+                  .replace(/\r\n/g, '\n')
+                  .replace(/\n{3,}/g, '\n\n')
+                  .trim();
+                resolve(text);
+              } catch (error) {
+                reject(error);
+              }
+            });
+            pdfParser.on("pdfParser_dataError", errData => reject(errData));
+            pdfParser.loadPDF(tempFile);
+          });
+        } else if (type.includes('word') || type.includes('docx')) {
+          const result = await mammoth.extractRawText({ path: tempFile });
+          content = result.value.trim();
+        }
+      } finally {
+        // Clean up temp file
+        try {
+          fs.unlinkSync(tempFile);
+        } catch (e) {
+          logger.warn(`Failed to clean up temp file: ${tempFile}`, e);
+        }
+      }
+
+      if (content) {
+        // Extract capabilities and skills using OpenAI
+        const analysis = await this.#extractCapabilitiesAndSkills(content);
+        return {
+          content,
+          analysis
+        };
+      }
+      return null;
+    } catch (error) {
+      logger.error('Error processing document content:', error);
+      return null;
+    }
+  }
+
+  async #extractCapabilitiesAndSkills(content) {
+    try {
+      const response = await this.#openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert in analyzing job descriptions and role documents to extract capabilities and skills based on the NSW Government Capability Framework. Extract capabilities with their levels (Foundational, Intermediate, Adept, Advanced, Highly Advanced) and any specific skills mentioned. Format your response as a JSON object with two arrays: 'capabilities' and 'skills'. For capabilities, include the name, level, and any behavioral indicators found. For skills, include the name and any relevant context.`
+          },
+          {
+            role: "user",
+            content: `Extract capabilities and skills from this document:\n\n${content}`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000,
+        response_format: { type: "json_object" }
+      });
+
+      const result = response.choices[0].message.content;
+      
+      try {
+        // Parse the response into structured data
+        const parsed = JSON.parse(result);
+        return {
+          capabilities: parsed.capabilities || [],
+          skills: parsed.skills || []
+        };
+      } catch (error) {
+        logger.error('Error parsing OpenAI response:', {
+          error: {
+            message: error.message,
+            response: result
+          }
+        });
+        return { capabilities: [], skills: [] };
+      }
+    } catch (error) {
+      logger.error('Error calling OpenAI:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      return { capabilities: [], skills: [] };
+    }
+  }
+
+  async #upsertToStagingCapabilityLevel(level) {
+    try {
+      const { data, error } = await this.#supabase
+        .from('staging_capability_levels')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: level.id,
+          capability_id: level.capability_id,
+          level: level.level,
+          summary: level.summary,
+          behavioral_indicators: level.behavioral_indicators,
+          raw_data: level,
+          processing_status: 'pending'
+        }, {
+          onConflict: 'institution_id,source_id,external_id',
+          returning: true
+        });
+
+      if (error) throw error;
+      logger.info(`Successfully upserted capability level: ${level.level} for capability ${level.capability_id}`);
+      return data;
+    } catch (error) {
+      logger.error('Error upserting capability level:', {
+        level: level.level,
+        capability_id: level.capability_id,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
+      throw error;
+    }
+  }
+
+  async #findJobDocuments(jobId) {
+    try {
+      logger.info(`Finding documents for job ${jobId}...`);
+      const documents = await this.page.evaluate(() => {
+        const links = [];
+        const allLinks = document.querySelectorAll('a');
+        
+        allLinks.forEach(link => {
+          const href = link.href;
+          const text = link.textContent?.trim();
+          if (!href || !text) return;
+          
+          const docKeywords = ['position description', 'role description', 'pd', 'click here', 'view the role'];
+          const isDocLink = docKeywords.some(keyword => 
+            text.toLowerCase().includes(keyword) || 
+            href.toLowerCase().includes(keyword)
+          );
+          
+          if (isDocLink) {
+            links.push({
+              url: href,
+              text: text,
+              type: href.toLowerCase().includes('.pdf') ? 'pdf' : 
+                    href.toLowerCase().includes('.doc') ? 'word' : 'unknown'
+            });
+          }
+        });
+        
+        return links;
+      });
+      
+      logger.info(`Found ${documents.length} potential documents:`, {
+        documents: documents.map(d => ({ url: d.url, type: d.type }))
+      });
+      
+      return documents;
+    } catch (error) {
+      logger.error(`Error finding documents for job ${jobId}:`, {
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+        },
+        jobId
+      });
+      throw error;
+    }
+  }
+
+  async #downloadDocument(url) {
+    try {
+      logger.info(`Downloading document from ${url}...`);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        const error = new Error(`Failed to download document: ${response.status} ${response.statusText}`);
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          url: response.url
+        };
+        throw error;
+      }
+      
+      const buffer = await response.arrayBuffer();
+      logger.info(`Successfully downloaded document`, {
+        url,
+        size: buffer.byteLength,
+        type: response.headers.get('content-type')
+      });
+      
+      return Buffer.from(buffer);
+    } catch (error) {
+      logger.error('Error downloading document:', {
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause,
+          response: error.response
+        },
+        url
+      });
+      throw error;
+    }
+  }
+
+  async #processJobDetails(jobId, details) {
+    try {
+      logger.info(`Processing job details for ${jobId}...`, { details });
+      
+      // Store job details
+      const { data: jobData, error: jobError } = await this.#supabase
+        .from('staging_jobs')
+        .upsert({
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: jobId,
+          raw_data: {
+            id: jobId,
+            title: details.title,
+            department: details.department,
+            location: details.location,
+            salary: details.salary,
+            closing_date: details.closingDate,
+            description: details.description,
+            company_id: details.company_id,
+            source_url: details.sourceUrl,
+            job_type: details.jobType,
+            source: details.source,
+            institution: details.institution,
+            documents: details.details?.documents || [],
+            skills: details.details?.skills || [],
+            category: details.details?.category,
+            processing_status: 'pending'
+          },
+          processed: false,
+          validation_status: 'pending'
+        }, {
+          onConflict: 'institution_id,external_id',
+          returning: true
+        });
+
+      if (jobError) {
+        logger.error('Error storing job details:', {
+          error: {
+            name: jobError.name,
+            message: jobError.message,
+            details: jobError.details,
+            hint: jobError.hint,
+            code: jobError.code
+          },
+          jobId,
+          details
+        });
+        throw jobError;
+      }
+
+      if (!jobData || !jobData[0]) {
+        throw new Error('No job data returned after upsert');
+      }
+
+      logger.info('Successfully stored job details', {
+        jobId,
+        title: details.title,
+        department: details.department,
+        jobData: jobData[0]
+      });
+
+      return jobData[0];
+    } catch (error) {
+      logger.error('Error processing job details:', {
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+        },
+        jobId,
+        details
+      });
+      throw error;
+    }
+  }
+
+  async #processJob(jobId, jobDetails) {
+    try {
+      logger.info(`Processing job ${jobId}...`, { jobDetails });
+      
+      // 1. First store the job details
+      const jobData = await this.#processJobDetails(jobId, jobDetails);
+      if (!jobData) {
+        throw new Error('Failed to store job details');
+      }
+      logger.info(`Successfully stored job details for ${jobId}`);
+
+      // 2. Create/update the role
+      const roleData = {
+        institution_id: this.#institutionId,
+        source_id: 'nswgov',
+        external_id: jobId,
+        title: jobDetails.title,
+        department: jobDetails.department,
+        location: jobDetails.location,
+        grade_band: jobDetails.salary,
+        primary_purpose: jobDetails.details?.description?.split('.')[0] || '',
+        raw_data: jobDetails,
+        processing_status: 'pending'
+      };
+
+      const { data: role, error: roleError } = await this.#supabase
+        .from('staging_roles')
+        .upsert(roleData, {
+          onConflict: 'institution_id,external_id',
+          returning: true
+        });
+
+      if (roleError) {
+        logger.error(`Error storing role data for ${jobId}:`, {
+          error: roleError,
+          roleData
+        });
+        throw roleError;
+      }
+
+      if (!role || !role[0]) {
+        throw new Error('Failed to store role data');
+      }
+
+      logger.info(`Successfully stored role data for ${jobId}`);
+
+      // 3. Process capabilities if found
+      if (jobDetails.details?.skills?.length > 0) {
+        for (const skillText of jobDetails.details.skills) {
+          // Create skill record
+          const skillData = {
+            institution_id: this.#institutionId,
+            source_id: 'nswgov',
+            external_id: `skill_${skillText.toLowerCase().replace(/\s+/g, '_')}`,
+            name: skillText,
+            category: 'job_requirement',
+            description: skillText,
+            source: 'job_listing',
+            is_occupation_specific: true,
+            raw_data: { skill: skillText },
+            processing_status: 'pending'
+          };
+          
+          const { data: skill, error: skillError } = await this.#supabase
+            .from('staging_skills')
+            .upsert(skillData, {
+              onConflict: 'institution_id,source_id,external_id',
+              returning: true
+            });
+
+          if (skillError) {
+            logger.error(`Error storing skill data for ${jobId}:`, {
+              error: skillError,
+              skillData
+            });
+            continue;
+          }
+
+          if (skill?.[0]) {
+            const roleSkillData = {
+              institution_id: this.#institutionId,
+              source_id: 'nswgov',
+              role_id: role[0].id,
+              skill_id: skill[0].id,
+              processing_status: 'pending'
+            };
+
+            const { error: roleSkillError } = await this.#supabase
+              .from('staging_role_skills')
+              .upsert(roleSkillData, {
+                onConflict: 'institution_id,role_id,skill_id',
+                returning: true
+              });
+
+            if (roleSkillError) {
+              logger.error(`Error linking skill ${skillText} to role ${jobId}:`, {
+                error: roleSkillError,
+                roleSkillData
+              });
+              continue;
+            }
+
+            logger.info(`Successfully linked skill ${skillText} to role ${jobId}`);
+          }
+        }
+      }
+
+      // 4. Process taxonomies/categories if found
+      if (jobDetails.details?.category) {
+        const taxonomyData = {
+          institution_id: this.#institutionId,
+          source_id: 'nswgov',
+          external_id: `tax_${jobDetails.details.category.toLowerCase().replace(/\s+/g, '_')}`,
+          name: jobDetails.details.category,
+          description: `Job category: ${jobDetails.details.category}`,
+          taxonomy_type: 'job_category',
+          raw_data: { category: jobDetails.details.category },
+          processing_status: 'pending'
+        };
+        
+        const { data: taxonomy, error: taxonomyError } = await this.#supabase
+          .from('staging_taxonomies')
+          .upsert(taxonomyData, {
+            onConflict: 'institution_id,source_id,external_id',
+            returning: true
+          });
+
+        if (taxonomyError) {
+          logger.error(`Error storing taxonomy data for ${jobId}:`, {
+            error: taxonomyError,
+            taxonomyData
+          });
+        } else if (taxonomy?.[0]) {
+          const roleTaxonomyData = {
+            institution_id: this.#institutionId,
+            source_id: 'nswgov',
+            role_id: role[0].id,
+            taxonomy_id: taxonomy[0].id,
+            processing_status: 'pending'
+          };
+
+          const { error: roleTaxonomyError } = await this.#supabase
+            .from('staging_role_taxonomies')
+            .upsert(roleTaxonomyData, {
+              onConflict: 'institution_id,role_id,taxonomy_id',
+              returning: true
+            });
+
+          if (roleTaxonomyError) {
+            logger.error(`Error linking taxonomy ${jobDetails.details.category} to role ${jobId}:`, {
+              error: roleTaxonomyError,
+              roleTaxonomyData
+            });
+          } else {
+            logger.info(`Successfully linked taxonomy ${jobDetails.details.category} to role ${jobId}`);
+          }
+        }
+      }
+
+      // 5. Process documents
+      if (jobDetails.details?.documents?.length > 0) {
+        for (const doc of jobDetails.details.documents) {
+          try {
+            const buffer = await this.#downloadDocument(doc.url);
+            const processedDoc = await this.#processDocumentContent(buffer, doc.type);
+            
+            if (processedDoc) {
+              const documentData = {
+                institution_id: this.#institutionId,
+                source_id: 'nswgov',
+                original_id: doc.url,
+                raw_content: {
+                  url: doc.url,
+                  type: doc.type,
+                  text: doc.text,
+                  content: processedDoc.content
+                },
+                processing_status: 'pending'
+              };
+
+              const { data: document, error: documentError } = await this.#supabase
+                .from('staging_documents')
+                .upsert(documentData, {
+                  onConflict: 'institution_id,source_id,external_id',
+                  returning: true
+                });
+
+              if (documentError) {
+                logger.error(`Error storing document for job ${jobId}:`, {
+                  error: documentError,
+                  documentData
+                });
+                continue;
+              }
+
+              if (document?.[0]) {
+                // Link document to job
+                const jobDocumentData = {
+                  institution_id: this.#institutionId,
+                  source_id: 'nswgov',
+                  job_id: jobId,
+                  document_id: document[0].id,
+                  processing_status: 'pending'
+                };
+
+                const { error: jobDocumentError } = await this.#supabase
+                  .from('staging_job_documents')
+                  .upsert(jobDocumentData, {
+                    onConflict: 'institution_id,job_id,document_id',
+                    returning: true
+                  });
+
+                if (jobDocumentError) {
+                  logger.error(`Error linking document to job ${jobId}:`, {
+                    error: jobDocumentError,
+                    jobDocumentData
+                  });
+                  continue;
+                }
+
+                // Link document to role
+                const roleDocumentData = {
+                  institution_id: this.#institutionId,
+                  source_id: 'nswgov',
+                  role_id: role[0].id,
+                  document_id: document[0].id,
+                  processing_status: 'pending'
+                };
+
+                const { error: roleDocumentError } = await this.#supabase
+                  .from('staging_role_documents')
+                  .upsert(roleDocumentData, {
+                    onConflict: 'institution_id,role_id,document_id',
+                    returning: true
+                  });
+
+                if (roleDocumentError) {
+                  logger.error(`Error linking document to role ${jobId}:`, {
+                    error: roleDocumentError,
+                    roleDocumentData
+                  });
+                  continue;
+                }
+
+                logger.info(`Successfully linked document ${doc.url} to job ${jobId} and role ${role[0].id}`);
+              }
+            }
+          } catch (docError) {
+            logger.error(`Error processing document for job ${jobId}:`, {
+              error: docError,
+              document: doc
+            });
+          }
+        }
+      }
+
+      return { job: jobData, role: role[0] };
+    } catch (error) {
+      logger.error(`Error processing job ${jobId}:`, {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+        },
+        jobDetails
       });
       throw error;
     }

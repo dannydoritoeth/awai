@@ -3,7 +3,7 @@
 
 BEGIN;
 
--- Create staging tables
+-- Create staging tables for documents and jobs
 CREATE TABLE IF NOT EXISTS staging_documents (
     id SERIAL PRIMARY KEY,
     institution_id UUID NOT NULL,  -- Link to institution (e.g., NSW Gov)
@@ -54,6 +54,203 @@ CREATE TABLE IF NOT EXISTS staging_validation_failures (
     error_message TEXT,
     raw_data JSONB
 );
+
+-- Create staging tables for core entities
+CREATE TABLE IF NOT EXISTS staging_companies (
+    id SERIAL PRIMARY KEY,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    website TEXT,
+    raw_data JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, source_id, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_capabilities (
+    id SERIAL PRIMARY KEY,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    group_name TEXT,
+    description TEXT,
+    source_framework TEXT,
+    is_occupation_specific BOOLEAN DEFAULT FALSE,
+    raw_data JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, source_id, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_roles (
+    id SERIAL PRIMARY KEY,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    division_id UUID,
+    grade_band TEXT,
+    location TEXT,
+    anzsco_code TEXT,
+    pcat_code TEXT,
+    primary_purpose TEXT,
+    raw_data JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, source_id, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_skills (
+    id SERIAL PRIMARY KEY,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT,
+    description TEXT,
+    source TEXT,
+    is_occupation_specific BOOLEAN DEFAULT FALSE,
+    raw_data JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, source_id, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_taxonomies (
+    id SERIAL PRIMARY KEY,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    taxonomy_type TEXT DEFAULT 'core',
+    raw_data JSONB NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, source_id, external_id)
+);
+
+-- Add indexes for core entity staging tables
+CREATE INDEX IF NOT EXISTS idx_staging_companies_status ON staging_companies(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_companies_institution ON staging_companies(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_capabilities_status ON staging_capabilities(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_capabilities_institution ON staging_capabilities(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_roles_status ON staging_roles(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_roles_institution ON staging_roles(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_skills_status ON staging_skills(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_skills_institution ON staging_skills(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_taxonomies_status ON staging_taxonomies(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_taxonomies_institution ON staging_taxonomies(institution_id);
+
+-- Create relationship staging tables
+CREATE TABLE IF NOT EXISTS staging_job_documents (
+    id SERIAL PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, job_id, document_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_role_documents (
+    id SERIAL PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, role_id, document_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_role_skills (
+    id SERIAL PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, role_id, skill_id)
+);
+
+CREATE TABLE IF NOT EXISTS staging_role_capabilities (
+    id SERIAL PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    capability_id TEXT NOT NULL,
+    capability_type TEXT NOT NULL,
+    level TEXT,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, role_id, capability_id, capability_type)
+);
+
+CREATE TABLE IF NOT EXISTS staging_role_taxonomies (
+    id SERIAL PRIMARY KEY,
+    role_id TEXT NOT NULL,
+    taxonomy_id TEXT NOT NULL,
+    institution_id UUID NOT NULL,
+    source_id TEXT NOT NULL,
+    processed BOOLEAN DEFAULT FALSE,
+    processing_status TEXT DEFAULT 'pending',
+    processing_metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(institution_id, role_id, taxonomy_id)
+);
+
+-- Add indexes for relationship staging tables
+CREATE INDEX IF NOT EXISTS idx_staging_job_documents_status ON staging_job_documents(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_job_documents_institution ON staging_job_documents(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_role_documents_status ON staging_role_documents(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_role_documents_institution ON staging_role_documents(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_role_skills_status ON staging_role_skills(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_role_skills_institution ON staging_role_skills(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_role_capabilities_status ON staging_role_capabilities(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_role_capabilities_institution ON staging_role_capabilities(institution_id);
+
+CREATE INDEX IF NOT EXISTS idx_staging_role_taxonomies_status ON staging_role_taxonomies(processing_status);
+CREATE INDEX IF NOT EXISTS idx_staging_role_taxonomies_institution ON staging_role_taxonomies(institution_id);
+
+-- Add validation tracking for core entities
+ALTER TABLE staging_validation_failures
+    ADD COLUMN IF NOT EXISTS staging_company_id INTEGER REFERENCES staging_companies(id),
+    ADD COLUMN IF NOT EXISTS staging_capability_id INTEGER REFERENCES staging_capabilities(id),
+    ADD COLUMN IF NOT EXISTS staging_role_id INTEGER REFERENCES staging_roles(id),
+    ADD COLUMN IF NOT EXISTS staging_skill_id INTEGER REFERENCES staging_skills(id),
+    ADD COLUMN IF NOT EXISTS staging_taxonomy_id INTEGER REFERENCES staging_taxonomies(id);
 
 -- Add version tracking to jobs table
 ALTER TABLE jobs

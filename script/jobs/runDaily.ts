@@ -40,6 +40,20 @@ async function runDaily() {
         // Initialize Supabase client
         const supabase = createClient(supabaseUrl, supabaseKey);
         
+        // Test Supabase connection
+        const { error: testError } = await supabase.from('institutions').select('count').single();
+        if (testError) {
+            logger.error('Failed to connect to Supabase:', {
+                error: {
+                    message: testError.message,
+                    details: testError.details,
+                    hint: testError.hint,
+                    code: testError.code
+                }
+            });
+            throw testError;
+        }
+        
         // Get or create NSW Gov institution
         let { data: institution, error: institutionError } = await supabase
             .from('institutions')
@@ -61,24 +75,43 @@ async function runDaily() {
                 .single();
                 
             if (createError) {
-                logger.error('Error creating institution:', createError);
+                logger.error('Error creating institution:', {
+                    error: {
+                        message: createError.message,
+                        details: createError.details,
+                        hint: createError.hint,
+                        code: createError.code
+                    }
+                });
                 throw createError;
             }
             
             institution = newInstitution;
             logger.info('Created NSW Gov institution');
         } else if (institutionError) {
-            logger.error('Error fetching institution:', institutionError);
+            logger.error('Error fetching institution:', {
+                error: {
+                    message: institutionError.message,
+                    details: institutionError.details,
+                    hint: institutionError.hint,
+                    code: institutionError.code
+                }
+            });
             throw institutionError;
         }
         
         if (!institution) {
-            logger.error('NSW Gov institution not found and could not be created');
-            throw new Error('NSW Gov institution not found and could not be created');
+            const error = new Error('NSW Gov institution not found and could not be created');
+            logger.error(error.message);
+            throw error;
         }
         
         // Initialize ETL processor
-        const processor = new ETLProcessor();
+        const processor = new ETLProcessor({
+            maxJobs: 1,
+            supabase,
+            institution_id: institution.id
+        });
         
         // Initialize spider with desired job limit
         const spider = new NSWJobSpider({
@@ -128,12 +161,40 @@ async function runDaily() {
         
         logger.info('Daily ETL run completed successfully');
     } catch (error) {
-        logger.error('Fatal error in daily ETL run', { error });
+        // Ensure error is properly formatted
+        const formattedError = error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause
+        } : error;
+        
+        logger.error('Fatal error in daily ETL run:', { error: formattedError });
         process.exit(1);
     }
 }
 
+// Add proper error handling for the main execution
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection:', {
+        reason: reason instanceof Error ? {
+            name: reason.name,
+            message: reason.message,
+            stack: reason.stack,
+            cause: reason.cause
+        } : reason
+    });
+    process.exit(1);
+});
+
 runDaily().catch(error => {
-    logger.error('Unhandled error in daily ETL run', { error });
+    const formattedError = error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause
+    } : error;
+    
+    logger.error('Unhandled error in daily ETL run:', { error: formattedError });
     process.exit(1);
 }); 
