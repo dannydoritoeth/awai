@@ -444,6 +444,9 @@ export class NSWJobSpider {
       }
 
       logger.info('Successfully completed migration from staging to live DB');
+
+      // Add verification step
+      await this.#verifyLiveSync(liveSupabase);
     } catch (error) {
       logger.error('Error migrating data to live DB:', {
         error: {
@@ -453,6 +456,103 @@ export class NSWJobSpider {
         }
       });
       throw error;
+    }
+  }
+
+  async #verifyLiveSync(liveSupabase) {
+    try {
+      logger.info('\n----------------------------------------');
+      logger.info('Verifying Live DB Sync Status:');
+      logger.info('----------------------------------------');
+
+      // Get all pending items from staging
+      const [
+        { data: stagingJobs },
+        { data: stagingRoles },
+        { data: stagingSkills },
+        { data: stagingCapabilities },
+        { data: stagingRoleSkills },
+        { data: stagingRoleCapabilities }
+      ] = await Promise.all([
+        this.#supabase.from('jobs').select('id, original_id').eq('sync_status', 'pending'),
+        this.#supabase.from('roles').select('id').eq('sync_status', 'pending'),
+        this.#supabase.from('skills').select('id').eq('sync_status', 'pending'),
+        this.#supabase.from('capabilities').select('id').eq('sync_status', 'pending'),
+        this.#supabase.from('role_skills').select('role_id, skill_id').eq('sync_status', 'pending'),
+        this.#supabase.from('role_capabilities').select('role_id, capability_id').eq('sync_status', 'pending')
+      ]);
+
+      // Get corresponding items from live DB
+      const [
+        { data: liveJobs },
+        { data: liveRoles },
+        { data: liveSkills },
+        { data: liveCapabilities },
+        { data: liveRoleSkills },
+        { data: liveRoleCapabilities }
+      ] = await Promise.all([
+        liveSupabase.from('jobs').select('id, original_id').in('original_id', stagingJobs?.map(j => j.original_id) || []),
+        liveSupabase.from('roles').select('id').in('id', stagingRoles?.map(r => r.id) || []),
+        liveSupabase.from('skills').select('id').in('id', stagingSkills?.map(s => s.id) || []),
+        liveSupabase.from('capabilities').select('id').in('id', stagingCapabilities?.map(c => c.id) || []),
+        liveSupabase.from('role_skills').select('role_id, skill_id').in('role_id', stagingRoleSkills?.map(rs => rs.role_id) || []),
+        liveSupabase.from('role_capabilities').select('role_id, capability_id').in('role_id', stagingRoleCapabilities?.map(rc => rc.role_id) || [])
+      ]);
+
+      // Compare and log results
+      const compareResults = (entityName, staging, live, idField = 'id') => {
+        const stagingCount = staging?.length || 0;
+        const liveCount = live?.length || 0;
+        const stagingIds = new Set(staging?.map(item => item[idField]) || []);
+        const liveIds = new Set(live?.map(item => item[idField]) || []);
+        const missing = staging?.filter(item => !liveIds.has(item[idField])) || [];
+
+        logger.info(`${entityName}:`);
+        logger.info(`  - Staging count: ${stagingCount}`);
+        logger.info(`  - Live count: ${liveCount}`);
+        logger.info(`  - Successfully synced: ${liveCount}/${stagingCount}`);
+        
+        if (missing.length > 0) {
+          logger.warn(`  - Missing in live DB: ${missing.length} items`);
+          logger.warn(`  - Missing IDs: ${JSON.stringify(missing.map(item => item[idField]))}`);
+        }
+      };
+
+      compareResults('Jobs', stagingJobs, liveJobs, 'original_id');
+      compareResults('Roles', stagingRoles, liveRoles);
+      compareResults('Skills', stagingSkills, liveSkills);
+      compareResults('Capabilities', stagingCapabilities, liveCapabilities);
+
+      // For relationships, create composite keys for comparison
+      const compareRelationships = (entityName, staging, live) => {
+        const getKey = (item) => `${item.role_id}-${item.skill_id || item.capability_id}`;
+        const stagingKeys = new Set(staging?.map(getKey) || []);
+        const liveKeys = new Set(live?.map(getKey) || []);
+        const missing = staging?.filter(item => !liveKeys.has(getKey(item))) || [];
+
+        logger.info(`${entityName}:`);
+        logger.info(`  - Staging count: ${staging?.length || 0}`);
+        logger.info(`  - Live count: ${live?.length || 0}`);
+        logger.info(`  - Successfully synced: ${live?.length || 0}/${staging?.length || 0}`);
+        
+        if (missing.length > 0) {
+          logger.warn(`  - Missing in live DB: ${missing.length} relationships`);
+          logger.warn(`  - Missing relationships: ${JSON.stringify(missing)}`);
+        }
+      };
+
+      compareRelationships('Role Skills', stagingRoleSkills, liveRoleSkills);
+      compareRelationships('Role Capabilities', stagingRoleCapabilities, liveRoleCapabilities);
+
+      logger.info('----------------------------------------');
+    } catch (error) {
+      logger.error('Error verifying live sync:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
     }
   }
 
@@ -2191,6 +2291,35 @@ export class NSWJobSpider {
   async #processJob(jobId, details) {
     try {
       logger.info(`Processing job ${jobId}...`);
+      
+      // Get the live DB client
+      const liveSupabase = createClient(
+        process.env.SUPABASE_URL || '',
+        process.env.SUPABASE_KEY || ''
+      );
+
+      // Check if job already exists in live DB
+      const { data: existingLiveJob, error: checkError } = await liveSupabase
+        .from('jobs')
+        .select('id')
+        .eq('source_id', 'nswgov')
+        .eq('original_id', jobId)
+        .maybeSingle();
+
+      if (checkError) {
+        logger.error('Error checking live DB for existing job:', {
+          error: checkError,
+          jobId
+        });
+        throw checkError;
+      }
+
+      if (existingLiveJob) {
+        logger.info(`Job ${jobId} already exists in live DB, skipping processing`);
+        return null;
+      }
+
+      logger.info(`Job ${jobId} not found in live DB, proceeding with processing`);
       
       // First get the company data
       const companyData = await this.#upsertToStagingCompany(details);
