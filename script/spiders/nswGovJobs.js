@@ -15,6 +15,7 @@ import { generateNSWCapabilityData } from '../scripts/generateNSWCapabilities.js
 import { generateTaxonomyData } from '../scripts/generateTaxonomyData.js';
 import os from 'os';
 import { createClient } from '@supabase/supabase-js';
+import { generateRoleEmbedding, generateSkillEmbedding } from '../utils/embeddingTemplates.js';
 
 /**
  * @description Scrapes jobs from NSW Government jobs website
@@ -1380,6 +1381,21 @@ export class NSWJobSpider {
         throw checkError;
       }
 
+
+      let embedding = null;
+      try {
+        embedding = await generateRoleEmbedding(role, {
+          job: role.raw_data,
+          capabilities: role.raw_data?.capabilities || [],
+          skills: role.raw_data?.skills || [],
+          taxonomies: role.raw_data?.taxonomies || [],
+          relatedJobs: role.raw_data?.related_jobs || []
+        });
+      } catch (embeddingError) {
+        logger.error('Error generating role embedding:', { error: embeddingError, role: role.title });
+      }
+
+
       let result;
       if (existingRole) {
         // Update existing role
@@ -1395,7 +1411,8 @@ export class NSWJobSpider {
             primary_purpose: role.primary_purpose,
             raw_data: role.raw_data,
             sync_status: 'pending',
-            normalized_key: normalizedKey
+            normalized_key: normalizedKey,
+            embedding: embedding
           })
           .eq('id', existingRole.id)
           .select();
@@ -1421,7 +1438,8 @@ export class NSWJobSpider {
             primary_purpose: role.primary_purpose,
             raw_data: role.raw_data,
             sync_status: 'pending',
-            normalized_key: normalizedKey
+            normalized_key: normalizedKey,
+            embedding: embedding
           })
           .select();
 
@@ -1598,6 +1616,20 @@ export class NSWJobSpider {
         throw checkError;
       }
 
+
+      // Generate embedding for the skill
+      let embedding = null;
+      try {
+        embedding = await generateSkillEmbedding(skill, {
+          relatedRoles: [{
+            title: this.#currentRoleId ? 'Current Role' : undefined,
+            context: skill.description
+          }]
+        });
+      } catch (embeddingError) {
+        logger.error('Error generating skill embedding:', { error: embeddingError, skill: skill.name });
+      }
+
       const skillData = {
           name: skill.name,
         description: skill.description || '',
@@ -1606,7 +1638,8 @@ export class NSWJobSpider {
         company_id: companyData[0].id,
         category: skill.category || 'Technical',
         sync_status: 'pending',
-        last_synced_at: null
+        last_synced_at: null,
+        embedding: embedding
       };
 
       let result;
