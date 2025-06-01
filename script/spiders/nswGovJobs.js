@@ -1768,7 +1768,9 @@ export class NSWJobSpider {
           role_id: roleId,
           capability_id: capabilityId,
           capability_type: capabilityType,
-          level: level
+          level: level,
+          sync_status: 'pending',
+          last_synced_at: null
         }, {
           onConflict: 'role_id,capability_id'
         })
@@ -1810,7 +1812,8 @@ export class NSWJobSpider {
         .upsert({
           role_id: roleId,
           skill_id: skillId,
-          sync_status: 'pending'
+          sync_status: 'pending',
+          last_synced_at: null
         }, {
           onConflict: 'role_id,skill_id',
           returning: true
