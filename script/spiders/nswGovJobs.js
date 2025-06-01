@@ -11,7 +11,6 @@ import { logger } from '../utils/logger.js';
 import PDFParser from 'pdf2json';
 import mammoth from 'mammoth';
 import { OpenAI } from 'openai';
-import { generateNSWCapabilityData } from '../scripts/generateNSWCapabilities.js';
 import { generateTaxonomyData } from '../scripts/generateTaxonomyData.js';
 import os from 'os';
 import { createClient } from '@supabase/supabase-js';

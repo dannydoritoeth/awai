@@ -5,7 +5,7 @@ import { DocumentProcessor } from "../utils/documentProcessor.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { OpenAI } from 'openai';
-import { Department as DepartmentType } from '../types/department.js';
+
 
 const JobSchema = z.object({
     title: z.string(),
