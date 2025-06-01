@@ -560,8 +560,8 @@ export class NSWJobSpider {
         this.#supabase.from('roles').select('id').gte('last_synced_at', recentTimestamp),
         this.#supabase.from('skills').select('id').gte('last_synced_at', recentTimestamp),
         this.#supabase.from('capabilities').select('id').gte('last_synced_at', recentTimestamp),
-        this.#supabase.from('role_skills').select('role_id, skill_id').gte('last_synced_at', recentTimestamp),
-        this.#supabase.from('role_capabilities').select('role_id, capability_id').gte('last_synced_at', recentTimestamp)
+        this.#supabase.from('role_skills').select('role_id, skill_id').eq('sync_status', 'synced'),
+        this.#supabase.from('role_capabilities').select('role_id, capability_id').eq('sync_status', 'synced')
       ]);
 
       // Log the current state of staging tables
@@ -2622,14 +2622,39 @@ export class NSWJobSpider {
         messages: [
           {
             role: "system",
-            content: `You are an expert in analyzing job descriptions and extracting capabilities and skills based on the NSW Government Capability Framework. Your task is to:
+            content: `You are an expert in analyzing job descriptions and extracting capabilities based on the NSW Government Capability Framework. Your task is to:
 
-1. Extract capabilities that align with the NSW Government Capability Framework core capabilities:
-- Personal Attributes (e.g. Manage Self, Display Resilience and Courage)
-- Relationships (e.g. Communicate Effectively, Commit to Customer Service)
-- Results (e.g. Deliver Results, Think and Solve Problems)
-- Business Enablers (e.g. Technology, Finance)
-- People Management (e.g. Manage and Develop People)
+1. ONLY extract capabilities from this predefined list of NSW Government Capability Framework core capabilities:
+
+Personal Attributes:
+- Display Resilience and Courage
+- Act with Integrity
+- Manage Self
+- Value Diversity and Inclusion
+
+Relationships:
+- Communicate Effectively
+- Commit to Customer Service
+- Work Collaboratively
+- Influence and Negotiate
+
+Results:
+- Deliver Results
+- Plan and Prioritise
+- Think and Solve Problems
+- Demonstrate Accountability
+
+Business Enablers:
+- Finance
+- Technology
+- Procurement and Contract Management
+- Project Management
+
+People Management:
+- Manage and Develop People
+- Inspire Direction and Purpose
+- Optimise Business Outcomes
+- Manage Reform and Change
 
 2. For each capability, determine the level (Foundational, Intermediate, Adept, Advanced, Highly Advanced) based on the role requirements and responsibilities.
 
@@ -2642,7 +2667,7 @@ Format your response as a JSON object with:
 {
   "capabilities": [
     {
-      "name": "string (one of the core capabilities)",
+      "name": "string (MUST be one of the exact core capabilities listed above)",
       "level": "string (Foundational, Intermediate, Adept, Advanced, or Highly Advanced)",
       "description": "string (how this capability applies to the role)",
       "behavioral_indicators": ["string (specific behaviors that demonstrate this capability)"]
@@ -2659,7 +2684,7 @@ Format your response as a JSON object with:
           },
           {
             role: "user",
-            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements:\n\n${content}`
+            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements. ONLY use capabilities from the predefined NSW Government Capability Framework list:\n\n${content}`
           }
         ],
         temperature: 0.3,
