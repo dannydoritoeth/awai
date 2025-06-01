@@ -1,8 +1,49 @@
 # NSW Government Jobs ETL Refactoring Plan
 
+## Important Note on Functionality
+
+This refactoring plan is focused on code organization and maintainability while **preserving existing functionality**. The key points are:
+
+- **No Functional Changes**: The ETL process will continue to work exactly as it does now
+- **Same Data Flow**: The order of operations and data processing steps remain unchanged
+- **Identical Outputs**: The final data structure and format will be the same
+- **Existing Integrations**: All current integrations with Supabase, OpenAI, and other services remain as is
+- **Business Logic**: Core business rules and processing logic stay the same
+
+The main goals are:
+1. Better code organization
+2. Improved maintainability
+3. Clearer separation of concerns
+4. Enhanced testability
+5. Better documentation
+
+## Current Structure
+
+The ETL process consists of three main components:
+
+1. **runDaily.ts**
+   - Entry point for the ETL process
+   - Handles database connections setup
+   - Orchestrates the spider and processor
+   - Manages institution setup
+
+2. **ETLProcessor.ts**
+   - Processes job data
+   - Handles database operations
+   - Manages document processing
+   - Performs AI analysis
+   - Handles data migration
+
+3. **nswGovJobs.js**
+   - Web scraping functionality
+   - Document handling
+   - Initial data processing
+   - Taxonomy processing
+   - Database staging operations
+
 ## Current Issues
 
-1. **Monolithic Structure**: The `NSWJobSpider` class is over 2700 lines long and handles too many responsibilities:
+1. **Monolithic Spider Class**: The `NSWJobSpider` class (2700+ lines) handles:
    - Web scraping
    - Data processing
    - Database operations
@@ -12,27 +53,26 @@
    - Data validation
    - Migration between databases
 
-2. **Tight Coupling**: The class is tightly coupled with:
-   - Supabase database
-   - OpenAI API
-   - Specific data structures
-   - Document processing logic
+2. **Tight Coupling**:
+   - Direct database operations in spider
+   - OpenAI integration mixed with scraping
+   - Document processing embedded in spider
+   - Staging/live database logic mixed
 
 3. **Maintainability Challenges**:
-   - Hard to modify one feature without affecting others
-   - Difficult to test individual components
-   - Complex error handling across different concerns
-   - Duplicate code patterns
-   - Mixed levels of abstraction
+   - Complex error handling across concerns
+   - Duplicate database operations
+   - Mixed responsibilities
+   - Hard to modify individual features
 
 ## Refactoring Goals
 
-1. **Separation of Concerns**: Split functionality into focused, single-responsibility modules
-2. **Improved Testability**: Enable unit testing of individual components
-3. **Better Error Handling**: Consistent error handling across modules
+1. **Separation of Concerns**: Split functionality into focused modules
+2. **Improved Testability**: Enable unit testing of components
+3. **Better Error Handling**: Consistent error handling
 4. **Configuration Management**: Externalize configuration
 5. **Dependency Injection**: Reduce tight coupling
-6. **Type Safety**: Improve TypeScript usage and type definitions
+6. **Type Safety**: Improve TypeScript usage
 
 ## Proposed Architecture
 
@@ -45,361 +85,533 @@ src/
 ├── models/
 │   ├── job.ts
 │   ├── role.ts
-│   ├── capability.ts
-│   └── skill.ts
+│   └── document.ts
 ├── services/
 │   ├── spider/
-│   │   ├── NSWJobSpider.ts
+│   │   ├── NSWJobSpider.ts        # Core scraping only
 │   │   └── interfaces/
 │   ├── processor/
-│   │   ├── JobProcessor.ts
-│   │   ├── ProcessorOrchestrator.ts
+│   │   ├── JobProcessor.ts        # Data processing
+│   │   ├── DocumentProcessor.ts   # Document handling
 │   │   └── interfaces/
 │   ├── analyzer/
-│   │   ├── AIAnalyzer.ts
+│   │   ├── AIAnalyzer.ts         # AI/OpenAI operations
+│   │   ├── templates/            # NEW: AI Analysis prompts
+│   │   │   ├── jobAnalysis.ts    # Job content analysis
+│   │   │   ├── skillExtraction.ts # Skill extraction
+│   │   │   ├── capabilityAnalysis.ts # Capability analysis
+│   │   │   └── taxonomyAnalysis.ts # Taxonomy classification
 │   │   └── interfaces/
-│   └── storage/
-│       ├── DatabaseService.ts
-│       └── interfaces/
-├── utils/
-│   ├── logger.ts
-│   ├── errors.ts
-│   └── validators.ts
-└── types/
-    └── common.ts
+│   ├── storage/
+│   │   ├── DatabaseService.ts    # Database operations
+│   │   └── interfaces/
+│   ├── embeddings/               # Semantic search embeddings
+│   │   ├── templates/
+│   │   │   ├── jobTemplates.ts   # Job description templates
+│   │   │   ├── roleTemplates.ts  # Role templates
+│   │   │   └── skillTemplates.ts # Skill templates
+│   │   ├── JobEmbedder.ts
+│   │   └── interfaces/
+│   └── orchestrator/
+│       └── ETLOrchestrator.ts    # Replaces runDaily.ts
+└── utils/
+    ├── logger.ts
+    ├── errors.ts
+    └── validators.ts
 ```
 
-## Code Cleanup Plan
+## Code Documentation Headers
 
-### Phase 0: Code Audit (Week 1)
+Each source file should include a standardized documentation header. Here are the templates for different file types:
 
-1. **Identify Unused Files**
-   - Run static analysis tools to find unused imports and files
-   - Create dependency graphs to visualize code relationships
-   - Document all files that appear to be unused
+### Service Class Header
+```typescript
+/**
+ * @file [filename]
+ * @description Part of NSW Government Jobs ETL Refactoring
+ * 
+ * [Brief description of the service's responsibility]
+ * 
+ * @module services/[service-name]
+ * @see RefactorETL.md for the complete refactoring plan
+ * 
+ * @author [Your Team Name]
+ * @version 1.0.0
+ * @since [Date]
+ * 
+ * Key Responsibilities:
+ * - [List main responsibilities]
+ * 
+ * Dependencies:
+ * - [List key dependencies]
+ * 
+ * Usage:
+ * ```typescript
+ * [Example usage code]
+ * ```
+ */
+```
 
-2. **Analyze Current Usage**
-   ```
-   Current Structure:
-   script/
-   ├── jobs/
-   │   ├── runDaily.ts           # To be replaced by ProcessorOrchestrator
-   │   ├── ETLProcessor.ts       # To be split into smaller services
-   │   └── nswGovJobs.js        # To be refactored into TypeScript and split
-   ├── spiders/                  # Review and clean up
-   ├── utils/                    # Review and consolidate
-   └── scripts/                  # Review for redundancy
-   ```
+### Interface Header
+```typescript
+/**
+ * @file [filename]
+ * @description Part of NSW Government Jobs ETL Refactoring
+ * 
+ * [Brief description of what this interface represents]
+ * 
+ * @module interfaces
+ * @see RefactorETL.md for the complete refactoring plan
+ * 
+ * @author [Your Team Name]
+ * @version 1.0.0
+ * @since [Date]
+ */
+```
 
-3. **Files to Review for Removal/Consolidation**
-   - Duplicate utility functions across files
-   - Old migration scripts
-   - Deprecated feature files
-   - Test files for removed features
-   - Backup or temporary files
+### Model Header
+```typescript
+/**
+ * @file [filename]
+ * @description Part of NSW Government Jobs ETL Refactoring
+ * 
+ * [Brief description of what this model represents]
+ * 
+ * @module models
+ * @see RefactorETL.md for the complete refactoring plan
+ * 
+ * @author [Your Team Name]
+ * @version 1.0.0
+ * @since [Date]
+ * 
+ * Database Tables:
+ * - [List related database tables]
+ */
+```
 
-### Phase 0.1: Safe Removal Process (Week 1)
+## Text Processing and Embeddings
 
-1. **Categorize Files**
-   - **Category 1**: Definitely unused (safe to remove)
-   - **Category 2**: Potentially unused (needs verification)
-   - **Category 3**: Used but needs refactoring
-   - **Category 4**: Used and current
+### Job Description Processing
 
-2. **Verification Process**
-   - Create a test branch
-   - Remove Category 1 files
-   - Run full test suite
-   - Monitor in staging environment
-   - Document any dependencies discovered
+1. **Template Structure**
+```typescript
+// services/embeddings/templates/jobTemplates.ts
 
-3. **Documentation Requirements**
-   - List of files to be removed
-   - Reason for removal
-   - Potential impact
-   - Rollback plan
+export const jobDescriptionTemplate = `
+Role: {title}
+Department: {department}
+Location: {location}
 
-### Integration with Main Refactoring Plan
+Key Responsibilities:
+{responsibilities}
 
-The code cleanup will be integrated with the main refactoring phases:
+Required Skills:
+{skills}
 
-1. **ETLProcessor Migration**
-   - Create new service classes
-   - Move functionality piece by piece
-   - Add tests for each piece
-   - Validate each migration step
-   - Remove old code once verified
+Additional Information:
+{additionalInfo}
+`;
 
-2. **runDaily Migration**
-   - Create ProcessorOrchestrator
-   - Move environment setup
-   - Move job processing logic
-   - Add improved error handling
-   - Remove old file once verified
+export const jobEmbeddingPrompt = `
+Analyze this job posting for the NSW Government position.
+Focus on:
+1. Core responsibilities
+2. Required skills and capabilities
+3. Department-specific requirements
+4. Level of seniority
+5. Technical vs. managerial aspects
+`;
+```
 
-## Step-by-Step Refactoring Plan
+2. **Role Template Structure**
+```typescript
+// services/embeddings/templates/roleTemplates.ts
 
-### Phase 1: Setup and Infrastructure (Week 1)
+export const roleTemplate = `
+Position: {title}
+Classification: {classification}
+Department: {department}
 
-1. **Project Structure Setup**
+Core Capabilities:
+{capabilities}
+
+Focus Areas:
+{focusAreas}
+
+Key Deliverables:
+{deliverables}
+`;
+
+export const roleEmbeddingPrompt = `
+Analyze this role description for the NSW Government position.
+Focus on:
+1. Core capabilities required
+2. Level of responsibility
+3. Key focus areas
+4. Required outcomes
+5. Organizational impact
+`;
+```
+
+3. **Skill Template Structure**
+```typescript
+// services/embeddings/templates/skillTemplates.ts
+
+export const skillTemplate = `
+Skill: {name}
+Category: {category}
+Level Required: {level}
+
+Description:
+{description}
+
+Application Context:
+{context}
+`;
+
+export const skillEmbeddingPrompt = `
+Analyze this skill requirement for NSW Government roles.
+Focus on:
+1. Technical vs. soft skill aspects
+2. Required proficiency level
+3. Practical application areas
+4. Related capabilities
+5. Industry relevance
+`;
+```
+
+## AI Analysis Templates
+
+### Job Content Analysis
+```typescript
+// services/analyzer/templates/jobAnalysis.ts
+
+export const jobAnalysisPrompt = `
+Analyze this job description and extract key information.
+Consider:
+1. Primary job responsibilities
+2. Required experience level
+3. Technical requirements
+4. Soft skills needed
+5. Team structure and reporting lines
+
+Format the response as:
+{
+  "responsibilities": string[],
+  "experienceLevel": "junior" | "mid" | "senior" | "executive",
+  "technicalRequirements": string[],
+  "softSkills": string[],
+  "teamStructure": {
+    "reportsTo": string,
+    "manages": string[]
+  }
+}
+`;
+
+export const jobSummaryPrompt = `
+Create a concise summary of this job posting.
+Include:
+1. Key role objectives
+2. Essential requirements
+3. Unique aspects of the role
+4. Department context
+
+Maximum length: 250 words
+`;
+```
+
+### Skill Extraction
+```typescript
+// services/analyzer/templates/skillExtraction.ts
+
+export const skillExtractionPrompt = `
+Extract all skills mentioned in this job description.
+Categorize them as:
+1. Technical Skills
+2. Soft Skills
+3. Domain Knowledge
+4. Certifications
+5. Tools & Technologies
+
+For each skill, indicate:
+- Required vs Preferred
+- Experience level needed
+- Context of usage
+
+Format as JSON with schema:
+{
+  "technicalSkills": Array<{
+    "name": string,
+    "required": boolean,
+    "experienceLevel": string,
+    "context": string
+  }>,
+  // ... similar for other categories
+}
+`;
+```
+
+### Capability Analysis
+```typescript
+// services/analyzer/templates/capabilityAnalysis.ts
+
+export const capabilityExtractionPrompt = `
+Analyze this content for NSW Government Capability Framework alignments.
+Consider the 16 core capabilities across:
+1. Personal Attributes
+2. Relationships
+3. Results
+4. Business Enablers
+
+For each identified capability:
+1. Note the required level (Foundational to Highly Advanced)
+2. Extract supporting evidence from the text
+3. Identify behavioral indicators
+
+Format as JSON with schema:
+{
+  "capabilities": Array<{
+    "name": string,
+    "group": string,
+    "level": string,
+    "evidence": string[],
+    "behaviors": string[]
+  }>
+}
+`;
+```
+
+### Taxonomy Analysis
+```typescript
+// services/analyzer/templates/taxonomyAnalysis.ts
+
+export const taxonomyClassificationPrompt = `
+Classify this job according to the NSW Government Job Classification framework.
+Consider:
+1. Occupation Category
+2. Job Family
+3. Job Function
+4. Grade/Level
+5. Specialization
+
+Also identify:
+- Similar roles in other departments
+- Career progression paths
+- Related capabilities
+
+Format as JSON with schema:
+{
+  "classification": {
+    "category": string,
+    "family": string,
+    "function": string,
+    "grade": string,
+    "specialization": string[]
+  },
+  "relatedRoles": string[],
+  "careerPath": {
+    "previous": string[],
+    "next": string[]
+  }
+}
+`;
+```
+
+## Implementation Plan
+
+### Phase 1: Core Infrastructure (Week 1)
+
+1. **Project Structure**
    - Create new directory structure
    - Setup TypeScript configuration
-   - Configure testing framework (Jest)
-   - Setup linting and formatting
+   - Configure testing framework
+   - Move existing files to new structure
+   - Add documentation headers to all files
+   - Create embedding templates
 
 2. **Configuration Management**
-   - Create configuration modules
-   - Move all hardcoded values to config files
-   - Implement environment variable handling
+   ```typescript
+   // config/database.ts
+   export interface DatabaseConfig {
+     supabaseUrl: string;
+     supabaseKey: string;
+     stagingUrl: string;
+     stagingKey: string;
+   }
 
-### Phase 2: Core Models and Interfaces (Week 1-2)
+   // config/spider.ts
+   export interface SpiderConfig {
+     baseUrl: string;
+     maxJobs: number;
+     rateLimitDelay: number;
+   }
+   ```
 
-1. **Define Core Models**
+### Phase 2: Core Models (Week 1-2)
+
+1. **Define Data Models**
    ```typescript
    // models/job.ts
-   interface Job {
+   export interface Job {
      id: string;
      title: string;
      department: string;
-     // ... other properties
+     location: string;
+     salary: string;
+     closingDate: Date;
+     sourceUrl: string;
+     documents?: Document[];
    }
 
-   // models/role.ts
-   interface Role {
+   // models/document.ts
+   export interface Document {
      id: string;
-     title: string;
-     capabilities: Capability[];
-     // ... other properties
+     url: string;
+     type: string;
+     content?: string;
+     jobId: string;
    }
    ```
 
-2. **Create Service Interfaces**
+### Phase 3: Spider Service (Week 2-3)
+
+1. **Extract Core Spider Functionality**
    ```typescript
-   // services/spider/interfaces/IJobSpider.ts
-   interface IJobSpider {
-     launch(): Promise<Job[]>;
-     scrapeJobs(): Promise<Job[]>;
-     scrapeJobDetails(jobId: string): Promise<JobDetails>;
-   }
-   ```
-
-### Phase 3: Spider Service Refactoring (Week 2)
-
-1. **Create Base Spider Class**
-   ```typescript
-   abstract class BaseSpider {
-     protected browser: Browser;
-     protected page: Page;
-     
-     abstract launch(): Promise<void>;
-     abstract terminate(): Promise<void>;
-   }
-   ```
-
-2. **Split NSWJobSpider**
-   - Create specialized classes for different scraping tasks
-   - Implement proper inheritance
-   - Add retry mechanisms and error handling
-
-### Phase 4: Data Processing Services (Week 3)
-
-1. **Create Job Processor Service**
-   ```typescript
-   class JobProcessor {
+   // services/spider/NSWJobSpider.ts
+   export class NSWJobSpider {
      constructor(
-       private analyzer: IAnalyzer,
-       private storage: IStorageService
+       private config: SpiderConfig,
+       private logger: Logger
      ) {}
 
-     async processJob(job: Job): Promise<ProcessedJob>;
-     async extractCapabilities(job: Job): Promise<Capability[]>;
-     async extractSkills(job: Job): Promise<Skill[]>;
+     async launch(): Promise<Job[]>;
+     private async scrapeJobs(): Promise<Job[]>;
+     private async scrapeJobDetails(jobId: string): Promise<JobDetails>;
    }
    ```
 
-2. **Implement AI Analysis Service**
+2. **Create Document Service**
    ```typescript
-   class AIAnalyzer implements IAnalyzer {
-     constructor(private openai: OpenAIApi) {}
-     
+   // services/processor/DocumentProcessor.ts
+   export class DocumentProcessor {
+     constructor(
+       private storage: StorageService,
+       private logger: Logger
+     ) {}
+
+     async processDocument(doc: Document): Promise<ProcessedDocument>;
+     async extractText(buffer: Buffer): Promise<string>;
+   }
+   ```
+
+### Phase 4: Storage Service (Week 3-4)
+
+1. **Database Operations Layer**
+   ```typescript
+   // services/storage/DatabaseService.ts
+   export class DatabaseService {
+     constructor(
+       private config: DatabaseConfig,
+       private logger: Logger
+     ) {}
+
+     async upsertJob(job: Job): Promise<Job>;
+     async stageJob(job: Job): Promise<void>;
+     async migrateToLive(jobId: string): Promise<void>;
+   }
+   ```
+
+### Phase 5: AI Analysis Service (Week 4)
+
+1. **Extract AI Operations**
+   ```typescript
+   // services/analyzer/AIAnalyzer.ts
+   export class AIAnalyzer {
+     constructor(
+       private openai: OpenAI,
+       private logger: Logger
+     ) {}
+
      async analyzeJobDescription(content: string): Promise<Analysis>;
      async extractCapabilities(content: string): Promise<Capability[]>;
      async extractSkills(content: string): Promise<Skill[]>;
    }
    ```
 
-### Phase 5: Storage Layer Refactoring (Week 4)
+### Phase 6: ETL Orchestrator (Week 5)
 
-1. **Create Database Service**
+1. **Create Orchestrator**
    ```typescript
-   class DatabaseService implements IStorageService {
-     constructor(private supabase: SupabaseClient) {}
-     
-     async upsertJob(job: Job): Promise<Job>;
-     async upsertRole(role: Role): Promise<Role>;
-     async linkCapabilities(roleId: string, capabilities: Capability[]): Promise<void>;
+   // services/orchestrator/ETLOrchestrator.ts
+   export class ETLOrchestrator {
+     constructor(
+       private spider: NSWJobSpider,
+       private processor: JobProcessor,
+       private storage: DatabaseService,
+       private logger: Logger
+     ) {}
+
+     async runDaily(): Promise<void> {
+       // Initialize connections
+       // Run spider
+       // Process jobs
+       // Handle errors
+     }
    }
    ```
 
-2. **Implement Repository Pattern**
-   - Create repositories for each entity type
-   - Implement data access methods
-   - Add caching layer if needed
-
-### Phase 6: Document Processing (Week 5)
-
-1. **Create Document Service**
-   ```typescript
-   class DocumentProcessor {
-     async processDocument(doc: Document): Promise<ProcessedDocument>;
-     async extractText(buffer: Buffer, type: string): Promise<string>;
-     async analyzeContent(content: string): Promise<DocumentAnalysis>;
-   }
-   ```
-
-2. **Implement Document Storage**
-   - Handle different document types
-   - Implement content extraction
-   - Add document analysis capabilities
-
-### Phase 7: Migration and Taxonomy (Week 6)
-
-1. **Create Migration Service**
-   ```typescript
-   class MigrationService {
-     async migrateToLive(data: MigrationData): Promise<MigrationResult>;
-     async validateMigration(result: MigrationResult): Promise<void>;
-     async rollbackOnFailure(migrationId: string): Promise<void>;
-   }
-   ```
-
-2. **Implement Taxonomy Processing**
-   - Create taxonomy service
-   - Implement classification logic
-   - Add validation rules
-
-### Phase 8: Testing and Documentation (Week 7)
+## Testing Strategy
 
 1. **Unit Tests**
-   - Write tests for each service
-   - Add integration tests
-   - Implement E2E tests
+   - Test each service in isolation
+   - Mock external dependencies
+   - Test error handling
 
-2. **Documentation**
-   - Add JSDoc comments
-   - Create API documentation
-   - Write usage examples
+2. **Integration Tests**
+   - Test service interactions
+   - Test database operations
+   - Test complete ETL flow
 
-## Implementation Strategy
+3. **E2E Tests**
+   - Test full ETL process
+   - Validate data integrity
+   - Test error recovery
 
-1. **Incremental Approach**
-   - Implement changes one module at a time
-   - Maintain backward compatibility
-   - Add feature flags for gradual rollout
+## Migration Strategy
 
-2. **Testing Strategy**
-   - Write tests before refactoring
-   - Maintain test coverage
-   - Use dependency injection for testability
+1. **Gradual Migration**
+   - Start with storage layer
+   - Move spider functionality
+   - Implement new services
+   - Switch to new orchestrator
 
-3. **Deployment Plan**
-   - Deploy changes in phases
-   - Monitor performance metrics
-   - Have rollback plans ready
-
-## Risk Mitigation
-
-1. **Data Integrity**
-   - Implement validation at each layer
-   - Add data consistency checks
-   - Maintain audit logs
-
-2. **Performance**
-   - Monitor response times
-   - Implement caching where needed
-   - Add performance testing
-
-3. **Error Handling**
-   - Implement proper error boundaries
-   - Add retry mechanisms
-   - Improve error reporting
+2. **Parallel Running**
+   - Run old and new systems
+   - Compare results
+   - Validate data integrity
 
 ## Success Metrics
 
 1. **Code Quality**
-   - Reduced code complexity
+   - Reduced file sizes
+   - Better type coverage
    - Improved test coverage
-   - Better type safety
 
 2. **Maintainability**
-   - Smaller, focused modules
-   - Clear separation of concerns
-   - Better documentation
+   - Isolated components
+   - Clear interfaces
+   - Better error handling
 
 3. **Performance**
-   - Improved processing speed
-   - Reduced error rates
-   - Better resource utilization
+   - Faster processing
+   - Better resource usage
+   - Reduced errors
 
-## Timeline and Resources
+## Timeline
 
-- Total Duration: 7-8 weeks
-- Team Size: 2-3 developers
-- Key Dependencies:
-  - TypeScript expertise
-  - Testing framework knowledge
-  - Database migration experience
-
-## Next Steps
-
-1. Review and approve refactoring plan
-2. Set up new project structure
-3. Begin Phase 1 implementation
-4. Schedule regular progress reviews
-5. Plan for gradual feature migration
-
-## Updated Timeline
-
-1. **Week 1**
-   - Code audit and cleanup (Phase 0)
-   - Project structure setup (Phase 1)
-
-2. **Week 2**
-   - Complete safe removal of unused code
-   - Core models and interfaces (Phase 2)
-
-## Migration Strategy for ETLProcessor and runDaily
-
-1. **ETLProcessor Migration**
-   - Create new service classes
-   - Move functionality piece by piece
-   - Add tests for each piece
-   - Validate each migration step
-   - Remove old code once verified
-
-2. **runDaily Migration**
-   - Create ProcessorOrchestrator
-   - Move environment setup
-   - Move job processing logic
-   - Add improved error handling
-   - Remove old file once verified
-
-## Code Removal Success Metrics
-
-1. **Codebase Metrics**
-   - Reduction in total lines of code
-   - Reduction in number of files
-   - Improvement in code coverage
-   - Reduction in cyclomatic complexity
-
-2. **Performance Metrics**
-   - Reduced memory usage
-   - Improved startup time
-   - Reduced build time
-   - Smaller bundle size
-
-3. **Maintenance Metrics**
-   - Fewer dependencies
-   - Clearer file organization
-   - Better documentation coverage
-   - Reduced technical debt
+- Week 1: Infrastructure & Models
+- Week 2-3: Spider & Document Services
+- Week 3-4: Storage Service
+- Week 4: AI Analysis Service
+- Week 5: Orchestrator & Testing
+- Week 6: Migration & Validation
