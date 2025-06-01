@@ -1086,28 +1086,79 @@ export class NSWJobSpider {
 
   async #upsertToStagingRole(role) {
     try {
-      const { data, error } = await this.#supabase
+      // First check if role exists
+      const normalizedKey = this.#normalizeRoleTitle(role.title);
+      const { data: existingRole, error: checkError } = await this.#supabase
         .from('roles')
-        .upsert({
-          company_id: role.company_id,
-          title: role.title,
-          division_id: role.division_id,
-          grade_band: role.grade_band,
-          location: role.location,
-          anzsco_code: role.anzsco_code,
-          pcat_code: role.pcat_code,
-          primary_purpose: role.primary_purpose,
-          raw_data: role.raw_data,
-          sync_status: 'pending',
-          normalized_key: this.#normalizeRoleTitle(role.title)
-        }, {
-          onConflict: 'company_id,normalized_key',
-          returning: true
-        });
+        .select('id')
+        .eq('company_id', role.company_id)
+        .eq('normalized_key', normalizedKey)
+        .maybeSingle();
 
-      if (error) throw error;
-      logger.info(`Successfully upserted role: ${role.title}`);
-      return data;
+      if (checkError) {
+        logger.error('Error checking existing role:', { error: checkError, role: role.title });
+        throw checkError;
+      }
+
+      let result;
+      if (existingRole) {
+        // Update existing role
+        const { data, error: updateError } = await this.#supabase
+          .from('roles')
+          .update({
+            title: role.title,
+            division_id: role.division_id,
+            grade_band: role.grade_band,
+            location: role.location,
+            anzsco_code: role.anzsco_code,
+            pcat_code: role.pcat_code,
+            primary_purpose: role.primary_purpose,
+            raw_data: role.raw_data,
+            sync_status: 'pending',
+            normalized_key: normalizedKey
+          })
+          .eq('id', existingRole.id)
+          .select();
+
+        if (updateError) {
+          logger.error('Error updating role:', { error: updateError, role: role.title });
+          throw updateError;
+        }
+        result = data;
+        logger.info(`Successfully updated role: ${role.title}`);
+      } else {
+        // Insert new role
+        const { data, error: insertError } = await this.#supabase
+          .from('roles')
+          .insert({
+            company_id: role.company_id,
+            title: role.title,
+            division_id: role.division_id,
+            grade_band: role.grade_band,
+            location: role.location,
+            anzsco_code: role.anzsco_code,
+            pcat_code: role.pcat_code,
+            primary_purpose: role.primary_purpose,
+            raw_data: role.raw_data,
+            sync_status: 'pending',
+            normalized_key: normalizedKey
+          })
+          .select();
+
+        if (insertError) {
+          logger.error('Error inserting role:', { error: insertError, role: role.title });
+          throw insertError;
+        }
+        result = data;
+        logger.info(`Successfully inserted role: ${role.title}`);
+      }
+
+      if (result && result[0]) {
+        this.#currentRoleId = result[0].id;
+        logger.info(`Role stored with ID: ${this.#currentRoleId}`);
+      }
+
+      return result;
     } catch (error) {
       logger.error('Error upserting role:', { error, role: role.title });
       throw error;
@@ -1880,6 +1931,11 @@ export class NSWJobSpider {
         skillsFound: aiResults.skills.length
       });
 
+      if (!this.#currentRoleId) {
+        logger.warn('No current role ID set, skipping capability and skill linking');
+        return aiResults;
+      }
+
       // Process capabilities
       logger.info(`Processing ${aiResults.capabilities.length} capabilities...`);
       for (const capability of aiResults.capabilities) {
@@ -1887,9 +1943,14 @@ export class NSWJobSpider {
           logger.debug('Upserting capability:', { capability: capability.name });
           const capabilityResult = await this.#upsertToStagingCapability(capability);
           
-          if (capabilityResult && capabilityResult[0] && this.#currentRoleId) {
+          if (capabilityResult && capabilityResult[0]) {
             // Link capability to role
-            await this.#upsertToStagingRoleCapability(this.#currentRoleId, capabilityResult[0].id, capability.level);
+            await this.#upsertToStagingRoleCapability(
+              this.#currentRoleId, 
+              capabilityResult[0].id, 
+              'core', // capability type
+              capability.level // capability level
+            );
           }
         } catch (error) {
           logger.error('Error processing capability:', { error, capability });
@@ -1903,7 +1964,7 @@ export class NSWJobSpider {
           logger.debug('Upserting skill:', { skill: skill.name });
           const skillResult = await this.#upsertToStagingSkill(skill, companyData);
           
-          if (skillResult && skillResult[0] && this.#currentRoleId) {
+          if (skillResult && skillResult[0]) {
             // Link skill to role
             await this.#upsertToStagingRoleSkill(this.#currentRoleId, skillResult[0].id);
           }
@@ -2104,11 +2165,11 @@ export class NSWJobSpider {
       };
       
       const role = await this.#upsertToStagingRole(roleData);
-      if (!role) {
+      if (!role || !role[0]) {
         logger.warn(`No role data returned for ${jobId}, but continuing processing`);
       } else {
         this.#currentRoleId = role[0].id;
-        logger.info(`Role stored with ID: ${role[0].id}`);
+        logger.info(`Role stored with ID: ${this.#currentRoleId}`);
       }
       
       // 3. Extract capabilities and skills using AI
