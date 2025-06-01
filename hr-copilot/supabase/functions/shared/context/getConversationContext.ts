@@ -1,13 +1,19 @@
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Database } from '../../database.types.ts';
-import { ChatMessage, ChatSender } from '../chatTypes.ts';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js';
+import type { Database } from '../../database.types.ts';
+import { ChatMessageV2 } from '../mcp/types/action.ts';
 import { AgentAction } from '../agent/logAgentAction.ts';
+import { getSemanticMatches } from '../semanticSearch.ts';
+import { SemanticMatch } from '../mcpTypes.ts';
+import { EntityType } from '../embeddings.ts';
 
-export interface ConversationContext {
-  history: ChatMessage[];
-  agentActions?: AgentAction[];
-  summary?: string;
-  contextEmbedding?: number[];
+export interface ConversationContextV2 {
+  contextEmbedding: number[];
+  summary: string;
+  agentActions: AgentAction[];
+  pastMessages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
 }
 
 /**
@@ -29,108 +35,149 @@ function computeAverageEmbedding(embeddings: number[][]): number[] {
 }
 
 /**
- * Get conversation context including recent messages, actions, and computed embedding
+ * Strips large payloads from agent actions to minimize token usage
  */
-export async function getConversationContext(
+function stripLargePayloads(action: AgentAction): AgentAction {
+  const { response, ...rest } = action;
+  
+  // Extract only summary and dataForPrompt if present
+  const strippedResponse = {
+    ...response,
+    summary: response?.summary || null,
+    dataForPrompt: response?.dataForPrompt || null
+  };
+
+  // Remove potentially large fields
+  delete strippedResponse.rawAiResponse;
+  delete strippedResponse.prompt;
+  delete strippedResponse.fullContext;
+
+  return {
+    ...rest,
+    response: strippedResponse
+  };
+}
+
+/**
+ * Get conversation context including history, actions, and embeddings
+ */
+export async function getConversationContextV2(
   supabase: SupabaseClient<Database>,
   sessionId: string,
   options: {
     messageLimit?: number;
     actionLimit?: number;
-    embeddingAverageCount?: number;
+    semanticActionMatchThreshold?: number;
+    semanticActionLimit?: number;
+    queryEmbedding?: number[];
   } = {}
-): Promise<ConversationContext> {
+): Promise<ConversationContextV2> {
   const {
-    messageLimit = 10,
+    messageLimit = 5,
     actionLimit = 5,
-    embeddingAverageCount = 3
+    semanticActionMatchThreshold = 0.75,
+    semanticActionLimit = 3,
+    queryEmbedding
   } = options;
 
-  try {
-    // Get session details first
-    const { data: session, error: sessionError } = await supabase
-      .from('conversation_sessions')
-      .select('summary')
-      .eq('id', sessionId)
-      .single();
+  // Get recent messages
+  const { data: messages, error: messagesError } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('timestamp', { ascending: false })
+    .limit(messageLimit);
 
-    if (sessionError) throw sessionError;
-
-    // Get recent messages (excluding system/debug)
-    const { data: messages, error: messagesError } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('session_id', sessionId)
-      .not('sender', 'eq', 'system')
-      .order('timestamp', { ascending: false })
-      .limit(messageLimit);
-
-    if (messagesError) throw messagesError;
-
-    // Get recent agent actions
-    const { data: actions, error: actionsError } = await supabase
-      .from('agent_actions')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: false })
-      .limit(actionLimit);
-
-    if (actionsError) throw actionsError;
-
-    // Collect recent embeddings from both messages and actions
-    const recentEmbeddings: number[][] = [];
-    
-    // Add message embeddings
-    for (const msg of messages.slice(0, embeddingAverageCount)) {
-      if (msg.embedding) {
-        recentEmbeddings.push(msg.embedding);
-      }
-    }
-    
-    // Add action embeddings
-    for (const action of actions.slice(0, embeddingAverageCount)) {
-      if (action.embedding) {
-        recentEmbeddings.push(action.embedding);
-      }
-    }
-
-    // Compute average embedding if we have any
-    const contextEmbedding = recentEmbeddings.length > 0 
-      ? computeAverageEmbedding(recentEmbeddings)
-      : undefined;
-
-    // Transform messages to ChatMessage interface
-    const chatMessages = messages.map(msg => ({
-      id: msg.id,
-      sessionId: msg.session_id,
-      sender: msg.sender as ChatSender,
-      message: msg.message,
-      toolCall: msg.tool_call,
-      responseData: msg.response_data,
-      timestamp: msg.timestamp
-    }));
-
-    // Transform actions to AgentAction interface
-    const agentActions = actions.map(action => ({
-      entityType: action.target_type,
-      entityId: action.target_id,
-      payload: action.payload,
-      semanticMetrics: action.outcome ? JSON.parse(action.outcome) : undefined
-    }));
-
-    return {
-      history: chatMessages,
-      agentActions: agentActions.length > 0 ? agentActions : undefined,
-      summary: session.summary,
-      contextEmbedding
-    };
-
-  } catch (error) {
-    console.error('Error getting conversation context:', error);
-    // Return minimal context on error
-    return {
-      history: [],
-      summary: undefined
-    };
+  if (messagesError) {
+    console.error('Error fetching messages:', messagesError);
+    throw messagesError;
   }
+
+  // Get recent agent actions
+  const { data: recentActions, error: actionsError } = await supabase
+    .from('agent_actions')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('timestamp', { ascending: false })
+    .limit(actionLimit);
+
+  if (actionsError) {
+    console.error('Error fetching actions:', actionsError);
+    throw actionsError;
+  }
+
+  // Get conversation summary
+  const { data: summary, error: summaryError } = await supabase
+    .from('conversation_sessions')
+    .select('summary')
+    .eq('id', sessionId)
+    .single();
+
+  if (summaryError && summaryError.code !== 'PGRST116') {
+    console.error('Error fetching summary:', summaryError);
+    throw summaryError;
+  }
+
+  // Get embeddings for recent messages
+  const contextEmbedding = messages?.[0]?.embedding || [];
+
+  // If queryEmbedding provided, fetch semantically similar actions using database vector similarity
+  let semanticActions: AgentAction[] = [];
+  if (queryEmbedding && queryEmbedding.length > 0) {
+    try {
+      const similarActions = await getSemanticMatches(supabase, {
+        embedding: queryEmbedding,
+        entityTypes: ['agent_actions' as EntityType],
+        limit: semanticActionLimit,
+        minScore: semanticActionMatchThreshold,
+        filters: {
+          session_id: sessionId
+        }
+      });
+
+      semanticActions = similarActions
+        .filter((match): match is SemanticMatch & { metadata: AgentAction } => 
+          match.metadata !== null && typeof match.metadata === 'object'
+        )
+        .map(match => match.metadata);
+    } catch (error) {
+      console.error('Error fetching semantic actions:', error);
+      // Continue without semantic actions
+    }
+  }
+
+  // Combine and deduplicate actions
+  const seenActionIds = new Set<string>();
+  const combinedActions = [...(recentActions || []), ...semanticActions]
+    .filter(action => {
+      if (seenActionIds.has(action.id)) return false;
+      seenActionIds.add(action.id);
+      return true;
+    })
+    .map(action => {
+      // Extract only necessary fields to minimize payload
+      const { response, ...rest } = action;
+      const safeResponse = response as Record<string, any> | undefined;
+      
+      return {
+        ...rest,
+        response: safeResponse ? {
+          summary: typeof safeResponse.summary === 'string' ? safeResponse.summary : undefined,
+          dataForPrompt: safeResponse.dataForPrompt || undefined
+        } : undefined
+      };
+    });
+
+  // Convert messages to pastMessages format
+  const pastMessages = messages?.map(m => ({
+    role: m.sender === 'assistant' ? 'assistant' : 'user',
+    content: m.message
+  })) || [];
+
+  return {
+    contextEmbedding,
+    summary: summary?.summary || '',
+    agentActions: combinedActions,
+    pastMessages
+  };
 } 

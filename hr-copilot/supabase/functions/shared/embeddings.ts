@@ -2,8 +2,8 @@ import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
 import { SemanticMatch } from './mcpTypes.ts';
 
-export type Tables = 'profiles' | 'roles' | 'jobs' | 'companies' | 'divisions' | 'capabilities' | 'skills';
-export type EntityType = 'profile' | 'role' | 'skill' | 'capability' | 'company';
+export type Tables = 'profiles' | 'roles' | 'jobs' | 'companies' | 'divisions' | 'capabilities' | 'skills' | 'agent_actions';
+export type EntityType = 'profile' | 'role' | 'skill' | 'capability' | 'company' | 'agent_action';
 
 export interface SemanticSimilarity {
   similarity: number;

@@ -111,3 +111,15 @@ Seed data now includes a `company_id` on all core tables (`roles`, `jobs`, `capa
 
 Contributions welcome via GitHub PRs and issues.  
 Licensed under the MIT License.
+
+
+-- Example: enable the "vector" extension.
+create extension vector
+with
+  schema extensions;
+-- Example: disable the "vector" extension
+drop
+  extension if exists vector;
+
+
+supabase db dump --schema public > schema.sql

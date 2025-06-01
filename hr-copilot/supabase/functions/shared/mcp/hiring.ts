@@ -11,6 +11,9 @@ import { logAgentAction } from '../agent/logAgentAction.ts';
 import { getHiringMatches, HiringMatch } from '../job/hiringMatches.ts';
 import { logAgentResponse } from '../chatUtils.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
+import { loadRoleDataForPrompt } from './utils/roleDataLoader.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
+import { batchScoreRoleProfiles } from '../agent/scoreRoleProfiles.ts';
 
 // Type definitions
 declare const Deno: {
@@ -86,7 +89,11 @@ interface HiringMatchDetails {
   };
 }
 
-interface HiringMatch extends HiringMatch {
+interface ProcessedHiringMatch {
+  profileId: string;
+  name: string;
+  score: number;
+  semanticScore: number;
   details: HiringMatchDetails;
 }
 
@@ -97,7 +104,7 @@ async function processHiringMatches(
   supabase: SupabaseClient<Database>,
   roleId: string,
   options = { limit: 20, threshold: 0.7 }
-): Promise<{ matches: HiringMatch[], debug: any }> {
+): Promise<{ matches: ProcessedHiringMatch[], debug: any }> {
   const debug: any = {
     timings: {},
     counts: {},
@@ -108,11 +115,11 @@ async function processHiringMatches(
   try {
     console.log('Starting hiring matches processing...');
     
-    // 1. Get role data first
+    // Get complete role data including skills and capabilities
     console.log('Loading role data...');
     const roleDataStartTime = Date.now();
-    const roleData = await getRolesData(supabase, [roleId]);
-    if (!roleData || !roleData[roleId]) {
+    const roleData = await loadRoleDataForPrompt(supabase, roleId);
+    if (!roleData) {
       throw new Error('Failed to load role data');
     }
     debug.timings.getRoleData = Date.now() - roleDataStartTime;
@@ -150,12 +157,12 @@ async function processHiringMatches(
 
     // 4. Process matches
     console.log('Processing matches...');
-    const matches: HiringMatch[] = [];
+    const matches: ProcessedHiringMatch[] = [];
     const processStartTime = Date.now();
 
     // Score all profiles in batch
-    const scoreResults = await batchScoreProfileFit(supabase, roleId, profileIds, {
-      maxRoles: options.limit,
+    const scoreResults = await batchScoreRoleProfiles(supabase, roleId, profileIds, {
+      maxProfiles: options.limit,
       maxConcurrent: 5
     });
 
@@ -188,16 +195,17 @@ async function processHiringMatches(
         getSkillGaps(supabase, profileId, roleId)
       ]);
 
-      const capabilityDetails = {
-        matched: capabilityGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-        missing: capabilityGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-        insufficient: capabilityGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
-      };
-
-      const skillDetails = {
-        matched: skillGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
-        missing: skillGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
-        insufficient: skillGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+      const details: HiringMatchDetails = {
+        capabilities: {
+          matched: capabilityGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
+          missing: capabilityGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
+          insufficient: capabilityGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+        },
+        skills: {
+          matched: skillGaps.data?.filter(gap => gap.gapType === 'met').map(gap => gap.name) || [],
+          missing: skillGaps.data?.filter(gap => gap.gapType === 'missing').map(gap => gap.name) || [],
+          insufficient: skillGaps.data?.filter(gap => gap.gapType === 'insufficient').map(gap => gap.name) || []
+        }
       };
 
       matches.push({
@@ -205,16 +213,9 @@ async function processHiringMatches(
         name: profileData.name,
         score: resultData.score,
         semanticScore: semanticMatch.similarity,
-        summary: resultData.matchSummary || `Profile match score: ${resultData.score}%`,
-        details: {
-          capabilities: capabilityDetails,
-          skills: skillDetails
-        }
+        details
       });
     }
-
-    debug.timings.processing = Date.now() - processStartTime;
-    debug.counts.finalMatches = matches.length;
 
     // 5. Sort by combined score
     matches.sort((a, b) => {
@@ -223,8 +224,8 @@ async function processHiringMatches(
       return scoreB - scoreA;
     });
 
-    debug.timings.total = Date.now() - startTime;
-    console.log('Hiring matches processing completed:', debug);
+    debug.timings.processing = Date.now() - processStartTime;
+    debug.counts.finalMatches = matches.length;
 
     return {
       matches: matches.slice(0, options.limit),
@@ -252,82 +253,49 @@ async function generateHiringInsights(
       return {
         response: "No matching candidates found to analyze.",
         followUpQuestion: "Would you like to adjust the search criteria?",
-        prompt: "No candidates to analyze"
+        prompt: "No matches to analyze"
       };
     }
 
-    const systemPrompt = 'You are an experienced technical hiring advisor helping a hiring manager evaluate candidates. Focus on providing clear, actionable insights based on candidate skills, capabilities, and potential. Be direct about both strengths and concerns.';
-
     const promptData = {
-      systemPrompt,
-      userMessage: message || 'Please analyze the candidates for this role and provide hiring recommendations.',
+      systemPrompt: 'You are an AI hiring advisor helping to analyze candidate matches for a role.',
+      userMessage: message || 'Please analyze the candidates and provide hiring recommendations.',
       data: {
         role: roleData,
-        candidates: matches.slice(0, 5)
-      },
-      context: {
-        sections: [
-          'ROLE REQUIREMENTS OVERVIEW',
-          'CANDIDATE POOL QUALITY',
-          'INDIVIDUAL CANDIDATE ASSESSMENTS',
-          'INTERVIEW RECOMMENDATIONS',
-          'HIRING RECOMMENDATIONS'
-        ]
+        matches: matches.slice(0, 5).map(match => ({
+          name: match.name,
+          score: match.score,
+          semanticScore: match.semanticScore,
+          capabilities: match.details.capabilities,
+          skills: match.details.skills
+        }))
       }
     };
 
-    const promptOptions = {
+    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
       maxItems: 5,
-      maxFieldLength: 200,
-      priorityFields: ['name', 'score', 'semanticScore', 'summary', 'matched', 'missing', 'insufficient'],
-      excludeFields: ['metadata', 'raw_data', 'embedding']
-    };
-
-    const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
-
-    // Call ChatGPT API
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
-      throw new Error('OpenAI API key not found');
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: prompt.system
-          },
-          {
-            role: 'user',
-            content: prompt.user
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
+      maxFieldLength: 200
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate insights from OpenAI API');
+    const aiResponse = await invokeChatModel(
+      {
+        system: prompt.system,
+        user: prompt.user
+      },
+      {
+        model: 'openai:gpt-3.5-turbo',
+        temperature: 0.2
+      }
+    );
+
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
-    const data = await response.json();
-    const chatResponse = data.choices?.[0]?.message?.content;
-
-    if (!chatResponse) {
-      throw new Error('Invalid response format from OpenAI API');
-    }
-
+    const parts = (aiResponse.output || '').split(/\n\nFollow-up question:/i);
     return {
-      response: chatResponse,
-      followUpQuestion: "Would you like to focus on any specific aspects of these candidates?",
+      response: parts[0].trim(),
+      followUpQuestion: parts[1]?.trim(),
       prompt: prompt.user
     };
 
@@ -335,7 +303,7 @@ async function generateHiringInsights(
     console.error('Error generating hiring insights:', error);
     return {
       response: 'I encountered an error while analyzing the candidates. Please try again or contact support if the issue persists.',
-      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates\' qualifications?',
+      followUpQuestion: 'Would you like me to focus on specific aspects of the candidates?',
       prompt: 'Error occurred while generating prompt'
     };
   }
@@ -361,10 +329,10 @@ export async function runHiringLoop(
       );
     }
 
-    // Get role details
-    const roleDetail = await getRoleDetail(supabase, roleId);
-    if (!roleDetail) {
-      throw new Error('Failed to load role details');
+    // Get complete role data including skills and capabilities
+    const roleData = await loadRoleDataForPrompt(supabase, roleId);
+    if (!roleData) {
+      throw new Error('Failed to load role data');
     }
 
     // Log role data loaded
@@ -454,10 +422,10 @@ export async function runHiringLoop(
       };
     });
 
-    // Generate insights using ChatGPT
+    // Generate insights using ChatGPT with complete role data
     const chatResponse = await generateHiringInsights(
       processedMatches || [],
-      roleDetail,
+      roleData,
       request.context?.lastMessage
     );
 
@@ -477,7 +445,7 @@ export async function runHiringLoop(
       );
     }
 
-    // Return response with linked matches, recommendations, and role details
+    // Return response with linked matches, recommendations, and complete role data
     return {
       success: true,
       message: 'Hiring loop completed successfully',
@@ -505,7 +473,7 @@ export async function runHiringLoop(
           aiPrompt: null
         },
         actionsTaken: [
-          'Retrieved role data',
+          'Retrieved complete role data',
           'Analyzed candidate matches',
           'Generated hiring recommendations',
           chatResponse ? 'Generated hiring insights' : 'Attempted to generate hiring insights',
@@ -522,9 +490,9 @@ export async function runHiringLoop(
               'Review role requirements',
               'Consider alternative roles'
             ],
-        role: roleDetail
+        role: roleData
       }
-    } as HiringMCPResponse;
+    };
 
   } catch (error) {
     console.error('Error in hiring loop:', error);
@@ -541,6 +509,7 @@ export async function runHiringLoop(
 
     return {
       success: false,
+      message: 'Error in hiring loop',
       error: {
         type: 'HIRING_LOOP_ERROR',
         message: error.message,

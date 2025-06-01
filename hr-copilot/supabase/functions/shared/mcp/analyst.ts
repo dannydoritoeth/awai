@@ -5,6 +5,7 @@ import { logAgentAction } from '../agent/logAgentAction.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
 import { ModelId } from './promptTypes.ts';
 import { logAgentResponse } from '../chatUtils.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
 
 // Deno type declaration
 declare const Deno: {
@@ -321,6 +322,113 @@ const summarizeData = (data: any[]) => {
   };
 };
 
+async function generateCapabilityInsights(
+  data: any,
+  message?: string
+): Promise<{ response: string; followUpQuestion?: string }> {
+  const promptData = {
+    systemPrompt: 'You are an AI analyst providing insights on organizational capabilities.',
+    userMessage: message || 'Please analyze the capability data and provide insights.',
+    data: {
+      heatmaps: data
+    }
+  };
+
+  const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, {
+    maxItems: 10,
+    maxFieldLength: 200
+  });
+
+  const aiResponse = await invokeChatModel(
+    {
+      system: prompt.system,
+      messages: [
+        { role: 'user', content: prompt.user }
+      ]
+    },
+    {
+      model: 'openai:gpt-3.5-turbo',
+      temperature: 0.2
+    }
+  );
+
+  if (!aiResponse.success) {
+    throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
+  }
+
+  const parts = (aiResponse.output || '').split(/\n\nFollow-up question:/i);
+  return {
+    response: parts[0].trim(),
+    followUpQuestion: parts[1]?.trim()
+  };
+}
+
+async function handleAnalystRequest(
+  supabase: SupabaseClient<Database>,
+  input: AnalystLoopInput
+): Promise<AnalystMCPResponse> {
+  try {
+    const { mode, insightId, sessionId, context, plannerRecommendations } = input;
+
+    // Build the system prompt
+    const systemPrompt = `You are an AI analyst assistant helping to analyze and understand data.
+Your goal is to help users understand insights and make data-driven decisions.
+Always provide clear explanations and actionable recommendations.`;
+
+    // Build the user prompt
+    const userPrompt = buildSafePrompt(
+      context?.lastMessage || '',
+      {
+        insightId,
+        companyIds: context?.companyIds,
+        recommendations: plannerRecommendations
+      }
+    );
+
+    // Call the AI model
+    const aiResponse = await invokeChatModel(
+      {
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ]
+      },
+      {
+        model: 'openai:gpt-3.5-turbo',
+        temperature: 0.7,
+        max_tokens: 1000
+      }
+    );
+
+    if (!aiResponse.success) {
+      throw new Error(`AI model error: ${aiResponse.error?.message || 'Unknown error'}`);
+    }
+
+    // Log the response
+    if (sessionId) {
+      await logAgentResponse(supabase, sessionId, aiResponse.output || '');
+    }
+
+    return {
+      success: true,
+      mode: 'analyst',
+      response: aiResponse.output || '',
+      nextAction: null
+    };
+
+  } catch (error) {
+    console.error('Error in analyst loop:', error);
+    return {
+      success: false,
+      mode: 'analyst',
+      error: {
+        type: 'ANALYST_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    };
+  }
+}
+
 export async function runAnalystLoop(
   supabase: SupabaseClient<Database>,
   input: AnalystLoopInput
@@ -400,156 +508,8 @@ export async function runAnalystLoop(
     let insightData = data;
 
     try {
-      promptResult = await buildSafePrompt(
-        'openai:gpt-3.5-turbo' as ModelId,
-        {
-          systemPrompt: `Analyze workforce capability data and provide insights focused on answering the user's specific question.
-The data is organized in sections:
-1. Capability Heatmap - Matrix showing capability distribution across groups
-   - Rows: Groups (taxonomy/division/region/company)
-   - Columns: Individual capabilities
-   - Values: Number of roles with that capability
-2. Summary Statistics - Overall metrics
-3. Top Capabilities - Most common capabilities with their distribution
-
-When analyzing, format your response using this structure:
-
-# Capability Distribution Analysis
-
-## Overview
-- Present 2-3 key high-level findings
-- Use bullet points for clarity
-- Include the most important metrics
-
----
-
-## Key Statistics
-| Metric | Value |
-|--------|--------|
-| Total Roles | [number] |
-| Number of Groups | [number] |
-| Unique Capabilities | [number] |
-
----
-
-## Group Analysis
-### [Group Name]
-- Total Roles: [number]
-- Unique Capabilities: [number]
-- Top Capabilities:
-  1. [Capability] ([percentage]%)
-  2. [Capability] ([percentage]%)
-  3. [Capability] ([percentage]%)
-
-[Repeat for other significant groups]
-
----
-
-## Insights & Recommendations
-### Strengths
-- List 2-3 key strengths
-- Use bullet points
-
-### Areas for Improvement
-- List 2-3 areas needing attention
-- Use bullet points
-
-### Recommendations
-> **Priority Actions:**
-> 1. First recommendation
-> 2. Second recommendation
-> 3. Third recommendation
-
-Remember to:
-- Focus primarily on answering the user's specific question
-- Use data to support all insights
-- Keep sections concise and scannable
-- Use consistent formatting throughout`,
-          data: summarizeData(data || []),
-          context: {
-            type: input.insightId?.replace('generateCapabilityHeatmapBy', '')?.toLowerCase() || 'organization',
-            format: 'csv',
-            userQuestion: input.context?.lastMessage || 'Analyze the capability distribution'
-          }
-        }
-      );
-
-      // Call OpenAI API
-      const apiKey = Deno.env.get('OPENAI_API_KEY');
-      if (!apiKey) {
-        throw new Error('OpenAI API key not found');
-      }
-
-      // Log AI processing
-      if (sessionId) {
-        await logAgentResponse(
-          supabase,
-          sessionId,
-          "Analyzing the data patterns and generating detailed insights...",
-          'mcp_ai_processing'
-        );
-      }
-
-      const requestBody = {
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: promptResult.system
-          },
-          {
-            role: 'user',
-            content: promptResult.user
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500  // Reduced from 2500 to stay within limits
-      };
-
-      // Log request details for debugging
-      console.log('OpenAI Request:', {
-        url: 'https://api.openai.com/v1/chat/completions',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer [REDACTED]'
-        },
-        body: {
-          ...requestBody,
-          messages: requestBody.messages.map(m => ({
-            ...m,
-            content: m.content.length > 100 ? 
-              `${m.content.substring(0, 100)}... (${m.content.length} chars)` : 
-              m.content
-          }))
-        }
-      });
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('OpenAI API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        throw new Error(`OpenAI API Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
-      }
-
-      const responseData = await response.json();
-      chatResponse = responseData.choices?.[0]?.message?.content;
-
-      if (!chatResponse) {
-        console.error('Invalid OpenAI response format:', responseData);
-        throw new Error('Invalid response format from OpenAI API - no content in response');
-      }
+      promptResult = await generateCapabilityInsights(data, input.context?.lastMessage);
+      chatResponse = promptResult.response;
 
       // Log final response
       if (sessionId) {
@@ -560,7 +520,7 @@ Remember to:
           'mcp_final_response',
           undefined,
           {
-            followUpQuestion: 'Would you like to explore another insight or analyze this data differently?',
+            followUpQuestion: promptResult.followUpQuestion,
             insightData: data || null,
             promptDetails: promptResult
           }
@@ -590,7 +550,7 @@ Remember to:
         insightData,
         chatResponse: {
           message: chatResponse || '',
-          followUpQuestion: 'Would you like to explore another insight or analyze this data differently?',
+          followUpQuestion: promptResult.followUpQuestion,
           promptDetails: promptResult
         },
         actionsTaken,

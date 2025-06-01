@@ -1,11 +1,11 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { Database } from '../database.types.ts';
 import { SemanticMatch } from './mcpTypes.ts';
-import { EntityType } from './embeddings.ts';
+import { Tables } from './embeddings.ts';
 
 export interface SemanticSearchParams {
   embedding: number[];
-  entityTypes: EntityType[];
+  tables: Tables[];
   companyId?: string;
   filters?: Record<string, string>;
   limit?: number;
@@ -14,7 +14,7 @@ export interface SemanticSearchParams {
 }
 
 /**
- * Perform semantic similarity search across multiple entity types
+ * Perform semantic similarity search across multiple tables
  */
 export async function getSemanticMatches(
   supabase: SupabaseClient<Database>,
@@ -22,7 +22,7 @@ export async function getSemanticMatches(
 ): Promise<SemanticMatch[]> {
   const {
     embedding,
-    entityTypes,
+    tables,
     companyId,
     filters = {},
     limit = 10,
@@ -33,7 +33,7 @@ export async function getSemanticMatches(
   const results: SemanticMatch[] = [];
 
   // Helper to build common query parts
-  const buildQuery = async (table: string, nameField: string = 'title') => {
+  const buildQuery = async (table: Tables, nameField: string = 'title') => {
     // First get matches from vector similarity search
     const { data: matches, error: rpcError } = await supabase
       .rpc('match_embeddings_by_vector', {
@@ -97,7 +97,7 @@ export async function getSemanticMatches(
       const match = matches.find(m => m.id === item.id);
       return {
         id: item.id,
-        type: table.slice(0, -1) as EntityType,
+        type: table.slice(0, -1) as SemanticMatch['type'],
         name: item[nameField] || 'Unnamed',
         similarity: match?.similarity || 0,
         metadata: {
@@ -112,15 +112,15 @@ export async function getSemanticMatches(
     }) || [];
   };
 
-  // Process each entity type in parallel
-  const matchPromises = entityTypes.map(async (entityType) => {
+  // Process each table in parallel
+  const matchPromises = tables.map(async (table) => {
     try {
       const matches = await buildQuery(
-        `${entityType}s`, // Convert type to table name
-        entityType === 'role' || entityType === 'job' ? 'title' : 'name'
+        table,
+        table === 'roles' || table === 'jobs' ? 'title' : 'name'
       );
       
-      console.log(`${entityType} matches:`, {
+      console.log(`${table} matches:`, {
         count: matches.length,
         matches: matches.map(m => ({
           id: m.id,
@@ -131,7 +131,7 @@ export async function getSemanticMatches(
 
       results.push(...matches);
     } catch (error) {
-      console.error(`Error processing ${entityType}:`, error);
+      console.error(`Error processing ${table}:`, error);
     }
   });
 

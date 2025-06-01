@@ -3,6 +3,10 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import chalk from "chalk";
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 async function processDocuments() {
   try {
@@ -17,7 +21,7 @@ async function processDocuments() {
     const files = fs.readdirSync(dbDir).filter(f => f.endsWith('.json'));
     console.log(chalk.cyan(`Found ${files.length} job database files`));
     
-    let totalDocumentsProcessed = 0;
+    let totalDocumentsStaged = 0;
     
     for (const file of files) {
       if (file.startsWith('nswgov-') || file.startsWith('seek-')) {
@@ -32,8 +36,15 @@ async function processDocuments() {
           console.log(chalk.cyan(`Found ${jobCount} jobs with ${docCount} documents to process`));
           
           if (docCount > 0) {
-            const processedDocs = await processor.processJobDocuments(jobsDbPath);
-            totalDocumentsProcessed += processedDocs.length;
+            const stagedDocs = await processor.processJobDocuments(jobsDbPath);
+            totalDocumentsStaged += stagedDocs.length;
+            
+            if (processor.failedDocuments.length > 0) {
+              console.log(chalk.yellow('\nSome documents failed to stage:'));
+              for (const failed of processor.failedDocuments) {
+                console.log(chalk.yellow(`- ${failed.file}: ${failed.error}`));
+              }
+            }
           } else {
             console.log(chalk.yellow('No documents found to process in this file'));
           }
@@ -43,14 +54,14 @@ async function processDocuments() {
       }
     }
     
-    if (totalDocumentsProcessed > 0) {
-      console.log(chalk.green(`\nDocument processing completed successfully!`));
-      console.log(chalk.cyan(`Total documents processed: ${totalDocumentsProcessed}`));
+    if (totalDocumentsStaged > 0) {
+      console.log(chalk.green(`\nDocument staging completed successfully!`));
+      console.log(chalk.cyan(`Total documents staged: ${totalDocumentsStaged}`));
     } else {
-      console.log(chalk.yellow('\nNo documents were processed. This could mean either:'));
-      console.log(chalk.yellow('1. No job files were found with today\'s date'));
-      console.log(chalk.yellow('2. No documents were found in the job files'));
-      console.log(chalk.yellow('3. All documents were already processed'));
+      console.log(chalk.yellow('\nNo documents were staged. This could mean either:'));
+      console.log(chalk.yellow('1. No job files were found with documents'));
+      console.log(chalk.yellow('2. All documents were already staged'));
+      console.log(chalk.yellow('3. All documents failed to stage'));
     }
   } catch (error) {
     console.error(chalk.red("Error processing documents:", error));

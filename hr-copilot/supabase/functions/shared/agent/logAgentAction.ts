@@ -3,14 +3,37 @@ import { Database } from '../../database.types.ts';
 import { SemanticMetrics } from '../embeddings.ts';
 import { generateEmbedding } from '../semanticSearch.ts';
 
-export type EntityType = 'profile' | 'role' | 'job' | 'company' | 'division' | 'chat';
-
 export interface AgentAction {
-  entityType: EntityType;
-  entityId: string;
-  payload: Record<string, any>;
-  semanticMetrics?: SemanticMetrics;
+  id: string;
+  agent_name: string;
+  action_type: string;
+  target_type?: string;
+  target_id?: string;
+  request: Record<string, any>;
+  request_hash?: string;
+  response?: {
+    summary?: string;
+    dataForPrompt?: Record<string, any>;
+    [key: string]: any;
+  };
+  outcome: 'success' | 'error';
+  confidence_score?: number;
+  session_id: string;
+  step_index: number;
+  embedding?: number[];
+  timestamp: string;
 }
+
+// Actions that don't need embeddings (simple status updates or processing steps)
+const SKIP_EMBEDDING_ACTIONS = [
+  'Applied response formatting',
+  'Retrieved planner recommendations',
+  'Retrieved conversation context',
+  'Executed candidate mode processing',
+  'MCP Processing Step V2',
+  'Tool Execution',
+  'Processing Step'
+];
 
 /**
  * Log an agent action with optional semantic metrics
@@ -20,9 +43,19 @@ export async function logAgentAction(
   action: AgentAction
 ): Promise<void> {
   try {
-    // Generate a summary of the action for embedding
-    const actionSummary = `${action.entityType} ${action.payload.type || action.payload.stage || 'action'}: ${JSON.stringify(action.payload)}`;
-    const embedding = await generateEmbedding(actionSummary);
+    // Check if this is a simple status update or processing step
+    const actionType = action.payload.type || action.payload.action || action.payload.stage;
+    const shouldSkipEmbedding = SKIP_EMBEDDING_ACTIONS.some(skipAction => 
+      actionType?.includes(skipAction) || 
+      action.payload.reason?.includes(skipAction)
+    );
+
+    let embedding = null;
+    if (!shouldSkipEmbedding) {
+      // Generate a summary of the action for embedding
+      const actionSummary = `${action.entityType} ${actionType}: ${JSON.stringify(action.payload)}`;
+      embedding = await generateEmbedding(actionSummary);
+    }
 
     const { error } = await supabase
       .from('agent_actions')

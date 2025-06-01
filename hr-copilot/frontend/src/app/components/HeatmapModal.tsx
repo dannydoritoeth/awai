@@ -60,11 +60,18 @@ export default function HeatmapModal({ isOpen, onClose, data, groupBy }: Heatmap
         
         {/* Heatmap Container */}
         <div className="flex-1 p-4 overflow-auto">
-          <CapabilityHeatmap
-            data={data}
-            isExpanded={true}
-            groupBy={groupBy}
-          />
+          {data.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-700"></div>
+              <p className="mt-4 text-gray-600">Loading heatmap data...</p>
+            </div>
+          ) : (
+            <CapabilityHeatmap
+              data={data}
+              isExpanded={true}
+              groupBy={groupBy}
+            />
+          )}
         </div>
       </div>
     </div>

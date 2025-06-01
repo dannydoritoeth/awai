@@ -22,7 +22,7 @@ import { runAnalystLoop } from '../shared/mcp/analyst.ts';
 import { embedContext } from '../shared/embeddings.ts';
 import { getPlannerRecommendation } from '../shared/mcp/planner.ts';
 import { logAgentAction } from '../shared/agent/logAgentAction.ts';
-import { getConversationContext } from '../shared/context/getConversationContext.ts';
+import { getConversationContextV2 } from '../shared/context/getConversationContext.ts';
 
 // Initialize Supabase client
 const supabaseClient = createClient(
@@ -88,7 +88,7 @@ serve(async (req) => {
     if (request.sessionId) {
       console.log('Getting conversation context...');
       try {
-        conversationContext = await getConversationContext(supabaseClient, request.sessionId);
+        conversationContext = await getConversationContextV2(supabaseClient, request.sessionId);
         // Merge conversation context into request context
         request.context = {
           ...request.context,

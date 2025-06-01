@@ -6,6 +6,8 @@ import { SubscriptionService } from "./subscriptionService.ts";
 import { PineconeClient } from './pineconeClient.ts';
 import { handleApiCall } from './apiHandler.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
+import { generateEmbedding } from '../embeddings.ts';
 
 declare const Deno: {
   env: {
@@ -79,24 +81,8 @@ export class ScoringService {
   }
 
   private async getEmbeddings(record: any): Promise<number[]> {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: JSON.stringify(record),
-        model: 'text-embedding-3-large'
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI embeddings error: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return result.data[0].embedding;
+    const embedding = await generateEmbedding(JSON.stringify(record));
+    return embedding;
   }
 
   private async getSimilarRecords(record: any, type: 'contact' | 'company' | 'deal'): Promise<any[]> {
@@ -192,35 +178,28 @@ ${JSON.stringify(data, null, 2)}`;
   }
 
   private async callOpenAI(model: string, prompt: string, temperature: number, maxTokens: number): Promise<AIResponse> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        'Content-Type': 'application/json',
+    const aiResponse = await invokeChatModel(
+      {
+        system: 'You are a helpful AI assistant that analyzes and scores sales opportunities.',
+        messages: [
+          { role: 'user', content: prompt }
+        ]
       },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature,
-        max_tokens: maxTokens,
-        response_format: { type: 'json_object' }
-      })
-    });
+      {
+        model: 'openai:gpt-3.5-turbo',
+        temperature: temperature,
+        max_tokens: maxTokens
+      }
+    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenAI API error: ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Unexpected response format from OpenAI API');
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
     try {
-      return JSON.parse(data.choices[0].message.content);
+      return JSON.parse(aiResponse.output);
     } catch (error) {
-      throw new Error(`Failed to parse OpenAI response as JSON: ${error.message}`);
+      throw new Error(`Failed to parse AI response as JSON: ${error.message}`);
     }
   }
 

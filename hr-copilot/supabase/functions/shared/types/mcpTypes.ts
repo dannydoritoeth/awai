@@ -1,42 +1,27 @@
+import { ActionResultV2, PlannedActionV2 } from '../mcp/types/action.ts';
+
 // Base MCP Response interface that all modes must implement
 export interface BaseMCPResponse {
   success: boolean;
   error?: string;
-  data: {
-    matches: any[]; // Array of matching items (roles, candidates, or general matches)
-    recommendations: string[]; // List of recommendations
-    chatResponse: {
-      message: string;
-      followUpQuestion?: string;
-    };
-    nextActions: string[] | NextAction[]; // List of next possible actions
-    actionsTaken: string[]; // List of actions that were taken during processing
-  };
+  data?: BaseMCPResponseData;
 }
 
 // Hiring mode specific response
 export interface HiringMCPResponse extends BaseMCPResponse {
-  data: BaseMCPResponse['data'] & {
-    role: {
-      id: string;
-      title: string;
-      description: string;
-      requirements: string[];
-      // Add other role-specific fields as needed
-    };
+  data?: BaseMCPResponseData & {
+    matchingProfiles?: any[];
+    roleRequirements?: any;
+    fitScores?: any;
   };
 }
 
 // Candidate mode specific response
 export interface CandidateMCPResponse extends BaseMCPResponse {
-  data: BaseMCPResponse['data'] & {
-    profile: {
-      id: string;
-      name: string;
-      skills: string[];
-      experience: string[];
-      // Add other profile-specific fields as needed
-    };
+  data?: BaseMCPResponseData & {
+    careerPaths?: string[];
+    skillGaps?: string[];
+    developmentPlan?: any;
   };
 }
 
@@ -44,8 +29,9 @@ export interface CandidateMCPResponse extends BaseMCPResponse {
 export type GeneralMCPResponse = BaseMCPResponse;
 
 export interface NextAction {
-  type: string;
-  description: string;
+  action: string;
+  reason: string;
+  confidence: number;
 }
 
 export interface ChatResponse {
@@ -66,26 +52,40 @@ export interface PlannerRecommendation {
 }
 
 export interface AnalystMCPResponse extends BaseMCPResponse {
-  data: {
-    matches: any[];
-    recommendations: string[];
-    insightData: any;
-    chatResponse: ChatResponse;
-    actionsTaken: string[];
-    nextActions: NextAction[];
+  data?: BaseMCPResponseData & {
+    analysis?: any;
+    heatmap?: any;
+    trends?: any;
   };
 }
 
+export interface BaseMCPResponseData {
+    matches: any[];
+    recommendations: string[];
+  chatResponse: {
+    message: string;
+    followUpQuestion?: string;
+  };
+  nextActions: string[] | NextAction[];
+    actionsTaken: string[];
+  // V2 specific fields
+  intermediateResults?: ActionResultV2[];
+  context?: Record<string, any>;
+  plan?: PlannedActionV2[];
+}
+
 // Union type for all possible MCP responses
-export type MCPResponse = HiringMCPResponse | CandidateMCPResponse | GeneralMCPResponse | AnalystMCPResponse;
+export type MCPResponse = BaseMCPResponse | CandidateMCPResponse | HiringMCPResponse | AnalystMCPResponse;
 
 // Helper type guard functions
 export const isHiringResponse = (response: MCPResponse): response is HiringMCPResponse => {
-  return 'role' in response.data;
+  return response.data !== undefined && 
+    ('matchingProfiles' in response.data || 'roleRequirements' in response.data || 'fitScores' in response.data);
 };
 
 export const isCandidateResponse = (response: MCPResponse): response is CandidateMCPResponse => {
-  return 'profile' in response.data;
+  return response.data !== undefined && 
+    ('careerPaths' in response.data || 'skillGaps' in response.data || 'developmentPlan' in response.data);
 };
 
 export const isGeneralResponse = (response: MCPResponse): response is GeneralMCPResponse => {

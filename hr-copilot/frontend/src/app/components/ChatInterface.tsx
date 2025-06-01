@@ -6,6 +6,39 @@ import remarkGfm from 'remark-gfm';
 import { ChatMessage, HeatmapRequestData } from '@/types/chat';
 import { CapabilityData } from './CapabilityHeatmap';
 import HeatmapModal from './HeatmapModal';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { 
+  InformationCircleIcon, 
+  DocumentMagnifyingGlassIcon, 
+  ChartBarIcon, 
+  LightBulbIcon, 
+  ClipboardDocumentCheckIcon,
+  ClipboardIcon 
+} from '@heroicons/react/24/outline';
+import React from 'react';
+import { generateActionMessage } from '@/lib/messageUtils';
+
+interface ActionButtonData {
+  label: string;
+  actionId: string;
+  params: {
+    profileId?: string;
+    roleId?: string;
+    roleTitle?: string;
+    matchPercentage?: number;
+    matchStatus?: string;
+    [key: string]: unknown;
+  };
+  variant?: 'primary' | 'secondary' | 'outline';
+  size?: 'small' | 'medium' | 'large';
+  groupId?: string;
+}
+
+interface ActionButtonGroupData {
+  groupId: string;
+  title: string;
+  actions: ActionButtonData[];
+}
 
 interface HeatmapRequestParams {
   mode: string;
@@ -22,25 +55,85 @@ interface HeatmapResponse {
   error: string | null;
 }
 
+interface RoleData {
+  id: string;
+  title: string;
+  company: string;
+  department?: string;
+  location?: string;
+  description?: string;
+  skills?: string[];
+  requirements?: string[];
+}
+
+interface ProfileData {
+  name?: string;
+  profile?: {
+    name: string;
+    id: string;
+  };
+}
+
 interface ChatInterfaceProps {
   messages: ChatMessage[];
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, actionData?: { actionId: string; params: Record<string, unknown> }) => void;
   isLoading: boolean;
+  sessionId: string;
+  profileId?: string;
+  profileData?: ProfileData;
+  roleData?: RoleData;
+  onRoleMatchFound?: (match: {
+    id: string;
+    name: string;
+    matchPercentage: number;
+    matchStatus: string;
+    type: 'role' | 'profile';
+  }) => void;
 }
 
 export default function ChatInterface({
   messages,
   onSendMessage,
-  isLoading
+  isLoading,
+  sessionId,
+  profileId,
+  profileData: initialProfileData,
+  roleData: initialRoleData,
+  onRoleMatchFound
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [activeHeatmapModal, setActiveHeatmapModal] = useState<string | null>(null);
+  const [loadingHeatmaps, setLoadingHeatmaps] = useState<{[key: string]: boolean}>({});
+  const [roleData, setRoleData] = useState<RoleData | null>(initialRoleData || null);
+  const [profileData, setProfileData] = useState<ProfileData | null>(initialProfileData || null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [heatmapData, setHeatmapData] = useState<{[key: string]: CapabilityData[]}>({});
+  const pendingRoleMatches = useRef<Array<{
+    id: string;
+    name: string;
+    matchPercentage: number;
+    matchStatus: string;
+    type: 'role' | 'profile';
+  }>>([]);
+
+  // Update state when props change
+  useEffect(() => {
+    console.log('Props changed:', {
+      initialProfileData,
+      initialRoleData
+    });
+    
+    if (initialRoleData) {
+      setRoleData(initialRoleData);
+    }
+    if (initialProfileData) {
+      setProfileData(initialProfileData);
+    }
+  }, [initialRoleData, initialProfileData]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -82,15 +175,33 @@ export default function ChatInterface({
       if (!container) return false;
       
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      return hasUserInteracted && messages.length > prevMessagesLengthRef.current && isNearBottom;
+      return messages.length > prevMessagesLengthRef.current && (hasUserInteracted || isNearBottom);
     };
 
     if (shouldAutoScroll()) {
       scrollToBottom();
     }
+
+    // If we have new messages and they're from the user, mark as interacted
+    if (messages.length > prevMessagesLengthRef.current) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.sender === 'user') {
+        setHasUserInteracted(true);
+      }
+    }
     
     prevMessagesLengthRef.current = messages.length;
   }, [messages, hasUserInteracted]);
+
+  // Process any pending role matches after render
+  useEffect(() => {
+    if (pendingRoleMatches.current.length > 0) {
+      pendingRoleMatches.current.forEach(match => {
+        onRoleMatchFound?.(match);
+      });
+      pendingRoleMatches.current = [];
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +220,7 @@ export default function ChatInterface({
   };
 
   const fetchHeatmapData = async (messageId: string, params: HeatmapRequestParams) => {
+    setLoadingHeatmaps(prev => ({ ...prev, [messageId]: true }));
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/data`, {
         method: 'POST',
@@ -136,23 +248,14 @@ export default function ChatInterface({
       }
     } catch (error) {
       console.error('Error fetching heatmap data:', error);
+    } finally {
+      setLoadingHeatmaps(prev => ({ ...prev, [messageId]: false }));
     }
   };
 
-  const shouldShowHeatmap = (message: ChatMessage) => {
-    console.log('Checking message for heatmap:', {
-      messageId: message.id,
-      sender: message.sender,
-      hasResponseData: !!message.response_data,
-      responseData: message.response_data
-    });
-
-    if (!message.response_data) {
-      console.log('Not showing heatmap - no response data');
-      return false;
-    }
-
-    // Check if this is a heatmap request message
+  const isHeatmapMessage = (message: ChatMessage) => {
+    if (!message.response_data) return false;
+    
     const data = message.response_data as HeatmapRequestData;
     const heatmapTypes = [
       'generateCapabilityHeatmapByTaxonomy',
@@ -161,23 +264,20 @@ export default function ChatInterface({
       'generateCapabilityHeatmapByCompany'
     ];
 
-    if (heatmapTypes.includes(data.insightId)) {
-      // If we haven't fetched the data yet, fetch it
-      if (!heatmapData[message.id]) {
-        console.log('Fetching heatmap data for message:', message.id);
-        fetchHeatmapData(message.id, {
-          mode: data.mode,
-          insightId: data.insightId,
-          sessionId: data.sessionId,
-          companyIds: data.companyIds
-        });
-      }
-      
-      // Return true if we have the data
-      return !!heatmapData[message.id];
-    }
+    return heatmapTypes.includes(data.insightId);
+  };
 
-    return false;
+  const handleHeatmapClick = (message: ChatMessage) => {
+    const data = message.response_data as HeatmapRequestData;
+    if (!heatmapData[message.id]) {
+      fetchHeatmapData(message.id, {
+        mode: data.mode,
+        insightId: data.insightId,
+        sessionId: data.sessionId,
+        companyIds: data.companyIds
+      });
+    }
+    setActiveHeatmapModal(message.id);
   };
 
   const getHeatmapGrouping = (insightId: string) => {
@@ -197,10 +297,229 @@ export default function ChatInterface({
 
   const closeHeatmapModal = () => setActiveHeatmapModal(null);
 
+  const handleActionButtonClick = async (actionData: ActionButtonData) => {
+    try {
+      // Log the incoming action data
+      console.log('Action button clicked with data:', {
+        actionId: actionData.actionId,
+        params: actionData.params,
+        profileId: actionData.params.profileId,
+        roleId: actionData.params.roleId,
+        profileData,
+        roleData,
+        context: roleData ? 'role' : 'profile'
+      });
+
+      const { message, actionId } = generateActionMessage(actionData, roleData, profileData);
+
+      // Add the message to the chat interface with action data
+      setHasUserInteracted(true);
+      onSendMessage(message, {
+        actionId: actionId,
+        params: {
+          // Include role context
+          ...(roleData && { roleId: roleData.id, roleTitle: roleData.title }),
+          ...(actionData.params.roleId && { roleId: actionData.params.roleId }),
+          ...(actionData.params.roleTitle && { roleTitle: actionData.params.roleTitle }),
+          
+          // Include profile context
+          ...(profileData && profileData.name && { 
+            profileId, 
+            profileName: profileData.name 
+          }),
+          ...(actionData.params.profileId && { 
+            profileId: actionData.params.profileId,
+            profileName: actionData.params.profileName || profileData?.name || 'the candidate'
+          })
+        }
+      });
+
+      // Process role matches if needed
+      if (actionData.params.roleId && actionData.params.roleTitle) {
+        pendingRoleMatches.current.push({
+          id: actionData.params.roleId,
+          name: actionData.params.roleTitle,
+          matchPercentage: actionData.params.matchPercentage || 0,
+          matchStatus: actionData.params.matchStatus || 'now',
+          type: 'role'
+        });
+      }
+    } catch (error) {
+      console.error('Error executing action:', error);
+    }
+  };
+
+  const ActionButton = ({ data, isUserMessage }: { data: ActionButtonData; isUserMessage: boolean }) => {
+    const baseClasses = "px-4 py-2 rounded-lg font-medium text-sm transition-colors";
+    const variantClasses = {
+      primary: isUserMessage 
+        ? "bg-blue-700 hover:bg-blue-800 text-white" 
+        : "bg-blue-600 hover:bg-blue-700 text-white",
+      secondary: isUserMessage
+        ? "bg-blue-200 hover:bg-blue-300 text-blue-900"
+        : "bg-blue-100 hover:bg-blue-200 text-blue-800",
+      outline: isUserMessage
+        ? "border-2 border-blue-400 hover:bg-blue-100 text-blue-700"
+        : "border-2 border-blue-500 hover:bg-blue-50 text-blue-600"
+    };
+    const sizeClasses = {
+      small: "px-3 py-1 text-sm",
+      medium: "px-4 py-2",
+      large: "px-6 py-3 text-lg"
+    };
+
+    return (
+      <button
+        onClick={() => handleActionButtonClick(data)}
+        className={`${baseClasses} ${variantClasses[data.variant || 'primary']} ${sizeClasses[data.size || 'medium']}`}
+      >
+        {data.label}
+      </button>
+    );
+  };
+
+  const ActionButtonGroup = ({ data, isUserMessage }: { data: ActionButtonGroupData; isUserMessage: boolean }) => {
+    const baseButtonClasses = "px-4 py-2 font-medium text-sm transition-colors";
+    const mainButtonClasses = isUserMessage 
+      ? "bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+      : "bg-blue-500 hover:bg-blue-600 text-white rounded-lg";
+    const dropdownItemClasses = isUserMessage
+      ? "hover:bg-blue-50 text-gray-700"
+      : "hover:bg-gray-50 text-gray-700";
+
+    return (
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className={`${baseButtonClasses} ${mainButtonClasses} flex items-center justify-between gap-2 min-w-[200px]`}
+          >
+            <span>{data.title}</span>
+            <svg 
+              className="w-4 h-4 transition-transform" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </DropdownMenu.Trigger>
+
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="z-[9999] w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100"
+            sideOffset={5}
+          >
+            {data.actions.map((action) => (
+              <DropdownMenu.Item
+                key={action.actionId}
+                onSelect={() => handleActionButtonClick(action)}
+                className={`${baseButtonClasses} ${dropdownItemClasses} w-full text-left flex items-center outline-none cursor-pointer`}
+              >
+                {(action.actionId === 'getRoleDetails' || action.actionId === 'getProfileContext') && (
+                  <InformationCircleIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'getCapabilityGaps' && (
+                  <ChartBarIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'getSemanticSkillRecommendations' && (
+                  <LightBulbIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'explainMatch' && (
+                  <DocumentMagnifyingGlassIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'getReadinessAssessment' && (
+                  <ClipboardIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                {action.actionId === 'getDevelopmentPlan' && (
+                  <ClipboardDocumentCheckIcon className="mr-3 h-5 w-5 text-gray-400" />
+                )}
+                <span>{action.label}</span>
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    );
+  };
+
+  const processActionButtons = (content: string) => {
+    try {
+      const actionData = JSON.parse(content);
+      
+      // Schedule match processing for next tick to avoid render phase updates
+      const processMatch = (match: { 
+        id: string; 
+        name: string; 
+        matchPercentage: number; 
+        matchStatus: string; 
+        type: 'role' | 'profile';
+      }) => {
+        setTimeout(() => {
+          console.log('Adding match:', { name: match.name, type: match.type });
+          onRoleMatchFound?.(match);
+        }, 0);
+      };
+
+      interface ActionParams {
+        roleId?: string;
+        roleTitle?: string;
+        profileId?: string;
+        profileName?: string;
+        name?: string;
+        matchPercentage?: number;
+        semanticScore?: number;
+      }
+
+      const processParams = (params: ActionParams) => {
+        if (params.roleId) {
+          // This is a role match
+          processMatch({
+            id: params.roleId,
+            name: params.roleTitle || 'Unknown Role',
+            matchPercentage: params.matchPercentage || 100,
+            matchStatus: 'Candidate',
+            type: 'role'
+          });
+        } else if (params.profileId) {
+          // This is a profile match
+          const name = params.profileName || params.name || 'Unknown Profile';
+          const matchPercentage = params.matchPercentage || 
+            (typeof params.semanticScore === 'number' ? params.semanticScore * 100 : 83);
+
+          processMatch({
+            id: params.profileId,
+            name: name,
+            matchPercentage: matchPercentage,
+            matchStatus: 'Candidate',
+            type: 'profile'
+          });
+        }
+      };
+      
+      // Handle both array of actions and single action
+      if (Array.isArray(actionData)) {
+        actionData.forEach(action => {
+          if (action.params) {
+            processParams(action.params);
+          }
+        });
+      } else if (actionData.params) {
+        processParams(actionData.params);
+      }
+
+      return actionData;
+    } catch (error) {
+      console.error('Failed to process action buttons:', error);
+      return null;
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Messages Area */}
       <div 
+        data-chat-container
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 mb-[76px]"
       >
@@ -236,12 +555,56 @@ export default function ChatInterface({
                     td: (props) => <td className={`p-3 ${message.sender === 'user' ? 'text-white border-white/30' : 'text-gray-700 border-gray-300'}`} {...props} />,
                     hr: (props) => <hr className={`my-6 border-t ${message.sender === 'user' ? 'border-white/30' : 'border-gray-200'}`} {...props} />,
                     a: (props) => <a className={message.sender === 'user' ? 'text-white hover:text-blue-100 underline' : 'text-blue-600 hover:text-blue-800 underline'} {...props} />,
-                    code: ({inline, ...props}: {inline?: boolean} & React.HTMLProps<HTMLElement>) => 
-                      inline ? (
-                        <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props} />
+                    code: ({inline, className, children, ...props}: {inline?: boolean; className?: string; children?: React.ReactNode} & React.HTMLProps<HTMLElement>) => {
+                      const content = String(children || '').trim();
+                      
+                      if (className === 'language-action') {
+                        const actionData = processActionButtons(content);
+                        if (!actionData) return <code {...props}>{children}</code>;
+                        
+                        // Check if it's a group of actions
+                        if (Array.isArray(actionData) && actionData.length > 0 && actionData[0].groupId) {
+                          // Group actions by groupId
+                          const groupedActions = actionData.reduce((groups: Record<string, ActionButtonData[]>, action) => {
+                            const groupId = action.groupId || 'default';
+                            if (!groups[groupId]) {
+                              groups[groupId] = [];
+                            }
+                            groups[groupId].push(action);
+                            return groups;
+                          }, {});
+
+                          // Render each group
+                          return (
+                            <div className="space-y-2">
+                              {Object.entries(groupedActions).map(([groupId, actions]) => (
+                                <ActionButtonGroup
+                                  key={groupId}
+                                  data={{
+                                    groupId: String(groupId),
+                                    title: String(actions[0].params.roleTitle || 'Actions'),
+                                    actions
+                                  }}
+                                  isUserMessage={message.sender === 'user'}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+                        
+                        // Single action button
+                        return <ActionButton data={actionData} isUserMessage={message.sender === 'user'} />;
+                      }
+                      return inline ? (
+                        <code className={`rounded px-1.5 py-0.5 text-sm font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props}>
+                          {children}
+                        </code>
                       ) : (
-                        <code className={`block rounded p-3 text-sm font-mono overflow-x-auto ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props} />
-                      ),
+                        <code className={`block rounded p-3 text-sm font-mono overflow-x-auto ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-800'}`} {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
                     pre: (props) => <pre className={`rounded p-3 overflow-x-auto font-mono ${message.sender === 'user' ? 'bg-blue-700 text-white' : 'bg-gray-100'}`} {...props} />,
                     blockquote: (props) => <blockquote className={`border-l-4 p-4 my-4 ${message.sender === 'user' ? 'border-white/50 bg-blue-700 text-white' : 'border-blue-500 bg-blue-50 text-gray-700'}`} {...props} />,
                   }}
@@ -250,30 +613,43 @@ export default function ChatInterface({
                 </ReactMarkdown>
               </div>
 
-              {shouldShowHeatmap(message) && (
+              {isHeatmapMessage(message) && (
                 <div className="mt-4 flex items-center gap-2">
                   <button
-                    onClick={() => setActiveHeatmapModal(message.id)}
+                    onClick={() => handleHeatmapClick(message)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                       message.sender === 'user'
                         ? 'bg-blue-700 hover:bg-blue-800 text-white'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
                     }`}
+                    disabled={loadingHeatmaps[message.id]}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    View Capability Heatmap
+                    {loadingHeatmaps[message.id] ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading Heatmap...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        View Capability Heatmap
+                      </>
+                    )}
                   </button>
                 </div>
               )}
 
               {/* Heatmap Modal */}
-              {activeHeatmapModal === message.id && heatmapData[message.id] && (
+              {activeHeatmapModal === message.id && (
                 <HeatmapModal
                   isOpen={true}
                   onClose={closeHeatmapModal}
-                  data={heatmapData[message.id]}
+                  data={heatmapData[message.id] || []}
                   groupBy={getHeatmapGrouping((message.response_data as HeatmapRequestData).insightId)}
                 />
               )}

@@ -3,6 +3,7 @@ import { Database } from '../../database.types.ts';
 import { PlannerRecommendation, MCPContext } from '../mcpTypes.ts';
 import { logAgentAction } from '../agent/logAgentAction.ts';
 import { buildSafePrompt } from './promptBuilder.ts';
+import { invokeChatModel } from '../ai/invokeAIModel.ts';
 
 // Available MCP actions that can be recommended by the planner
 const AVAILABLE_ACTIONS = {
@@ -267,33 +268,23 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
 
     const prompt = buildSafePrompt('openai:gpt-3.5-turbo', promptData, promptOptions);
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        'Content-Type': 'application/json'
+    const aiResponse = await invokeChatModel(
+      {
+        system: `${prompt.system}\n\nIMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.`,
+        user: prompt.user
       },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          { 
-            role: 'system', 
-            content: `${prompt.system}\n\nIMPORTANT: Respond with ONLY the JSON array. Do not include any markdown formatting, backticks, or explanatory text.`
-          },
-          { role: 'user', content: prompt.user }
-        ],
+      {
+        model: 'openai:gpt-3.5-turbo',
         temperature: 0.2
-      })
-    });
+      }
+    );
 
-    const data = await response.json();
-    
-    if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid AI response format - missing content');
+    if (!aiResponse.success) {
+      throw new Error(`AI API error: ${aiResponse.error?.message || 'Unknown error'}`);
     }
 
     try {
-      const content = data.choices[0].message.content.trim();
+      const content = aiResponse.output.trim();
       const recommendations = JSON.parse(content);
 
       if (!Array.isArray(recommendations)) {
@@ -303,9 +294,10 @@ IMPORTANT: You must respond with a valid JSON array containing objects with thes
       return recommendations;
     } catch (error) {
       console.error('Error parsing AI response:', error);
-      console.error('Raw response:', data.choices[0].message.content);
+      console.error('Raw response:', aiResponse.output);
       return [];
     }
+
   } catch (error) {
     console.error('Error getting AI recommendations:', error);
     return [];

@@ -1,0 +1,22 @@
+You are analyzing organizational capabilities and skill distributions.
+Focus on identifying patterns and gaps.
+Provide actionable recommendations for capability development.
+
+Capability Distribution Data:
+{{capabilityData}}
+
+Team Structure:
+{{teamStructure}}
+
+Please analyze:
+1. Overall capability coverage (%)
+2. Areas of strength (high coverage)
+3. Critical gaps (low coverage)
+4. Emerging capability needs
+5. Recommendations for:
+   - Immediate skill development
+   - Strategic hiring needs
+   - Training programs
+   - Knowledge transfer opportunities
+
+Format the analysis with clear sections and quantitative metrics where possible. 

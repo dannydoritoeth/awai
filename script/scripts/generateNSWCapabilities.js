@@ -1,12 +1,24 @@
-import { v4 as uuidv4 } from 'uuid';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { logger } from '../utils/logger.js';
+import crypto from 'crypto';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+function generateDeterministicId(input) {
+  const hash = crypto.createHash('sha256');
+  hash.update(input);
+  return hash.digest('hex').substring(0, 32); // Use first 32 chars for a manageable ID
+}
 
-// NSW Capability Framework structure
+function generateCapabilityId(name, groupName) {
+  return generateDeterministicId(`capability_${groupName}_${name}`);
+}
+
+function generateLevelId(capabilityId, level) {
+  return generateDeterministicId(`level_${capabilityId}_${level}`);
+}
+
+function generateNormalizedKey(name, groupName) {
+  return `${groupName.toLowerCase().replace(/\s+/g, '_')}_${name.toLowerCase().replace(/\s+/g, '_')}`;
+}
+
 const frameworkStructure = {
   'Personal Attributes': [
     {
@@ -740,21 +752,13 @@ const frameworkStructure = {
   ]
 };
 
-function generateCapabilityId() {
-  return uuidv4();
-}
-
-function generateLevelId() {
-  return uuidv4();
-}
-
-function generateCapabilities(companyId) {
+function generateCapabilities(institutionId) {
   const capabilities = [];
   const capabilityLevels = [];
 
   Object.entries(frameworkStructure).forEach(([groupName, groupCapabilities]) => {
     groupCapabilities.forEach(capability => {
-      const capabilityId = generateCapabilityId();
+      const capabilityId = generateCapabilityId(capability.name, groupName);
       
       capabilities.push({
         id: capabilityId,
@@ -763,15 +767,19 @@ function generateCapabilities(companyId) {
         description: capability.description,
         source_framework: 'NSW Public Sector Capability Framework',
         is_occupation_specific: false,
-        company_id: companyId,
+        company_id: institutionId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
 
       // Generate levels for this capability
       for (const [level, indicators] of Object.entries(capability.behavioralIndicators)) {
+        const levelId = generateLevelId(capabilityId, level);
         capabilityLevels.push({
-          id: generateLevelId(),
+          id: levelId,
+          institution_id: institutionId,
+          source_id: 'nswgov',
+          external_id: `${capabilityId}_${level.toLowerCase().replace(/\s+/g, '_')}`,
           capability_id: capabilityId,
           level: level,
           summary: `${level} level of ${capability.name}`,
@@ -786,24 +794,121 @@ function generateCapabilities(companyId) {
   return { capabilities, capabilityLevels };
 }
 
-async function writeToFile(data, filename) {
-  const filePath = path.join(__dirname, '..', 'database/seed', filename);
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-  console.log(`Written ${filePath}`);
-}
-
-export async function generateNSWCapabilityData(companyId) {
+export async function generateNSWCapabilityData(supabase, institutionId) {
   try {
-    console.log('Generating NSW Capability Framework data...');
+    logger.info('Checking if NSW Capability Framework data exists...');
     
-    const { capabilities, capabilityLevels } = generateCapabilities(companyId);
+    // Check if capabilities already exist
+    const { data: existingCapabilities, error: checkError } = await supabase
+      .from('capabilities')
+      .select('id')
+      .eq('normalized_key', 'personal_attributes_accountability')
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      logger.error('Error checking existing capabilities:', {
+        error: {
+          message: checkError.message,
+          details: checkError.details,
+          hint: checkError.hint,
+          code: checkError.code
+        }
+      });
+      throw checkError;
+    }
+
+    if (existingCapabilities) {
+      logger.info('NSW Capability Framework data already exists');
+      return;
+    }
+
+    // Define capability groups
+    const capabilityGroups = [
+      {
+        name: 'Personal Attributes',
+        capabilities: [
+          {
+            name: 'Accountability',
+            levels: [
+              'Demonstrates accountability for own actions, showing commitment to delivering on intended outcomes',
+              'Takes responsibility and is accountable for own actions, showing commitment to delivering on intended outcomes',
+              'Models accountability for own actions and decisions, showing commitment to delivering on intended outcomes',
+              'Champions accountability for own and others\' actions and decisions, showing commitment to delivering on intended outcomes',
+              'Leads by example, demonstrating the highest standards of accountability and commitment to delivering on intended outcomes'
+            ]
+          },
+          // ... more capabilities ...
+        ]
+      },
+      // ... more groups ...
+    ];
     
-    await writeToFile(capabilities, 'capabilities.json');
-    await writeToFile(capabilityLevels, 'capability_levels.json');
-    
-    console.log('NSW Capability Framework data generation completed!');
+    // Insert capabilities and levels
+    for (const group of capabilityGroups) {
+      for (const capability of group.capabilities) {
+        const capabilityId = generateCapabilityId(capability.name, group.name);
+        const normalizedKey = generateNormalizedKey(capability.name, group.name);
+
+        // Insert capability
+        const { error: capabilityError } = await supabase
+          .from('capabilities')
+          .insert({
+            id: capabilityId,
+            name: capability.name,
+            group_name: group.name,
+            normalized_key: normalizedKey
+          });
+
+        if (capabilityError) {
+          logger.error('Error inserting capability:', {
+            error: {
+              message: capabilityError.message,
+              details: capabilityError.details,
+              hint: capabilityError.hint,
+              code: capabilityError.code
+          }
+        });
+          throw capabilityError;
+        }
+
+        // Insert levels for this capability
+        for (let i = 0; i < capability.levels.length; i++) {
+          const levelId = generateLevelId(capabilityId, i + 1);
+          const { error: levelError } = await supabase
+            .from('capability_levels')
+            .insert({
+              id: levelId,
+              capability_id: capabilityId,
+              level: (i + 1).toString(),
+              summary: capability.levels[i],
+              behavioral_indicators: []
+          });
+
+        if (levelError) {
+            logger.error('Error inserting capability level:', {
+            error: {
+              message: levelError.message,
+              details: levelError.details,
+              hint: levelError.hint,
+                code: levelError.code
+            }
+          });
+            throw levelError;
+          }
+        }
+      }
+    }
+
+    logger.info('Successfully generated NSW Capability Framework data');
   } catch (error) {
-    console.error('Error generating NSW Capability Framework data:', error);
+    logger.error('Error generating NSW Capability Framework data:', {
+      error: {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      }
+    });
     throw error;
   }
 } 

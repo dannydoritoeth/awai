@@ -20,18 +20,54 @@ export async function startChatSession(
   mode: 'candidate' | 'hiring' | 'general' | 'analyst',
   entityId?: string,
   browserSessionId?: string,
+  initialMessage?: string,
   insightId?: string,
   scope?: string,
   companyIds?: string[]
 ) {
   try {
+    // Get the summary based on mode
+    let summary: string | null = null;
+
+    if (mode === 'hiring' && entityId) {
+      // Get role name
+      const { data: role } = await supabaseClient
+        .from('roles')
+        .select('title')
+        .eq('id', entityId)
+        .single();
+      summary = role?.title || null;
+    } else if (mode === 'candidate' && entityId) {
+      // Get profile name
+      const { data: profile } = await supabaseClient
+        .from('profiles')
+        .select('name')
+        .eq('id', entityId)
+        .single();
+      summary = profile?.name || null;
+    } else if (mode === 'analyst' && insightId) {
+      // For analyst mode, use the predefined insight title
+      const insights = {
+        generateCapabilityHeatmapByTaxonomy: 'Capability Heatmap by Taxonomy Group',
+        generateCapabilityHeatmapByDivision: 'Capability Heatmap by Division',
+        generateCapabilityHeatmapByRegion: 'Capability Heatmap by Region',
+        generateCapabilityHeatmapByCompany: 'Organization-wide Capability Heatmap'
+      };
+      summary = insights[insightId as keyof typeof insights] || null;
+    } else if (mode === 'general' && initialMessage) {
+      // For general mode, use the first 50 characters of the message
+      summary = initialMessage.length > 50 ? `${initialMessage.substring(0, 47)}...` : initialMessage;
+    }
+
+    // Create the session with summary
     const { data, error } = await supabaseClient
       .from('conversation_sessions')
       .insert({
         mode,
         entity_id: mode === 'general' ? null : entityId,
         browser_session_id: browserSessionId,
-        status: 'active'
+        status: 'active',
+        summary
       })
       .select('id')
       .single();
@@ -92,8 +128,207 @@ export async function postUserMessage(
   }
 }
 
+// Messages that don't need embeddings (simple status updates or processing steps)
+const SKIP_EMBEDDING_MESSAGES = [
+  // Status updates
+  'Applied response formatting',
+  'Retrieved planner recommendations',
+  'Retrieved conversation context',
+  'Executed candidate mode processing',
+  'MCP Processing Step V2',
+  'Tool Execution',
+  'Processing Step',
+  'Loading profile data',
+  'Searching for roles',
+  'Processing matches',
+  'Loading capabilities',
+  'Comparing capabilities',
+  'Finding mentors',
+  'Generating plan',
+  'Completed',
+  'Error in',
+  'Retrieved',
+  'Loaded',
+  'Found',
+  'Processing',
+  'Analyzing',
+  'Generating',
+  
+  // Progress indicators
+  'Loading...',
+  'Searching...',
+  'Analyzing...',
+  'Processing...',
+  'Generating...',
+  'Comparing...',
+  'Finding...',
+  'Retrieving...',
+  'Updating...',
+  'Calculating...',
+  
+  // Action states
+  'Starting analysis',
+  'Completing analysis',
+  'Beginning search',
+  'Completing search',
+  'Starting generation',
+  'Completing generation',
+  'Starting comparison',
+  'Completing comparison',
+  
+  // Phase markers
+  'Phase 1:',
+  'Phase 2:',
+  'Phase 3:',
+  'Phase 4:',
+  'Phase 5:',
+  'Phase 6:',
+  
+  // Common action verbs
+  'Loading',
+  'Searching',
+  'Finding',
+  'Getting',
+  'Retrieving',
+  'Processing',
+  'Analyzing',
+  'Generating',
+  'Creating',
+  'Updating',
+  'Comparing',
+  'Calculating',
+  'Checking',
+  'Validating',
+  'Verifying',
+  'Preparing',
+  'Building',
+  'Constructing',
+  'Evaluating',
+  'Assessing',
+  'Reviewing',
+  'Examining',
+  'Inspecting',
+  'Testing',
+  'Matching',
+  'Mapping',
+  'Filtering',
+  'Sorting',
+  'Ranking',
+  'Scoring',
+  'Computing',
+  'Determining',
+  'Identifying',
+  'Locating',
+  'Fetching',
+  'Gathering',
+  'Collecting',
+  'Compiling',
+  'Assembling',
+  'Organizing',
+  'Structuring',
+  'Formatting',
+  'Transforming',
+  'Converting',
+  'Parsing',
+  'Extracting',
+  'Combining',
+  'Merging',
+  'Joining',
+  'Splitting',
+  'Separating',
+  'Dividing',
+  'Grouping',
+  'Categorizing',
+  'Classifying',
+  'Labeling',
+  'Tagging',
+  'Marking',
+  'Flagging',
+  'Highlighting',
+  'Emphasizing',
+  'Summarizing',
+  'Concluding',
+  'Finalizing',
+  'Completing',
+  'Finishing',
+  'Ending',
+  'Stopping',
+  'Halting',
+  'Pausing',
+  'Resuming',
+  'Continuing',
+  'Proceeding',
+  'Moving',
+  'Advancing',
+  'Progressing',
+  'Developing',
+  'Evolving',
+  'Growing',
+  'Expanding',
+  'Extending',
+  'Enhancing',
+  'Improving',
+  'Optimizing',
+  'Refining',
+  'Polishing',
+  'Cleaning',
+  'Sanitizing',
+  'Validating',
+  'Verifying',
+  'Confirming',
+  'Checking',
+  'Testing',
+  'Debugging',
+  'Fixing',
+  'Repairing',
+  'Correcting',
+  'Adjusting',
+  'Modifying',
+  'Changing',
+  'Updating',
+  'Upgrading',
+  'Downgrading',
+  'Installing',
+  'Uninstalling',
+  'Configuring',
+  'Setting',
+  'Resetting',
+  'Initializing',
+  'Starting',
+  'Booting',
+  'Launching',
+  'Running',
+  'Executing',
+  'Performing',
+  'Conducting',
+  'Carrying',
+  'Handling',
+  'Managing',
+  'Controlling',
+  'Monitoring',
+  'Observing',
+  'Watching',
+  'Tracking',
+  'Following',
+  'Leading',
+  'Guiding',
+  'Directing',
+  'Steering',
+  'Navigating',
+  'Routing',
+  'Mapping',
+  'Planning',
+  'Scheduling',
+  'Timing',
+  'Measuring',
+  'Counting',
+  'Calculating',
+  'Computing',
+  'Processing'
+];
+
 /**
- * Log an agent response to a chat session
+ * @deprecated Use logAgentProgress instead. This function will be removed once MCP loop v2 handles all agent action logging.
  */
 export async function logAgentResponse(
   supabase: SupabaseClient<Database>,
@@ -103,14 +338,37 @@ export async function logAgentResponse(
   toolCall?: Record<string, any>,
   responseData?: Record<string, any>
 ): Promise<{ messageId: string; error?: ChatError }> {
-  try {
-    console.log('logAgentResponse called with:', { sessionId, message, actionType });
-    
-    // Generate embedding for the message
-    const embedding = await generateEmbedding(message);
-    console.log('Generated embedding for message');
+  console.warn('logAgentResponse is deprecated. Please use logAgentProgress instead.');
+  return logAgentProgress(supabase, sessionId, message, toolCall);
+}
 
-    // Log the message
+/**
+ * Log a progress update message to the chat session only
+ * This is the preferred way to log progress updates from actions since MCP loop v2 handles agent_actions logging
+ */
+export async function logAgentProgress(
+  supabase: SupabaseClient<Database>,
+  sessionId: string,
+  message: string,
+  toolCall?: Record<string, any>
+): Promise<{ messageId: string; error?: ChatError }> {
+  try {
+    console.log('logAgentProgress called with:', { sessionId, message });
+    
+    // Check if this is a simple status update or processing step
+    const shouldSkipEmbedding = SKIP_EMBEDDING_MESSAGES.some(skipMessage => 
+      message.includes(skipMessage) || 
+      toolCall?.reason?.includes(skipMessage)
+    );
+
+    let embedding = null;
+    if (!shouldSkipEmbedding) {
+      // Generate embedding for the message
+      embedding = await generateEmbedding(message);
+      console.log('Generated embedding for message');
+    }
+
+    // Log the message to chat_messages only
     const { data: messageData, error: messageError } = await supabase
       .from('chat_messages')
       .insert({
@@ -118,7 +376,6 @@ export async function logAgentResponse(
         sender: 'assistant',
         message,
         tool_call: toolCall,
-        response_data: responseData,
         embedding
       })
       .select('id')
@@ -130,38 +387,14 @@ export async function logAgentResponse(
     }
     console.log('Successfully inserted chat message with ID:', messageData?.id);
 
-    // If there's an action type, log it to agent_actions
-    if (actionType) {
-      console.log('Logging action to agent_actions:', actionType);
-      const { data: session } = await supabase
-        .from('conversation_sessions')
-        .select('profile_id')
-        .eq('id', sessionId)
-        .single();
-
-      if (session) {
-        await logAgentAction(supabase, {
-          entityType: 'profile',
-          entityId: session.profile_id,
-          payload: {
-            type: actionType,
-            message,
-            toolCall,
-            responseData
-          }
-        });
-        console.log('Successfully logged agent action');
-      }
-    }
-
     return { messageId: messageData.id };
   } catch (error) {
-    console.error('Full error in logAgentResponse:', error);
+    console.error('Full error in logAgentProgress:', error);
     return {
       messageId: '',
       error: {
         type: 'DATABASE_ERROR',
-        message: 'Failed to log agent response',
+        message: 'Failed to log agent progress',
         details: error
       }
     };
@@ -387,8 +620,16 @@ export function createMCPLoopBody(
   entityId?: string,
   insightId?: string,
   scope?: string,
-  companyIds?: string[]
+  companyIds?: string[],
+  actionData?: {
+    actionId: string;
+    params: Record<string, any>;
+  }
 ) {
+  // Extract all params from actionData if present
+  const actionParams = actionData?.params || {};
+  
+  // Create flattened base context
   const baseContext = {
     lastMessage: message,
     mode,
@@ -398,14 +639,26 @@ export function createMCPLoopBody(
     semanticContext: {
       previousMatches: []
     },
-    contextEmbedding: []
+    contextEmbedding: [],
+    // Add companyIds to context if present
+    ...(companyIds ? { companyIds } : {}),
+    // Flatten all action params into context
+    ...actionParams
   };
 
+  // Create flattened body with all parameters at top level
   const body = {
     mode,
     sessionId,
-    ...(mode === 'candidate' ? { profileId: entityId } : {}),
-    ...(mode === 'hiring' ? { roleId: entityId } : {}),
+    // Add companyIds at top level if present
+    ...(companyIds ? { companyIds } : {}),
+    // Flatten all action params at top level first
+    ...actionParams,
+    // Then add mode-specific IDs, but don't overwrite roleId/profileId from actionParams
+    ...(mode === 'candidate' && !actionParams.profileId ? { profileId: entityId } : {}),
+    ...(mode === 'hiring' && !actionParams.roleId ? { roleId: entityId } : {}),
+    // Include actionId if present
+    ...(actionData?.actionId && { actionId: actionData.actionId }),
     context: baseContext
   };
 
@@ -414,13 +667,7 @@ export function createMCPLoopBody(
     return {
       ...body,
       insightId,
-      companyIds: companyIds || [entityId],
-      context: {
-        ...baseContext,
-        companyIds: companyIds || [entityId],
-        scope: scope || 'division',
-        outputFormat: 'action_plan'
-      },
+      scope,
       plannerRecommendations: []
     };
   }

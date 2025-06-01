@@ -2,3 +2,6 @@ sales-copilot/hubspot-app/hubspot.config.yml
 scrape/.env.local
 /hr-copilot/supabase/.temp
 script/.env.local
+/node_modules
+/script/supabase/.temp
+/script/__tests__/resources/talentpathai-dev-staging _ Antion _ Supabase_files
