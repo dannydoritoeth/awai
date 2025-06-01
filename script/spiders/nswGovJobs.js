@@ -36,6 +36,7 @@ export class NSWJobSpider {
   #page;
   #browser;
   #currentRoleId = null;
+  #frameworkCapabilities;
 
   constructor({ maxJobs = 10, supabase, institution_id }) {
     try {
@@ -2103,16 +2104,55 @@ export class NSWJobSpider {
   }
 
   async #initializeNSWCapabilityFramework() {
-      logger.info('Initializing NSW Capability Framework...');
+    logger.info('Initializing NSW Capability Framework...');
     try {
-        await generateNSWCapabilityData(this.#supabase, this.#institutionId);
+      // Load capabilities from JSON file
+      const capabilitiesPath = path.join(process.cwd(), 'database', 'seed', 'capabilities.json');
+      const capabilitiesData = JSON.parse(fs.readFileSync(capabilitiesPath, 'utf8'));
+      
+      logger.info(`Found ${capabilitiesData.length} capabilities in framework definition`);
+
+      // Upsert each capability
+      for (const capability of capabilitiesData) {
+        const { data, error } = await this.#supabase
+          .from('capabilities')
+          .upsert({
+            id: capability.id,
+            name: capability.name,
+            group_name: capability.group_name,
+            description: capability.description,
+            source_framework: capability.source_framework,
+            is_occupation_specific: capability.is_occupation_specific,
+            sync_status: 'pending',
+            last_synced_at: null
+          }, {
+            onConflict: 'id'
+          })
+          .select();
+
+        if (error) {
+          logger.error('Error upserting capability:', {
+            capability: capability.name,
+            error
+          });
+          throw error;
+        }
+
+        logger.info(`Initialized capability: ${capability.name}`);
+      }
+
+      // Store capabilities in memory for use in prompts
+      this.#frameworkCapabilities = capabilitiesData;
+      
+      logger.info('Successfully initialized NSW Capability Framework');
     } catch (error) {
-        logger.error('Error initializing NSW Capability Framework:', {
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-            message: error.message
-        });
+      logger.error('Error initializing NSW Capability Framework:', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          details: error
+        }
+      });
       throw error;
     }
   }
@@ -2617,6 +2657,21 @@ export class NSWJobSpider {
     try {
       logger.debug('Content length for analysis:', { length: content?.length || 0 });
       
+      // Generate the capabilities list for the prompt
+      const capabilitiesByGroup = {};
+      this.#frameworkCapabilities.forEach(cap => {
+        if (!capabilitiesByGroup[cap.group_name]) {
+          capabilitiesByGroup[cap.group_name] = [];
+        }
+        capabilitiesByGroup[cap.group_name].push(`${cap.name}: ${cap.description}`);
+      });
+
+      // Build the capabilities section of the prompt
+      let capabilitiesPrompt = 'NSW Government Capability Framework core capabilities:\n\n';
+      for (const [group, capabilities] of Object.entries(capabilitiesByGroup)) {
+        capabilitiesPrompt += `${group}:\n${capabilities.map(c => `- ${c}`).join('\n')}\n\n`;
+      }
+      
       const response = await this.#openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
@@ -2624,39 +2679,10 @@ export class NSWJobSpider {
             role: "system",
             content: `You are an expert in analyzing job descriptions and extracting capabilities based on the NSW Government Capability Framework. Your task is to:
 
-1. ONLY extract capabilities from this predefined list of NSW Government Capability Framework core capabilities:
+1. ONLY extract capabilities from this predefined list of capabilities. Each capability includes its description to help you accurately match job requirements:
 
-Personal Attributes:
-- Display Resilience and Courage
-- Act with Integrity
-- Manage Self
-- Value Diversity and Inclusion
-
-Relationships:
-- Communicate Effectively
-- Commit to Customer Service
-- Work Collaboratively
-- Influence and Negotiate
-
-Results:
-- Deliver Results
-- Plan and Prioritise
-- Think and Solve Problems
-- Demonstrate Accountability
-
-Business Enablers:
-- Finance
-- Technology
-- Procurement and Contract Management
-- Project Management
-
-People Management:
-- Manage and Develop People
-- Inspire Direction and Purpose
-- Optimise Business Outcomes
-- Manage Reform and Change
-
-2. For each capability, determine the level (Foundational, Intermediate, Adept, Advanced, Highly Advanced) based on the role requirements and responsibilities.
+${capabilitiesPrompt}
+2. For each capability you identify, determine the level (Foundational, Intermediate, Adept, Advanced, Highly Advanced) based on the role requirements and responsibilities.
 
 3. Extract technical and soft skills mentioned in the job description, including:
 - Technical skills (e.g. programming languages, tools, platforms)
@@ -2667,7 +2693,7 @@ Format your response as a JSON object with:
 {
   "capabilities": [
     {
-      "name": "string (MUST be one of the exact core capabilities listed above)",
+      "name": "string (MUST be one of the exact capability names listed above)",
       "level": "string (Foundational, Intermediate, Adept, Advanced, or Highly Advanced)",
       "description": "string (how this capability applies to the role)",
       "behavioral_indicators": ["string (specific behaviors that demonstrate this capability)"]
@@ -2684,7 +2710,7 @@ Format your response as a JSON object with:
           },
           {
             role: "user",
-            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements. ONLY use capabilities from the predefined NSW Government Capability Framework list:\n\n${content}`
+            content: `Extract capabilities and skills from this job description. Focus on the key responsibilities and requirements. ONLY use capabilities from the predefined NSW Government Capability Framework list above:\n\n${content}`
           }
         ],
         temperature: 0.3,
