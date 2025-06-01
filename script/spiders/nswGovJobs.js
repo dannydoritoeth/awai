@@ -201,7 +201,7 @@ export class NSWJobSpider {
         process.env.SUPABASE_KEY || ''
       );
 
-      // 1. Migrate companies first
+      // 1. Migrate companies first (since they're referenced by other entities)
       const { data: companies, error: companiesError } = await this.#supabase
         .from('companies')
         .select('*')
@@ -234,7 +234,145 @@ export class NSWJobSpider {
         logger.info(`Migrated ${companies.length} companies to live DB`);
       }
 
-      // 2. Migrate jobs (before roles since roles reference jobs)
+      // 2. Migrate capabilities (before role_capabilities)
+      logger.info('Starting capabilities migration...');
+      const { data: capabilities, error: capsError } = await this.#supabase
+        .from('capabilities')
+        .select('*')
+        .eq('sync_status', 'pending');
+
+      if (capsError) {
+        logger.error('Error fetching capabilities from staging:', capsError);
+        throw capsError;
+      }
+
+      logger.info(`Found ${capabilities?.length || 0} capabilities to migrate`);
+      
+      if (capabilities && capabilities.length > 0) {
+        logger.info('Capabilities to migrate:', capabilities.map(c => ({ id: c.id, name: c.name })));
+        
+        const { data: liveCapsData, error: liveCapabilitiesError } = await liveSupabase
+          .from('capabilities')
+          .upsert(
+            capabilities.map(cap => ({
+              ...cap,
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            }))
+          )
+          .select();
+
+        if (liveCapabilitiesError) {
+          logger.error('Error migrating capabilities:', {
+            error: liveCapabilitiesError,
+            capsToMigrate: capabilities
+          });
+          throw liveCapabilitiesError;
+        }
+
+        logger.info(`Successfully upserted ${liveCapsData?.length || 0} capabilities to live DB`);
+
+        // Verify capabilities in live DB
+        const { data: verifyLiveCaps, error: verifyError } = await liveSupabase
+          .from('capabilities')
+          .select('id, name')
+          .in('id', capabilities.map(c => c.id));
+        
+        if (verifyError) {
+          logger.error('Error verifying capabilities in live DB:', verifyError);
+        } else {
+          logger.info(`Verified ${verifyLiveCaps?.length || 0} capabilities in live DB:`, 
+            verifyLiveCaps?.map(c => ({ id: c.id, name: c.name })));
+        }
+
+        // Update sync status in staging
+        const { error: updateError } = await this.#supabase
+          .from('capabilities')
+          .update({
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString()
+          })
+          .in('id', capabilities.map(c => c.id));
+
+        if (updateError) {
+          logger.error('Error updating capabilities sync status in staging:', updateError);
+        } else {
+          logger.info(`Updated sync status for ${capabilities.length} capabilities in staging`);
+        }
+
+        logger.info(`Completed capabilities migration`);
+      }
+
+      // 3. Migrate skills (before role_skills)
+      logger.info('Starting skills migration...');
+      const { data: skills, error: skillsError } = await this.#supabase
+        .from('skills')
+        .select('*')
+        .eq('sync_status', 'pending');
+
+      if (skillsError) {
+        logger.error('Error fetching skills from staging:', skillsError);
+        throw skillsError;
+      }
+
+      logger.info(`Found ${skills?.length || 0} skills to migrate`);
+      
+      if (skills && skills.length > 0) {
+        logger.info('Skills to migrate:', skills.map(s => ({ id: s.id, name: s.name })));
+        
+        const { data: liveSkillsData, error: liveSkillsError } = await liveSupabase
+          .from('skills')
+          .upsert(
+            skills.map(skill => ({
+              ...skill,
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            }))
+          )
+          .select();
+
+        if (liveSkillsError) {
+          logger.error('Error migrating skills:', {
+            error: liveSkillsError,
+            skillsToMigrate: skills
+          });
+          throw liveSkillsError;
+        }
+
+        logger.info(`Successfully upserted ${liveSkillsData?.length || 0} skills to live DB`);
+
+        // Verify skills in live DB
+        const { data: verifyLiveSkills, error: verifyError } = await liveSupabase
+          .from('skills')
+          .select('id, name')
+          .in('id', skills.map(s => s.id));
+        
+        if (verifyError) {
+          logger.error('Error verifying skills in live DB:', verifyError);
+        } else {
+          logger.info(`Verified ${verifyLiveSkills?.length || 0} skills in live DB:`, 
+            verifyLiveSkills?.map(s => ({ id: s.id, name: s.name })));
+        }
+
+        // Update sync status in staging
+        const { error: updateError } = await this.#supabase
+          .from('skills')
+          .update({
+            sync_status: 'synced',
+            last_synced_at: new Date().toISOString()
+          })
+          .in('id', skills.map(s => s.id));
+
+        if (updateError) {
+          logger.error('Error updating skills sync status in staging:', updateError);
+        } else {
+          logger.info(`Updated sync status for ${skills.length} skills in staging`);
+        }
+
+        logger.info(`Completed skills migration`);
+      }
+
+      // 4. Migrate jobs
       const { data: jobs, error: jobsError } = await this.#supabase
         .from('jobs')
         .select('*')
@@ -273,7 +411,7 @@ export class NSWJobSpider {
         logger.info(`Migrated ${jobs.length} jobs to live DB`);
       }
 
-      // 3. Migrate roles
+      // 5. Migrate roles
       const { data: roles, error: rolesError } = await this.#supabase
         .from('roles')
         .select('*')
@@ -306,85 +444,7 @@ export class NSWJobSpider {
         logger.info(`Migrated ${roles.length} roles to live DB`);
       }
 
-      // 4. Migrate capabilities
-      const { data: capabilities, error: capsError } = await this.#supabase
-        .from('capabilities')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (capsError) throw capsError;
-
-      if (capabilities && capabilities.length > 0) {
-        const { error: liveCapabilitiesError } = await liveSupabase
-          .from('capabilities')
-          .upsert(
-            capabilities.map(cap => ({
-              ...cap,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveCapabilitiesError) {
-          logger.error('Error migrating capabilities:', {
-            error: liveCapabilitiesError,
-            capsToMigrate: capabilities
-          });
-          throw liveCapabilitiesError;
-        }
-
-        // Update sync status in staging
-        await this.#supabase
-          .from('capabilities')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', capabilities.map(c => c.id));
-
-        logger.info(`Migrated ${capabilities.length} capabilities to live DB`);
-      }
-
-      // 5. Migrate skills
-      const { data: skills, error: skillsError } = await this.#supabase
-        .from('skills')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (skillsError) throw skillsError;
-
-      if (skills && skills.length > 0) {
-        const { error: liveSkillsError } = await liveSupabase
-          .from('skills')
-          .upsert(
-            skills.map(skill => ({
-              ...skill,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveSkillsError) {
-          logger.error('Error migrating skills:', {
-            error: liveSkillsError,
-            skillsToMigrate: skills
-          });
-          throw liveSkillsError;
-        }
-
-        // Update sync status in staging
-        await this.#supabase
-          .from('skills')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', skills.map(s => s.id));
-
-        logger.info(`Migrated ${skills.length} skills to live DB`);
-      }
-
-      // 6. Migrate role capabilities
+      // 6. Migrate role capabilities (after both roles and capabilities exist)
       const { data: roleCapabilities, error: roleCapsError } = await this.#supabase
         .from('role_capabilities')
         .select('*')
@@ -423,7 +483,7 @@ export class NSWJobSpider {
         logger.info(`Migrated ${roleCapabilities.length} role capabilities to live DB`);
       }
 
-      // 7. Migrate role skills
+      // 7. Migrate role skills (after both roles and skills exist)
       const { data: roleSkills, error: roleSkillsError } = await this.#supabase
         .from('role_skills')
         .select('*')
@@ -1454,7 +1514,9 @@ export class NSWJobSpider {
         description: capability.description,
         source_framework: 'NSW Public Sector Capability Framework',
         is_occupation_specific: false,
-        normalized_key: this.#normalizeRoleTitle(capability.name)
+        normalized_key: this.#normalizeRoleTitle(capability.name),
+        sync_status: 'pending',
+        last_synced_at: null
       };
 
       let capabilityResult;
@@ -1541,7 +1603,9 @@ export class NSWJobSpider {
         source: 'job_description',
         is_occupation_specific: true,
         company_id: companyData[0].id,
-        category: skill.category || 'Technical'
+        category: skill.category || 'Technical',
+        sync_status: 'pending',
+        last_synced_at: null
       };
 
       let result;
