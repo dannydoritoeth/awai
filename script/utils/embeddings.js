@@ -15,7 +15,7 @@ const BEARER_TOKEN = process.env.GOOGLE_BEARER_TOKEN;
 // OpenAI Configuration
 const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || 'google';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-ada-002';
+const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 
 // Initialize OpenAI client if using OpenAI
 const openai = EMBEDDING_PROVIDER === 'openai' ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
