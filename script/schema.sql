@@ -747,7 +747,9 @@ CREATE TABLE IF NOT EXISTS "public"."taxonomy" (
     "description" "text",
     "taxonomy_type" "text" DEFAULT 'core'::"text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
