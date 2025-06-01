@@ -201,7 +201,7 @@ export class NSWJobSpider {
         process.env.SUPABASE_KEY || ''
       );
 
-      // 1. Migrate companies
+      // 1. Migrate companies first
       const { data: companies, error: companiesError } = await this.#supabase
         .from('companies')
         .select('*')
@@ -325,7 +325,7 @@ export class NSWJobSpider {
         logger.info(`Migrated ${skills.length} skills to live DB`);
       }
 
-      // 5. Migrate role capabilities
+      // 5. Verify and migrate role capabilities
       const { data: roleCapabilities, error: roleCapsError } = await this.#supabase
         .from('role_capabilities')
         .select('*')
@@ -334,29 +334,57 @@ export class NSWJobSpider {
       if (roleCapsError) throw roleCapsError;
 
       if (roleCapabilities && roleCapabilities.length > 0) {
-        const { error: liveRoleCapsError } = await liveSupabase
-          .from('role_capabilities')
-          .upsert(roleCapabilities.map(rc => ({
-            ...rc,
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })));
+        // Verify that all referenced roles and capabilities exist in live DB
+        const roleIds = [...new Set(roleCapabilities.map(rc => rc.role_id))];
+        const capabilityIds = [...new Set(roleCapabilities.map(rc => rc.capability_id))];
 
-        if (liveRoleCapsError) throw liveRoleCapsError;
+        const { data: existingRoles } = await liveSupabase
+          .from('roles')
+          .select('id')
+          .in('id', roleIds);
 
-        // Update sync status in staging
-        await this.#supabase
-          .from('role_capabilities')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', roleCapabilities.map(rc => rc.id));
+        const { data: existingCapabilities } = await liveSupabase
+          .from('capabilities')
+          .select('id')
+          .in('id', capabilityIds);
 
-        logger.info(`Migrated ${roleCapabilities.length} role capabilities to live DB`);
+        const existingRoleIds = new Set(existingRoles.map(r => r.id));
+        const existingCapabilityIds = new Set(existingCapabilities.map(c => c.id));
+
+        // Filter out relationships where either role or capability doesn't exist
+        const validRoleCapabilities = roleCapabilities.filter(rc =>
+          existingRoleIds.has(rc.role_id) && existingCapabilityIds.has(rc.capability_id)
+        );
+
+        if (validRoleCapabilities.length !== roleCapabilities.length) {
+          logger.warn(`Skipping ${roleCapabilities.length - validRoleCapabilities.length} role capabilities due to missing references`);
+        }
+
+        if (validRoleCapabilities.length > 0) {
+          const { error: liveRoleCapsError } = await liveSupabase
+            .from('role_capabilities')
+            .upsert(validRoleCapabilities.map(rc => ({
+              ...rc,
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            })));
+
+          if (liveRoleCapsError) throw liveRoleCapsError;
+
+          // Update sync status in staging for valid relationships
+          await this.#supabase
+            .from('role_capabilities')
+            .update({
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            })
+            .in('id', validRoleCapabilities.map(rc => rc.id));
+
+          logger.info(`Migrated ${validRoleCapabilities.length} role capabilities to live DB`);
+        }
       }
 
-      // 6. Migrate role skills
+      // 6. Verify and migrate role skills
       const { data: roleSkills, error: roleSkillsError } = await this.#supabase
         .from('role_skills')
         .select('*')
@@ -365,26 +393,54 @@ export class NSWJobSpider {
       if (roleSkillsError) throw roleSkillsError;
 
       if (roleSkills && roleSkills.length > 0) {
-        const { error: liveRoleSkillsError } = await liveSupabase
-          .from('role_skills')
-          .upsert(roleSkills.map(rs => ({
-            ...rs,
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })));
+        // Verify that all referenced roles and skills exist in live DB
+        const roleIds = [...new Set(roleSkills.map(rs => rs.role_id))];
+        const skillIds = [...new Set(roleSkills.map(rs => rs.skill_id))];
 
-        if (liveRoleSkillsError) throw liveRoleSkillsError;
+        const { data: existingRoles } = await liveSupabase
+          .from('roles')
+          .select('id')
+          .in('id', roleIds);
 
-        // Update sync status in staging
-        await this.#supabase
-          .from('role_skills')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', roleSkills.map(rs => rs.id));
+        const { data: existingSkills } = await liveSupabase
+          .from('skills')
+          .select('id')
+          .in('id', skillIds);
 
-        logger.info(`Migrated ${roleSkills.length} role skills to live DB`);
+        const existingRoleIds = new Set(existingRoles.map(r => r.id));
+        const existingSkillIds = new Set(existingSkills.map(s => s.id));
+
+        // Filter out relationships where either role or skill doesn't exist
+        const validRoleSkills = roleSkills.filter(rs =>
+          existingRoleIds.has(rs.role_id) && existingSkillIds.has(rs.skill_id)
+        );
+
+        if (validRoleSkills.length !== roleSkills.length) {
+          logger.warn(`Skipping ${roleSkills.length - validRoleSkills.length} role skills due to missing references`);
+        }
+
+        if (validRoleSkills.length > 0) {
+          const { error: liveRoleSkillsError } = await liveSupabase
+            .from('role_skills')
+            .upsert(validRoleSkills.map(rs => ({
+              ...rs,
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            })));
+
+          if (liveRoleSkillsError) throw liveRoleSkillsError;
+
+          // Update sync status in staging for valid relationships
+          await this.#supabase
+            .from('role_skills')
+            .update({
+              sync_status: 'synced',
+              last_synced_at: new Date().toISOString()
+            })
+            .in('id', validRoleSkills.map(rs => rs.id));
+
+          logger.info(`Migrated ${validRoleSkills.length} role skills to live DB`);
+        }
       }
 
       logger.info('Successfully completed migration from staging to live DB');
