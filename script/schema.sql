@@ -732,7 +732,9 @@ CREATE TABLE IF NOT EXISTS "public"."skills" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "embedding" "extensions"."vector"(1536),
     "company_id" "uuid",
-    "embedding_text_hash" "text"
+    "embedding_text_hash" "text",
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 

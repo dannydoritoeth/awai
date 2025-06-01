@@ -4,3 +4,4 @@ scrape/.env.local
 script/.env.local
 /node_modules
 /script/supabase/.temp
+/script/__tests__/resources/talentpathai-dev-staging _ Antion _ Supabase_files

@@ -120,3 +120,6 @@ with
 -- Example: disable the "vector" extension
 drop
   extension if exists vector;
+
+
+supabase db dump --schema public > schema.sql
