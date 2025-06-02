@@ -31,7 +31,8 @@ import {
 import { ProcessedJob } from '../processor/types.js';
 
 export class StorageService implements IStorageService {
-  private client: SupabaseClient;
+  private liveClient: SupabaseClient;
+  private stagingClient: SupabaseClient;
   private metrics: StorageMetrics;
 
   constructor(
@@ -39,20 +40,39 @@ export class StorageService implements IStorageService {
     private logger: Logger
   ) {
     try {
-      this.logger.info('Creating Supabase client with config:', {
-        url: config.supabaseUrl ? 'Set' : 'Not Set',
-        key: config.supabaseKey ? 'Set' : 'Not Set'
+      // Validate required configuration
+      if (!config.stagingSupabaseUrl) {
+        throw new Error('stagingSupabaseUrl is required');
+      }
+      if (!config.stagingSupabaseKey) {
+        throw new Error('stagingSupabaseKey is required');
+      }
+      if (!config.liveSupabaseUrl) {
+        throw new Error('liveSupabaseUrl is required');
+      }
+      if (!config.liveSupabaseKey) {
+        throw new Error('liveSupabaseKey is required');
+      }
+
+      this.logger.info('Creating Supabase clients with config:', {
+        liveUrl: config.liveSupabaseUrl ? 'Set' : 'Not Set',
+        liveKey: config.liveSupabaseKey ? 'Set' : 'Not Set',
+        stagingUrl: config.stagingSupabaseUrl ? 'Set' : 'Not Set',
+        stagingKey: config.stagingSupabaseKey ? 'Set' : 'Not Set'
       });
-    this.client = createClient(config.supabaseUrl, config.supabaseKey);
-    this.metrics = {
-      totalStored: 0,
-      successfulStores: 0,
-      failedStores: 0,
-      startTime: new Date(),
-      errors: []
-    };
+      
+      this.liveClient = createClient(config.liveSupabaseUrl, config.liveSupabaseKey);
+      this.stagingClient = createClient(config.stagingSupabaseUrl, config.stagingSupabaseKey);
+      
+      this.metrics = {
+        totalStored: 0,
+        successfulStores: 0,
+        failedStores: 0,
+        startTime: new Date(),
+        errors: []
+      };
     } catch (error) {
-      this.logger.error('Failed to create Supabase client:', error);
+      this.logger.error('Failed to create Supabase clients:', error);
       throw error;
     }
   }
@@ -85,7 +105,7 @@ export class StorageService implements IStorageService {
       const slug = 'nsw-gov';
       this.logger.info('Looking up institution with slug:', slug);
       
-      const { data: institution, error: fetchError } = await this.client
+      const { data: institution, error: fetchError } = await this.liveClient
         .from('institutions')
         .select('id')
         .eq('slug', slug)
@@ -94,7 +114,7 @@ export class StorageService implements IStorageService {
       if (fetchError) {
         if (fetchError.code === 'PGRST116') { // Not found error
           this.logger.info('Institution not found, creating new one');
-          const { data: newInstitution, error: insertError } = await this.client
+          const { data: newInstitution, error: insertError } = await this.liveClient
             .from('institutions')
             .insert({
               name: 'NSW Government',
@@ -138,7 +158,7 @@ export class StorageService implements IStorageService {
       
       // First test a simple query
       this.logger.info('Testing simple query...');
-      const { data, error } = await this.client.from('jobs').select('id').limit(1);
+      const { data, error } = await this.liveClient.from('jobs').select('id').limit(1);
       
       if (error) {
         this.logger.error('Database query failed:', error);
@@ -255,7 +275,7 @@ export class StorageService implements IStorageService {
    */
   async getJobById(id: string): Promise<JobRecord | null> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.liveClient
         .from(this.config.jobsTable)
         .select('*')
         .eq('id', id)
@@ -275,7 +295,7 @@ export class StorageService implements IStorageService {
    */
   async getJobsByFilter(filters: Record<string, any>, options?: QueryOptions): Promise<JobRecord[]> {
     try {
-      let query = this.client
+      let query = this.liveClient
         .from(this.config.jobsTable)
         .select('*');
 
@@ -308,7 +328,7 @@ export class StorageService implements IStorageService {
    */
   async getCapabilitiesByJobId(jobId: string): Promise<CapabilityRecord[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.liveClient
         .from(this.config.capabilitiesTable)
         .select('*')
         .eq('jobId', jobId);
@@ -327,7 +347,7 @@ export class StorageService implements IStorageService {
    */
   async getEmbeddingsByJobId(jobId: string): Promise<EmbeddingRecord[]> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.liveClient
         .from(this.config.embeddingsTable)
         .select('*')
         .eq('jobId', jobId);
@@ -346,7 +366,7 @@ export class StorageService implements IStorageService {
    */
   async getTaxonomyByJobId(jobId: string): Promise<TaxonomyRecord | null> {
     try {
-      const { data, error } = await this.client
+      const { data, error } = await this.liveClient
         .from(this.config.taxonomyTable)
         .select('*')
         .eq('jobId', jobId)
@@ -383,6 +403,14 @@ export class StorageService implements IStorageService {
         department: job.jobDetails.agency
       });
 
+      // First store the company
+      const companyData = await this.storeCompanyRecord({
+        name: job.jobDetails.agency,
+        description: '',
+        website: '',
+        raw_data: job.jobDetails
+      });
+
       const jobRecord = {
         title: job.jobDetails.title,
         source_id: 'nswgov',
@@ -402,7 +430,7 @@ export class StorageService implements IStorageService {
       };
 
       // First check if the job exists
-      const { data: existingJob, error: fetchError } = await this.client
+      const { data: existingJob, error: fetchError } = await this.liveClient
         .from(this.config.jobsTable)
         .select()
         .eq('source_id', 'nswgov')
@@ -417,7 +445,7 @@ export class StorageService implements IStorageService {
       let result;
       if (existingJob) {
         // Update existing job
-        const { data, error: updateError } = await this.client
+        const { data, error: updateError } = await this.liveClient
           .from(this.config.jobsTable)
           .update(jobRecord)
           .eq('id', existingJob.id)
@@ -431,7 +459,7 @@ export class StorageService implements IStorageService {
         this.logger.info(`Successfully updated job ${job.jobDetails.id}`);
       } else {
         // Insert new job
-        const { data, error: insertError } = await this.client
+        const { data, error: insertError } = await this.liveClient
           .from(this.config.jobsTable)
           .insert(jobRecord)
           .select();
@@ -444,10 +472,316 @@ export class StorageService implements IStorageService {
         this.logger.info(`Successfully inserted job ${job.jobDetails.id}`);
       }
 
+      // Store role record
+      const roleData = await this.storeRoleRecord({
+        title: job.jobDetails.title,
+        company_id: companyData[0].id,
+        raw_data: job.jobDetails
+      });
+
+      // Process capabilities and skills
+      if (job.capabilities && job.capabilities.capabilities) {
+        for (const capability of job.capabilities.capabilities) {
+          const capabilityData = await this.storeCapabilityRecord({
+            name: capability.name,
+            description: capability.description,
+            level: capability.level,
+            raw_data: capability
+          });
+
+          if (capabilityData && capabilityData[0] && roleData && roleData[0]) {
+            await this.storeRoleCapability(roleData[0].id, capabilityData[0].id, 'core', capability.level);
+          }
+        }
+      }
+
+      if (job.capabilities && job.capabilities.skills) {
+        for (const skill of job.capabilities.skills) {
+          const skillData = await this.storeSkillRecord({
+            name: skill.name,
+            description: skill.description || '',
+            category: skill.category || 'Technical',
+            company_id: companyData[0].id,
+            raw_data: skill
+          });
+
+          if (skillData && skillData[0] && roleData && roleData[0]) {
+            await this.storeRoleSkill(roleData[0].id, skillData[0].id);
+          }
+        }
+      }
+
       this.logger.info('Successfully stored job record:', result);
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
+      throw error;
+    }
+  }
+
+  /**
+   * Store company record in staging
+   */
+  private async storeCompanyRecord(company: { name: string; description: string; website: string; raw_data: any }): Promise<any[]> {
+    try {
+      const companyData = {
+        name: company.name,
+        description: company.description,
+        website: company.website,
+        normalized_key: company.name.toLowerCase().replace(/\s+/g, '_'),
+        sync_status: 'pending',
+        last_synced_at: null
+      };
+
+      // First check if company exists
+      const { data: existingCompany, error: fetchError } = await this.stagingClient
+        .from('companies')
+        .select()
+        .eq('name', company.name)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      if (existingCompany) {
+        const { data, error: updateError } = await this.stagingClient
+          .from('companies')
+          .update(companyData)
+          .eq('id', existingCompany.id)
+          .select();
+
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await this.stagingClient
+          .from('companies')
+          .insert(companyData)
+          .select();
+
+        if (insertError) throw insertError;
+        return data;
+      }
+    } catch (error) {
+      this.logger.error('Error storing company record:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store role record in staging
+   */
+  private async storeRoleRecord(role: { title: string; company_id: string; raw_data: any }): Promise<any[]> {
+    try {
+      const roleData = {
+        title: role.title,
+        company_id: role.company_id,
+        normalized_key: role.title.toLowerCase().replace(/\s+/g, '_'),
+        sync_status: 'pending',
+        last_synced_at: null
+      };
+
+      // First check if role exists
+      const { data: existingRole, error: fetchError } = await this.stagingClient
+        .from('roles')
+        .select()
+        .eq('company_id', role.company_id)
+        .eq('normalized_key', roleData.normalized_key)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      if (existingRole) {
+        const { data, error: updateError } = await this.stagingClient
+          .from('roles')
+          .update(roleData)
+          .eq('id', existingRole.id)
+          .select();
+
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await this.stagingClient
+          .from('roles')
+          .insert(roleData)
+          .select();
+
+        if (insertError) throw insertError;
+        return data;
+      }
+    } catch (error) {
+      this.logger.error('Error storing role record:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store capability record in staging
+   */
+  private async storeCapabilityRecord(capability: { name: string; description: string; level: string; raw_data: any }): Promise<any[]> {
+    try {
+      const capabilityData = {
+        name: capability.name,
+        description: capability.description,
+        source_framework: 'NSW Public Sector Capability Framework',
+        is_occupation_specific: false,
+        normalized_key: capability.name.toLowerCase().replace(/\s+/g, '_'),
+        sync_status: 'pending',
+        last_synced_at: null
+      };
+
+      // First check if capability exists
+      const { data: existingCapability, error: fetchError } = await this.stagingClient
+        .from('capabilities')
+        .select()
+        .eq('name', capability.name)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      let result;
+      if (existingCapability) {
+        const { data, error: updateError } = await this.stagingClient
+          .from('capabilities')
+          .update(capabilityData)
+          .eq('id', existingCapability.id)
+          .select();
+
+        if (updateError) throw updateError;
+        result = data;
+      } else {
+        const { data, error: insertError } = await this.stagingClient
+          .from('capabilities')
+          .insert(capabilityData)
+          .select();
+
+        if (insertError) throw insertError;
+        result = data;
+      }
+
+      // Store capability level
+      if (result && result[0]) {
+        const { error: levelError } = await this.stagingClient
+          .from('capability_levels')
+          .upsert({
+            capability_id: result[0].id,
+            level: capability.level,
+            summary: capability.description
+          }, {
+            onConflict: 'capability_id,level'
+          });
+
+        if (levelError) throw levelError;
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error('Error storing capability record:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store skill record in staging
+   */
+  private async storeSkillRecord(skill: { name: string; description: string; category: string; company_id: string; raw_data: any }): Promise<any[]> {
+    try {
+      const skillData = {
+        name: skill.name,
+        description: skill.description,
+        category: skill.category,
+        source: 'job_description',
+        is_occupation_specific: true,
+        company_id: skill.company_id,
+        normalized_key: skill.name.toLowerCase().replace(/\s+/g, '_'),
+        sync_status: 'pending',
+        last_synced_at: null
+      };
+
+      // First check if skill exists
+      const { data: existingSkill, error: fetchError } = await this.stagingClient
+        .from('skills')
+        .select()
+        .eq('name', skill.name)
+        .eq('company_id', skill.company_id)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      if (existingSkill) {
+        const { data, error: updateError } = await this.stagingClient
+          .from('skills')
+          .update(skillData)
+          .eq('id', existingSkill.id)
+          .select();
+
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await this.stagingClient
+          .from('skills')
+          .insert(skillData)
+          .select();
+
+        if (insertError) throw insertError;
+        return data;
+      }
+    } catch (error) {
+      this.logger.error('Error storing skill record:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store role capability relationship in staging
+   */
+  private async storeRoleCapability(roleId: string, capabilityId: string, capabilityType: string, level: string): Promise<void> {
+    try {
+      const { error } = await this.stagingClient
+        .from('role_capabilities')
+        .upsert({
+          role_id: roleId,
+          capability_id: capabilityId,
+          capability_type: capabilityType,
+          level: level,
+          sync_status: 'pending',
+          last_synced_at: null
+        }, {
+          onConflict: 'role_id,capability_id'
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      this.logger.error('Error storing role capability:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store role skill relationship in staging
+   */
+  private async storeRoleSkill(roleId: string, skillId: string): Promise<void> {
+    try {
+      const { error } = await this.stagingClient
+        .from('role_skills')
+        .upsert({
+          role_id: roleId,
+          skill_id: skillId,
+          sync_status: 'pending',
+          last_synced_at: null
+        }, {
+          onConflict: 'role_id,skill_id'
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      this.logger.error('Error storing role skill:', error);
       throw error;
     }
   }
@@ -479,7 +813,7 @@ export class StorageService implements IStorageService {
       return;
     }
 
-    const { error } = await this.client
+    const { error } = await this.liveClient
       .from(this.config.capabilitiesTable)
       .upsert(capabilityRecords, {
         onConflict: 'institution_id,source_id,external_id'
@@ -539,7 +873,7 @@ export class StorageService implements IStorageService {
       }))
     ];
 
-    const { error } = await this.client
+    const { error } = await this.liveClient
       .from(this.config.embeddingsTable)
       .upsert(embeddings, {
         onConflict: 'institution_id,source_id,external_id'
@@ -568,7 +902,7 @@ export class StorageService implements IStorageService {
     };
 
     this.logger.info('Upserting taxonomy record to database:', taxonomyRecord);
-    const { data, error } = await this.client
+    const { data, error } = await this.liveClient
       .from(this.config.taxonomyTable)
       .upsert(taxonomyRecord, {
         onConflict: 'institution_id,source_id,external_id'
@@ -591,7 +925,7 @@ export class StorageService implements IStorageService {
   async cleanup(): Promise<void> {
     try {
       // Close Supabase client
-      await this.client.auth.signOut();
+      await this.liveClient.auth.signOut();
       this.logger.info('Successfully cleaned up storage service');
     } catch (error) {
       this.logger.error('Error cleaning up storage service:', error);

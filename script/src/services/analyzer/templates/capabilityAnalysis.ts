@@ -23,6 +23,11 @@ export interface CapabilityAnalysisResult {
   }[];
   occupationalGroups: string[];
   focusAreas: string[];
+  skills: {
+    name: string;
+    description?: string;
+    category?: string;
+  }[];
 }
 
 export const capabilityAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.

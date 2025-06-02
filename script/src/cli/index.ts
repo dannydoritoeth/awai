@@ -103,10 +103,10 @@ try {
       // Staging DB
       logger.info('Initializing Staging DB connection...');
       const stagingStorage = new StorageService({
-        supabaseUrl: process.env.SUPABASE_STAGING_URL!,
-        supabaseKey: process.env.SUPABASE_STAGING_KEY!,
-        liveDbUrl: process.env.SUPABASE_LIVE_URL!,
-        liveDbKey: process.env.SUPABASE_LIVE_KEY!,
+        stagingSupabaseUrl: process.env.SUPABASE_STAGING_URL!,
+        stagingSupabaseKey: process.env.SUPABASE_STAGING_KEY!,
+        liveSupabaseUrl: process.env.SUPABASE_LIVE_URL!,
+        liveSupabaseKey: process.env.SUPABASE_LIVE_KEY!,
         jobsTable: process.env.JOBS_TABLE || 'jobs',
         capabilitiesTable: process.env.CAPABILITIES_TABLE || 'capabilities',
         embeddingsTable: process.env.EMBEDDINGS_TABLE || 'embeddings',

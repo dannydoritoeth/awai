@@ -18,10 +18,10 @@ import { ProcessedJob } from '../processor/types.js';
 import { JobDetails } from '../spider/types.js';
 
 export interface StorageConfig {
-  supabaseUrl: string;
-  supabaseKey: string;
-  liveDbUrl: string;
-  liveDbKey: string;
+  stagingSupabaseUrl: string;
+  stagingSupabaseKey: string;
+  liveSupabaseUrl: string;
+  liveSupabaseKey: string;
   batchSize: number;
   maxRetries: number;
   retryDelay: number;
