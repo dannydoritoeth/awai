@@ -98,7 +98,7 @@ export class AIAnalyzer {
   /**
    * Analyzes a job description to extract capabilities
    */
-  async analyzeJobDescription(content: string): Promise<CapabilityAnalysisResult> {
+  async analyzeJobDescription(content: string, systemPrompt: string): Promise<CapabilityAnalysisResult> {
     try {
       const startTime = Date.now();
       
@@ -109,7 +109,7 @@ export class AIAnalyzer {
         messages: [
           {
             role: "system",
-            content: capabilityAnalysisPrompt
+            content: systemPrompt
           },
           {
             role: "user",
@@ -136,12 +136,12 @@ export class AIAnalyzer {
           model_name: this.model,
           temperature: this.temperature,
           max_tokens: this.maxTokens,
-          system_prompt: capabilityAnalysisPrompt,
+          system_prompt: systemPrompt,
           user_prompt: content,
           messages: [
             {
               role: "system",
-              content: capabilityAnalysisPrompt
+              content: systemPrompt
             },
             {
               role: "user",
@@ -171,12 +171,12 @@ export class AIAnalyzer {
           model_name: this.model,
           temperature: this.temperature,
           max_tokens: this.maxTokens,
-          system_prompt: capabilityAnalysisPrompt,
+          system_prompt: systemPrompt,
           user_prompt: content,
           messages: [
             {
               role: "system",
-              content: capabilityAnalysisPrompt
+              content: systemPrompt
             },
             {
               role: "user",
@@ -341,7 +341,7 @@ export class AIAnalyzer {
       });
 
       const result = await this.retryOperation(
-        () => this.analyzeJobDescription(content)
+        () => this.analyzeJobDescription(content, prompt)
       );
       
       this.logger.info(`Capability analysis complete for job ${job.id}`, {
