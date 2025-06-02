@@ -279,7 +279,11 @@ export class StorageService implements IStorageService {
       };
 
       if (job.jobDetails.documents?.length) {
-        const { documents, analysis } = await this.processJobDocuments(jobId, job.jobDetails.documents);
+        const documentUrls = job.jobDetails.documents.map(doc => ({
+          url: doc,
+          type: 'attachment'
+        }));
+        const { documents, analysis } = await this.processJobDocuments(jobId, documentUrls);
         if (analysis) {
           documentAnalysis = analysis;
         }
@@ -292,7 +296,7 @@ export class StorageService implements IStorageService {
         title: job.jobDetails.title,
         company_id: companyData[0].id,
         role_id: roleData[0].id,
-        locations: job.jobDetails.location,
+        locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
         remuneration: job.jobDetails.salary,
         closing_date: job.jobDetails.closingDate,
         source_url: job.jobDetails.url,
@@ -611,7 +615,7 @@ export class StorageService implements IStorageService {
           company_id: companyData[0].id,
           title: jobDetails.title,
           description: jobDetails.description,
-          location: location,
+          locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
           salary: jobDetails.salary,
           closing_date: jobDetails.closingDate,
           posted_date: jobDetails.postedDate,
@@ -639,7 +643,7 @@ export class StorageService implements IStorageService {
           company_id: companyData[0].id,
           title: jobDetails.title,
           description: jobDetails.description,
-          location: location,
+          locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
           salary: jobDetails.salary,
           closing_date: jobDetails.closingDate,
           posted_date: jobDetails.postedDate,
@@ -1185,22 +1189,15 @@ export class StorageService implements IStorageService {
    */
   private async storeCapabilityRecords(job: ProcessedJob, capabilities: Capability[]): Promise<void> {
     const capabilityRecords = capabilities.map(cap => ({
-      institution_id: this.config.institutionId,
-      source_id: 'nswgov',
-      external_id: `cap_${cap.name.toLowerCase().replace(/\s+/g, '_')}`,
       name: cap.name,
-      level: cap.level,
       description: cap.description,
-      behavioral_indicators: cap.behavioral_indicators,
-      relevance: cap.relevance || 1,
-      occupationalGroup: job.capabilities.occupationalGroups[0] || '',
-      focusArea: job.capabilities.focusAreas[0] || '',
+      level: cap.level,
       source_framework: 'NSW Government Capability Framework',
       is_occupation_specific: false,
-      raw_data: cap,
-      processed: false,
-      processing_status: 'pending',
-      processedAt: job.metadata.processedAt
+      normalized_key: cap.name.toLowerCase().replace(/\s+/g, '_'),
+      sync_status: 'pending',
+      last_synced_at: null,
+      raw_data: cap
     }));
 
     if (capabilityRecords.length === 0) {
@@ -1208,13 +1205,25 @@ export class StorageService implements IStorageService {
       return;
     }
 
-    const { error } = await this.stagingClient
-      .from(this.config.capabilitiesTable)
-      .upsert(capabilityRecords, {
-        onConflict: 'institution_id,source_id,external_id'
-      });
-
-    if (error) throw error;
+    // Store capabilities
+    for (const record of capabilityRecords) {
+      try {
+        const capabilityData = await this.storeCapabilityRecord({
+          name: record.name,
+          description: record.description,
+          level: record.level,
+          raw_data: record.raw_data
+        });
+        
+        if (capabilityData && capabilityData[0]) {
+          // Link capability to role
+          await this.storeRoleCapability(job.jobDetails.id, capabilityData[0].id, 'core', record.level);
+          this.logger.info(`Linked capability ${record.name} to role ${job.jobDetails.id}`);
+        }
+      } catch (error) {
+        this.logger.error('Error processing capability:', { error, capability: record.name });
+      }
+    }
   }
 
   /**
@@ -1222,21 +1231,14 @@ export class StorageService implements IStorageService {
    */
   private async storeSkillRecords(job: ProcessedJob, skills: Skill[]): Promise<void> {
     const skillRecords = skills.map(skill => ({
-      institution_id: this.config.institutionId,
-      source_id: 'nswgov',
-      external_id: `skill_${skill.name.toLowerCase().replace(/\s+/g, '_')}`,
       name: skill.name,
       description: skill.description,
-      category: skill.category,
-      relevance: skill.relevance || 1,
-      occupationalGroup: job.capabilities.occupationalGroups[0] || '',
-      focusArea: job.capabilities.focusAreas[0] || '',
-      source_framework: 'NSW Government Skill Framework',
+      source: 'job_description',
       is_occupation_specific: true,
-      raw_data: skill,
-      processed: false,
-      processing_status: 'pending',
-      processedAt: job.metadata.processedAt
+      category: skill.category,
+      sync_status: 'pending',
+      last_synced_at: null,
+      raw_data: skill
     }));
 
     if (skillRecords.length === 0) {
@@ -1244,13 +1246,26 @@ export class StorageService implements IStorageService {
       return;
     }
 
-    const { error } = await this.stagingClient
-      .from(this.config.skillsTable)
-      .upsert(skillRecords, {
-        onConflict: 'institution_id,source_id,external_id'
-      });
-
-    if (error) throw error;
+    // Store skills
+    for (const record of skillRecords) {
+      try {
+        const skillData = await this.storeSkillRecord({
+          name: record.name,
+          description: record.description,
+          category: record.category || 'Technical',
+          company_id: job.jobDetails.agency,
+          raw_data: record.raw_data
+        });
+        
+        if (skillData && skillData[0]) {
+          // Link skill to role
+          await this.storeRoleSkill(job.jobDetails.id, skillData[0].id);
+          this.logger.info(`Linked skill ${record.name} to role ${job.jobDetails.id}`);
+        }
+      } catch (error) {
+        this.logger.error('Error processing skill:', { error, skill: record.name });
+      }
+    }
   }
 
   /**
@@ -1323,12 +1338,9 @@ export class StorageService implements IStorageService {
       external_id: `taxonomy_${job.jobDetails.id}`,
       jobId: job.jobDetails.id,
       type: 'job',
-      jobFamily: job.taxonomy.jobFamily,
-      jobFunction: job.taxonomy.jobFunction,
-      keywords: job.taxonomy.keywords,
       technicalSkills: job.taxonomy.technicalSkills,
       softSkills: job.taxonomy.softSkills,
-      raw_data: job.taxonomy.raw_data,
+      raw_data: job.taxonomy,
       processed: false,
       processing_status: 'pending',
       processedAt: job.metadata.processedAt

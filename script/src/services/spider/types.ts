@@ -18,7 +18,7 @@ export interface JobListing {
   id: string;
   title: string;
   agency: string;
-  location: string;
+  location: string | string[];
   salary: string;
   closingDate: string;
   url: string;
