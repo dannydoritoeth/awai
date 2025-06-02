@@ -27,7 +27,13 @@ export interface ProcessorConfig {
 
 export interface ProcessedJob {
   jobDetails: JobDetails;
-  capabilities: TaxonomyAnalysisResult;
+  capabilities: CapabilityAnalysisResult;
+  embeddings: {
+    job: EmbeddingResult;
+    capabilities: EmbeddingResult[];
+    skills: EmbeddingResult[];
+  };
+  taxonomy: TaxonomyAnalysisResult;
   metadata: {
     processedAt: string;
     [key: string]: any;

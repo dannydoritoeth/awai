@@ -24,6 +24,7 @@ export interface JobListing {
   url: string;
   jobReference: string;
   postedDate: string;
+  jobType?: string;
 }
 
 export interface JobDetails extends JobListing {
@@ -32,11 +33,17 @@ export interface JobDetails extends JobListing {
   requirements: string[];
   notes: string[];
   aboutUs: string;
+  jobType: string;
   contactDetails: {
     name?: string;
     phone?: string;
     email?: string;
   };
+  documents: Array<{
+    url: string;
+    title?: string;
+    type?: string;
+  }>;
 }
 
 export interface SpiderConfig {

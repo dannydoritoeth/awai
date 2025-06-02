@@ -287,12 +287,13 @@ export class StorageService implements IStorageService {
 
       // Store the job record
       const jobRecord = {
-        id: jobId,
+        original_id: jobId,
+        source_id: 'nswgov',
         title: job.jobDetails.title,
         company_id: companyData[0].id,
         role_id: roleData[0].id,
-        location: job.jobDetails.location,
-        salary: job.jobDetails.salary,
+        locations: job.jobDetails.location,
+        remuneration: job.jobDetails.salary,
         closing_date: job.jobDetails.closingDate,
         source_url: job.jobDetails.url,
         raw_data: job.jobDetails,
@@ -600,69 +601,77 @@ export class StorageService implements IStorageService {
         documentAnalysis = await this.processJobDocuments(job.jobDetails.id, job.jobDetails.documents);
       }
 
-      const jobRecord = {
-        title: job.jobDetails.title,
+      // Prepare staging job record
+      const stagingJobRecord = {
+        institution_id: this.config.institutionId,
+        company_id: companyData[0].id,
         source_id: 'nswgov',
         original_id: job.jobDetails.id,
-        source_url: job.jobDetails.url,
-        department: job.jobDetails.agency,
-        locations: [job.jobDetails.location].filter(Boolean),
-        close_date: job.jobDetails.closingDate ? new Date(job.jobDetails.closingDate) : null,
-        remuneration: job.jobDetails.salary || 'Not specified',
-        raw_json: job.jobDetails,
-        first_seen_at: new Date(),
-        last_updated_at: new Date(),
         raw_data: {
           ...job.jobDetails,
           documents: documentAnalysis?.documents || [],
           document_analysis: documentAnalysis?.analysis || null
         },
-        version: 1,
-        sync_status: 'pending',
-        last_synced_at: new Date()
+        processed: false,
+        processing_status: 'pending',
+        validation_status: 'pending',
+        validation_timestamp: new Date(),
+        validation_errors: null
       };
 
-      // First check if the job exists
-      const { data: existingJob, error: fetchError } = await this.stagingClient
-        .from(this.config.jobsTable)
+      // Store in staging
+      const { data: stagingJob, error: stagingError } = await this.stagingClient
+        .from('staging_jobs')
+        .upsert(stagingJobRecord, {
+          onConflict: 'institution_id,source_id,original_id'
+        })
         .select()
-        .eq('source_id', 'nswgov')
-        .eq('original_id', job.jobDetails.id)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        this.logger.error('Error fetching existing job:', fetchError);
-        throw fetchError;
+      if (stagingError) {
+        this.logger.error('Error storing job in staging:', stagingError);
+        throw stagingError;
       }
 
-      let result;
-      if (existingJob) {
-        // Update existing job
-        const { data, error: updateError } = await this.stagingClient
-          .from(this.config.jobsTable)
-          .update(jobRecord)
-          .eq('id', existingJob.id)
-          .select();
-
-        if (updateError) {
-          this.logger.error('Error updating job record:', updateError);
-          throw updateError;
+      // Prepare live job record
+      const liveJobRecord = {
+        title: job.jobDetails.title,
+        company_id: companyData[0].id,
+        role_id: roleData[0].id,
+        source_id: 'nswgov',
+        original_id: job.jobDetails.id,
+        external_id: job.jobDetails.id,
+        department: job.jobDetails.agency,
+        job_type: job.jobDetails.jobType,
+        source_url: job.jobDetails.url,
+        remuneration: job.jobDetails.salary,
+        close_date: job.jobDetails.closingDate ? new Date(job.jobDetails.closingDate) : null,
+        locations: [job.jobDetails.location].filter(Boolean),
+        raw_json: job.jobDetails,
+        version: 1,
+        first_seen_at: new Date(),
+        last_updated_at: new Date(),
+        sync_status: 'pending',
+        last_synced_at: new Date(),
+        raw_data: {
+          ...job.jobDetails,
+          documents: documentAnalysis?.documents || [],
+          document_analysis: documentAnalysis?.analysis || null
         }
-        result = data;
-        this.logger.info(`Successfully updated job ${job.jobDetails.id}`);
-      } else {
-        // Insert new job
-        const { data, error: insertError } = await this.stagingClient
-          .from(this.config.jobsTable)
-          .insert(jobRecord)
-          .select();
+      };
 
-        if (insertError) {
-          this.logger.error('Error inserting job record:', insertError);
-          throw insertError;
-        }
-        result = data;
-        this.logger.info(`Successfully inserted job ${job.jobDetails.id}`);
+      // Store in live
+      const { data: liveJob, error: liveError } = await this.liveClient
+        .from('jobs')
+        .upsert(liveJobRecord, {
+          onConflict: 'source_id,original_id'
+        })
+        .select()
+        .single();
+
+      if (liveError) {
+        this.logger.error('Error storing job in live:', liveError);
+        throw liveError;
       }
 
       // Process capabilities and skills from both job description and documents
@@ -721,7 +730,7 @@ export class StorageService implements IStorageService {
         }
       }
 
-      this.logger.info('Successfully stored job record:', result);
+      this.logger.info('Successfully stored job record:', { stagingId: stagingJob.id, liveId: liveJob.id });
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
@@ -735,10 +744,26 @@ export class StorageService implements IStorageService {
   private async processJobDocuments(jobId: string, documents: Array<{ url: string; title?: string; type?: string; }>): Promise<{ documents: any[], analysis: any }> {
     try {
       const processedDocs = [];
-      let combinedAnalysis = {
+      let combinedAnalysis: {
+        capabilities: Array<{
+          name: string;
+          level: string;
+          description: string;
+          behavioral_indicators: string[];
+        }>;
+        skills: Array<{
+          name: string;
+          description: string;
+          category: string;
+        }>;
+      } = {
         capabilities: [],
         skills: []
       };
+
+      this.logger.info(`Starting to process ${documents.length} documents for job ${jobId}:`, 
+        documents.map(d => ({ url: d.url, title: d.title, type: d.type }))
+      );
 
       for (const doc of documents) {
         try {
@@ -746,8 +771,18 @@ export class StorageService implements IStorageService {
           this.logger.info(`Downloading document from ${doc.url}...`);
           const response = await fetch(doc.url);
           if (!response.ok) {
+            this.logger.error(`Failed to download document: ${response.statusText}`, {
+              url: doc.url,
+              status: response.status,
+              statusText: response.statusText
+            });
             throw new Error(`Failed to download document: ${response.statusText}`);
           }
+
+          this.logger.info(`Successfully downloaded document from ${doc.url}`, {
+            contentType: response.headers.get('content-type'),
+            contentLength: response.headers.get('content-length')
+          });
 
           const buffer = await response.arrayBuffer();
           const contentType = response.headers.get('content-type');
@@ -759,6 +794,7 @@ export class StorageService implements IStorageService {
 
           try {
             if (contentType?.includes('pdf') || doc.url.toLowerCase().endsWith('.pdf')) {
+              this.logger.info(`Processing PDF document: ${doc.url}`);
               const pdfParser = new PDFParser();
               content = await new Promise<string>((resolve, reject) => {
                 pdfParser.on("pdfParser_dataReady", () => {
@@ -775,9 +811,12 @@ export class StorageService implements IStorageService {
                 pdfParser.on("pdfParser_dataError", reject);
                 pdfParser.loadPDF(tempFile);
               });
+              this.logger.info(`Successfully extracted ${content?.length || 0} characters from PDF`);
             } else if (contentType?.includes('word') || doc.url.toLowerCase().endsWith('.docx')) {
+              this.logger.info(`Processing Word document: ${doc.url}`);
               const result = await mammoth.extractRawText({ path: tempFile });
               content = result.value.trim();
+              this.logger.info(`Successfully extracted ${content?.length || 0} characters from Word document`);
             }
           } finally {
             // Clean up temp file
@@ -791,6 +830,7 @@ export class StorageService implements IStorageService {
           if (content) {
             // Analyze document content for capabilities and skills
             if (this.config.aiService) {
+              this.logger.info(`Analyzing document content (${content.length} characters)`);
               const analysis = await this.config.aiService.analyzeText(content);
               
               // Store document
@@ -809,12 +849,27 @@ export class StorageService implements IStorageService {
                 .select()
                 .single();
 
-              if (error) throw error;
+              if (error) {
+                this.logger.error('Error storing document:', {
+                  error,
+                  jobId,
+                  document: doc,
+                  table: 'documents',
+                  record: documentRecord
+                });
+                throw error;
+              }
 
               processedDocs.push(data);
               
               // Combine analysis results
               if (analysis) {
+                this.logger.info('Document analysis results:', {
+                  capabilities: analysis.capabilities.length,
+                  skills: analysis.skills.length,
+                  capabilities_list: analysis.capabilities.map(c => ({ name: c.name, level: c.level })),
+                  skills_list: analysis.skills.map(s => ({ name: s.name, category: s.category }))
+                });
                 combinedAnalysis.capabilities.push(...analysis.capabilities);
                 combinedAnalysis.skills.push(...analysis.skills);
               }
@@ -833,6 +888,14 @@ export class StorageService implements IStorageService {
           });
         }
       }
+
+      this.logger.info('Document processing summary:', {
+        jobId,
+        total_documents: documents.length,
+        processed_documents: processedDocs.length,
+        total_capabilities: combinedAnalysis.capabilities.length,
+        total_skills: combinedAnalysis.skills.length
+      });
 
       return {
         documents: processedDocs,

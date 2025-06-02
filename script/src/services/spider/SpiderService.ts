@@ -232,6 +232,7 @@ export class SpiderService implements ISpiderService {
    */
   async getJobDetails(jobListing: JobListing): Promise<JobDetails> {
     this.logger.info(`Scraping details for job: ${jobListing.title}`);
+    this.logger.info(`Job URL: ${jobListing.url}`);
 
     try {
       const page = await this.getPage();
@@ -250,22 +251,56 @@ export class SpiderService implements ISpiderService {
           return items;
         };
 
+        // Get all document links
+        const documents: Array<{ url: string; title?: string; type?: string }> = [];
+        document.querySelectorAll('a[href*=".pdf"], a[href*=".doc"], a[href*=".docx"]').forEach(link => {
+          const url = link.getAttribute('href');
+          if (url) {
+            documents.push({
+              url: url.startsWith('http') ? url : new URL(url, window.location.href).href,
+              title: link.textContent?.trim() || undefined,
+              type: url.split('.').pop()?.toLowerCase()
+            });
+          }
+        });
+
         const contactDetails = {
-          name: getTextContent('.contact-name'),
-          phone: getTextContent('.contact-phone'),
-          email: getTextContent('.contact-email')
+          name: getTextContent('.contact-name, [class*="contact"] [class*="name"]'),
+          phone: getTextContent('.contact-phone, [class*="contact"] [class*="phone"]'),
+          email: getTextContent('.contact-email, [class*="contact"] [class*="email"]')
         };
+
+        // Get job type
+        const jobType = getTextContent('[class*="job-type"], [class*="employment-type"], .job-type') || 'Not specified';
+
+        // Get description - try multiple selectors and combine content
+        const description = [
+          getTextContent('.job-description, [class*="description"]'),
+          getTextContent('.role-description, [class*="role"]'),
+          getTextContent('.about-role, [class*="about"]'),
+        ].filter(Boolean).join('\n\n');
 
         return {
           ...listing,
-          description: getTextContent('.job-description'),
-          responsibilities: getListItems('.responsibilities'),
-          requirements: getListItems('.requirements'),
-          notes: getListItems('.notes'),
-          aboutUs: getTextContent('.about-us'),
-          contactDetails
+          description,
+          responsibilities: getListItems('.responsibilities, [class*="responsibilities"], [class*="duties"]'),
+          requirements: getListItems('.requirements, [class*="requirements"], [class*="essential"]'),
+          notes: getListItems('.notes, [class*="notes"], [class*="additional"]'),
+          aboutUs: getTextContent('.about-us, [class*="about-us"], [class*="agency"]'),
+          jobType,
+          contactDetails,
+          documents
         };
       }, jobListing);
+
+      // Log found documents
+      if (details.documents?.length > 0) {
+        this.logger.info(`Found ${details.documents.length} attached documents:`, 
+          details.documents.map(d => ({ url: d.url, title: d.title, type: d.type }))
+        );
+      } else {
+        this.logger.info('No attached documents found');
+      }
 
       this.metrics.successfulScrapes++;
       await page.close();

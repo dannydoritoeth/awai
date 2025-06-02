@@ -30,6 +30,24 @@ export interface CapabilityAnalysisResult {
   }[];
 }
 
+// Add logging helper
+export const logAnalysisResult = (result: CapabilityAnalysisResult) => {
+  console.log('\n=== AI Analysis Results ===');
+  console.log('Capabilities found:', result.capabilities.length);
+  result.capabilities.forEach(cap => {
+    console.log(`- ${cap.name} (${cap.level}): ${cap.description}`);
+  });
+  
+  console.log('\nSkills found:', result.skills.length);
+  result.skills.forEach(skill => {
+    console.log(`- ${skill.name} (${skill.category}): ${skill.description || 'No description'}`);
+  });
+  
+  console.log('\nOccupational Groups:', result.occupationalGroups.join(', '));
+  console.log('Focus Areas:', result.focusAreas.join(', '));
+  console.log('=========================\n');
+};
+
 export const capabilityAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
 Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework.
 
@@ -76,6 +94,9 @@ export interface TaxonomyAnalysisResult {
     technical: string[];
     soft: string[];
   };
+  technicalSkills: string[];
+  softSkills: string[];
+  raw_data?: any;
 }
 
 export const taxonomyAnalysisPrompt = `You are an expert in job classification and skills taxonomy.
