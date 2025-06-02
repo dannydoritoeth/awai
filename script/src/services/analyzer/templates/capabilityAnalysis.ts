@@ -15,32 +15,33 @@
  */
 
 export interface CapabilityAnalysisResult {
-  capabilities: {
+  capabilities: Array<{
     name: string;
     level: 'foundational' | 'intermediate' | 'adept' | 'advanced' | 'highly advanced';
     description: string;
     relevance: number;
-  }[];
+  }>;
   occupationalGroups: string[];
   focusAreas: string[];
-  skills: {
+  skills: Array<{
     name: string;
-    description?: string;
-    category?: string;
-  }[];
+    description: string;
+    category: 'Technical' | 'Domain Knowledge' | 'Soft Skills';
+  }>;
 }
 
 // Add logging helper
 export const logAnalysisResult = (result: CapabilityAnalysisResult) => {
-  console.log('\n=== AI Analysis Results ===');
-  console.log('Capabilities found:', result.capabilities.length);
+  console.log('\n=== AI Analysis Results ===\n');
+  
+  console.log(`Capabilities found: ${result.capabilities.length}`);
   result.capabilities.forEach(cap => {
     console.log(`- ${cap.name} (${cap.level}): ${cap.description}`);
   });
   
   console.log('\nSkills found:', result.skills.length);
   result.skills.forEach(skill => {
-    console.log(`- ${skill.name} (${skill.category}): ${skill.description || 'No description'}`);
+    console.log(`- ${skill.name} (${skill.category}): ${skill.description}`);
   });
   
   console.log('\nOccupational Groups:', result.occupationalGroups.join(', '));
@@ -50,6 +51,38 @@ export const logAnalysisResult = (result: CapabilityAnalysisResult) => {
 
 export const capabilityAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
 Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework.
+
+The NSW Government Capability Framework consists of the following core capabilities:
+
+Personal Attributes:
+- Display Resilience and Courage: Be open and honest, prepared to express your views, and willing to accept and commit to change
+- Act with Integrity: Be ethical and professional, and uphold and promote the public sector values
+- Manage Self: Show drive and motivation, an ability to self-reflect and a commitment to learning
+- Value Diversity and Inclusion: Demonstrate inclusive behaviour and show respect for diverse backgrounds, experiences and perspectives
+
+Relationships:
+- Communicate Effectively: Communicate clearly, actively listen to others, and respond with understanding and respect
+- Commit to Customer Service: Provide customer-focused services in line with public sector and organisational objectives
+- Work Collaboratively: Collaborate with others and value their contribution
+- Influence and Negotiate: Gain consensus and commitment from others, and resolve issues and conflicts
+
+Results:
+- Deliver Results: Achieve results through the efficient use of resources and a commitment to quality outcomes
+- Plan and Prioritise: Plan to achieve priority outcomes and respond flexibly to changing circumstances
+- Think and Solve Problems: Think, analyse and consider the broader context to develop practical solutions
+- Demonstrate Accountability: Be proactive and responsible for own actions, and adhere to legislation, policy and guidelines
+
+Business Enablers:
+- Finance: Understand and apply financial processes to achieve value for money and minimize financial risk
+- Technology: Understand and use available technologies to maximize efficiency and effectiveness
+- Procurement and Contract Management: Understand and apply procurement processes to ensure effective purchasing and contract performance
+- Project Management: Understand and apply effective project planning, coordination and control methods
+
+People Management:
+- Manage and Develop People: Engage and motivate staff, and develop capability and potential in others
+- Inspire Direction and Purpose: Communicate goals, priorities and vision, and recognize achievements
+- Optimise Business Outcomes: Manage resources effectively and apply sound workforce planning principles
+- Manage Reform and Change: Support, promote and champion change, and assist others to engage with change
 
 Please provide your analysis in JSON format with the following structure:
 {
@@ -87,40 +120,29 @@ Ensure your analysis:
 - Maintains consistency with NSW Government standards`;
 
 export interface TaxonomyAnalysisResult {
-  jobFamily: string;
-  jobFunction: string;
-  keywords: string[];
-  skills: {
-    technical: string[];
-    soft: string[];
-  };
   technicalSkills: string[];
   softSkills: string[];
-  raw_data?: any;
+  summary: string;
 }
 
-export const taxonomyAnalysisPrompt = `You are an expert in job classification and skills taxonomy.
-Your task is to analyze the job description and classify it according to standard job taxonomies and extract relevant skills.
+export const taxonomyAnalysisPrompt = `You are an expert in analyzing job descriptions and creating taxonomies of skills and capabilities.
+
+Your task is to analyze the job description and create a structured taxonomy of the skills and capabilities required.
 
 Please provide your analysis in JSON format with the following structure:
 {
-  "jobFamily": "High-level job category",
-  "jobFunction": "Specific job function within the family",
-  "keywords": ["List of relevant keywords"],
-  "skills": {
-    "technical": ["List of technical skills"],
-    "soft": ["List of soft skills"]
-  }
+  "technicalSkills": ["List of specific technical skills required"],
+  "softSkills": ["List of soft skills and interpersonal abilities required"],
+  "summary": "A brief summary of the role and its key requirements"
 }
 
 Focus on:
-1. Accurate job family and function classification
-2. Comprehensive skill identification
-3. Relevant industry keywords
-4. Both technical and soft skills
+1. Identifying specific technical skills and tools required
+2. Capturing soft skills and interpersonal abilities
+3. Creating a concise summary that captures the essence of the role
 
 Ensure your analysis:
-- Uses standardized job classifications
-- Identifies both required and preferred skills
-- Extracts keywords that aid in job matching
-- Maintains consistency with industry standards`; 
+- Is specific and actionable
+- Uses consistent terminology
+- Avoids duplicates
+- Maintains professional language`; 

@@ -239,16 +239,20 @@ export class SpiderService implements ISpiderService {
       await page.goto(jobListing.url, { waitUntil: 'networkidle0' });
 
       const details = await page.evaluate((listing) => {
-        const getTextContent = (selector: string): string => 
-          document.querySelector(selector)?.textContent?.trim() || '';
+        const getTextContent = (selector: string): string => {
+          const elements = document.querySelectorAll(selector);
+          return Array.from(elements)
+            .map(el => el.textContent?.trim())
+            .filter(Boolean)
+            .join('\n\n');
+        };
 
-        const getListItems = (selector: string): string[] => {
-          const items: string[] = [];
-          document.querySelectorAll(`${selector} li`).forEach(item => {
-            const text = item.textContent?.trim();
-            if (text) items.push(text);
+        const getTableValue = (label: string): string => {
+          const row = Array.from(document.querySelectorAll('table.job-summary tr')).find(row => {
+            const labelCell = row.querySelector('td:first-child');
+            return labelCell?.textContent?.trim().toLowerCase().includes(label.toLowerCase());
           });
-          return items;
+          return row?.querySelector('td:last-child')?.textContent?.trim() || '';
         };
 
         // Get all document links
@@ -264,30 +268,66 @@ export class SpiderService implements ISpiderService {
           }
         });
 
+        // Get job details from the summary table
+        const agency = getTableValue('organisation');
+        const jobType = getTableValue('work type');
+        const location = getTableValue('job location');
+        const jobReference = getTableValue('reference number');
+
+        // Get main job description content
+        const description = document.querySelector('.job-detail-des')?.textContent?.trim() || '';
+
+        // Parse the description to extract different sections
+        const sections = description.split(/\n{2,}/).filter(Boolean);
+        
+        const responsibilities: string[] = [];
+        const requirements: string[] = [];
+        const notes: string[] = [];
+        let aboutUs = '';
+
+        sections.forEach(section => {
+          const sectionLower = section.toLowerCase();
+          if (sectionLower.includes('key selection criteria') || sectionLower.includes('essential')) {
+            requirements.push(...section.split(/\d+\./).filter(Boolean).map(s => s.trim()));
+          } else if (sectionLower.includes('summary role') || sectionLower.includes('role description') || sectionLower.includes('responsibilities')) {
+            responsibilities.push(section.trim());
+          } else if (sectionLower.includes('about us') || sectionLower.includes('about karitane') || sectionLower.includes('about the organisation')) {
+            aboutUs = section.trim();
+          } else if (sectionLower.includes('note') || sectionLower.includes('additional information')) {
+            notes.push(section.trim());
+          }
+        });
+
+        // Get contact details
         const contactDetails = {
-          name: getTextContent('.contact-name, [class*="contact"] [class*="name"]'),
-          phone: getTextContent('.contact-phone, [class*="contact"] [class*="phone"]'),
-          email: getTextContent('.contact-email, [class*="contact"] [class*="email"]')
+          name: '',
+          phone: '',
+          email: ''
         };
 
-        // Get job type
-        const jobType = getTextContent('[class*="job-type"], [class*="employment-type"], .job-type') || 'Not specified';
+        // Look for contact information in the description
+        const contactSection = description.match(/(?:enquiries|contact|email|phone|tel)[^]*?(?=\n\n|\n?$)/i)?.[0] || '';
+        if (contactSection) {
+          const emailMatch = contactSection.match(/[\w.-]+@[\w.-]+\.\w+/);
+          const phoneMatch = contactSection.match(/(?:phone|tel|mob)[.: ]*([0-9 ]+)/i);
+          const nameMatch = contactSection.match(/(?:contact|attention)[.: ]*([\w\s]+)/i);
 
-        // Get description - try multiple selectors and combine content
-        const description = [
-          getTextContent('.job-description, [class*="description"]'),
-          getTextContent('.role-description, [class*="role"]'),
-          getTextContent('.about-role, [class*="about"]'),
-        ].filter(Boolean).join('\n\n');
+          if (emailMatch) contactDetails.email = emailMatch[0];
+          if (phoneMatch) contactDetails.phone = phoneMatch[1];
+          if (nameMatch) contactDetails.name = nameMatch[1].trim();
+        }
 
         return {
           ...listing,
-          description,
-          responsibilities: getListItems('.responsibilities, [class*="responsibilities"], [class*="duties"]'),
-          requirements: getListItems('.requirements, [class*="requirements"], [class*="essential"]'),
-          notes: getListItems('.notes, [class*="notes"], [class*="additional"]'),
-          aboutUs: getTextContent('.about-us, [class*="about-us"], [class*="agency"]'),
+          agency,
           jobType,
+          location,
+          jobReference,
+          description,
+          responsibilities,
+          requirements,
+          notes,
+          aboutUs,
           contactDetails,
           documents
         };
@@ -301,6 +341,17 @@ export class SpiderService implements ISpiderService {
       } else {
         this.logger.info('No attached documents found');
       }
+
+      // Log content summary
+      this.logger.info('Job content summary:', {
+        title: details.title,
+        descriptionLength: details.description.length,
+        responsibilitiesCount: details.responsibilities.length,
+        requirementsCount: details.requirements.length,
+        notesCount: details.notes.length,
+        aboutUsLength: details.aboutUs.length,
+        documentsCount: details.documents.length
+      });
 
       this.metrics.successfulScrapes++;
       await page.close();

@@ -572,122 +572,94 @@ export class StorageService implements IStorageService {
    */
   private async storeJobRecord(job: ProcessedJob): Promise<void> {
     try {
-      this.logger.info('Creating job record with data:', {
-        id: job.jobDetails.id,
-        title: job.jobDetails.title,
-        location: job.jobDetails.location,
-        department: job.jobDetails.agency
-      });
+      const { jobDetails, capabilities, taxonomy } = job;
 
-      // First store the company
+      // Format location as array
+      const location = Array.isArray(jobDetails.location) 
+        ? jobDetails.location 
+        : [jobDetails.location];
+
+      // Store company first
       const companyData = await this.storeCompanyRecord({
-        name: job.jobDetails.agency,
-        description: '',
+        name: jobDetails.agency,
+        description: jobDetails.aboutUs || '',
         website: '',
-        raw_data: job.jobDetails
+        raw_data: jobDetails
       });
 
-      // Store the role
+      if (!companyData || !companyData[0]) {
+        throw new Error('Failed to store company record');
+      }
+
+      // Store role
       const roleData = await this.storeRoleRecord({
-        title: job.jobDetails.title,
+        title: jobDetails.title,
         company_id: companyData[0].id,
-        raw_data: job.jobDetails
+        raw_data: jobDetails
       });
 
-      // Process any attached documents
-      let documentAnalysis = null;
-      if (job.jobDetails.documents && job.jobDetails.documents.length > 0) {
-        this.logger.info(`Processing ${job.jobDetails.documents.length} documents for job ${job.jobDetails.id}`);
-        documentAnalysis = await this.processJobDocuments(job.jobDetails.id, job.jobDetails.documents);
+      if (!roleData || !roleData[0]) {
+        throw new Error('Failed to store role record');
       }
 
-      // Prepare staging job record
-      const stagingJobRecord = {
-        institution_id: this.config.institutionId,
-        company_id: companyData[0].id,
-        source_id: 'nswgov',
-        original_id: job.jobDetails.id,
-        raw_data: {
-          ...job.jobDetails,
-          documents: documentAnalysis?.documents || [],
-          document_analysis: documentAnalysis?.analysis || null
-        },
-        processed: false,
-        processing_status: 'pending',
-        validation_status: 'pending',
-        validation_timestamp: new Date(),
-        validation_errors: null
-      };
-
-      // Store in staging
-      const { data: stagingJob, error: stagingError } = await this.stagingClient
-        .from('staging_jobs')
-        .upsert(stagingJobRecord, {
-          onConflict: 'institution_id,source_id,original_id'
+      // Store job
+      const stagingJob = await this.stagingClient
+        .from(this.config.jobsTable)
+        .upsert({
+          id: jobDetails.id,
+          role_id: roleData[0].id,
+          company_id: companyData[0].id,
+          title: jobDetails.title,
+          description: jobDetails.description,
+          location: location,
+          salary: jobDetails.salary,
+          closing_date: jobDetails.closingDate,
+          posted_date: jobDetails.postedDate,
+          job_type: jobDetails.jobType,
+          url: jobDetails.url,
+          job_reference: jobDetails.jobReference,
+          raw_data: jobDetails,
+          processed: true,
+          processing_status: 'complete',
+          processedAt: new Date().toISOString()
         })
         .select()
         .single();
 
-      if (stagingError) {
-        this.logger.error('Error storing job in staging:', stagingError);
-        throw stagingError;
+      if (!stagingJob.data) {
+        throw new Error('Failed to store staging job record');
       }
 
-      // Prepare live job record
-      const liveJobRecord = {
-        title: job.jobDetails.title,
-        company_id: companyData[0].id,
-        role_id: roleData[0].id,
-        source_id: 'nswgov',
-        original_id: job.jobDetails.id,
-        external_id: job.jobDetails.id,
-        department: job.jobDetails.agency,
-        job_type: job.jobDetails.jobType,
-        source_url: job.jobDetails.url,
-        remuneration: job.jobDetails.salary,
-        close_date: job.jobDetails.closingDate ? new Date(job.jobDetails.closingDate) : null,
-        locations: [job.jobDetails.location].filter(Boolean),
-        raw_json: job.jobDetails,
-        version: 1,
-        first_seen_at: new Date(),
-        last_updated_at: new Date(),
-        sync_status: 'pending',
-        last_synced_at: new Date(),
-        raw_data: {
-          ...job.jobDetails,
-          documents: documentAnalysis?.documents || [],
-          document_analysis: documentAnalysis?.analysis || null
-        }
-      };
-
-      // Store in live
-      const { data: liveJob, error: liveError } = await this.liveClient
-        .from('jobs')
-        .upsert(liveJobRecord, {
-          onConflict: 'source_id,original_id'
+      // Store job in live DB
+      const liveJob = await this.liveClient
+        .from(this.config.jobsTable)
+        .upsert({
+          id: jobDetails.id,
+          role_id: roleData[0].id,
+          company_id: companyData[0].id,
+          title: jobDetails.title,
+          description: jobDetails.description,
+          location: location,
+          salary: jobDetails.salary,
+          closing_date: jobDetails.closingDate,
+          posted_date: jobDetails.postedDate,
+          job_type: jobDetails.jobType,
+          url: jobDetails.url,
+          job_reference: jobDetails.jobReference,
+          raw_data: jobDetails,
+          processed: true,
+          processing_status: 'complete',
+          processedAt: new Date().toISOString()
         })
         .select()
         .single();
 
-      if (liveError) {
-        this.logger.error('Error storing job in live:', liveError);
-        throw liveError;
+      if (!liveJob.data) {
+        throw new Error('Failed to store live job record');
       }
-
-      // Process capabilities and skills from both job description and documents
-      const allCapabilities = [
-        ...(job.capabilities?.capabilities || []),
-        ...(documentAnalysis?.analysis?.capabilities || [])
-      ];
-
-      const allSkills = [
-        ...(job.capabilities?.skills || []),
-        ...(documentAnalysis?.analysis?.skills || [])
-      ];
-
-      this.logger.info(`Processing ${allCapabilities.length} capabilities and ${allSkills.length} skills for job ${job.jobDetails.id}`);
 
       // Store capabilities
+      const allCapabilities = capabilities.capabilities || [];
       if (allCapabilities.length > 0) {
         for (const capability of allCapabilities) {
           try {
@@ -709,6 +681,7 @@ export class StorageService implements IStorageService {
       }
 
       // Store skills
+      const allSkills = capabilities.skills || [];
       if (allSkills.length > 0) {
         for (const skill of allSkills) {
           try {
@@ -730,7 +703,7 @@ export class StorageService implements IStorageService {
         }
       }
 
-      this.logger.info('Successfully stored job record:', { stagingId: stagingJob.id, liveId: liveJob.id });
+      this.logger.info('Successfully stored job record:', { stagingId: stagingJob.data.id, liveId: liveJob.data.id });
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
