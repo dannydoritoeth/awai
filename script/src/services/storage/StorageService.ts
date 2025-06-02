@@ -524,20 +524,21 @@ export class StorageService implements IStorageService {
    */
   private async storeCompanyRecord(company: { name: string; description: string; website: string; raw_data: any }): Promise<any[]> {
     try {
-      const companyData = {
-        name: company.name,
-        description: company.description,
-        website: company.website,
-        normalized_key: company.name.toLowerCase().replace(/\s+/g, '_'),
-        sync_status: 'pending',
-        last_synced_at: null
-      };
+      if (!company) {
+        throw new Error('Company object is required');
+      }
+
+      // Ensure we have a valid company name
+      const companyName = (company.name || '').trim();
+      if (!companyName) {
+        throw new Error('Company name is required');
+      }
 
       // First check if company exists
       const { data: existingCompany, error: fetchError } = await this.stagingClient
         .from('companies')
-        .select()
-        .eq('name', company.name)
+        .select('id, name')
+        .eq('name', companyName)
         .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
@@ -545,23 +546,26 @@ export class StorageService implements IStorageService {
       }
 
       if (existingCompany) {
-        const { data, error: updateError } = await this.stagingClient
-          .from('companies')
-          .update(companyData)
-          .eq('id', existingCompany.id)
-          .select();
-
-        if (updateError) throw updateError;
-        return data;
-      } else {
-        const { data, error: insertError } = await this.stagingClient
-          .from('companies')
-          .insert(companyData)
-          .select();
-
-        if (insertError) throw insertError;
-        return data;
+        this.logger.info(`Company ${companyName} already exists with id ${existingCompany.id}`);
+        return [existingCompany];
       }
+
+      // If company doesn't exist, insert it
+      const { data, error: insertError } = await this.stagingClient
+        .from('companies')
+        .insert({
+          name: companyName,
+          description: company.description || `${companyName} - NSW Government`,
+          website: company.website || 'https://www.nsw.gov.au',
+          sync_status: 'pending',
+          last_synced_at: new Date().toISOString(),
+          raw_data: company
+        })
+        .select();
+
+      if (insertError) throw insertError;
+      this.logger.info(`Successfully inserted company: ${companyName}`);
+      return data;
     } catch (error) {
       this.logger.error('Error storing company record:', error);
       throw error;
