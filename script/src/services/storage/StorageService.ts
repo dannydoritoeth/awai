@@ -1353,6 +1353,51 @@ export class StorageService implements IStorageService {
   }
 
   /**
+   * Store AI model invocation record
+   */
+  public async storeAIInvocation(invocation: {
+    session_id?: string;
+    action_type: string;
+    model_provider: 'openai' | 'anthropic' | 'cohere';
+    model_name: string;
+    temperature?: number;
+    max_tokens?: number;
+    system_prompt?: string;
+    user_prompt: string;
+    messages?: any;
+    other_params?: any;
+    response_text: string;
+    response_metadata?: any;
+    token_usage?: any;
+    status: 'success' | 'error';
+    error_message?: string;
+    latency_ms?: number;
+  }): Promise<void> {
+    try {
+      const { error } = await this.stagingClient
+        .from('ai_model_invocations')
+        .insert({
+          ...invocation,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        this.logger.error('Error storing AI invocation:', error);
+        throw error;
+      }
+
+      this.logger.info('Successfully stored AI invocation:', {
+        action_type: invocation.action_type,
+        model_name: invocation.model_name,
+        status: invocation.status
+      });
+    } catch (error) {
+      this.handleStorageError('insert', 'ai_model_invocations', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up resources
    */
   async cleanup(): Promise<void> {
