@@ -387,6 +387,102 @@ export class StorageService implements IStorageService {
   }
 
   /**
+   * Log processing stats for both staging and live databases
+   */
+  async logProcessingStats(): Promise<void> {
+    try {
+      this.logger.info('\n----------------------------------------');
+      this.logger.info('ETL Processing Summary');
+      this.logger.info('----------------------------------------');
+
+      // Get staging counts
+      const stagingCounts = await this.getTableCounts(this.stagingClient);
+      
+      // Get live counts
+      const liveCounts = await this.getTableCounts(this.liveClient);
+
+      // Log the results
+      this.logger.info('Staging Database Records:');
+      this.logger.info(`✓ Companies: ${stagingCounts.companies}`);
+      this.logger.info(`✓ Roles: ${stagingCounts.roles}`);
+      this.logger.info(`✓ Jobs: ${stagingCounts.jobs}`);
+      this.logger.info(`✓ Capabilities: ${stagingCounts.capabilities}`);
+      this.logger.info(`✓ Skills: ${stagingCounts.skills}`);
+      this.logger.info(`✓ Role Capabilities: ${stagingCounts.roleCapabilities}`);
+      this.logger.info(`✓ Role Skills: ${stagingCounts.roleSkills}`);
+
+      this.logger.info('\nLive Database Records:');
+      this.logger.info(`✓ Companies: ${liveCounts.companies}`);
+      this.logger.info(`✓ Roles: ${liveCounts.roles}`);
+      this.logger.info(`✓ Jobs: ${liveCounts.jobs}`);
+      this.logger.info(`✓ Capabilities: ${liveCounts.capabilities}`);
+      this.logger.info(`✓ Skills: ${liveCounts.skills}`);
+      this.logger.info(`✓ Role Capabilities: ${liveCounts.roleCapabilities}`);
+      this.logger.info(`✓ Role Skills: ${liveCounts.roleSkills}`);
+
+      // Log any mismatches
+      const mismatches = [];
+      if (stagingCounts.companies !== liveCounts.companies) mismatches.push('Companies');
+      if (stagingCounts.roles !== liveCounts.roles) mismatches.push('Roles');
+      if (stagingCounts.jobs !== liveCounts.jobs) mismatches.push('Jobs');
+      if (stagingCounts.capabilities !== liveCounts.capabilities) mismatches.push('Capabilities');
+      if (stagingCounts.skills !== liveCounts.skills) mismatches.push('Skills');
+      if (stagingCounts.roleCapabilities !== liveCounts.roleCapabilities) mismatches.push('Role Capabilities');
+      if (stagingCounts.roleSkills !== liveCounts.roleSkills) mismatches.push('Role Skills');
+
+      if (mismatches.length > 0) {
+        this.logger.warn('\nMismatches detected in:', mismatches.join(', '));
+      }
+
+      this.logger.info('----------------------------------------');
+    } catch (error) {
+      this.logger.error('Error getting processing stats:', error);
+    }
+  }
+
+  /**
+   * Get record counts from database
+   */
+  private async getTableCounts(client: SupabaseClient): Promise<{
+    companies: number;
+    roles: number;
+    jobs: number;
+    capabilities: number;
+    skills: number;
+    roleCapabilities: number;
+    roleSkills: number;
+  }> {
+    const counts = {
+      companies: 0,
+      roles: 0,
+      jobs: 0,
+      capabilities: 0,
+      skills: 0,
+      roleCapabilities: 0,
+      roleSkills: 0
+    };
+
+    try {
+      const tables = ['companies', 'roles', 'jobs', 'capabilities', 'skills', 'role_capabilities', 'role_skills'];
+      
+      for (const table of tables) {
+        const { count, error } = await client
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+
+        if (error) throw error;
+
+        const key = table.replace(/_(.)/g, m => m[1].toUpperCase()) as keyof typeof counts;
+        counts[key] = count || 0;
+      }
+    } catch (error) {
+      this.logger.error('Error getting table counts:', error);
+    }
+
+    return counts;
+  }
+
+  /**
    * Store job record
    */
   private async storeJobRecord(job: ProcessedJob): Promise<void> {
@@ -403,6 +499,13 @@ export class StorageService implements IStorageService {
         name: job.jobDetails.agency,
         description: '',
         website: '',
+        raw_data: job.jobDetails
+      });
+
+      // Store the role
+      const roleData = await this.storeRoleRecord({
+        title: job.jobDetails.title,
+        company_id: companyData[0].id,
         raw_data: job.jobDetails
       });
 
@@ -425,14 +528,14 @@ export class StorageService implements IStorageService {
       };
 
       // First check if the job exists
-      const { data: existingJob, error: fetchError } = await this.liveClient
+      const { data: existingJob, error: fetchError } = await this.stagingClient
         .from(this.config.jobsTable)
         .select()
         .eq('source_id', 'nswgov')
         .eq('original_id', job.jobDetails.id)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      if (fetchError && fetchError.code !== 'PGRST116') {
         this.logger.error('Error fetching existing job:', fetchError);
         throw fetchError;
       }
@@ -440,7 +543,7 @@ export class StorageService implements IStorageService {
       let result;
       if (existingJob) {
         // Update existing job
-        const { data, error: updateError } = await this.liveClient
+        const { data, error: updateError } = await this.stagingClient
           .from(this.config.jobsTable)
           .update(jobRecord)
           .eq('id', existingJob.id)
@@ -454,7 +557,7 @@ export class StorageService implements IStorageService {
         this.logger.info(`Successfully updated job ${job.jobDetails.id}`);
       } else {
         // Insert new job
-        const { data, error: insertError } = await this.liveClient
+        const { data, error: insertError } = await this.stagingClient
           .from(this.config.jobsTable)
           .insert(jobRecord)
           .select();
@@ -466,13 +569,6 @@ export class StorageService implements IStorageService {
         result = data;
         this.logger.info(`Successfully inserted job ${job.jobDetails.id}`);
       }
-
-      // Store role record
-      const roleData = await this.storeRoleRecord({
-        title: job.jobDetails.title,
-        company_id: companyData[0].id,
-        raw_data: job.jobDetails
-      });
 
       // Process capabilities and skills
       if (job.capabilities && job.capabilities.capabilities) {
@@ -572,26 +668,27 @@ export class StorageService implements IStorageService {
    */
   private async storeRoleRecord(role: { title: string; company_id: string; raw_data: any }): Promise<any[]> {
     try {
-      const roleData = {
-        title: role.title,
-        company_id: role.company_id,
-        normalized_key: role.title.toLowerCase().replace(/\s+/g, '_'),
-        sync_status: 'pending',
-        last_synced_at: null
-      };
-
       // First check if role exists
       const { data: existingRole, error: fetchError } = await this.stagingClient
         .from('roles')
         .select()
         .eq('company_id', role.company_id)
-        .eq('normalized_key', roleData.normalized_key)
+        .eq('title', role.title)
         .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
       }
 
+      const roleData = {
+        title: role.title,
+        company_id: role.company_id,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: role.raw_data
+      };
+
+      let result;
       if (existingRole) {
         const { data, error: updateError } = await this.stagingClient
           .from('roles')
@@ -689,18 +786,6 @@ export class StorageService implements IStorageService {
    */
   private async storeSkillRecord(skill: { name: string; description: string; category: string; company_id: string; raw_data: any }): Promise<any[]> {
     try {
-      const skillData = {
-        name: skill.name,
-        description: skill.description,
-        category: skill.category,
-        source: 'job_description',
-        is_occupation_specific: true,
-        company_id: skill.company_id,
-        normalized_key: skill.name.toLowerCase().replace(/\s+/g, '_'),
-        sync_status: 'pending',
-        last_synced_at: null
-      };
-
       // First check if skill exists
       const { data: existingSkill, error: fetchError } = await this.stagingClient
         .from('skills')
@@ -712,6 +797,18 @@ export class StorageService implements IStorageService {
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
       }
+
+      const skillData = {
+        name: skill.name,
+        description: skill.description,
+        source: 'job_description',
+        is_occupation_specific: true,
+        company_id: skill.company_id,
+        category: skill.category,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: skill.raw_data
+      };
 
       if (existingSkill) {
         const { data, error: updateError } = await this.stagingClient
@@ -923,7 +1020,7 @@ export class StorageService implements IStorageService {
    */
   async cleanup(): Promise<void> {
     try {
-      // Close Supabase client
+      await this.logProcessingStats();
       await this.liveClient.auth.signOut();
       this.logger.info('Successfully cleaned up storage service');
     } catch (error) {
