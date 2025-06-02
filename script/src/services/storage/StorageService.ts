@@ -157,45 +157,18 @@ export class StorageService implements IStorageService {
   async initialize(): Promise<void> {
     try {
       this.logger.info('Testing Supabase connection...');
-      
-      // First test a simple query
-      this.logger.info('Testing simple query...');
-      const { data, error } = await this.liveClient.from('jobs').select('id').limit(1);
-      
-      if (error) {
-        this.logger.error('Database query failed:', error);
-        if ('code' in error) {
-          this.logger.error('Error code:', (error as any).code);
-        }
-        if ('details' in error) {
-          this.logger.error('Error details:', (error as any).details);
-        }
-        if ('hint' in error) {
-          this.logger.error('Error hint:', (error as any).hint);
-        }
-        if ('message' in error) {
-          this.logger.error('Error message:', (error as any).message);
-        }
-        throw error;
-      }
-
-      this.logger.info('Database query successful');
+      const { error } = await this.liveClient.from('jobs').select('id').limit(1);
+      if (error) throw error;
 
       // Initialize NSW Capability Framework
       await this.initializeNSWCapabilityFramework();
 
-      // Try to get or create institution
-      this.logger.info('Setting up institution...');
+      // Get or create institution
       const institutionId = await this.getOrCreateInstitution();
       this.config.institutionId = institutionId;
-      this.logger.info('Using institution ID:', institutionId);
-
-      this.logger.info('Initialization completed successfully');
+      this.logger.info('Initialization complete, using institution:', institutionId);
     } catch (error) {
       this.logger.error('Initialization failed:', error);
-      if (error instanceof Error) {
-        this.logger.error('Error stack:', error.stack);
-      }
       throw error;
     }
   }
@@ -204,21 +177,16 @@ export class StorageService implements IStorageService {
    * Initialize the NSW Capability Framework
    */
   private async initializeNSWCapabilityFramework(): Promise<void> {
-    this.logger.info('Initializing NSW Capability Framework...');
     try {
-      // Load capabilities from JSON file
       const capabilitiesPath = path.join(process.cwd(), 'database', 'seed', 'capabilities.json');
-      
-      // Check if file exists
       if (!fs.existsSync(capabilitiesPath)) {
         this.logger.warn('Capabilities file not found:', capabilitiesPath);
         return;
       }
 
       const capabilitiesData = JSON.parse(fs.readFileSync(capabilitiesPath, 'utf8'));
-      this.logger.info(`Found ${capabilitiesData.length} capabilities in framework definition`);
+      this.logger.info(`Loading ${capabilitiesData.length} capabilities...`);
 
-      // Upsert each capability
       for (const capability of capabilitiesData) {
         const { error } = await this.stagingClient
           .from('capabilities')
@@ -235,18 +203,10 @@ export class StorageService implements IStorageService {
             onConflict: 'id'
           });
 
-        if (error) {
-          this.logger.error('Error upserting capability:', {
-            capability: capability.name,
-            error
-          });
-          throw error;
-        }
-
-        this.logger.info(`Initialized capability: ${capability.name}`);
+        if (error) throw error;
       }
 
-      this.logger.info('Successfully initialized NSW Capability Framework');
+      this.logger.info('NSW Capability Framework initialized');
     } catch (error) {
       this.logger.error('Error initializing NSW Capability Framework:', error);
       throw error;
@@ -258,42 +218,19 @@ export class StorageService implements IStorageService {
    */
   async storeJob(job: ProcessedJob): Promise<void> {
     try {
-      // Validate job ID
       const jobId = job.jobDetails.id;
-      if (!jobId) {
-        throw new Error('Job ID is required but was null or undefined');
-      }
+      if (!jobId) throw new Error('Job ID is required');
 
-      this.logger.info(`Starting storage for job ${jobId}`);
+      this.logger.info(`Processing job ${jobId}: ${job.jobDetails.title}`);
       
-      try {
-        // Store job details
-        this.logger.info(`Storing job details for ${jobId}`);
-        await this.storeJobRecord(job);
-        this.logger.info(`Successfully stored job details for ${jobId}`);
+      await this.storeJobRecord(job);
+      await this.storeCapabilityRecords(job);
+      await this.storeEmbeddingRecords(job);
+      await this.storeTaxonomyRecord(job);
 
-        // Store capabilities
-        this.logger.info(`Storing ${job.capabilities.capabilities.length} capabilities for job ${jobId}`);
-        await this.storeCapabilityRecords(job);
-        this.logger.info(`Successfully stored capabilities for job ${jobId}`);
-
-        // Store embeddings
-        this.logger.info(`Storing embeddings for job ${jobId}`);
-        await this.storeEmbeddingRecords(job);
-        this.logger.info(`Successfully stored embeddings for job ${jobId}`);
-
-        // Store taxonomy
-        this.logger.info(`Storing taxonomy for job ${jobId}`);
-        await this.storeTaxonomyRecord(job);
-        this.logger.info(`Successfully stored taxonomy for job ${jobId}`);
-
-        this.metrics.successfulStores++;
-        this.metrics.totalStored++;
-
-      } catch (error) {
-        this.logger.error(`Error in storage for job ${jobId}:`, error);
-        throw error;
-      }
+      this.metrics.successfulStores++;
+      this.metrics.totalStored++;
+      this.logger.info(`Successfully stored job ${jobId}`);
 
     } catch (error) {
       this.metrics.failedStores++;

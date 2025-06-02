@@ -54,13 +54,10 @@ export class ProcessorService implements IProcessorService {
    */
   async initialize(): Promise<void> {
     try {
-      this.logger.info('NSW Capability Framework initialization started');
-      // Load capability framework definitions
-      const frameworkDefs = await this.loadCapabilityFramework();
-      this.logger.info(`Found ${frameworkDefs.length} capabilities in framework definition`);
-      this.logger.info('Successfully initialized NSW Capability Framework');
+      // Nothing to initialize at the moment
+      this.logger.info('Processor service initialized');
     } catch (error) {
-      this.logger.error('Error initializing NSW Capability Framework:', error);
+      this.logger.error('Error initializing processor service:', error);
       throw error;
     }
   }
