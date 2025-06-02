@@ -30,25 +30,6 @@ export interface CapabilityAnalysisResult {
   }>;
 }
 
-// // Add logging helper
-// export const logAnalysisResult = (result: CapabilityAnalysisResult) => {
-//   console.log('\n=== AI Analysis Results ===\n');
-  
-//   console.log(`Capabilities found: ${result.capabilities.length}`);
-//   result.capabilities.forEach(cap => {
-//     console.log(`- ${cap.name} (${cap.level}): ${cap.description}`);
-//   });
-  
-//   console.log('\nSkills found:', result.skills.length);
-//   result.skills.forEach(skill => {
-//     console.log(`- ${skill.name} (${skill.category}): ${skill.description}`);
-//   });
-  
-//   console.log('\nOccupational Groups:', result.occupationalGroups.join(', '));
-//   console.log('Focus Areas:', result.focusAreas.join(', '));
-//   console.log('=========================\n');
-// };
-
 export const capabilityAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
 Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework.
 
@@ -125,24 +106,23 @@ export interface TaxonomyAnalysisResult {
   summary: string;
 }
 
-export const taxonomyAnalysisPrompt = `You are an expert in analyzing job descriptions and creating taxonomies of skills and capabilities.
+export const taxonomyAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying required skills.
 
-Your task is to analyze the job description and create a structured taxonomy of the skills and capabilities required.
+Your task is to analyze the job description and extract two types of skills:
+1. Technical skills: Specific technical abilities, tools, methodologies, or domain knowledge required
+2. Soft skills: Interpersonal abilities, behavioral traits, and professional competencies needed
 
 Please provide your analysis in JSON format with the following structure:
 {
-  "technicalSkills": ["List of specific technical skills required"],
-  "softSkills": ["List of soft skills and interpersonal abilities required"],
-  "summary": "A brief summary of the role and its key requirements"
+  "technicalSkills": ["List of specific technical skills, tools, and domain knowledge"],
+  "softSkills": ["List of interpersonal and behavioral skills"],
+  "summary": "A concise 1-2 sentence summary of the role's key requirements"
 }
 
-Focus on:
-1. Identifying specific technical skills and tools required
-2. Capturing soft skills and interpersonal abilities
-3. Creating a concise summary that captures the essence of the role
-
-Ensure your analysis:
-- Is specific and actionable
-- Uses consistent terminology
-- Avoids duplicates
-- Maintains professional language`; 
+Guidelines:
+- Technical skills should be specific and actionable (e.g. "Python programming" not just "programming")
+- Soft skills should be clear and professionally relevant (e.g. "stakeholder management" not just "people skills")
+- Keep skills concise and focused
+- Avoid duplicates
+- Use consistent terminology
+- The summary should capture the essence of the role and its key requirements`; 

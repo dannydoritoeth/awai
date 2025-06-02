@@ -26,7 +26,8 @@ import {
   PipelineOptions,
   PipelineStatus,
   PipelineState,
-  PipelineError
+  PipelineError,
+  LoggedProcessedJob
 } from './types.js';
 import { JobDetails, JobListing } from '../spider/types.js';
 import { ProcessedJob } from '../processor/types.js';
@@ -74,8 +75,18 @@ export class OrchestratorService implements IOrchestratorService {
       await this.initializePipeline(options);
       
       this.logger.info('=== Pipeline Options ===');
-      this.logger.info('Initial options:', options);
-      this.logger.info('State options:', this.state.options);
+      this.logger.info('Initial options:', {
+        maxRecords: options?.maxRecords,
+        skipProcessing: options?.skipProcessing,
+        skipStorage: options?.skipStorage,
+        migrateToLive: options?.migrateToLive
+      });
+      this.logger.info('State options:', {
+        maxRecords: this.state.options?.maxRecords,
+        skipProcessing: this.state.options?.skipProcessing,
+        skipStorage: this.state.options?.skipStorage,
+        migrateToLive: this.state.options?.migrateToLive
+      });
       
       // Scrape jobs
       const { success: scrapedJobs, failed: failedScrapes } = await this.scrapeJobs(this.state.options);
@@ -92,8 +103,8 @@ export class OrchestratorService implements IOrchestratorService {
       await this.cleanup();
 
       // Return final result
-      return {
-        status: this.stopRequested ? 'stopped' : 'completed',
+      const pipelineResult: PipelineResult = {
+        status: this.stopRequested ? 'stopped' as const : 'completed' as const,
         metrics: {
           ...this.state.metrics,
           endTime: new Date(),
@@ -116,16 +127,39 @@ export class OrchestratorService implements IOrchestratorService {
           }
         },
         jobs: {
-          scraped: scrapedJobs,
-          processed: processedJobs,
-          stored: processedJobs,
+          scraped: scrapedJobs.map(job => ({
+            ...job,
+            documents: []
+          })),
+          processed: processedJobs.map(job => ({
+            ...job,
+            embeddings: {
+              job: { ...job.embeddings.job, vector: '[vector data hidden]' },
+              capabilities: job.embeddings.capabilities.map(e => ({ ...e, vector: '[vector data hidden]' })),
+              skills: job.embeddings.skills.map(e => ({ ...e, vector: '[vector data hidden]' }))
+            }
+          })) as LoggedProcessedJob[],
+          stored: processedJobs.map(job => ({
+            ...job,
+            embeddings: {
+              job: { ...job.embeddings.job, vector: '[vector data hidden]' },
+              capabilities: job.embeddings.capabilities.map(e => ({ ...e, vector: '[vector data hidden]' })),
+              skills: job.embeddings.skills.map(e => ({ ...e, vector: '[vector data hidden]' }))
+            }
+          })) as LoggedProcessedJob[],
           failed: {
-            scraping: failedScrapes,
+            scraping: failedScrapes.map(job => ({
+              ...job,
+              documents: []
+            })),
             processing: [],
             storage: []
           }
         }
       };
+
+      this.logger.info('Pipeline execution complete:', pipelineResult);
+      return pipelineResult;
 
     } catch (error) {
       this.logger.error('Pipeline failed:', error);
@@ -138,24 +172,17 @@ export class OrchestratorService implements IOrchestratorService {
   /**
    * Stop the pipeline
    */
-  async stopPipeline(): Promise<void> {
-    this.logger.info('Stopping pipeline...');
+  stop(): void {
+    this.logger.info('Stop requested');
     this.stopRequested = true;
-    this.state.status = 'stopping';
-    
-    // Wait for current operations to complete
-    while (this.state.status === 'stopping' || this.state.status === 'running') {
-      await delay(1000);
-    }
-    
-    this.stopRequested = false;
+    this.state.status = 'stopped';
   }
 
   /**
    * Pause the pipeline
    */
-  async pausePipeline(): Promise<void> {
-    this.logger.info('Pausing pipeline...');
+  pause(): void {
+    this.logger.info('Pause requested');
     this.pauseRequested = true;
     this.state.status = 'paused';
   }
@@ -163,8 +190,8 @@ export class OrchestratorService implements IOrchestratorService {
   /**
    * Resume the pipeline
    */
-  async resumePipeline(): Promise<void> {
-    this.logger.info('Resuming pipeline...');
+  resume(): void {
+    this.logger.info('Resume requested');
     this.pauseRequested = false;
     this.state.status = 'running';
   }
@@ -243,11 +270,11 @@ export class OrchestratorService implements IOrchestratorService {
   }
 
   /**
-   * Wait for pipeline to resume
+   * Wait for resume if paused
    */
   private async waitForResume(): Promise<void> {
-    while (this.pauseRequested) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    while (this.pauseRequested && !this.stopRequested) {
+      await delay(1000);
     }
   }
 
@@ -349,7 +376,8 @@ export class OrchestratorService implements IOrchestratorService {
               name: '',
               phone: '',
               email: ''
-            }
+            },
+            documents: []
           };
           jobResults.failed.push(failedJob);
           this.state.metrics.failedScrapes++;
@@ -422,7 +450,7 @@ export class OrchestratorService implements IOrchestratorService {
   }
 
   /**
-   * Store jobs and migrate to live DB if enabled
+   * Store jobs in staging DB
    */
   private async storeJobs(jobs: ProcessedJob[], options?: PipelineOptions): Promise<void> {
     this.state.currentStage = 'storage';
@@ -451,20 +479,6 @@ export class OrchestratorService implements IOrchestratorService {
         }
       }
 
-      // Migrate to live DB if enabled
-      if (this.state.options?.migrateToLive && limitedJobs.length > 0) {
-        this.state.currentStage = 'migration';
-        this.logger.info(`Migrating ${limitedJobs.length} jobs to live database`);
-        try {
-          await this.storage.migrateBatchToLive(limitedJobs);
-          this.logger.info('Successfully migrated jobs to live database');
-        } catch (error) {
-          this.addError('migration', error);
-          this.logger.error('Error migrating to live database:', error);
-          // Don't mark jobs as failed if staging storage succeeded
-        }
-      }
-
     } catch (error) {
       this.addError('storage', error);
       this.logger.error('Error in storage stage:', error);
@@ -472,42 +486,28 @@ export class OrchestratorService implements IOrchestratorService {
   }
 
   /**
-   * Filter jobs based on pipeline options
+   * Filter jobs based on options
    */
-  private filterJobs(jobs: JobListing[], options?: PipelineOptions): JobListing[] {
+  private filterJobs(jobs: JobDetails[], options?: PipelineOptions): JobDetails[] {
     if (!options) return jobs;
 
-    return jobs.filter(job => {
-      const postedDate = new Date(job.postedDate);
-      
-      const matchesDateRange = (!options.startDate || postedDate >= options.startDate) &&
-        (!options.endDate || postedDate <= options.endDate);
-
-      const matchesAgency = !options.agencies?.length ||
-        options.agencies.includes(job.agency);
-
-      const matchesLocation = !options.locations?.length ||
-        options.locations.includes(job.location);
-
-      return matchesDateRange && matchesAgency && matchesLocation;
-    });
+    // Apply maxRecords limit if specified
+    const maxRecords = options.maxRecords || 0;
+    return maxRecords > 0 ? jobs.slice(0, maxRecords) : jobs;
   }
 
   /**
-   * Complete the pipeline
+   * Clean up resources
    */
-  private async cleanup(): Promise<void> {
-    this.logger.info('Completing pipeline...');
-    this.state.status = 'completed';
-    
-    // Clean up all services
+  public async cleanup(): Promise<void> {
     try {
       await this.spider.cleanup();
       await this.processor.cleanup();
       await this.storage.cleanup();
       this.logger.info('Successfully cleaned up all services');
     } catch (error) {
-      this.logger.error('Error during service cleanup:', error);
+      this.logger.error('Error during cleanup:', error);
+      throw error;
     }
   }
 
@@ -533,5 +533,27 @@ export class OrchestratorService implements IOrchestratorService {
 
     this.state.metrics.errors.push(pipelineError);
     this.state.lastError = pipelineError;
+  }
+
+  /**
+   * Validate pipeline options
+   */
+  private validateOptions(options?: PipelineOptions): void {
+    if (!options) return;
+
+    // Validate maxRecords
+    if (options.maxRecords !== undefined && options.maxRecords <= 0) {
+      throw new Error('maxRecords must be greater than 0');
+    }
+
+    // Validate skipProcessing and skipStorage
+    if (options.skipProcessing && !options.skipStorage) {
+      throw new Error('Cannot skip processing without skipping storage');
+    }
+
+    // Validate migrateToLive
+    if (options.migrateToLive && (options.skipProcessing || options.skipStorage)) {
+      throw new Error('Cannot migrate to live DB when skipping processing or storage');
+    }
   }
 } 

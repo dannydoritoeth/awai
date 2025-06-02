@@ -14,8 +14,8 @@
  * @since 2024-02-06
  */
 
-import { JobDetails, TaxonomyAnalysisResult } from '../storage/types.js';
-import { CapabilityAnalysisResult } from '../analyzer/templates/capabilityAnalysis.js';
+import { JobDetails } from '../spider/types.js';
+import { CapabilityAnalysisResult, TaxonomyAnalysisResult } from '../analyzer/templates/capabilityAnalysis.js';
 import { EmbeddingResult } from '../embeddings/templates/embeddingTemplates.js';
 
 export interface ProcessorConfig {

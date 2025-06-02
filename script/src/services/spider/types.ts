@@ -24,9 +24,7 @@ export interface JobListing {
   url: string;
   jobReference: string;
   postedDate: string;
-  jobType?: string;
-  description?: string;
-  aboutUs?: string;
+  jobType: string;
 }
 
 export interface JobDetails extends JobListing {
@@ -37,15 +35,11 @@ export interface JobDetails extends JobListing {
   aboutUs: string;
   jobType: string;
   contactDetails: {
-    name?: string;
-    phone?: string;
-    email?: string;
+    name: string;
+    phone: string;
+    email: string;
   };
-  documents: Array<{
-    url: string;
-    title?: string;
-    type?: string;
-  }>;
+  documents: string[];
   metadata?: {
     processedAt?: string;
     source?: string;

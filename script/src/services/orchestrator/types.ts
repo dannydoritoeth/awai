@@ -27,7 +27,27 @@ export interface OrchestratorConfig {
   pollInterval: number;
 }
 
-export interface PipelineMetrics {
+// Type for logged version of ProcessedJob with hidden vectors
+export type LoggedProcessedJob = Omit<ProcessedJob, 'embeddings'> & {
+  embeddings: {
+    job: Omit<ProcessedJob['embeddings']['job'], 'vector'> & { vector: string };
+    capabilities: Array<Omit<ProcessedJob['embeddings']['capabilities'][0], 'vector'> & { vector: string }>;
+    skills: Array<Omit<ProcessedJob['embeddings']['skills'][0], 'vector'> & { vector: string }>;
+  };
+};
+
+export type PipelineStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'completed' | 'failed';
+
+export type PipelineStage = 'scraping' | 'processing' | 'storage' | 'migration';
+
+export type PipelineError = {
+  stage: PipelineStage;
+  error: Error | string;
+  jobId?: string;
+  timestamp: Date;
+};
+
+export type PipelineMetrics = {
   jobsScraped: number;
   jobsProcessed: number;
   jobsStored: number;
@@ -54,58 +74,57 @@ export interface PipelineMetrics {
     failed: number;
     migratedToLive: number;
   };
-}
+};
 
-export interface PipelineError {
-  stage: PipelineStage;
-  error: string;
-  timestamp: Date;
-  jobId?: string;
-  context?: {
-    stack?: string;
-    cause?: unknown;
-  };
-}
-
-export interface PipelineResult {
+export type PipelineResult = {
   status: PipelineStatus;
-  metrics: PipelineMetrics;
+  metrics: PipelineMetrics & {
+    endTime: Date;
+    totalDuration: number;
+    scraping: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+    processing: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+    storage: {
+      total: number;
+      successful: number;
+      failed: number;
+      migratedToLive: number;
+    };
+  };
   jobs: {
     scraped: JobDetails[];
-    processed: ProcessedJob[];
-    stored: ProcessedJob[];
+    processed: LoggedProcessedJob[];
+    stored: LoggedProcessedJob[];
     failed: {
       scraping: JobDetails[];
       processing: JobDetails[];
-      storage: ProcessedJob[];
+      storage: JobDetails[];
     };
   };
-}
+};
 
-export interface PipelineOptions {
-  startDate?: Date;
-  endDate?: Date;
-  agencies?: string[];
-  locations?: string[];
-  skipProcessing?: boolean;
-  skipStorage?: boolean;
-  continueOnError?: boolean;
+export type PipelineOptions = {
   maxRecords?: number;
   migrateToLive?: boolean;
-}
+  skipProcessing?: boolean;
+  skipStorage?: boolean;
+  skipMigration?: boolean;
+};
 
 export interface IOrchestratorService {
   runPipeline(options?: PipelineOptions): Promise<PipelineResult>;
-  stopPipeline(): Promise<void>;
-  pausePipeline(): Promise<void>;
-  resumePipeline(): Promise<void>;
-  getMetrics(): PipelineMetrics;
-  getStatus(): PipelineStatus;
+  stop(): void;
+  pause(): void;
+  resume(): void;
+  cleanup(): Promise<void>;
 }
-
-export type PipelineStatus = 'idle' | 'running' | 'paused' | 'stopping' | 'stopped' | 'completed' | 'failed';
-
-export type PipelineStage = 'scraping' | 'processing' | 'storage' | 'migration';
 
 export interface PipelineState {
   status: PipelineStatus;

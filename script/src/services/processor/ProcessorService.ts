@@ -85,7 +85,7 @@ export class ProcessorService implements IProcessorService {
       // Process taxonomy
       this.logger.info(`Analyzing taxonomy for job ${job.id}`);
       const taxonomy = await this.analyzer.analyzeTaxonomy(job);
-      this.logger.info(`Found ${taxonomy.skills.technical.length} technical skills and ${taxonomy.skills.soft.length} soft skills for job ${job.id}`);
+      this.logger.info(`Found ${taxonomy.technicalSkills.length} technical skills and ${taxonomy.softSkills.length} soft skills for job ${job.id}`);
 
       // Generate embeddings
       this.logger.info(`Generating embeddings for job ${job.id}`);
@@ -97,8 +97,11 @@ export class ProcessorService implements IProcessorService {
         )
       );
 
+      // Only generate embeddings for the skills we actually found
+      const allSkills = [...taxonomy.technicalSkills, ...taxonomy.softSkills];
+      this.logger.info(`Generating embeddings for ${allSkills.length} skills`);
       const skillEmbeddings = await Promise.all(
-        [...taxonomy.skills.technical, ...taxonomy.skills.soft].map(async (skill: string) => 
+        allSkills.map(async (skill: string) => 
           this.embeddingService.generateSkillEmbedding(skill)
         )
       );
@@ -123,7 +126,16 @@ export class ProcessorService implements IProcessorService {
 
       this.metrics.successfulProcesses++;
       this.metrics.totalProcessed++;
-      this.logger.info(`Successfully processed job ${job.id}`);
+      
+      // Log processed job without embeddings
+      this.logger.info(`Successfully processed job ${job.id}`, {
+        ...processedJob,
+        embeddings: {
+          job: { ...jobEmbedding, vector: '[vector data hidden]' },
+          capabilities: capabilityEmbeddings.map(e => ({ ...e, vector: '[vector data hidden]' })),
+          skills: skillEmbeddings.map(e => ({ ...e, vector: '[vector data hidden]' }))
+        }
+      });
 
       return processedJob;
 

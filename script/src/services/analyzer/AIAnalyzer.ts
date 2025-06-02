@@ -20,7 +20,7 @@
  */
 
 import { OpenAI } from 'openai';
-import { CapabilityAnalysisResult, TaxonomyAnalysisResult, capabilityAnalysisPrompt, taxonomyAnalysisPrompt, logAnalysisResult } from './templates/capabilityAnalysis.js';
+import { CapabilityAnalysisResult, TaxonomyAnalysisResult, capabilityAnalysisPrompt, taxonomyAnalysisPrompt } from './templates/capabilityAnalysis.js';
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
 import { delay } from '../../utils/helpers.js';
@@ -140,11 +140,6 @@ export class AIAnalyzer {
           latency_ms: Date.now() - startTime
         });
       }
-      
-
-      
-      // Use the helper to log a formatted version
-      logAnalysisResult(result);
       
       return result;
     } catch (error) {
