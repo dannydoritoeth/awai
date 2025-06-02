@@ -15,7 +15,6 @@
  */
 
 import { ProcessedJob } from '../processor/types.js';
-import { JobDetails } from '../spider/types.js';
 
 export interface StorageConfig {
   stagingSupabaseUrl: string;
@@ -26,10 +25,28 @@ export interface StorageConfig {
   maxRetries: number;
   retryDelay: number;
   jobsTable: string;
+  companiesTable: string;
+  rolesTable: string;
+  skillsTable: string;
   capabilitiesTable: string;
   embeddingsTable: string;
   taxonomyTable: string;
   institutionId: string;
+  aiService?: {
+    analyzeText: (text: string) => Promise<{
+      capabilities: Array<{
+        name: string;
+        level: string;
+        description: string;
+        behavioral_indicators: string[];
+      }>;
+      skills: Array<{
+        name: string;
+        description: string;
+        category: string;
+      }>;
+    }>;
+  };
 }
 
 export interface StorageMetrics {
@@ -125,6 +142,31 @@ export interface TaxonomyRecord {
   processedAt: string;
 }
 
+export interface TaxonomyAnalysisResult {
+  jobFamily: string;
+  jobFunction: string;
+  keywords: string[];
+  occupationalGroups: string[];
+  focusAreas: string[];
+  capabilities: Array<{
+    name: string;
+    level: string;
+    description: string;
+    behavioral_indicators: string[];
+    relevance?: number;
+  }>;
+  skills: Array<{
+    name: string;
+    description: string;
+    category: string;
+    relevance?: number;
+  }>;
+  raw_data: any;
+  vector?: number[];
+  text?: string;
+  metadata?: any;
+}
+
 export interface QueryOptions {
   limit?: number;
   offset?: number;
@@ -142,4 +184,19 @@ export interface IStorageService {
   getEmbeddingsByJobId(jobId: string): Promise<EmbeddingRecord[]>;
   getTaxonomyByJobId(jobId: string): Promise<TaxonomyRecord | null>;
   getMetrics(): StorageMetrics;
+}
+
+export interface JobDetails {
+  id: string;
+  title: string;
+  agency: string;
+  location: string;
+  url: string;
+  salary?: string;
+  closingDate?: string;
+  documents: Array<{
+    url: string;
+    title?: string;
+    type?: string;
+  }>;
 } 

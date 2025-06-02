@@ -26,16 +26,45 @@ import {
   CapabilityRecord,
   EmbeddingRecord,
   TaxonomyRecord,
-  QueryOptions
+  QueryOptions,
+  JobDetails,
+  TaxonomyAnalysisResult
 } from './types.js';
 import { ProcessedJob } from '../processor/types.js';
 import path from 'path';
 import fs from 'fs';
+import PDFParser from 'pdf2json';
+import mammoth from 'mammoth';
+import os from 'os';
+
+interface Capability {
+  name: string;
+  level: string;
+  description: string;
+  behavioral_indicators: string[];
+  relevance?: number;
+}
+
+interface Skill {
+  name: string;
+  description: string;
+  category: string;
+  relevance?: number;
+}
+
+interface DocumentAnalysis {
+  capabilities: Capability[];
+  skills: Skill[];
+}
 
 export class StorageService implements IStorageService {
   private liveClient: SupabaseClient;
   private stagingClient: SupabaseClient;
   private metrics: StorageMetrics;
+  private combinedAnalysis: DocumentAnalysis = {
+    capabilities: [],
+    skills: []
+  };
 
   constructor(
     private config: StorageConfig,
@@ -221,12 +250,67 @@ export class StorageService implements IStorageService {
       const jobId = job.jobDetails.id;
       if (!jobId) throw new Error('Job ID is required');
 
-      this.logger.info(`Processing job ${jobId}: ${job.jobDetails.title}`);
+      this.logger.info('Processing job:', {
+        id: jobId,
+        title: job.jobDetails.title,
+        location: job.jobDetails.location,
+        department: job.jobDetails.agency
+      });
       
-      await this.storeJobRecord(job);
-      await this.storeCapabilityRecords(job);
-      await this.storeEmbeddingRecords(job);
-      await this.storeTaxonomyRecord(job);
+      // First store the company
+      const companyData = await this.storeCompanyRecord({
+        name: job.jobDetails.agency,
+        description: '',
+        website: '',
+        raw_data: job.jobDetails
+      });
+
+      // Store the role
+      const roleData = await this.storeRoleRecord({
+        title: job.jobDetails.title,
+        company_id: companyData[0].id,
+        raw_data: job.jobDetails
+      });
+
+      // Process any attached documents
+      let documentAnalysis = {
+        capabilities: [],
+        skills: []
+      };
+
+      if (job.jobDetails.documents?.length) {
+        const { documents, analysis } = await this.processJobDocuments(jobId, job.jobDetails.documents);
+        if (analysis) {
+          documentAnalysis = analysis;
+        }
+      }
+
+      // Store the job record
+      const jobRecord = {
+        id: jobId,
+        title: job.jobDetails.title,
+        company_id: companyData[0].id,
+        role_id: roleData[0].id,
+        location: job.jobDetails.location,
+        salary: job.jobDetails.salary,
+        closing_date: job.jobDetails.closingDate,
+        source_url: job.jobDetails.url,
+        raw_data: job.jobDetails,
+        sync_status: 'pending',
+        last_synced_at: new Date().toISOString()
+      };
+
+      const { error: jobError } = await this.stagingClient
+        .from(this.config.jobsTable)
+        .upsert(jobRecord)
+        .select()
+        .single();
+
+      if (jobError) throw jobError;
+
+      // Store capabilities and skills from both job and documents
+      await this.storeCapabilityRecords(job, documentAnalysis.capabilities);
+      await this.storeSkillRecords(job, documentAnalysis.skills);
 
       this.metrics.successfulStores++;
       this.metrics.totalStored++;
@@ -509,6 +593,13 @@ export class StorageService implements IStorageService {
         raw_data: job.jobDetails
       });
 
+      // Process any attached documents
+      let documentAnalysis = null;
+      if (job.jobDetails.documents && job.jobDetails.documents.length > 0) {
+        this.logger.info(`Processing ${job.jobDetails.documents.length} documents for job ${job.jobDetails.id}`);
+        documentAnalysis = await this.processJobDocuments(job.jobDetails.id, job.jobDetails.documents);
+      }
+
       const jobRecord = {
         title: job.jobDetails.title,
         source_id: 'nswgov',
@@ -521,7 +612,11 @@ export class StorageService implements IStorageService {
         raw_json: job.jobDetails,
         first_seen_at: new Date(),
         last_updated_at: new Date(),
-        raw_data: job.jobDetails,
+        raw_data: {
+          ...job.jobDetails,
+          documents: documentAnalysis?.documents || [],
+          document_analysis: documentAnalysis?.analysis || null
+        },
         version: 1,
         sync_status: 'pending',
         last_synced_at: new Date()
@@ -570,34 +665,58 @@ export class StorageService implements IStorageService {
         this.logger.info(`Successfully inserted job ${job.jobDetails.id}`);
       }
 
-      // Process capabilities and skills
-      if (job.capabilities && job.capabilities.capabilities) {
-        for (const capability of job.capabilities.capabilities) {
-          const capabilityData = await this.storeCapabilityRecord({
-            name: capability.name,
-            description: capability.description,
-            level: capability.level,
-            raw_data: capability
-          });
+      // Process capabilities and skills from both job description and documents
+      const allCapabilities = [
+        ...(job.capabilities?.capabilities || []),
+        ...(documentAnalysis?.analysis?.capabilities || [])
+      ];
 
-          if (capabilityData && capabilityData[0] && roleData && roleData[0]) {
-            await this.storeRoleCapability(roleData[0].id, capabilityData[0].id, 'core', capability.level);
+      const allSkills = [
+        ...(job.capabilities?.skills || []),
+        ...(documentAnalysis?.analysis?.skills || [])
+      ];
+
+      this.logger.info(`Processing ${allCapabilities.length} capabilities and ${allSkills.length} skills for job ${job.jobDetails.id}`);
+
+      // Store capabilities
+      if (allCapabilities.length > 0) {
+        for (const capability of allCapabilities) {
+          try {
+            const capabilityData = await this.storeCapabilityRecord({
+              name: capability.name,
+              description: capability.description,
+              level: capability.level,
+              raw_data: capability
+            });
+
+            if (capabilityData && capabilityData[0] && roleData && roleData[0]) {
+              await this.storeRoleCapability(roleData[0].id, capabilityData[0].id, 'core', capability.level);
+              this.logger.info(`Linked capability ${capability.name} to role ${roleData[0].id}`);
+            }
+          } catch (error) {
+            this.logger.error('Error processing capability:', { error, capability: capability.name });
           }
         }
       }
 
-      if (job.capabilities && job.capabilities.skills) {
-        for (const skill of job.capabilities.skills) {
-          const skillData = await this.storeSkillRecord({
-            name: skill.name,
-            description: skill.description || '',
-            category: skill.category || 'Technical',
-            company_id: companyData[0].id,
-            raw_data: skill
-          });
+      // Store skills
+      if (allSkills.length > 0) {
+        for (const skill of allSkills) {
+          try {
+            const skillData = await this.storeSkillRecord({
+              name: skill.name,
+              description: skill.description || '',
+              category: skill.category || 'Technical',
+              company_id: companyData[0].id,
+              raw_data: skill
+            });
 
-          if (skillData && skillData[0] && roleData && roleData[0]) {
-            await this.storeRoleSkill(roleData[0].id, skillData[0].id);
+            if (skillData && skillData[0] && roleData && roleData[0]) {
+              await this.storeRoleSkill(roleData[0].id, skillData[0].id);
+              this.logger.info(`Linked skill ${skill.name} to role ${roleData[0].id}`);
+            }
+          } catch (error) {
+            this.logger.error('Error processing skill:', { error, skill: skill.name });
           }
         }
       }
@@ -606,6 +725,129 @@ export class StorageService implements IStorageService {
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
+      throw error;
+    }
+  }
+
+  /**
+   * Process job documents
+   */
+  private async processJobDocuments(jobId: string, documents: Array<{ url: string; title?: string; type?: string; }>): Promise<{ documents: any[], analysis: any }> {
+    try {
+      const processedDocs = [];
+      let combinedAnalysis = {
+        capabilities: [],
+        skills: []
+      };
+
+      for (const doc of documents) {
+        try {
+          // Download document
+          this.logger.info(`Downloading document from ${doc.url}...`);
+          const response = await fetch(doc.url);
+          if (!response.ok) {
+            throw new Error(`Failed to download document: ${response.statusText}`);
+          }
+
+          const buffer = await response.arrayBuffer();
+          const contentType = response.headers.get('content-type');
+
+          // Process document content
+          let content = null;
+          const tempFile = path.join(os.tmpdir(), `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`);
+          fs.writeFileSync(tempFile, Buffer.from(buffer));
+
+          try {
+            if (contentType?.includes('pdf') || doc.url.toLowerCase().endsWith('.pdf')) {
+              const pdfParser = new PDFParser();
+              content = await new Promise<string>((resolve, reject) => {
+                pdfParser.on("pdfParser_dataReady", () => {
+                  try {
+                    const text = decodeURIComponent(pdfParser.getRawTextContent())
+                      .replace(/\r\n/g, '\n')
+                      .replace(/\n{3,}/g, '\n\n')
+                      .trim();
+                    resolve(text);
+                  } catch (error) {
+                    reject(error);
+                  }
+                });
+                pdfParser.on("pdfParser_dataError", reject);
+                pdfParser.loadPDF(tempFile);
+              });
+            } else if (contentType?.includes('word') || doc.url.toLowerCase().endsWith('.docx')) {
+              const result = await mammoth.extractRawText({ path: tempFile });
+              content = result.value.trim();
+            }
+          } finally {
+            // Clean up temp file
+            try {
+              fs.unlinkSync(tempFile);
+            } catch (e) {
+              this.logger.warn(`Failed to clean up temp file: ${tempFile}`, e);
+            }
+          }
+
+          if (content) {
+            // Analyze document content for capabilities and skills
+            if (this.config.aiService) {
+              const analysis = await this.config.aiService.analyzeText(content);
+              
+              // Store document
+              const documentRecord = {
+                job_id: jobId,
+                url: doc.url,
+                content_type: contentType,
+                content: content,
+                analysis: analysis,
+                processed_at: new Date()
+              };
+
+              const { data, error } = await this.stagingClient
+                .from('documents')
+                .insert(documentRecord)
+                .select()
+                .single();
+
+              if (error) throw error;
+
+              processedDocs.push(data);
+              
+              // Combine analysis results
+              if (analysis) {
+                combinedAnalysis.capabilities.push(...analysis.capabilities);
+                combinedAnalysis.skills.push(...analysis.skills);
+              }
+            }
+          }
+        } catch (error) {
+          const err = error as Error;
+          this.logger.error('Error processing document:', {
+            jobId,
+            document: doc,
+            error: {
+              message: err.message,
+              stack: err.stack,
+              details: err
+            }
+          });
+        }
+      }
+
+      return {
+        documents: processedDocs,
+        analysis: combinedAnalysis
+      };
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error('Error in processJobDocuments:', {
+        jobId,
+        error: {
+          message: err.message,
+          stack: err.stack,
+          details: err
+        }
+      });
       throw error;
     }
   }
@@ -627,8 +869,8 @@ export class StorageService implements IStorageService {
 
       // First check if company exists
       const { data: existingCompany, error: fetchError } = await this.stagingClient
-        .from('companies')
-        .select('id, name')
+        .from(this.config.companiesTable)
+        .select()
         .eq('name', companyName)
         .maybeSingle();
 
@@ -670,7 +912,7 @@ export class StorageService implements IStorageService {
     try {
       // First check if role exists
       const { data: existingRole, error: fetchError } = await this.stagingClient
-        .from('roles')
+        .from(this.config.rolesTable)
         .select()
         .eq('company_id', role.company_id)
         .eq('title', role.title)
@@ -691,7 +933,7 @@ export class StorageService implements IStorageService {
       let result;
       if (existingRole) {
         const { data, error: updateError } = await this.stagingClient
-          .from('roles')
+          .from(this.config.rolesTable)
           .update(roleData)
           .eq('id', existingRole.id)
           .select();
@@ -700,7 +942,7 @@ export class StorageService implements IStorageService {
         return data;
       } else {
         const { data, error: insertError } = await this.stagingClient
-          .from('roles')
+          .from(this.config.rolesTable)
           .insert(roleData)
           .select();
 
@@ -853,8 +1095,18 @@ export class StorageService implements IStorageService {
         });
 
       if (error) throw error;
+      this.logger.info(`Successfully linked capability ${capabilityId} to role ${roleId}`);
     } catch (error) {
-      this.logger.error('Error storing role capability:', error);
+      const err = error as Error;
+      this.logger.error('Error storing role capability:', {
+        error: {
+          message: err.message,
+          stack: err.stack,
+          details: err
+        },
+        roleId,
+        capabilityId
+      });
       throw error;
     }
   }
@@ -876,8 +1128,18 @@ export class StorageService implements IStorageService {
         });
 
       if (error) throw error;
+      this.logger.info(`Successfully linked skill ${skillId} to role ${roleId}`);
     } catch (error) {
-      this.logger.error('Error storing role skill:', error);
+      const err = error as Error;
+      this.logger.error('Error storing role skill:', {
+        error: {
+          message: err.message,
+          stack: err.stack,
+          details: err
+        },
+        roleId,
+        skillId
+      });
       throw error;
     }
   }
@@ -885,15 +1147,16 @@ export class StorageService implements IStorageService {
   /**
    * Store capability records
    */
-  private async storeCapabilityRecords(job: ProcessedJob): Promise<void> {
-    const capabilityRecords = job.capabilities.capabilities.map(cap => ({
+  private async storeCapabilityRecords(job: ProcessedJob, capabilities: Capability[]): Promise<void> {
+    const capabilityRecords = capabilities.map(cap => ({
       institution_id: this.config.institutionId,
       source_id: 'nswgov',
       external_id: `cap_${cap.name.toLowerCase().replace(/\s+/g, '_')}`,
       name: cap.name,
       level: cap.level,
       description: cap.description,
-      relevance: cap.relevance,
+      behavioral_indicators: cap.behavioral_indicators,
+      relevance: cap.relevance || 1,
       occupationalGroup: job.capabilities.occupationalGroups[0] || '',
       focusArea: job.capabilities.focusAreas[0] || '',
       source_framework: 'NSW Government Capability Framework',
@@ -909,9 +1172,45 @@ export class StorageService implements IStorageService {
       return;
     }
 
-    const { error } = await this.liveClient
+    const { error } = await this.stagingClient
       .from(this.config.capabilitiesTable)
       .upsert(capabilityRecords, {
+        onConflict: 'institution_id,source_id,external_id'
+      });
+
+    if (error) throw error;
+  }
+
+  /**
+   * Store skill records
+   */
+  private async storeSkillRecords(job: ProcessedJob, skills: Skill[]): Promise<void> {
+    const skillRecords = skills.map(skill => ({
+      institution_id: this.config.institutionId,
+      source_id: 'nswgov',
+      external_id: `skill_${skill.name.toLowerCase().replace(/\s+/g, '_')}`,
+      name: skill.name,
+      description: skill.description,
+      category: skill.category,
+      relevance: skill.relevance || 1,
+      occupationalGroup: job.capabilities.occupationalGroups[0] || '',
+      focusArea: job.capabilities.focusAreas[0] || '',
+      source_framework: 'NSW Government Skill Framework',
+      is_occupation_specific: true,
+      raw_data: skill,
+      processed: false,
+      processing_status: 'pending',
+      processedAt: job.metadata.processedAt
+    }));
+
+    if (skillRecords.length === 0) {
+      this.logger.info(`No skills to store for job ${job.jobDetails.id}`);
+      return;
+    }
+
+    const { error } = await this.stagingClient
+      .from(this.config.skillsTable)
+      .upsert(skillRecords, {
         onConflict: 'institution_id,source_id,external_id'
       });
 
@@ -988,10 +1287,12 @@ export class StorageService implements IStorageService {
       external_id: `taxonomy_${job.jobDetails.id}`,
       jobId: job.jobDetails.id,
       type: 'job',
-      vector: job.taxonomy.vector,
-      text: job.taxonomy.text,
-      metadata: job.taxonomy.metadata,
-      raw_data: job.taxonomy,
+      jobFamily: job.taxonomy.jobFamily,
+      jobFunction: job.taxonomy.jobFunction,
+      keywords: job.taxonomy.keywords,
+      technicalSkills: job.taxonomy.technicalSkills,
+      softSkills: job.taxonomy.softSkills,
+      raw_data: job.taxonomy.raw_data,
       processed: false,
       processing_status: 'pending',
       processedAt: job.metadata.processedAt

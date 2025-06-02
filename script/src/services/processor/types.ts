@@ -14,8 +14,8 @@
  * @since 2024-02-06
  */
 
-import { JobDetails } from '../spider/types.js';
-import { CapabilityAnalysisResult, TaxonomyAnalysisResult } from '../analyzer/templates/capabilityAnalysis.js';
+import { JobDetails, TaxonomyAnalysisResult } from '../storage/types.js';
+import { CapabilityAnalysisResult } from '../analyzer/templates/capabilityAnalysis.js';
 import { EmbeddingResult } from '../embeddings/templates/embeddingTemplates.js';
 
 export interface ProcessorConfig {
@@ -27,18 +27,10 @@ export interface ProcessorConfig {
 
 export interface ProcessedJob {
   jobDetails: JobDetails;
-  capabilities: CapabilityAnalysisResult;
-  taxonomy: TaxonomyAnalysisResult;
-  embeddings: {
-    job: EmbeddingResult;
-    capabilities: EmbeddingResult[];
-    skills: EmbeddingResult[];
-  };
+  capabilities: TaxonomyAnalysisResult;
   metadata: {
     processedAt: string;
-    version: string;
-    status: ProcessingStatus;
-    errors?: ProcessingError[];
+    [key: string]: any;
   };
 }
 
