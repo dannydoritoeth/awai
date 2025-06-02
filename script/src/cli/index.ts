@@ -83,7 +83,8 @@ async function main() {
       maxRetries: Number(process.env.RETRY_ATTEMPTS) || 3,
       retryDelay: Number(process.env.RETRY_DELAY) || 1000,
       version: '1.0.0'
-    }, aiAnalyzer, embeddingService, logger);
+    }, logger, aiAnalyzer, embeddingService, stagingStorage);
+    await processor.initialize();
     logger.info('ProcessorService initialized');
 
     // Initialize Orchestrator

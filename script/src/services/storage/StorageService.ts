@@ -1577,17 +1577,58 @@ export class StorageService implements IStorageService {
     name: string;
     description: string;
     group_name: string;
+    embedding?: any;
   }>> {
     try {
-      const { data, error } = await this.stagingClient
+      // First try to get capabilities with embeddings
+      const { data: capabilitiesWithEmbeddings, error: embeddingError } = await this.stagingClient
         .from('capabilities')
-        .select('id, name, description, group_name')
-        .eq('source_framework', 'NSW Government Capability Framework');
+        .select('id, name, description, group_name, embedding')
+        .eq('source_framework', 'NSW Public Sector Capability Framework');
 
-      if (error) throw error;
-      return data || [];
+      if (embeddingError) throw embeddingError;
+      return capabilitiesWithEmbeddings || [];
     } catch (error) {
       this.logger.error('Error getting framework capabilities:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store capability embeddings
+   */
+  async storeCapabilityEmbeddings(capabilities: Array<{
+    id: string;
+    name: string;
+    description: string;
+    group_name: string;
+    embedding: any;
+  }>): Promise<void> {
+    try {
+      this.logger.info(`Storing embeddings for ${capabilities.length} capabilities`);
+      
+      // Update capabilities with their embeddings
+      for (const capability of capabilities) {
+        // Format the vector data for Postgres
+        const vector = capability.embedding.vector;
+        const formattedVector = Array.isArray(vector) ? `[${vector.join(',')}]` : vector;
+
+        const { error } = await this.stagingClient
+          .from('capabilities')
+          .update({ 
+            embedding: formattedVector
+          })
+          .eq('id', capability.id);
+
+        if (error) {
+          this.logger.error(`Error storing embedding for capability ${capability.id}:`, error);
+          throw error;
+        }
+      }
+
+      this.logger.info('Successfully stored capability embeddings');
+    } catch (error) {
+      this.logger.error('Error storing capability embeddings:', error);
       throw error;
     }
   }

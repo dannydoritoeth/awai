@@ -116,6 +116,7 @@ export type PipelineOptions = {
   skipProcessing?: boolean;
   skipStorage?: boolean;
   skipMigration?: boolean;
+  continueOnError?: boolean;
 };
 
 export interface IOrchestratorService {

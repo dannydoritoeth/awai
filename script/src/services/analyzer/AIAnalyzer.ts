@@ -20,7 +20,7 @@
  */
 
 import { OpenAI } from 'openai';
-import { CapabilityAnalysisResult, TaxonomyAnalysisResult, capabilityAnalysisPrompt, taxonomyAnalysisPrompt } from './templates/capabilityAnalysis.js';
+import { CapabilityAnalysisResult, TaxonomyAnalysisResult, capabilityAnalysisPrompt, taxonomyAnalysisPrompt, createCapabilityAnalysisPrompt } from './templates/capabilityAnalysis.js';
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
 import { delay } from '../../utils/helpers.js';
@@ -62,6 +62,12 @@ export class AIAnalyzer {
   private model: string;
   private temperature: number;
   private maxTokens: number;
+  private frameworkCapabilities: Array<{
+    id: string;
+    name: string;
+    description: string;
+    group_name: string;
+  }> = [];
 
   constructor(
     private config: AIAnalyzerConfig,
@@ -73,6 +79,20 @@ export class AIAnalyzer {
     this.model = config.openaiModel || "gpt-4-0125-preview";
     this.temperature = config.temperature || 0;
     this.maxTokens = config.maxTokens || 2000;
+    this.logger.info('AIAnalyzer initialized');
+  }
+
+  /**
+   * Set the framework capabilities for use in analysis
+   */
+  async setFrameworkCapabilities(capabilities: Array<{
+    id: string;
+    name: string;
+    description: string;
+    group_name: string;
+  }>): Promise<void> {
+    this.frameworkCapabilities = capabilities;
+    this.logger.info(`Set ${capabilities.length} framework capabilities for analysis`);
   }
 
   /**
@@ -282,8 +302,15 @@ export class AIAnalyzer {
    */
   async analyzeCapabilities(job: JobDetails): Promise<CapabilityAnalysisResult> {
     try {
-      this.logger.info(`Analyzing capabilities for job: ${job.title}`);
-      
+      this.logger.info(`Analyzing capabilities for job ${job.id}`);
+
+      if (!this.frameworkCapabilities || this.frameworkCapabilities.length === 0) {
+        throw new Error('Framework capabilities not loaded. Please ensure initialize() is called first.');
+      }
+
+      // Create the prompt with the current framework capabilities
+      const prompt = createCapabilityAnalysisPrompt(this.frameworkCapabilities);
+
       // Prepare the content for analysis
       const content = [
         `Job Title: ${job.title}`,
@@ -309,7 +336,8 @@ export class AIAnalyzer {
         responsibilitiesCount: job.responsibilities.length,
         requirementsCount: job.requirements.length,
         notesCount: job.notes.length,
-        hasAboutUs: Boolean(job.aboutUs)
+        hasAboutUs: Boolean(job.aboutUs),
+        frameworkCapabilitiesCount: this.frameworkCapabilities.length
       });
 
       const result = await this.retryOperation(

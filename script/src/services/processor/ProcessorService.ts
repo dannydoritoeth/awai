@@ -60,6 +60,7 @@ export class ProcessorService implements IProcessorService {
     private embeddingService: EmbeddingService,
     private storageService: StorageService
   ) {
+    // Initialize metrics first
     this.metrics = {
       totalProcessed: 0,
       successfulProcesses: 0,
@@ -67,6 +68,10 @@ export class ProcessorService implements IProcessorService {
       averageProcessingTime: 0,
       errors: []
     };
+    this.processingTimes = [];
+    this.frameworkCapabilities = [];
+
+    // Now we can use the logger
     this.logger.info('ProcessorService initialized');
   }
 
@@ -75,7 +80,12 @@ export class ProcessorService implements IProcessorService {
    */
   async initialize(): Promise<void> {
     try {
-      // Nothing to initialize at the moment
+      this.logger.info('Loading capability framework...');
+      this.frameworkCapabilities = await this.loadCapabilityFramework();
+      
+      // Pass the loaded capabilities to the analyzer
+      await this.analyzer.setFrameworkCapabilities(this.frameworkCapabilities);
+      
       this.logger.info('Processor service initialized');
     } catch (error) {
       this.logger.error('Error initializing processor service:', error);
@@ -96,18 +106,35 @@ export class ProcessorService implements IProcessorService {
         return [];
       }
 
-      // Generate embeddings for each capability
-      this.logger.info(`Generating embeddings for ${capabilities.length} capabilities`);
-      const capabilitiesWithEmbeddings = await Promise.all(
-        capabilities.map(async (cap: FrameworkCapability) => ({
-          ...cap,
-          embedding: await this.embeddingService.generateCapabilityEmbedding(cap.description)
-        }))
-      );
+      // Filter capabilities that need embeddings
+      const capabilitiesNeedingEmbeddings = capabilities.filter(cap => !cap.embedding);
+      
+      if (capabilitiesNeedingEmbeddings.length > 0) {
+        this.logger.info(`Generating embeddings for ${capabilitiesNeedingEmbeddings.length} capabilities`);
+        const newEmbeddings = await Promise.all(
+          capabilitiesNeedingEmbeddings.map(async cap => ({
+            ...cap,
+            embedding: await this.embeddingService.generateCapabilityEmbedding(cap.description)
+          }))
+        );
+
+        // Store the new embeddings
+        await this.storageService.storeCapabilityEmbeddings(newEmbeddings);
+
+        // Update the capabilities array with new embeddings
+        for (const newCap of newEmbeddings) {
+          const index = capabilities.findIndex(cap => cap.id === newCap.id);
+          if (index !== -1) {
+            capabilities[index] = newCap;
+          }
+        }
+      } else {
+        this.logger.info('All capabilities already have embeddings');
+      }
 
       this.logger.info(`Successfully loaded ${capabilities.length} capabilities with embeddings`);
-      this.frameworkCapabilities = capabilitiesWithEmbeddings;
-      return capabilitiesWithEmbeddings;
+      this.frameworkCapabilities = capabilities;
+      return capabilities;
     } catch (error) {
       this.logger.error('Error in loadCapabilityFramework:', error);
       throw error;
