@@ -383,7 +383,7 @@ export class StorageService implements IStorageService {
         department: job.jobDetails.agency
       });
 
-    const jobRecord = {
+      const jobRecord = {
         title: job.jobDetails.title,
         source_id: 'nswgov',
         original_id: job.jobDetails.id,
@@ -399,24 +399,52 @@ export class StorageService implements IStorageService {
         version: 1,
         sync_status: 'pending',
         last_synced_at: new Date()
-    };
+      };
 
-      this.logger.info('Upserting job record to database:', jobRecord);
-      const { data, error } = await this.client
-      .from(this.config.jobsTable)
-        .upsert(jobRecord, {
-          onConflict: 'source_id,original_id'
-        })
+      // First check if the job exists
+      const { data: existingJob, error: fetchError } = await this.client
+        .from(this.config.jobsTable)
         .select()
+        .eq('source_id', 'nswgov')
+        .eq('original_id', job.jobDetails.id)
         .single();
 
-      if (error) {
-        this.logger.error('Error upserting job record:', error);
-        this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
-        throw error;
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        this.logger.error('Error fetching existing job:', fetchError);
+        throw fetchError;
       }
 
-      this.logger.info('Successfully stored job record:', data);
+      let result;
+      if (existingJob) {
+        // Update existing job
+        const { data, error: updateError } = await this.client
+          .from(this.config.jobsTable)
+          .update(jobRecord)
+          .eq('id', existingJob.id)
+          .select();
+
+        if (updateError) {
+          this.logger.error('Error updating job record:', updateError);
+          throw updateError;
+        }
+        result = data;
+        this.logger.info(`Successfully updated job ${job.jobDetails.id}`);
+      } else {
+        // Insert new job
+        const { data, error: insertError } = await this.client
+          .from(this.config.jobsTable)
+          .insert(jobRecord)
+          .select();
+
+        if (insertError) {
+          this.logger.error('Error inserting job record:', insertError);
+          throw insertError;
+        }
+        result = data;
+        this.logger.info(`Successfully inserted job ${job.jobDetails.id}`);
+      }
+
+      this.logger.info('Successfully stored job record:', result);
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
