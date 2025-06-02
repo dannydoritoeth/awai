@@ -38,6 +38,7 @@ import mammoth from 'mammoth';
 import os from 'os';
 
 interface Capability {
+  id: string;
   name: string;
   level: 'foundational' | 'intermediate' | 'adept' | 'advanced' | 'highly advanced';
   description: string;
@@ -1251,59 +1252,12 @@ export class StorageService implements IStorageService {
       const roleId = roleData.id;
       this.logger.info(`Found role ID ${roleId} for job ${job.jobDetails.id}`);
 
-      // Store each capability
+      // Link each capability to the role
       for (const capability of capabilities) {
         try {
-          if (!capability.name) {
-            this.logger.warn('Skipping capability with no name');
+          if (!capability.id) {
+            this.logger.warn('Skipping capability with no ID');
             continue;
-          }
-
-          // Store capability
-          const { data: capabilityData, error: capabilityError } = await this.stagingClient
-            .from('capabilities')
-            .upsert({
-              name: capability.name,
-              description: capability.description,
-              source_framework: 'NSW Government Capability Framework',
-              is_occupation_specific: false,
-              normalized_key: capability.name.toLowerCase().replace(/\s+/g, '_'),
-              sync_status: 'pending',
-              last_synced_at: null,
-              raw_data: capability
-            }, {
-              onConflict: 'name'
-            })
-            .select()
-            .single();
-
-          if (capabilityError) {
-            this.logger.error('Error storing capability:', { error: capabilityError, capability: capability.name });
-            continue;
-          }
-
-          if (!capabilityData) {
-            this.logger.error('No capability data returned after upsert:', capability.name);
-            continue;
-          }
-
-          // Store capability level
-          const { error: levelError } = await this.stagingClient
-            .from('capability_levels')
-            .upsert({
-              capability_id: capabilityData.id,
-              level: capability.level,
-              summary: capability.description
-            }, {
-              onConflict: 'capability_id,level'
-            });
-
-          if (levelError) {
-            this.logger.error('Error storing capability level:', {
-              error: levelError,
-              capability: capability.name,
-              level: capability.level
-            });
           }
 
           // Link capability to role
@@ -1311,7 +1265,7 @@ export class StorageService implements IStorageService {
             .from('role_capabilities')
             .upsert({
               role_id: roleId,
-              capability_id: capabilityData.id,
+              capability_id: capability.id,
               capability_type: 'core',
               level: capability.level,
               sync_status: 'pending',
@@ -1329,7 +1283,7 @@ export class StorageService implements IStorageService {
             continue;
           }
 
-          this.logger.info(`Successfully stored and linked capability ${capability.name} to role ${roleId}`);
+          this.logger.info(`Successfully linked capability ${capability.name} (${capability.id}) to role ${roleId}`);
         } catch (error) {
           this.logger.error('Error processing capability:', { error, capability: capability.name });
         }
@@ -1611,6 +1565,29 @@ export class StorageService implements IStorageService {
       }
     } catch (error) {
       this.logger.error('Error storing skill record:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get capabilities from the framework
+   */
+  async getFrameworkCapabilities(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    group_name: string;
+  }>> {
+    try {
+      const { data, error } = await this.stagingClient
+        .from('capabilities')
+        .select('id, name, description, group_name')
+        .eq('source_framework', 'NSW Government Capability Framework');
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      this.logger.error('Error getting framework capabilities:', error);
       throw error;
     }
   }

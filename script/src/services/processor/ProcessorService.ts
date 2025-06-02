@@ -29,16 +29,36 @@ import {
   ProcessingError,
   ProcessingStatus
 } from './types.js';
+import { StorageService } from '../storage/StorageService.js';
+
+interface FrameworkCapability {
+  id: string;
+  name: string;
+  description: string;
+  group_name: string;
+  embedding?: any;
+}
+
+interface ProcessedCapability {
+  id: string;
+  name: string;
+  level: "foundational" | "intermediate" | "adept" | "advanced" | "highly advanced";
+  description: string;
+  relevance: number;
+  embedding?: any;
+}
 
 export class ProcessorService implements IProcessorService {
   private metrics: ProcessingMetrics;
   private processingTimes: number[] = [];
+  private frameworkCapabilities: FrameworkCapability[] = [];
 
   constructor(
     private config: ProcessorConfig,
+    private logger: Logger,
     private analyzer: AIAnalyzer,
     private embeddingService: EmbeddingService,
-    private logger: Logger
+    private storageService: StorageService
   ) {
     this.metrics = {
       totalProcessed: 0,
@@ -47,6 +67,7 @@ export class ProcessorService implements IProcessorService {
       averageProcessingTime: 0,
       errors: []
     };
+    this.logger.info('ProcessorService initialized');
   }
 
   /**
@@ -63,11 +84,34 @@ export class ProcessorService implements IProcessorService {
   }
 
   /**
-   * Load capability framework definitions
+   * Load capability framework and generate embeddings
    */
-  private async loadCapabilityFramework(): Promise<any[]> {
-    // TODO: Implement framework loading from config or database
-    return [];
+  private async loadCapabilityFramework(): Promise<FrameworkCapability[]> {
+    try {
+      // Load capabilities from staging database
+      const capabilities = await this.storageService.getFrameworkCapabilities();
+
+      if (!capabilities || capabilities.length === 0) {
+        this.logger.warn('No capabilities found in framework');
+        return [];
+      }
+
+      // Generate embeddings for each capability
+      this.logger.info(`Generating embeddings for ${capabilities.length} capabilities`);
+      const capabilitiesWithEmbeddings = await Promise.all(
+        capabilities.map(async (cap: FrameworkCapability) => ({
+          ...cap,
+          embedding: await this.embeddingService.generateCapabilityEmbedding(cap.description)
+        }))
+      );
+
+      this.logger.info(`Successfully loaded ${capabilities.length} capabilities with embeddings`);
+      this.frameworkCapabilities = capabilitiesWithEmbeddings;
+      return capabilitiesWithEmbeddings;
+    } catch (error) {
+      this.logger.error('Error in loadCapabilityFramework:', error);
+      throw error;
+    }
   }
 
   /**
@@ -91,11 +135,11 @@ export class ProcessorService implements IProcessorService {
       this.logger.info(`Generating embeddings for job ${job.id}`);
       const jobEmbedding = await this.embeddingService.generateJobEmbedding(job.description);
 
-      const capabilityEmbeddings = await Promise.all(
-        capabilities.capabilities.map(async (cap: { description: string }) => 
-          this.embeddingService.generateCapabilityEmbedding(cap.description)
-        )
-      );
+      // Get embeddings for the matched capabilities from our pre-generated framework embeddings
+      const capabilityEmbeddings = capabilities.capabilities.map((cap: ProcessedCapability) => {
+        const frameworkCap = this.frameworkCapabilities.find(fc => fc.id === cap.id);
+        return frameworkCap?.embedding;
+      });
 
       // Only generate embeddings for the skills we actually found
       const allSkills = [...taxonomy.technicalSkills, ...taxonomy.softSkills];

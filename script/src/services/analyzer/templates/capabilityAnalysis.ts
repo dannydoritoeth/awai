@@ -16,6 +16,7 @@
 
 export interface CapabilityAnalysisResult {
   capabilities: Array<{
+    id: string;
     name: string;
     level: 'foundational' | 'intermediate' | 'adept' | 'advanced' | 'highly advanced';
     description: string;
@@ -30,45 +31,36 @@ export interface CapabilityAnalysisResult {
   }>;
 }
 
-export const capabilityAnalysisPrompt = `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
+interface CapabilityGroup {
+  [key: string]: string[];
+}
+
+export const createCapabilityAnalysisPrompt = (frameworkCapabilities: Array<{ id: string; name: string; description: string; group_name: string }>) => {
+  // Generate the capabilities list for the prompt
+  const capabilitiesByGroup: CapabilityGroup = {};
+  frameworkCapabilities.forEach(cap => {
+    if (!capabilitiesByGroup[cap.group_name]) {
+      capabilitiesByGroup[cap.group_name] = [];
+    }
+    capabilitiesByGroup[cap.group_name].push(`${cap.name} (${cap.id}): ${cap.description}`);
+  });
+
+  // Build the capabilities section of the prompt
+  let capabilitiesPrompt = 'NSW Government Capability Framework core capabilities:\n\n';
+  for (const [group, capabilities] of Object.entries(capabilitiesByGroup)) {
+    capabilitiesPrompt += `${group}:\n${capabilities.map((c: string) => `- ${c}`).join('\n')}\n\n`;
+  }
+
+  return `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
 Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework.
 
-The NSW Government Capability Framework consists of the following core capabilities:
-
-Personal Attributes:
-- Display Resilience and Courage: Be open and honest, prepared to express your views, and willing to accept and commit to change
-- Act with Integrity: Be ethical and professional, and uphold and promote the public sector values
-- Manage Self: Show drive and motivation, an ability to self-reflect and a commitment to learning
-- Value Diversity and Inclusion: Demonstrate inclusive behaviour and show respect for diverse backgrounds, experiences and perspectives
-
-Relationships:
-- Communicate Effectively: Communicate clearly, actively listen to others, and respond with understanding and respect
-- Commit to Customer Service: Provide customer-focused services in line with public sector and organisational objectives
-- Work Collaboratively: Collaborate with others and value their contribution
-- Influence and Negotiate: Gain consensus and commitment from others, and resolve issues and conflicts
-
-Results:
-- Deliver Results: Achieve results through the efficient use of resources and a commitment to quality outcomes
-- Plan and Prioritise: Plan to achieve priority outcomes and respond flexibly to changing circumstances
-- Think and Solve Problems: Think, analyse and consider the broader context to develop practical solutions
-- Demonstrate Accountability: Be proactive and responsible for own actions, and adhere to legislation, policy and guidelines
-
-Business Enablers:
-- Finance: Understand and apply financial processes to achieve value for money and minimize financial risk
-- Technology: Understand and use available technologies to maximize efficiency and effectiveness
-- Procurement and Contract Management: Understand and apply procurement processes to ensure effective purchasing and contract performance
-- Project Management: Understand and apply effective project planning, coordination and control methods
-
-People Management:
-- Manage and Develop People: Engage and motivate staff, and develop capability and potential in others
-- Inspire Direction and Purpose: Communicate goals, priorities and vision, and recognize achievements
-- Optimise Business Outcomes: Manage resources effectively and apply sound workforce planning principles
-- Manage Reform and Change: Support, promote and champion change, and assist others to engage with change
+${capabilitiesPrompt}
 
 Please provide your analysis in JSON format with the following structure:
 {
   "capabilities": [
     {
+      "id": "Capability ID from the provided list",
       "name": "Capability name from the framework",
       "level": "One of: foundational, intermediate, adept, advanced, highly advanced",
       "description": "Brief description of how this capability applies to the role",
@@ -87,18 +79,20 @@ Please provide your analysis in JSON format with the following structure:
 }
 
 Focus on identifying:
-1. Core capabilities from the framework that are essential for the role
+1. Core capabilities from the EXACT list provided above - do not create new capabilities
 2. The required level for each capability based on role seniority and responsibilities
 3. Relevant occupational groups and focus areas
 4. Technical and soft skills required for the role
 5. Clear justification for each capability's relevance
 
 Ensure your analysis:
+- ONLY uses capabilities from the provided list with their exact IDs
 - Maps directly to the NSW Public Sector Capability Framework
 - Reflects the role level and responsibilities accurately
 - Provides specific evidence from the job description
 - Identifies both technical and soft skills
 - Maintains consistency with NSW Government standards`;
+};
 
 export interface TaxonomyAnalysisResult {
   technicalSkills: string[];
@@ -125,4 +119,7 @@ Guidelines:
 - Keep skills concise and focused
 - Avoid duplicates
 - Use consistent terminology
-- The summary should capture the essence of the role and its key requirements`; 
+- The summary should capture the essence of the role and its key requirements`;
+
+// Keeping the old export name for backward compatibility
+export const capabilityAnalysisPrompt = createCapabilityAnalysisPrompt([]); 
