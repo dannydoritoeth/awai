@@ -44,19 +44,28 @@ Please provide your analysis in JSON format with the following structure:
     }
   ],
   "occupationalGroups": ["List of relevant occupational groups"],
-  "focusAreas": ["List of focus areas or specializations"]
+  "focusAreas": ["List of focus areas or specializations"],
+  "skills": [
+    {
+      "name": "Specific skill name",
+      "description": "How this skill is used in the role",
+      "category": "One of: Technical, Domain Knowledge, Soft Skills"
+    }
+  ]
 }
 
 Focus on identifying:
 1. Core capabilities from the framework that are essential for the role
 2. The required level for each capability based on role seniority and responsibilities
 3. Relevant occupational groups and focus areas
-4. Clear justification for each capability's relevance
+4. Technical and soft skills required for the role
+5. Clear justification for each capability's relevance
 
 Ensure your analysis:
 - Maps directly to the NSW Public Sector Capability Framework
 - Reflects the role level and responsibilities accurately
 - Provides specific evidence from the job description
+- Identifies both technical and soft skills
 - Maintains consistency with NSW Government standards`;
 
 export interface TaxonomyAnalysisResult {
