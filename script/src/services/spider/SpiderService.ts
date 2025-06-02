@@ -1,0 +1,305 @@
+/**
+ * @file SpiderService.ts
+ * @description Part of NSW Government Jobs ETL Refactoring
+ * 
+ * Implementation of the job spider service using Puppeteer.
+ * This service maintains the same scraping functionality as the current implementation
+ * while improving error handling and performance.
+ * 
+ * @module services/spider
+ * @see RefactorETL.md for the complete refactoring plan
+ * 
+ * @author AWAI Team
+ * @version 1.0.0
+ * @since 2024-02-06
+ */
+
+import puppeteer, { Browser, Page } from 'puppeteer';
+import { ISpiderService, JobListing, JobDetails, SpiderConfig, SpiderMetrics } from './types.js';
+import { Logger } from '../../utils/logger.js';
+import { delay } from '../../utils/helpers.js';
+
+export class SpiderService implements ISpiderService {
+  private browser: Browser | null = null;
+  private metrics: SpiderMetrics;
+  private baseUrl = "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
+
+  constructor(
+    private config: SpiderConfig,
+    private logger: Logger
+  ) {
+    this.metrics = {
+      totalJobs: 0,
+      successfulScrapes: 0,
+      failedScrapes: 0,
+      startTime: new Date(),
+      errors: []
+    };
+  }
+
+  /**
+   * Initialize the browser instance
+   */
+  private async initBrowser(): Promise<void> {
+    if (!this.browser) {
+      this.logger.info('Spider name "nsw gov jobs" launched');
+      this.browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      this.logger.info('Browser instance initialized');
+    }
+  }
+
+  /**
+   * Get a new page with default configuration
+   */
+  private async getPage(): Promise<Page> {
+    await this.initBrowser();
+    const page = await this.browser!.newPage();
+    await page.setUserAgent(this.config.userAgent);
+    await page.setViewport({ width: 1920, height: 1080 });
+    return page;
+  }
+
+  /**
+   * Scrape job listings from the main jobs page
+   */
+  async getJobListings(maxRecords?: number): Promise<JobListing[]> {
+    this.metrics.startTime = new Date();
+    this.logger.info('Starting job listings scrape');
+
+    try {
+      const page = await this.getPage();
+      
+      // Add longer timeout and better error handling for initial page load
+      this.logger.info('Loading initial URL:', this.baseUrl);
+      try {
+        await page.goto(this.baseUrl, { 
+          waitUntil: 'networkidle0',
+          timeout: 60000 // Increase timeout to 60 seconds
+        });
+      } catch (error: any) {
+        if (error?.name === 'TimeoutError') {
+          this.logger.warn('Initial page load timed out, trying to proceed anyway');
+        } else {
+          throw error;
+        }
+      }
+
+      // Log current URL and page content length for debugging
+      const currentUrl = await page.url();
+      const pageContent = await page.content();
+      this.logger.info('Current URL after navigation:', currentUrl);
+      this.logger.info(`Page content length: ${pageContent.length} characters`);
+
+      // Set page size if selector exists with better error handling
+      try {
+        await page.waitForSelector('select[name="pageSize"]', { timeout: 5000 });
+        this.logger.info('Found page size selector');
+        await page.select('select[name="pageSize"]', '100');
+        this.logger.info('Successfully set page size to 100');
+        // Wait for page to reload after changing page size
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error: any) {
+        this.logger.warn('Page size selector not found or could not be set:', error?.message || 'Unknown error');
+        this.logger.info('Continuing with default page size');
+      }
+
+      // Wait for job cards with better error handling
+      this.logger.info('Waiting for job cards to load...');
+      try {
+        await page.waitForSelector('.job-card, .search-result-card', { 
+          timeout: 10000,
+          visible: true 
+        });
+        this.logger.info('Job cards loaded');
+      } catch (error) {
+        this.logger.warn('Timeout waiting for job cards, checking if any are present');
+        const cards = await page.$$('.job-card, .search-result-card');
+        if (cards.length === 0) {
+          throw new Error('No job cards found on page');
+        }
+        this.logger.info(`Found ${cards.length} job cards despite timeout`);
+      }
+
+      // Add rate limiting delay
+      const rateLimitDelay = 2000;
+      const rateLimitJitter = 1000;
+      const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      const listings = await page.evaluate(() => {
+        // Helper function to safely get text content
+        const getText = (element: Element, selector: string): string => {
+          const el = element.querySelector(selector);
+          return el ? el.textContent?.trim() || '' : '';
+        };
+
+        // Use more specific selectors for job cards
+        const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
+        
+        return cards.map(element => {
+          // Get title and URL - try multiple possible selectors
+          const titleElement = 
+            element.querySelector('.card-header a') || 
+            element.querySelector('[class*="title"] a') ||
+            element.querySelector('h2 a') ||
+            element.querySelector('a');
+            
+          const title = titleElement?.querySelector('span')?.textContent?.trim() || 
+                       titleElement?.textContent?.trim() || '';
+          const jobUrl = (titleElement as HTMLAnchorElement)?.href || '';
+          
+          // Get dates - try multiple formats
+          const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
+          let postedDate = '', closingDate = '';
+          if (dateText) {
+            const dates = dateText.split('-').map((d: string) => d.trim());
+            postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
+            closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
+          }
+          
+          // Get department/agency
+          const agency = 
+            getText(element, '.job-search-result-right h2') || 
+            getText(element, '[class*="department"]') ||
+            getText(element, '[class*="agency"]') ||
+            'NSW Government'; // Fallback
+          
+          // Get location
+          const location = 
+            getText(element, '.nsw-col p:nth-child(3) span') ||
+            getText(element, '[class*="location"]') ||
+            'NSW'; // Fallback
+          
+          // Get salary
+          const salary = 
+            getText(element, '.salary') ||
+            getText(element, '[class*="remuneration"]') ||
+            getText(element, '[class*="salary"]') ||
+            'Not specified';
+
+          // Get job ID
+          const id = 
+            getText(element, '.job-search-result-ref-no') ||
+            getText(element, '[class*="reference"]') ||
+            getText(element, '[class*="job-id"]');
+
+          return {
+            id,
+            title,
+            agency,
+            location,
+            salary,
+            closingDate,
+            url: jobUrl,
+            postedDate,
+            jobReference: id // Add jobReference to match JobListing type
+          };
+        }).filter(job => job.title && job.id); // Only return jobs with at least a title and ID
+      });
+
+      // Apply maxRecords limit if specified
+      const limitedListings = maxRecords ? listings.slice(0, maxRecords) : listings;
+      
+      // Only log the jobs we're actually going to process
+      this.logger.info(`Found ${limitedListings.length} job listings${maxRecords ? ` (limited by maxRecords=${maxRecords})` : ''}`);
+      limitedListings.forEach(job => {
+        this.logger.info(`Processing job listing: ${job.id}, ${job.title}`);
+      });
+
+      this.metrics.totalJobs = limitedListings.length;
+      this.metrics.successfulScrapes++;
+
+      await page.close();
+      return limitedListings;
+
+    } catch (error) {
+      this.metrics.failedScrapes++;
+      this.metrics.errors.push({
+        url: this.baseUrl,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      this.logger.error('Error scraping job listings:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Scrape detailed job information from a specific job listing
+   */
+  async getJobDetails(jobListing: JobListing): Promise<JobDetails> {
+    this.logger.info(`Scraping details for job: ${jobListing.title}`);
+
+    try {
+      const page = await this.getPage();
+      await page.goto(jobListing.url, { waitUntil: 'networkidle0' });
+
+      const details = await page.evaluate((listing) => {
+        const getTextContent = (selector: string): string => 
+          document.querySelector(selector)?.textContent?.trim() || '';
+
+        const getListItems = (selector: string): string[] => {
+          const items: string[] = [];
+          document.querySelectorAll(`${selector} li`).forEach(item => {
+            const text = item.textContent?.trim();
+            if (text) items.push(text);
+          });
+          return items;
+        };
+
+        const contactDetails = {
+          name: getTextContent('.contact-name'),
+          phone: getTextContent('.contact-phone'),
+          email: getTextContent('.contact-email')
+        };
+
+        return {
+          ...listing,
+          description: getTextContent('.job-description'),
+          responsibilities: getListItems('.responsibilities'),
+          requirements: getListItems('.requirements'),
+          notes: getListItems('.notes'),
+          aboutUs: getTextContent('.about-us'),
+          contactDetails
+        };
+      }, jobListing);
+
+      this.metrics.successfulScrapes++;
+      await page.close();
+      return details;
+
+    } catch (error) {
+      this.metrics.failedScrapes++;
+      this.metrics.errors.push({
+        url: jobListing.url,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      this.logger.error(`Error scraping job details for ${jobListing.title}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current spider metrics
+   */
+  getMetrics(): SpiderMetrics {
+    return {
+      ...this.metrics,
+      endTime: new Date()
+    };
+  }
+
+  /**
+   * Clean up resources
+   */
+  async cleanup(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+    }
+  }
+} 

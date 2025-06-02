@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "cross-env NODE_OPTIONS=\"--loader ts-node/esm --experimental-specifier-resolution=node\" ts-node jobs/runDaily.ts",
+    "start": "node jobs/runDaily.js",
     "build": "tsc",
-    "dev": "ts-node-dev --respawn jobs/runDaily.ts",
+    "dev": "ts-node-dev --respawn jobs/runDaily.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },

@@ -531,7 +531,7 @@ Format as JSON with schema:
        private openai: OpenAI,
        private logger: Logger
      ) {}
-
+     
      async analyzeJobDescription(content: string): Promise<Analysis>;
      async extractCapabilities(content: string): Promise<Capability[]>;
      async extractSkills(content: string): Promise<Skill[]>;
@@ -615,3 +615,98 @@ Format as JSON with schema:
 - Week 4: AI Analysis Service
 - Week 5: Orchestrator & Testing
 - Week 6: Migration & Validation
+
+## ETL Process Checklist
+
+This checklist details the expected logs and steps from the original implementation. Use this to verify the new implementation maintains the same functionality.
+
+### 1. Initialization
+- [ ] Log: "Pipeline initialized"
+- [ ] Log: Spider name "nsw gov jobs" launched
+- [ ] Log: Supabase connection test successful
+- [ ] Log: NSW Capability Framework initialization started
+- [ ] Log: Found X capabilities in framework definition
+- [ ] Log: Successfully initialized NSW Capability Framework
+
+### 2. Page Loading and Setup
+- [ ] Log: Loading initial URL
+- [ ] Log: Current URL after navigation
+- [ ] Log: Found page size selector
+- [ ] Log: Successfully set page size
+- [ ] Log: Found X job cards on initial page
+
+### 3. Job Scraping (Per Page)
+- [ ] Log: Processing page X, current job count: Y/Z
+- [ ] Log: Found X job cards on page Y
+- [ ] For each job:
+  - [ ] Log: Processing job listing: {jobId, title}
+  - [ ] Log: Scraping details for job {jobId}
+  - [ ] Log: Found job details using selector
+  - [ ] Log: Extracted job details with title, department, description length
+  - [ ] Log: Found X documents for job {jobId} (if any)
+
+### 4. Data Processing (Per Job)
+- [ ] Log: Processing job {jobId}
+- [ ] Log: Company upsert result
+- [ ] Log: Job details stored
+- [ ] Log: Role stored with ID
+- [ ] Log: Analyzing job description (X characters)
+- [ ] Log: AI analysis results with capabilities and skills counts
+- [ ] Log: Successfully processed job {jobId}
+
+### 5. Database Operations
+- [ ] Log: Successfully upserted company
+- [ ] Log: Successfully upserted job
+- [ ] Log: Successfully upserted role
+- [ ] Log: Successfully upserted capabilities
+- [ ] Log: Successfully upserted skills
+- [ ] Log: Successfully linked capabilities to role
+- [ ] Log: Successfully linked skills to role
+
+### 6. Taxonomy Processing
+- [ ] Log: Processing role taxonomies
+- [ ] Log: Taxonomy processing completed successfully
+
+### 7. Migration to Live DB
+- [ ] Log: Starting migration from staging to live DB
+- [ ] Log: Migrated X companies to live DB
+- [ ] Log: Migrated X jobs to live DB
+- [ ] Log: Migrated X roles to live DB
+- [ ] Log: Migrated X capabilities to live DB
+- [ ] Log: Migrated X skills to live DB
+- [ ] Log: Successfully completed migration from staging to live DB
+
+### 8. Processing Stats
+- [ ] Log: ETL Processing Summary with counts for:
+  - Companies
+  - Roles
+  - Jobs
+  - Capabilities
+  - Skills
+  - Role Capabilities
+  - Role Skills
+
+### 9. Final Pipeline Stats
+- [ ] Log: Pipeline completed successfully with metrics:
+  - jobsScraped
+  - jobsProcessed
+  - jobsStored
+  - failedScrapes
+  - failedProcesses
+  - failedStorage
+  - startTime
+  - endTime
+  - totalDuration
+  - errors (if any)
+
+### Error Handling Throughout
+- [ ] All errors should be logged with:
+  - Error message
+  - Stack trace
+  - Additional context (jobId, URL, etc.)
+  - Error details/cause if available
+
+### Rate Limiting
+- [ ] Delay between job detail requests (2000ms base + random jitter up to 1000ms)
+- [ ] Delay between page navigations
+- [ ] Delay between API calls (OpenAI, document downloads)
