@@ -39,17 +39,18 @@ import os from 'os';
 
 interface Capability {
   name: string;
-  level: string;
+  level: 'foundational' | 'intermediate' | 'adept' | 'advanced' | 'highly advanced';
   description: string;
-  behavioral_indicators: string[];
-  relevance?: number;
+  relevance: number;
+  behavioral_indicators?: string[];
 }
 
 interface Skill {
   name: string;
   description: string;
-  category: string;
+  category: 'Technical' | 'Domain Knowledge' | 'Soft Skills';
   relevance?: number;
+  text?: string;
 }
 
 interface DocumentAnalysis {
@@ -314,8 +315,33 @@ export class StorageService implements IStorageService {
       if (jobError) throw jobError;
 
       // Store capabilities and skills from both job and documents
-      await this.storeCapabilityRecords(job, documentAnalysis.capabilities);
-      await this.storeSkillRecords(job, documentAnalysis.skills);
+      const allCapabilities = [
+        ...(job.capabilities?.capabilities || []).map(cap => ({
+          ...cap,
+          behavioral_indicators: []
+        })),
+        ...documentAnalysis.capabilities
+      ];
+
+      const allSkills = [
+        ...(job.capabilities?.skills || []),
+        ...documentAnalysis.skills,
+        ...(job.taxonomy?.technicalSkills || []).map(skill => ({
+          name: skill,
+          description: skill,
+          category: 'Technical' as const
+        })),
+        ...(job.taxonomy?.softSkills || []).map(skill => ({
+          name: skill,
+          description: skill,
+          category: 'Soft Skills' as const
+        }))
+      ];
+
+      this.logger.info(`Storing ${allCapabilities.length} capabilities and ${allSkills.length} skills for job ${jobId}`);
+
+      await this.storeCapabilityRecords(job, allCapabilities);
+      await this.storeSkillRecords(job, allSkills);
 
       this.metrics.successfulStores++;
       this.metrics.totalStored++;
@@ -1064,123 +1090,124 @@ export class StorageService implements IStorageService {
   }
 
   /**
-   * Store skill record in staging
+   * Store skill records
    */
-  private async storeSkillRecord(skill: { name: string; description: string; category: string; company_id: string; raw_data: any }): Promise<any[]> {
-    try {
-      // First check if skill exists
-      const { data: existingSkill, error: fetchError } = await this.stagingClient
-        .from('skills')
-        .select()
-        .eq('name', skill.name)
-        .eq('company_id', skill.company_id)
-        .maybeSingle();
+  private async storeSkillRecords(job: ProcessedJob, skills: Skill[]): Promise<void> {
+    // Get the company first
+    const { data: companyData, error: companyError } = await this.stagingClient
+      .from('companies')
+      .select('id')
+      .eq('name', job.jobDetails.agency)
+      .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        throw fetchError;
-      }
-
-      const skillData = {
-        name: skill.name,
-        description: skill.description,
-        source: 'job_description',
-        is_occupation_specific: true,
-        company_id: skill.company_id,
-        category: skill.category,
-        sync_status: 'pending',
-        last_synced_at: null,
-        raw_data: skill.raw_data
-      };
-
-      if (existingSkill) {
-        const { data, error: updateError } = await this.stagingClient
-          .from('skills')
-          .update(skillData)
-          .eq('id', existingSkill.id)
-          .select();
-
-        if (updateError) throw updateError;
-        return data;
-      } else {
-        const { data, error: insertError } = await this.stagingClient
-          .from('skills')
-          .insert(skillData)
-          .select();
-
-        if (insertError) throw insertError;
-        return data;
-      }
-    } catch (error) {
-      this.logger.error('Error storing skill record:', error);
-      throw error;
+    if (companyError) {
+      this.logger.error('Error fetching company:', companyError);
+      throw companyError;
     }
-  }
 
-  /**
-   * Store role capability relationship in staging
-   */
-  private async storeRoleCapability(roleId: string, capabilityId: string, capabilityType: string, level: string): Promise<void> {
-    try {
-      const { error } = await this.stagingClient
-        .from('role_capabilities')
-        .upsert({
-          role_id: roleId,
-          capability_id: capabilityId,
-          capability_type: capabilityType,
-          level: level,
-          sync_status: 'pending',
-          last_synced_at: null
-        }, {
-          onConflict: 'role_id,capability_id'
-        });
-
-      if (error) throw error;
-      this.logger.info(`Successfully linked capability ${capabilityId} to role ${roleId}`);
-    } catch (error) {
-      const err = error as Error;
-      this.logger.error('Error storing role capability:', {
-        error: {
-          message: err.message,
-          stack: err.stack,
-          details: err
-        },
-        roleId,
-        capabilityId
-      });
-      throw error;
+    if (!companyData) {
+      this.logger.error('Company not found:', job.jobDetails.agency);
+      throw new Error('Company not found');
     }
-  }
 
-  /**
-   * Store role skill relationship in staging
-   */
-  private async storeRoleSkill(roleId: string, skillId: string): Promise<void> {
-    try {
-      const { error } = await this.stagingClient
-        .from('role_skills')
-        .upsert({
-          role_id: roleId,
-          skill_id: skillId,
-          sync_status: 'pending',
-          last_synced_at: null
-        }, {
-          onConflict: 'role_id,skill_id'
-        });
+    // Get the role ID
+    const { data: roleData, error: roleError } = await this.stagingClient
+      .from('roles')
+      .select('id')
+      .eq('title', job.jobDetails.title)
+      .eq('company_id', companyData.id)
+      .single();
 
-      if (error) throw error;
-      this.logger.info(`Successfully linked skill ${skillId} to role ${roleId}`);
-    } catch (error) {
-      const err = error as Error;
-      this.logger.error('Error storing role skill:', {
-        error: {
-          message: err.message,
-          stack: err.stack,
-          details: err
-        },
-        roleId,
-        skillId
+    if (roleError) {
+      this.logger.error('Error fetching role:', roleError);
+      throw roleError;
+    }
+
+    if (!roleData) {
+      this.logger.error('Role not found:', {
+        title: job.jobDetails.title,
+        company: job.jobDetails.agency
       });
-      throw error;
+      throw new Error('Role not found');
+    }
+
+    const roleId = roleData.id;
+    this.logger.info(`Found role ID ${roleId} for job ${job.jobDetails.id}`);
+
+    const skillRecords = skills.map(skill => ({
+      name: skill.name || skill.text,
+      description: skill.description || skill.text || '',
+      source: 'job_description',
+      is_occupation_specific: true,
+      category: skill.category || 'Technical',
+      company_id: companyData.id,
+      sync_status: 'pending',
+      last_synced_at: null,
+      raw_data: skill
+    }));
+
+    if (skillRecords.length === 0) {
+      this.logger.info(`No skills to store for job ${job.jobDetails.id}`);
+      return;
+    }
+
+    // Store skills
+    for (const record of skillRecords) {
+      try {
+        // Store skill
+        const { data: skillData, error: skillError } = await this.stagingClient
+          .from('skills')
+          .upsert({
+            name: record.name,
+            description: record.description,
+            source: record.source,
+            is_occupation_specific: record.is_occupation_specific,
+            category: record.category,
+            company_id: record.company_id,
+            sync_status: record.sync_status,
+            last_synced_at: record.last_synced_at,
+            raw_data: record.raw_data
+          }, {
+            onConflict: 'name,company_id'
+          })
+          .select()
+          .single();
+
+        if (skillError) {
+          this.logger.error('Error storing skill:', { error: skillError, skill: record.name });
+          continue;
+        }
+
+        if (!skillData) {
+          this.logger.error('No skill data returned after upsert:', record.name);
+          continue;
+        }
+
+        // Link skill to role
+        const { error: linkError } = await this.stagingClient
+          .from('role_skills')
+          .upsert({
+            role_id: roleId,
+            skill_id: skillData.id,
+            sync_status: 'pending',
+            last_synced_at: null
+          }, {
+            onConflict: 'role_id,skill_id'
+          });
+
+        if (linkError) {
+          this.logger.error('Error linking skill to role:', {
+            error: linkError,
+            skill: record.name,
+            roleId
+          });
+          continue;
+        }
+
+        this.logger.info(`Successfully stored and linked skill ${record.name} to role ${roleId}`);
+      } catch (error) {
+        this.logger.error('Error processing skill:', { error, skill: record.name });
+      }
     }
   }
 
@@ -1188,6 +1215,47 @@ export class StorageService implements IStorageService {
    * Store capability records
    */
   private async storeCapabilityRecords(job: ProcessedJob, capabilities: Capability[]): Promise<void> {
+    // Get the company first
+    const { data: companyData, error: companyError } = await this.stagingClient
+      .from('companies')
+      .select('id')
+      .eq('name', job.jobDetails.agency)
+      .single();
+
+    if (companyError) {
+      this.logger.error('Error fetching company:', companyError);
+      throw companyError;
+    }
+
+    if (!companyData) {
+      this.logger.error('Company not found:', job.jobDetails.agency);
+      throw new Error('Company not found');
+    }
+
+    // Get the role ID
+    const { data: roleData, error: roleError } = await this.stagingClient
+      .from('roles')
+      .select('id')
+      .eq('title', job.jobDetails.title)
+      .eq('company_id', companyData.id)
+      .single();
+
+    if (roleError) {
+      this.logger.error('Error fetching role:', roleError);
+      throw roleError;
+    }
+
+    if (!roleData) {
+      this.logger.error('Role not found:', {
+        title: job.jobDetails.title,
+        company: job.jobDetails.agency
+      });
+      throw new Error('Role not found');
+    }
+
+    const roleId = roleData.id;
+    this.logger.info(`Found role ID ${roleId} for job ${job.jobDetails.id}`);
+
     const capabilityRecords = capabilities.map(cap => ({
       name: cap.name,
       description: cap.description,
@@ -1208,62 +1276,60 @@ export class StorageService implements IStorageService {
     // Store capabilities
     for (const record of capabilityRecords) {
       try {
-        const capabilityData = await this.storeCapabilityRecord({
-          name: record.name,
-          description: record.description,
-          level: record.level,
-          raw_data: record.raw_data
-        });
-        
-        if (capabilityData && capabilityData[0]) {
-          // Link capability to role
-          await this.storeRoleCapability(job.jobDetails.id, capabilityData[0].id, 'core', record.level);
-          this.logger.info(`Linked capability ${record.name} to role ${job.jobDetails.id}`);
+        // Store capability
+        const { data: capabilityData, error: capabilityError } = await this.stagingClient
+          .from('capabilities')
+          .upsert({
+            name: record.name,
+            description: record.description,
+            source_framework: record.source_framework,
+            is_occupation_specific: record.is_occupation_specific,
+            normalized_key: record.normalized_key,
+            sync_status: record.sync_status,
+            last_synced_at: record.last_synced_at,
+            raw_data: record.raw_data
+          }, {
+            onConflict: 'name'
+          })
+          .select()
+          .single();
+
+        if (capabilityError) {
+          this.logger.error('Error storing capability:', { error: capabilityError, capability: record.name });
+          continue;
         }
+
+        if (!capabilityData) {
+          this.logger.error('No capability data returned after upsert:', record.name);
+          continue;
+        }
+
+        // Link capability to role
+        const { error: linkError } = await this.stagingClient
+          .from('role_capabilities')
+          .upsert({
+            role_id: roleId,
+            capability_id: capabilityData.id,
+            capability_type: 'core',
+            level: record.level,
+            sync_status: 'pending',
+            last_synced_at: null
+          }, {
+            onConflict: 'role_id,capability_id'
+          });
+
+        if (linkError) {
+          this.logger.error('Error linking capability to role:', {
+            error: linkError,
+            capability: record.name,
+            roleId
+          });
+          continue;
+        }
+
+        this.logger.info(`Successfully stored and linked capability ${record.name} to role ${roleId}`);
       } catch (error) {
         this.logger.error('Error processing capability:', { error, capability: record.name });
-      }
-    }
-  }
-
-  /**
-   * Store skill records
-   */
-  private async storeSkillRecords(job: ProcessedJob, skills: Skill[]): Promise<void> {
-    const skillRecords = skills.map(skill => ({
-      name: skill.name,
-      description: skill.description,
-      source: 'job_description',
-      is_occupation_specific: true,
-      category: skill.category,
-      sync_status: 'pending',
-      last_synced_at: null,
-      raw_data: skill
-    }));
-
-    if (skillRecords.length === 0) {
-      this.logger.info(`No skills to store for job ${job.jobDetails.id}`);
-      return;
-    }
-
-    // Store skills
-    for (const record of skillRecords) {
-      try {
-        const skillData = await this.storeSkillRecord({
-          name: record.name,
-          description: record.description,
-          category: record.category || 'Technical',
-          company_id: job.jobDetails.agency,
-          raw_data: record.raw_data
-        });
-        
-        if (skillData && skillData[0]) {
-          // Link skill to role
-          await this.storeRoleSkill(job.jobDetails.id, skillData[0].id);
-          this.logger.info(`Linked skill ${record.name} to role ${job.jobDetails.id}`);
-        }
-      } catch (error) {
-        this.logger.error('Error processing skill:', { error, skill: record.name });
       }
     }
   }
@@ -1419,6 +1485,127 @@ export class StorageService implements IStorageService {
       this.logger.info('Successfully cleaned up storage service');
     } catch (error) {
       this.logger.error('Error cleaning up storage service:', error);
+    }
+  }
+
+  /**
+   * Store role capability relationship in staging
+   */
+  private async storeRoleCapability(roleId: string, capabilityId: string, capabilityType: string, level: string): Promise<void> {
+    try {
+      const { error } = await this.stagingClient
+        .from('role_capabilities')
+        .upsert({
+          role_id: roleId,
+          capability_id: capabilityId,
+          capability_type: capabilityType,
+          level: level,
+          sync_status: 'pending',
+          last_synced_at: null
+        }, {
+          onConflict: 'role_id,capability_id'
+        });
+
+      if (error) throw error;
+      this.logger.info(`Successfully linked capability ${capabilityId} to role ${roleId}`);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error('Error storing role capability:', {
+        error: {
+          message: err.message,
+          stack: err.stack,
+          details: err
+        },
+        roleId,
+        capabilityId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Store role skill relationship in staging
+   */
+  private async storeRoleSkill(roleId: string, skillId: string): Promise<void> {
+    try {
+      const { error } = await this.stagingClient
+        .from('role_skills')
+        .upsert({
+          role_id: roleId,
+          skill_id: skillId,
+          sync_status: 'pending',
+          last_synced_at: null
+        }, {
+          onConflict: 'role_id,skill_id'
+        });
+
+      if (error) throw error;
+      this.logger.info(`Successfully linked skill ${skillId} to role ${roleId}`);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error('Error storing role skill:', {
+        error: {
+          message: err.message,
+          stack: err.stack,
+          details: err
+        },
+        roleId,
+        skillId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Store skill record in staging
+   */
+  private async storeSkillRecord(skill: { name: string; description: string; category: string; company_id: string; raw_data: any }): Promise<any[]> {
+    try {
+      // First check if skill exists
+      const { data: existingSkill, error: fetchError } = await this.stagingClient
+        .from('skills')
+        .select()
+        .eq('name', skill.name)
+        .eq('company_id', skill.company_id)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      const skillData = {
+        name: skill.name,
+        description: skill.description,
+        source: 'job_description',
+        is_occupation_specific: true,
+        company_id: skill.company_id,
+        category: skill.category,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: skill.raw_data
+      };
+
+      if (existingSkill) {
+        const { data, error: updateError } = await this.stagingClient
+          .from('skills')
+          .update(skillData)
+          .eq('id', existingSkill.id)
+          .select();
+
+        if (updateError) throw updateError;
+        return data;
+      } else {
+        const { data, error: insertError } = await this.stagingClient
+          .from('skills')
+          .insert(skillData)
+          .select();
+
+        if (insertError) throw insertError;
+        return data;
+      }
+    } catch (error) {
+      this.logger.error('Error storing skill record:', error);
+      throw error;
     }
   }
 } 
