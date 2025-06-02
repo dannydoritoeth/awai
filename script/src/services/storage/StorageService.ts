@@ -29,6 +29,8 @@ import {
   QueryOptions
 } from './types.js';
 import { ProcessedJob } from '../processor/types.js';
+import path from 'path';
+import fs from 'fs';
 
 export class StorageService implements IStorageService {
   private liveClient: SupabaseClient;
@@ -179,6 +181,9 @@ export class StorageService implements IStorageService {
 
       this.logger.info('Database query successful');
 
+      // Initialize NSW Capability Framework
+      await this.initializeNSWCapabilityFramework();
+
       // Try to get or create institution
       this.logger.info('Setting up institution...');
       const institutionId = await this.getOrCreateInstitution();
@@ -191,6 +196,59 @@ export class StorageService implements IStorageService {
       if (error instanceof Error) {
         this.logger.error('Error stack:', error.stack);
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize the NSW Capability Framework
+   */
+  private async initializeNSWCapabilityFramework(): Promise<void> {
+    this.logger.info('Initializing NSW Capability Framework...');
+    try {
+      // Load capabilities from JSON file
+      const capabilitiesPath = path.join(process.cwd(), 'database', 'seed', 'capabilities.json');
+      
+      // Check if file exists
+      if (!fs.existsSync(capabilitiesPath)) {
+        this.logger.warn('Capabilities file not found:', capabilitiesPath);
+        return;
+      }
+
+      const capabilitiesData = JSON.parse(fs.readFileSync(capabilitiesPath, 'utf8'));
+      this.logger.info(`Found ${capabilitiesData.length} capabilities in framework definition`);
+
+      // Upsert each capability
+      for (const capability of capabilitiesData) {
+        const { error } = await this.stagingClient
+          .from('capabilities')
+          .upsert({
+            id: capability.id,
+            name: capability.name,
+            group_name: capability.group_name,
+            description: capability.description,
+            source_framework: capability.source_framework || 'NSW Public Sector Capability Framework',
+            is_occupation_specific: capability.is_occupation_specific || false,
+            sync_status: 'pending',
+            last_synced_at: null
+          }, {
+            onConflict: 'id'
+          });
+
+        if (error) {
+          this.logger.error('Error upserting capability:', {
+            capability: capability.name,
+            error
+          });
+          throw error;
+        }
+
+        this.logger.info(`Initialized capability: ${capability.name}`);
+      }
+
+      this.logger.info('Successfully initialized NSW Capability Framework');
+    } catch (error) {
+      this.logger.error('Error initializing NSW Capability Framework:', error);
       throw error;
     }
   }
