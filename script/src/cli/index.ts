@@ -103,7 +103,7 @@ async function main() {
       continueOnError: true
     });
 
-    logger.info('Pipeline execution complete:', result);
+    logger.info('Pipeline execution complete');
   } catch (error) {
     console.error('Pipeline execution failed:', error);
     process.exit(1);
