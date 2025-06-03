@@ -67,6 +67,7 @@ export interface AIAnalyzerConfig {
       function_area: string;
       classification_level: string;
     }) => Promise<{ id: string }>;
+    linkRoleToGeneralRole: (roleId: string, generalRoleId: string) => Promise<void>;
   };
 }
 
@@ -439,9 +440,23 @@ export class AIAnalyzer {
           result.generalRole.id = storedRole.id;
           result.generalRole.isNewRole = false;
           
+          // Link the role to the general role
+          if (job.roleId) {
+            await this.config.storageService.linkRoleToGeneralRole(job.roleId, storedRole.id);
+            this.logger.info(`Linked role ${job.roleId} to general role ${storedRole.id}`);
+          }
+          
           this.logger.info(`Stored new general role: ${storedRole.id}`);
         } catch (error) {
           this.logger.warn('Failed to store new general role:', error);
+        }
+      } else if (result.generalRole && typeof result.generalRole.id === 'string' && result.generalRole.id.length > 0 && job.roleId) {
+        // If we matched an existing general role, link it
+        try {
+          await this.config.storageService.linkRoleToGeneralRole(job.roleId, result.generalRole.id);
+          this.logger.info(`Linked role ${job.roleId} to existing general role ${result.generalRole.id}`);
+        } catch (error) {
+          this.logger.warn('Failed to link role to general role:', error);
         }
       }
       
