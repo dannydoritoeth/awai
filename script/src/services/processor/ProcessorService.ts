@@ -258,16 +258,6 @@ export class ProcessorService implements IProcessorService {
     const failed = results.filter(r => r === undefined).length;
     this.logger.info(`Batch processing complete: ${succeeded} succeeded, ${failed} failed`);
 
-    // Migrate processed data to live DB
-    try {
-      this.logger.info('Starting migration to live DB...');
-      await this.storageService.migrateToLiveDB();
-      this.logger.info('Migration to live DB completed successfully');
-    } catch (error) {
-      this.logger.error('Error during migration to live DB:', error);
-      // Don't throw here - we still want to return the processed results
-    }
-
     return results;
   }
 

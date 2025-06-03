@@ -204,14 +204,14 @@ export interface JobDetails {
   requirements: string[];
   notes: string[];
   aboutUs: string;
-  url: string;
   salary: string;
   closingDate: string;
   postedDate: string;
-  classification?: string;
-  roleId?: string;
-  documents?: JobDocument[];
+  url: string;
+  jobReference: string;
+  documents?: string[];
   embedding?: number[];
+  classification?: string;
 }
 
 // Re-export JobDocument for use in StorageService

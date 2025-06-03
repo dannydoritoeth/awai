@@ -621,50 +621,6 @@ export class StorageService implements IStorageService {
   }
 
   /**
-   * Get record counts from database
-   */
-  private async getTableCounts(client: SupabaseClient): Promise<{
-    companies: number;
-    roles: number;
-    jobs: number;
-    capabilities: number;
-    skills: number;
-    roleCapabilities: number;
-    roleSkills: number;
-    generalRoles: number;
-  }> {
-    const counts = {
-      companies: 0,
-      roles: 0,
-      jobs: 0,
-      capabilities: 0,
-      skills: 0,
-      roleCapabilities: 0,
-      roleSkills: 0,
-      generalRoles: 0
-    };
-
-    try {
-      const tables = ['companies', 'roles', 'jobs', 'capabilities', 'skills', 'role_capabilities', 'role_skills', 'general_roles'];
-      
-      for (const table of tables) {
-        const { count, error } = await client
-          .from(table)
-          .select('*', { count: 'exact', head: true });
-
-        if (error) throw error;
-
-        const key = table.replace(/_(.)/g, m => m[1].toUpperCase()) as keyof typeof counts;
-        counts[key] = count || 0;
-      }
-    } catch (error) {
-      this.logger.error('Error getting table counts:', error);
-    }
-
-    return counts;
-  }
-
-  /**
    * Log processing stats for both staging and live databases
    */
   async logProcessingStats(): Promise<void> {
@@ -682,7 +638,6 @@ export class StorageService implements IStorageService {
       // Log the results
       this.logger.info('Staging Database Records:');
       this.logger.info(`✓ Companies: ${stagingCounts.companies}`);
-      this.logger.info(`✓ General Roles: ${stagingCounts.generalRoles}`);
       this.logger.info(`✓ Roles: ${stagingCounts.roles}`);
       this.logger.info(`✓ Jobs: ${stagingCounts.jobs}`);
       this.logger.info(`✓ Capabilities: ${stagingCounts.capabilities}`);
@@ -692,7 +647,6 @@ export class StorageService implements IStorageService {
 
       this.logger.info('\nLive Database Records:');
       this.logger.info(`✓ Companies: ${liveCounts.companies}`);
-      this.logger.info(`✓ General Roles: ${liveCounts.generalRoles}`);
       this.logger.info(`✓ Roles: ${liveCounts.roles}`);
       this.logger.info(`✓ Jobs: ${liveCounts.jobs}`);
       this.logger.info(`✓ Capabilities: ${liveCounts.capabilities}`);
@@ -703,7 +657,6 @@ export class StorageService implements IStorageService {
       // Log any mismatches
       const mismatches = [];
       if (stagingCounts.companies !== liveCounts.companies) mismatches.push('Companies');
-      if (stagingCounts.generalRoles !== liveCounts.generalRoles) mismatches.push('General Roles');
       if (stagingCounts.roles !== liveCounts.roles) mismatches.push('Roles');
       if (stagingCounts.jobs !== liveCounts.jobs) mismatches.push('Jobs');
       if (stagingCounts.capabilities !== liveCounts.capabilities) mismatches.push('Capabilities');
@@ -722,287 +675,45 @@ export class StorageService implements IStorageService {
   }
 
   /**
-   * Migrate data from staging to live DB
+   * Get record counts from database
    */
-  async migrateToLiveDB(): Promise<void> {
+  private async getTableCounts(client: SupabaseClient): Promise<{
+    companies: number;
+    roles: number;
+    jobs: number;
+    capabilities: number;
+    skills: number;
+    roleCapabilities: number;
+    roleSkills: number;
+  }> {
+    const counts = {
+      companies: 0,
+      roles: 0,
+      jobs: 0,
+      capabilities: 0,
+      skills: 0,
+      roleCapabilities: 0,
+      roleSkills: 0
+    };
+
     try {
-      this.logger.info('Starting migration from staging to live DB...');
+      const tables = ['companies', 'roles', 'jobs', 'capabilities', 'skills', 'role_capabilities', 'role_skills'];
+      
+      for (const table of tables) {
+        const { count, error } = await client
+          .from(table)
+          .select('*', { count: 'exact', head: true });
 
-      // 1. Migrate companies first (since they're referenced by other entities)
-      const { data: companies, error: companiesError } = await this.stagingClient
-        .from('companies')
-        .select('*')
-        .eq('sync_status', 'pending');
+        if (error) throw error;
 
-      if (companiesError) throw companiesError;
-
-      if (companies && companies.length > 0) {
-        const { error: liveCompaniesError } = await this.liveClient
-          .from('companies')
-          .upsert(
-            companies.map(company => ({
-              ...company,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveCompaniesError) throw liveCompaniesError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('companies')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', companies.map(c => c.id));
-
-        this.logger.info(`Migrated ${companies.length} companies to live DB`);
+        const key = table.replace(/_(.)/g, m => m[1].toUpperCase()) as keyof typeof counts;
+        counts[key] = count || 0;
       }
-
-      // 2. Migrate capabilities (before role_capabilities)
-      this.logger.info('Starting capabilities migration...');
-      const { data: capabilities, error: capsError } = await this.stagingClient
-        .from('capabilities')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (capsError) throw capsError;
-
-      if (capabilities && capabilities.length > 0) {
-        const { error: liveCapabilitiesError } = await this.liveClient
-          .from('capabilities')
-          .upsert(
-            capabilities.map(cap => ({
-              ...cap,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveCapabilitiesError) throw liveCapabilitiesError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('capabilities')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', capabilities.map(c => c.id));
-
-        this.logger.info(`Migrated ${capabilities.length} capabilities to live DB`);
-      }
-
-      // 3. Migrate skills (before role_skills)
-      this.logger.info('Starting skills migration...');
-      const { data: skills, error: skillsError } = await this.stagingClient
-        .from('skills')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (skillsError) throw skillsError;
-
-      if (skills && skills.length > 0) {
-        const { error: liveSkillsError } = await this.liveClient
-          .from('skills')
-          .upsert(
-            skills.map(skill => ({
-              ...skill,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveSkillsError) throw liveSkillsError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('skills')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', skills.map(s => s.id));
-
-        this.logger.info(`Migrated ${skills.length} skills to live DB`);
-      }
-
-      // 4. Migrate general roles (before roles due to foreign key constraint)
-      this.logger.info('Starting general roles migration...');
-      const { data: generalRoles, error: generalRolesError } = await this.stagingClient
-        .from('general_roles')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (generalRolesError) throw generalRolesError;
-
-      if (generalRoles && generalRoles.length > 0) {
-        const { error: liveGeneralRolesError } = await this.liveClient
-          .from('general_roles')
-          .upsert(
-            generalRoles.map(gr => ({
-              ...gr,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveGeneralRolesError) throw liveGeneralRolesError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('general_roles')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', generalRoles.map(gr => gr.id));
-
-        this.logger.info(`Migrated ${generalRoles.length} general roles to live DB`);
-      }
-
-      // 5. Migrate roles (after general_roles, before jobs)
-      const { data: roles, error: rolesError } = await this.stagingClient
-        .from('roles')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (rolesError) throw rolesError;
-
-      if (roles && roles.length > 0) {
-        const { error: liveRolesError } = await this.liveClient
-          .from('roles')
-          .upsert(
-            roles.map(role => ({
-              ...role,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveRolesError) throw liveRolesError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('roles')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', roles.map(r => r.id));
-
-        this.logger.info(`Migrated ${roles.length} roles to live DB`);
-      }
-
-      // 6. Migrate jobs (after roles)
-      const { data: jobs, error: jobsError } = await this.stagingClient
-        .from('jobs')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (jobsError) throw jobsError;
-
-      if (jobs && jobs.length > 0) {
-        const { error: liveJobsError } = await this.liveClient
-          .from('jobs')
-          .upsert(
-            jobs.map(job => ({
-              ...job,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveJobsError) throw liveJobsError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('jobs')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', jobs.map(j => j.id));
-
-        this.logger.info(`Migrated ${jobs.length} jobs to live DB`);
-      }
-
-      // 7. Migrate role capabilities
-      const { data: roleCapabilities, error: roleCapsError } = await this.stagingClient
-        .from('role_capabilities')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (roleCapsError) throw roleCapsError;
-
-      if (roleCapabilities && roleCapabilities.length > 0) {
-        const { error: liveRoleCapsError } = await this.liveClient
-          .from('role_capabilities')
-          .upsert(
-            roleCapabilities.map(rc => ({
-              ...rc,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveRoleCapsError) throw liveRoleCapsError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('role_capabilities')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', roleCapabilities.map(rc => rc.id));
-
-        this.logger.info(`Migrated ${roleCapabilities.length} role capabilities to live DB`);
-      }
-
-      // 8. Migrate role skills
-      const { data: roleSkills, error: roleSkillsError } = await this.stagingClient
-        .from('role_skills')
-        .select('*')
-        .eq('sync_status', 'pending');
-
-      if (roleSkillsError) throw roleSkillsError;
-
-      if (roleSkills && roleSkills.length > 0) {
-        const { error: liveRoleSkillsError } = await this.liveClient
-          .from('role_skills')
-          .upsert(
-            roleSkills.map(rs => ({
-              ...rs,
-              sync_status: 'synced',
-              last_synced_at: new Date().toISOString()
-            }))
-          );
-
-        if (liveRoleSkillsError) throw liveRoleSkillsError;
-
-        // Update sync status in staging
-        await this.stagingClient
-          .from('role_skills')
-          .update({
-            sync_status: 'synced',
-            last_synced_at: new Date().toISOString()
-          })
-          .in('id', roleSkills.map(rs => rs.id));
-
-        this.logger.info(`Migrated ${roleSkills.length} role skills to live DB`);
-      }
-
-      this.logger.info('Successfully completed migration from staging to live DB');
-
-      // Log final processing stats to verify migration
-      await this.logProcessingStats();
     } catch (error) {
-      this.logger.error('Error migrating data to live DB:', error);
-      throw error;
+      this.logger.error('Error getting table counts:', error);
     }
+
+    return counts;
   }
 
   /**
@@ -2308,9 +2019,7 @@ export class StorageService implements IStorageService {
         title: role.title,
         description: role.description,
         function_area: role.function_area,
-        classification_level: role.classification_level,
-        sync_status: 'pending',
-        last_synced_at: null
+        classification_level: role.classification_level
       };
 
       if (role.id) {
