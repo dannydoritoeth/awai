@@ -18,11 +18,13 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 import { ISpiderService, JobListing, JobDetails, SpiderConfig, SpiderMetrics, JobDocument } from './types.js';
 import { Logger } from '../../utils/logger.js';
 import { delay } from '../../utils/helpers.js';
+import path from 'path';
+import fs from 'fs';
 
 export class SpiderService implements ISpiderService {
   private browser: Browser | null = null;
   private metrics: SpiderMetrics;
-  private baseUrl = "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
+  private baseUrl = process.env.NSW_JOBS_URL || "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
 
   constructor(
     private config: SpiderConfig,
@@ -227,6 +229,40 @@ export class SpiderService implements ISpiderService {
     }
   }
 
+  private async saveTestData(jobListing: JobListing, page: Page, jobDetails: JobDetails) {
+    if (process.env.SAVE_TEST_DATA !== 'true') return;
+
+    const testDataDir = path.join(process.cwd(), 'test', 'data', 'jobs');
+    const jobDir = path.join(testDataDir, jobListing.id);
+
+    // Create directories if they don't exist
+    await fs.promises.mkdir(jobDir, { recursive: true });
+
+    // Save the raw HTML content
+    const content = await page.content();
+    await fs.promises.writeFile(
+      path.join(jobDir, 'raw.html'),
+      content,
+      'utf-8'
+    );
+
+    // Save the job details
+    await fs.promises.writeFile(
+      path.join(jobDir, 'details.json'),
+      JSON.stringify(jobDetails, null, 2),
+      'utf-8'
+    );
+
+    // Save the job listing data used to fetch the details
+    await fs.promises.writeFile(
+      path.join(jobDir, 'listing.json'),
+      JSON.stringify(jobListing, null, 2),
+      'utf-8'
+    );
+
+    this.logger.info(`Saved test data for job ${jobListing.id} to ${jobDir}`);
+  }
+
   /**
    * Scrape detailed job information from a specific job listing
    */
@@ -387,6 +423,9 @@ export class SpiderService implements ISpiderService {
           documents
         };
       }, jobListing);
+
+      // Save test data if enabled
+      await this.saveTestData(jobListing, page, details);
 
       // Log found documents
       if (details.documents?.length > 0) {
