@@ -940,6 +940,16 @@ export class StorageService implements IStorageService {
               content = result.value.trim();
               this.logger.info(`Successfully extracted ${content?.length || 0} characters from Word document`);
             }
+
+            // Store document in job_documents table
+            await this.storeJobDocument(jobId, {
+              url: doc.url,
+              title: doc.title,
+              type: doc.type,
+              content_type: contentType || undefined,
+              content: content || undefined
+            });
+
           } finally {
             // Clean up temp file
             try {
@@ -955,34 +965,13 @@ export class StorageService implements IStorageService {
               this.logger.info(`Analyzing document content (${content.length} characters)`);
               const analysis = await this.config.aiService.analyzeText(content);
               
-              // Store document
-              const documentRecord = {
-                job_id: jobId,
+              processedDocs.push({
                 url: doc.url,
+                title: doc.title,
+                type: doc.type,
                 content_type: contentType,
-                content: content,
-                analysis: analysis,
-                processed_at: new Date()
-              };
-
-              const { data, error } = await this.stagingClient
-                .from('documents')
-                .insert(documentRecord)
-                .select()
-                .single();
-
-              if (error) {
-                this.logger.error('Error storing document:', {
-                  error,
-                  jobId,
-                  document: doc,
-                  table: 'documents',
-                  record: documentRecord
-                });
-                throw error;
-              }
-
-              processedDocs.push(data);
+                analysis: analysis
+              });
               
               // Combine analysis results
               if (analysis) {
@@ -1033,6 +1022,60 @@ export class StorageService implements IStorageService {
           details: err
         }
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Store job document record
+   */
+  private async storeJobDocument(jobId: string, document: {
+    url: string;
+    title?: string;
+    type?: string;
+    content_type?: string;
+    content?: string;
+  }): Promise<void> {
+    try {
+      const documentRecord = {
+        job_id: jobId,
+        document_url: document.url,
+        document_type: document.type || 'doc',
+        title: document.title,
+        url: document.url,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: {
+          url: document.url,
+          title: document.title,
+          type: document.type,
+          content_type: document.content_type,
+          content: document.content
+        }
+      };
+
+      const { error } = await this.stagingClient
+        .from('job_documents')
+        .upsert(documentRecord, {
+          onConflict: 'job_id,document_url'
+        });
+
+      if (error) {
+        this.logger.error('Error storing job document:', {
+          error,
+          jobId,
+          document: documentRecord
+        });
+        throw error;
+      }
+
+      this.logger.info(`Successfully stored document for job ${jobId}:`, {
+        url: document.url,
+        title: document.title,
+        type: document.type
+      });
+    } catch (error) {
+      this.logger.error('Error in storeJobDocument:', error);
       throw error;
     }
   }
