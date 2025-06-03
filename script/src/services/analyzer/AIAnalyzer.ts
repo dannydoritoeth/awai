@@ -20,7 +20,15 @@
  */
 
 import { OpenAI } from 'openai';
-import { CapabilityAnalysisResult, TaxonomyAnalysisResult, capabilityAnalysisPrompt, taxonomyAnalysisPrompt, createCapabilityAnalysisPrompt } from './templates/capabilityAnalysis.js';
+import { 
+  CapabilityAnalysisResult, 
+  createCapabilityAnalysisPrompt
+} from './templates/capabilityAnalysis.js';
+import {
+  TaxonomyAnalysisResult,
+  createTaxonomyAnalysisPrompt,
+  TaxonomyGroup
+} from './templates/taxonomyAnalysis.js';
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
 import { delay } from '../../utils/helpers.js';
@@ -55,6 +63,14 @@ export interface AIAnalyzerConfig {
   };
 }
 
+export interface BatchTaxonomyAnalysisResult {
+  roleTaxonomies: Array<{
+    roleId: string;
+    roleTitle: string;
+    taxonomyIds: string[];
+  }>;
+}
+
 export class AIAnalyzer {
   private openai: OpenAI;
   private maxRetries: number;
@@ -68,6 +84,8 @@ export class AIAnalyzer {
     description: string;
     group_name: string;
   }> = [];
+
+  private taxonomyGroups: TaxonomyGroup[] = [];
 
   constructor(
     private config: AIAnalyzerConfig,
@@ -93,6 +111,14 @@ export class AIAnalyzer {
   }>): Promise<void> {
     this.frameworkCapabilities = capabilities;
     this.logger.info(`Set ${capabilities.length} framework capabilities for analysis`);
+  }
+
+  /**
+   * Set the taxonomy groups for batch analysis
+   */
+  async setTaxonomyGroups(taxonomies: TaxonomyGroup[]): Promise<void> {
+    this.taxonomyGroups = taxonomies;
+    this.logger.info(`Set ${taxonomies.length} taxonomy groups for analysis`);
   }
 
   /**
@@ -203,20 +229,41 @@ export class AIAnalyzer {
   /**
    * Creates a taxonomy analysis of a job posting
    */
-  async createJobSummary(content: string): Promise<TaxonomyAnalysisResult> {
+  async createJobSummary(jobDescription: string, jobId: string): Promise<TaxonomyAnalysisResult> {
+    let systemPromptText = '';
     try {
       const startTime = Date.now();
+
+      if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
+        throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
+      }
+
+      // Create the prompt with the current taxonomy groups
+      const taxonomyData = this.taxonomyGroups.map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description
+      }));
+      systemPromptText = createTaxonomyAnalysisPrompt(taxonomyData);
       
+      // Prepare the content for analysis
+      const userContent = JSON.stringify({
+        roles: [{
+          id: jobId,
+          title: jobDescription
+        }]
+      }, null, 2);
+
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: [
           {
             role: "system",
-            content: taxonomyAnalysisPrompt
+            content: systemPromptText
           },
           {
             role: "user",
-            content
+            content: userContent
           }
         ],
         temperature: this.temperature,
@@ -239,16 +286,16 @@ export class AIAnalyzer {
           model_name: this.model,
           temperature: this.temperature,
           max_tokens: this.maxTokens,
-          system_prompt: taxonomyAnalysisPrompt,
-          user_prompt: content,
+          system_prompt: systemPromptText,
+          user_prompt: userContent,
           messages: [
             {
               role: "system",
-              content: taxonomyAnalysisPrompt
+              content: systemPromptText
             },
             {
               role: "user",
-              content
+              content: userContent
             }
           ],
           response_text: responseContent,
@@ -274,16 +321,16 @@ export class AIAnalyzer {
           model_name: this.model,
           temperature: this.temperature,
           max_tokens: this.maxTokens,
-          system_prompt: taxonomyAnalysisPrompt,
-          user_prompt: content,
+          system_prompt: systemPromptText,
+          user_prompt: jobDescription,
           messages: [
             {
               role: "system",
-              content: taxonomyAnalysisPrompt
+              content: systemPromptText
             },
             {
               role: "user",
-              content
+              content: jobDescription
             }
           ],
           response_text: '',
@@ -292,7 +339,7 @@ export class AIAnalyzer {
         });
       }
 
-      this.logger.error('Error creating job taxonomy:', error);
+      this.logger.error('Error in createJobSummary:', error);
       throw error;
     }
   }
@@ -361,16 +408,142 @@ export class AIAnalyzer {
   /**
    * Analyze job taxonomy
    */
-  async analyzeTaxonomy(job: JobDetails): Promise<TaxonomyAnalysisResult> {
+  async analyzeTaxonomy(job: JobDetails & { roleId: string }): Promise<TaxonomyAnalysisResult> {
     try {
       this.logger.info(`Analyzing taxonomy for job: ${job.title}`);
+      
+      // Prepare the job content
+      const jobContent = [
+        `Title: ${job.title}`,
+        `Agency: ${job.agency}`,
+        `Job Type: ${job.jobType}`,
+        `Location: ${job.location}`,
+        `Description:`,
+        job.description,
+        `Responsibilities:`,
+        ...job.responsibilities.map(r => `- ${r}`),
+        `Requirements:`,
+        ...job.requirements.map(r => `- ${r}`),
+        `Notes:`,
+        ...job.notes.map(n => `- ${n}`),
+        `About Us:`,
+        job.aboutUs
+      ].filter(Boolean).join('\n\n');
+
       const result = await this.retryOperation(
-        () => this.createJobSummary(job.description)
+        () => this.createJobSummary(jobContent, job.roleId)
       );
       this.logger.info(`Taxonomy analysis complete for job ${job.id}`);
       return result;
     } catch (error) {
       this.logger.error(`Error analyzing taxonomy for job ${job.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze taxonomies for a batch of roles
+   */
+  async analyzeBatchTaxonomies(roles: Array<{ id: string; title: string }>): Promise<BatchTaxonomyAnalysisResult> {
+    try {
+      const startTime = Date.now();
+      this.logger.info(`Analyzing taxonomies for ${roles.length} roles`);
+
+      if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
+        throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
+      }
+
+      // Create the prompt with the current taxonomy groups
+      const taxonomyData = this.taxonomyGroups.map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description
+      }));
+      const systemPromptText = createTaxonomyAnalysisPrompt(taxonomyData);
+
+      // Prepare the content for analysis
+      const content = JSON.stringify({
+        roles: roles.map(r => ({
+          id: r.id,
+          title: r.title
+        }))
+      }, null, 2);
+
+      try {
+        const completion = await this.openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            {
+              role: "system",
+              content: systemPromptText
+            },
+            {
+              role: "user",
+              content
+            }
+          ],
+          temperature: this.temperature,
+          max_tokens: this.maxTokens,
+          response_format: { type: "json_object" }
+        });
+
+        const responseContent = completion.choices[0]?.message?.content;
+        if (!responseContent) {
+          throw new Error('No content returned from OpenAI');
+        }
+
+        const result = JSON.parse(responseContent) as BatchTaxonomyAnalysisResult;
+
+        // Store the AI invocation
+        if (this.config.storageService) {
+          await this.config.storageService.storeAIInvocation({
+            action_type: 'analyze_batch_taxonomies',
+            model_provider: 'openai',
+            model_name: this.model,
+            temperature: this.temperature,
+            max_tokens: this.maxTokens,
+            system_prompt: systemPromptText,
+            user_prompt: content,
+            messages: [
+              {
+                role: "system",
+                content: systemPromptText
+              },
+              {
+                role: "user",
+                content
+              }
+            ],
+            response_text: responseContent,
+            response_metadata: {
+              model: completion.model,
+              object: completion.object,
+              created: completion.created,
+              system_fingerprint: completion.system_fingerprint
+            },
+            token_usage: completion.usage,
+            status: 'success',
+            latency_ms: Date.now() - startTime
+          });
+        }
+
+        this.logger.info('Taxonomy analysis complete', {
+          rolesAnalyzed: roles.length,
+          taxonomiesAssigned: result.roleTaxonomies.reduce((sum, rt) => sum + rt.taxonomyIds.length, 0)
+        });
+
+        return result;
+      } catch (error) {
+        // Log the error with the prompts for debugging
+        this.logger.error('OpenAI API error:', {
+          error,
+          systemPrompt: systemPromptText,
+          userPrompt: content
+        });
+        throw error;
+      }
+    } catch (error) {
+      this.logger.error('Error in batch taxonomy analysis:', error);
       throw error;
     }
   }

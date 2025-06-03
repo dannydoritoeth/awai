@@ -31,6 +31,7 @@ import {
   TaxonomyAnalysisResult
 } from './types.js';
 import { ProcessedJob } from '../processor/types.js';
+import { EmbeddingResult } from '../embeddings/templates/embeddingTemplates.js';
 import path from 'path';
 import fs from 'fs';
 import PDFParser from 'pdf2json';
@@ -97,13 +98,13 @@ export class StorageService implements IStorageService {
       this.liveClient = createClient(config.liveSupabaseUrl, config.liveSupabaseKey);
       this.stagingClient = createClient(config.stagingSupabaseUrl, config.stagingSupabaseKey);
       
-      this.metrics = {
-        totalStored: 0,
-        successfulStores: 0,
-        failedStores: 0,
-        startTime: new Date(),
-        errors: []
-      };
+    this.metrics = {
+      totalStored: 0,
+      successfulStores: 0,
+      failedStores: 0,
+      startTime: new Date(),
+      errors: []
+    };
     } catch (error) {
       this.logger.error('Failed to create Supabase clients:', error);
       throw error;
@@ -191,15 +192,18 @@ export class StorageService implements IStorageService {
       const { error } = await this.liveClient.from('jobs').select('id').limit(1);
       if (error) throw error;
 
-      // Initialize NSW Capability Framework
+      // Initialize the NSW Capability Framework
       await this.initializeNSWCapabilityFramework();
-
+      
+      // Initialize taxonomy groups
+      await this.initializeTaxonomyGroups();
+      
       // Get or create institution
       const institutionId = await this.getOrCreateInstitution();
       this.config.institutionId = institutionId;
       this.logger.info('Initialization complete, using institution:', institutionId);
     } catch (error) {
-      this.logger.error('Initialization failed:', error);
+      this.logger.error('Error initializing storage service:', error);
       throw error;
     }
   }
@@ -240,6 +244,85 @@ export class StorageService implements IStorageService {
       this.logger.info('NSW Capability Framework initialized');
     } catch (error) {
       this.logger.error('Error initializing NSW Capability Framework:', error);
+        throw error;
+    }
+  }
+
+  /**
+   * Initialize taxonomy groups in the database
+   */
+  private async initializeTaxonomyGroups(): Promise<void> {
+    try {
+      // First check if the taxonomies table exists and has the correct schema
+      const { error: tableError } = await this.stagingClient
+        .from('taxonomy')
+        .select('id')
+        .limit(1);
+
+      if (tableError) {
+        this.logger.error('Error accessing taxonomy table:', {
+          error: tableError,
+          details: 'Make sure the taxonomy table exists with the correct schema'
+        });
+        throw tableError;
+      }
+
+      const taxonomiesPath = path.join(process.cwd(), 'database', 'seed', 'taxonomy.json');
+      if (!fs.existsSync(taxonomiesPath)) {
+        this.logger.warn('Taxonomies file not found:', taxonomiesPath);
+        return;
+      }
+
+      const taxonomiesData = JSON.parse(fs.readFileSync(taxonomiesPath, 'utf8'));
+      this.logger.info(`Loading ${taxonomiesData.length} taxonomies...`);
+
+      for (const taxonomy of taxonomiesData) {
+        try {
+          const { error } = await this.stagingClient
+            .from('taxonomy')
+            .upsert({
+              id: taxonomy.id,
+              name: taxonomy.name,
+              description: taxonomy.description,
+              taxonomy_type: taxonomy.taxonomy_type,
+              sync_status: 'pending',
+              last_synced_at: null
+            }, {
+              onConflict: 'id'
+            });
+
+          if (error) {
+            this.logger.error('Error upserting taxonomy:', {
+              error,
+              taxonomy: taxonomy.name,
+              taxonomyId: taxonomy.id
+            });
+            throw error;
+          }
+        } catch (error) {
+          this.logger.error('Error processing individual taxonomy:', {
+            error: error instanceof Error ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name
+            } : error,
+            taxonomy: taxonomy.name,
+            taxonomyId: taxonomy.id
+          });
+          throw error;
+        }
+      }
+
+      this.logger.info('Taxonomy groups initialized');
+    } catch (error) {
+      this.logger.error('Error initializing taxonomy groups:', {
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : error,
+        taxonomiesPath: path.join(process.cwd(), 'database', 'seed', 'taxonomy.json')
+      });
       throw error;
     }
   }
@@ -261,7 +344,7 @@ export class StorageService implements IStorageService {
       
       // First store the company
       const companyData = await this.storeCompanyRecord({
-        name: job.jobDetails.agency,
+        name: job.jobDetails.agency || 'NSW Government',
         description: '',
         website: '',
         raw_data: job.jobDetails
@@ -291,29 +374,63 @@ export class StorageService implements IStorageService {
         }
       }
 
-      // Store the job record
+      // Check if job exists
+      const { data: existingJob, error: checkError } = await this.stagingClient
+        .from('jobs')
+        .select('id')
+        .eq('company_id', companyData[0].id)
+        .eq('source_id', 'nswgov')
+        .eq('external_id', jobId)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      // Prepare job record
       const jobRecord = {
-        original_id: jobId,
+        external_id: jobId,
         source_id: 'nswgov',
         title: job.jobDetails.title,
         company_id: companyData[0].id,
         role_id: roleData[0].id,
         locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
         remuneration: job.jobDetails.salary,
-        closing_date: job.jobDetails.closingDate,
+        close_date: job.jobDetails.closingDate === 'Ongoing' ? null : job.jobDetails.closingDate,
+        open_date: job.jobDetails.postedDate || new Date().toISOString(),
+        job_type: job.jobDetails.jobType,
         source_url: job.jobDetails.url,
-        raw_data: job.jobDetails,
+        raw_json: job.jobDetails,
         sync_status: 'pending',
-        last_synced_at: new Date().toISOString()
+        last_synced_at: null,
+        raw_data: job.jobDetails
       };
 
-      const { error: jobError } = await this.stagingClient
-        .from(this.config.jobsTable)
-        .upsert(jobRecord)
-        .select()
-        .single();
+      // this.logger.info("Storing job record:", jobRecord);
 
-      if (jobError) throw jobError;
+      let result;
+      if (existingJob) {
+        // Update existing job
+        const { error: updateError } = await this.stagingClient
+          .from('jobs')
+          .update(jobRecord)
+          .eq('id', existingJob.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        this.logger.info(`Successfully updated job ${jobId}`);
+      } else {
+        // Insert new job
+        const { error: insertError } = await this.stagingClient
+          .from('jobs')
+          .insert(jobRecord)
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        this.logger.info(`Successfully inserted job ${jobId}`);
+      }
 
       // Store capabilities and skills from both job and documents
       const allCapabilities = [
@@ -327,12 +444,12 @@ export class StorageService implements IStorageService {
       const allSkills = [
         ...(job.capabilities?.skills || []),
         ...documentAnalysis.skills,
-        ...(job.taxonomy?.technicalSkills || []).map(skill => ({
+        ...(job.taxonomy?.technicalSkills || []).map((skill: string) => ({
           name: skill,
           description: skill,
           category: 'Technical' as const
         })),
-        ...(job.taxonomy?.softSkills || []).map(skill => ({
+        ...(job.taxonomy?.softSkills || []).map((skill: string) => ({
           name: skill,
           description: skill,
           category: 'Soft Skills' as const
@@ -634,60 +751,57 @@ export class StorageService implements IStorageService {
       }
 
       // Store job
-      const stagingJob = await this.stagingClient
+      const jobRecord = {
+        original_id: jobDetails.id,
+        source_id: 'nswgov',
+        title: jobDetails.title,
+        company_id: companyData[0].id,
+        role_id: roleData[0].id,
+        locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
+        remuneration: jobDetails.salary,
+        close_date: jobDetails.closingDate === 'Ongoing' ? null : jobDetails.closingDate,
+        open_date: jobDetails.postedDate || new Date().toISOString(),
+        job_type: jobDetails.jobType,
+        source_url: jobDetails.url,
+        raw_json: jobDetails,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: jobDetails
+      };
+
+      const { error: jobError } = await this.stagingClient
         .from(this.config.jobsTable)
-        .upsert({
-          id: jobDetails.id,
-          role_id: roleData[0].id,
-          company_id: companyData[0].id,
-          title: jobDetails.title,
-          description: jobDetails.description,
-          locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
-          salary: jobDetails.salary,
-          closing_date: jobDetails.closingDate,
-          posted_date: jobDetails.postedDate,
-          job_type: jobDetails.jobType,
-          url: jobDetails.url,
-          job_reference: jobDetails.jobReference,
-          raw_data: jobDetails,
-          processed: true,
-          processing_status: 'complete',
-          processedAt: new Date().toISOString()
-        })
+        .upsert(jobRecord)
         .select()
         .single();
 
-      if (!stagingJob.data) {
-        throw new Error('Failed to store staging job record');
-      }
+      if (jobError) throw jobError;
 
       // Store job in live DB
-      const liveJob = await this.liveClient
+      const liveJobRecord = {
+        id: jobDetails.id,
+        role_id: roleData[0].id,
+        company_id: companyData[0].id,
+        title: jobDetails.title,
+        locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
+        remuneration: jobDetails.salary,
+        close_date: jobDetails.closingDate === 'Ongoing' ? null : jobDetails.closingDate,
+        open_date: jobDetails.postedDate || new Date().toISOString(),
+        job_type: jobDetails.jobType,
+        source_url: jobDetails.url,
+        raw_json: jobDetails,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: jobDetails
+      };
+
+      const liveJobError = await this.liveClient
         .from(this.config.jobsTable)
-        .upsert({
-          id: jobDetails.id,
-          role_id: roleData[0].id,
-          company_id: companyData[0].id,
-          title: jobDetails.title,
-          description: jobDetails.description,
-          locations: Array.isArray(jobDetails.location) ? jobDetails.location : [jobDetails.location],
-          salary: jobDetails.salary,
-          closing_date: jobDetails.closingDate,
-          posted_date: jobDetails.postedDate,
-          job_type: jobDetails.jobType,
-          url: jobDetails.url,
-          job_reference: jobDetails.jobReference,
-          raw_data: jobDetails,
-          processed: true,
-          processing_status: 'complete',
-          processedAt: new Date().toISOString()
-        })
+        .upsert(liveJobRecord)
         .select()
         .single();
 
-      if (!liveJob.data) {
-        throw new Error('Failed to store live job record');
-      }
+      if (liveJobError) throw liveJobError;
 
       // Store capabilities
       const allCapabilities = capabilities.capabilities || [];
@@ -725,7 +839,7 @@ export class StorageService implements IStorageService {
             });
 
             if (skillData && skillData[0] && roleData && roleData[0]) {
-              await this.storeRoleSkill(roleData[0].id, skillData[0].id);
+              await this.linkRoleSkill(roleData[0].id, skillData[0].id);
               this.logger.info(`Linked skill ${skill.name} to role ${roleData[0].id}`);
             }
           } catch (error) {
@@ -734,7 +848,10 @@ export class StorageService implements IStorageService {
         }
       }
 
-      this.logger.info('Successfully stored job record:', { stagingId: stagingJob.data.id, liveId: liveJob.data.id });
+      this.logger.info('Successfully stored job record:', { 
+        stagingId: jobRecord.original_id, 
+        liveId: liveJobRecord.id 
+      });
     } catch (error) {
       this.logger.error('Error in storeJobRecord:', error);
       this.handleStorageError('insert', this.config.jobsTable, error, job.jobDetails.id);
@@ -936,35 +1053,47 @@ export class StorageService implements IStorageService {
 
       // First check if company exists
       const { data: existingCompany, error: fetchError } = await this.stagingClient
-        .from(this.config.companiesTable)
-        .select()
+        .from('companies')
+        .select('*')
         .eq('name', companyName)
         .maybeSingle();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        throw fetchError;
-      }
-
+      // If company exists, return it
       if (existingCompany) {
         this.logger.info(`Company ${companyName} already exists with id ${existingCompany.id}`);
         return [existingCompany];
       }
 
-      // If company doesn't exist, insert it
+      // If error is not PGRST116 (no rows), throw it
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      // Company doesn't exist, create it
+      const companyData = {
+        name: companyName,
+        description: company.description || `${companyName} - NSW Government`,
+        website: company.website || 'https://www.nsw.gov.au',
+        sync_status: 'pending',
+        last_synced_at: new Date().toISOString(),
+        raw_data: company.raw_data
+      };
+
       const { data, error: insertError } = await this.stagingClient
         .from('companies')
-        .insert({
-          name: companyName,
-          description: company.description || `${companyName} - NSW Government`,
-          website: company.website || 'https://www.nsw.gov.au',
-          sync_status: 'pending',
-          last_synced_at: new Date().toISOString(),
-          raw_data: company
-        })
+        .insert(companyData)
         .select();
 
-      if (insertError) throw insertError;
-      this.logger.info(`Successfully inserted company: ${companyName}`);
+      if (insertError) {
+        this.logger.error('Error inserting company:', { error: insertError, company: companyData });
+        throw insertError;
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error('No data returned after company insert');
+      }
+
+      this.logger.info(`Successfully inserted company: ${companyName} with id ${data[0].id}`);
       return data;
     } catch (error) {
       this.logger.error('Error storing company record:', error);
@@ -1031,7 +1160,7 @@ export class StorageService implements IStorageService {
         name: capability.name,
         description: capability.description,
         source_framework: 'NSW Public Sector Capability Framework',
-        is_occupation_specific: false,
+      is_occupation_specific: false,
         normalized_key: capability.name.toLowerCase().replace(/\s+/g, '_'),
         sync_status: 'pending',
         last_synced_at: null
@@ -1093,31 +1222,29 @@ export class StorageService implements IStorageService {
   /**
    * Store skill records
    */
-  private async storeSkillRecords(job: ProcessedJob, skills: Skill[]): Promise<void> {
+  private async storeSkillRecords(job: ProcessedJob, skills: Array<{ name: string; description?: string; category?: string; text?: string }>): Promise<void> {
     try {
       // Get the company first
-      const { data: companyData, error: companyError } = await this.stagingClient
-        .from('companies')
-        .select('id')
-        .eq('name', job.jobDetails.agency)
-        .single();
+      const companyData = await this.storeCompanyRecord({
+        name: job.jobDetails.agency || 'NSW Government',
+        description: job.jobDetails.aboutUs || '',
+        website: '',
+        raw_data: job.jobDetails
+      });
 
-      if (companyError) {
-        this.logger.error('Error fetching company:', companyError);
-        throw companyError;
+      if (!companyData || !companyData[0]) {
+        throw new Error('Failed to get or create company');
       }
 
-      if (!companyData) {
-        this.logger.error('Company not found:', job.jobDetails.agency);
-        throw new Error('Company not found');
-      }
+      const companyId = companyData[0].id;
+      this.logger.info(`Using company ID ${companyId} for skills of job ${job.jobDetails.id}`);
 
       // Get the role ID
       const { data: roleData, error: roleError } = await this.stagingClient
         .from('roles')
         .select('id')
         .eq('title', job.jobDetails.title)
-        .eq('company_id', companyData.id)
+        .eq('company_id', companyId)
         .single();
 
       if (roleError) {
@@ -1136,66 +1263,16 @@ export class StorageService implements IStorageService {
       const roleId = roleData.id;
       this.logger.info(`Found role ID ${roleId} for job ${job.jobDetails.id}`);
 
-      // Store each skill
+      // Store each skill and link to role
       for (const skill of skills) {
         try {
-          const skillName = skill.name || skill.text || '';
-          if (!skillName) {
-            this.logger.warn('Skipping skill with no name');
-            continue;
-          }
-
-          // Store skill
-          const { data: skillData, error: skillError } = await this.stagingClient
-            .from('skills')
-            .upsert({
-              name: skillName,
-              description: skill.description || skillName,
-              source: 'job_description',
-              is_occupation_specific: true,
-              category: skill.category || 'Technical',
-              company_id: companyData.id,
-              sync_status: 'pending',
-              last_synced_at: null,
-              raw_data: skill
-            }, {
-              onConflict: 'id'
-            })
-            .select()
-            .single();
-
-          if (skillError) {
-            this.logger.error('Error storing skill:', { error: skillError, skill: skillName });
-            continue;
-          }
-
-          if (!skillData) {
-            this.logger.error('No skill data returned after upsert:', skillName);
-            continue;
-          }
-
+          // Upsert skill
+          const skillRecord = await this.upsertSkill(skill, companyId);
+          
           // Link skill to role
-          const { error: linkError } = await this.stagingClient
-            .from('role_skills')
-            .upsert({
-              role_id: roleId,
-              skill_id: skillData.id,
-              sync_status: 'pending',
-              last_synced_at: null
-            }, {
-              onConflict: 'role_id,skill_id'
-            });
+          await this.linkRoleSkill(roleId, skillRecord.id);
 
-          if (linkError) {
-            this.logger.error('Error linking skill to role:', {
-              error: linkError,
-              skill: skillName,
-              roleId
-            });
-            continue;
-          }
-
-          this.logger.info(`Successfully stored and linked skill ${skillName} to role ${roleId}`);
+          this.logger.info(`Successfully processed skill ${skillRecord.name} for role ${roleId}`);
         } catch (error) {
           this.logger.error('Error processing skill:', { error, skill: skill.name || skill.text });
         }
@@ -1313,7 +1390,7 @@ export class StorageService implements IStorageService {
         processing_status: 'pending',
         processedAt: job.metadata.processedAt
       },
-      ...job.embeddings.capabilities.map((emb, i) => ({
+      ...job.embeddings.capabilities.filter((emb): emb is EmbeddingResult => emb !== undefined).map((emb, i) => ({
         institution_id: this.config.institutionId,
         source_id: 'nswgov',
         external_id: `emb_cap_${job.jobDetails.id}_${i}`,
@@ -1364,8 +1441,8 @@ export class StorageService implements IStorageService {
       external_id: `taxonomy_${job.jobDetails.id}`,
       jobId: job.jobDetails.id,
       type: 'job',
-      technicalSkills: job.taxonomy.technicalSkills,
-      softSkills: job.taxonomy.softSkills,
+      technicalSkills: job.taxonomy?.technicalSkills || [],
+      softSkills: job.taxonomy?.softSkills || [],
       raw_data: job.taxonomy,
       processed: false,
       processing_status: 'pending',
@@ -1463,7 +1540,7 @@ export class StorageService implements IStorageService {
           sync_status: 'pending',
           last_synced_at: null
         }, {
-          onConflict: 'role_id,capability_id'
+          onConflict: 'role_id,capability_id,capability_type'
         });
 
       if (error) throw error;
@@ -1486,7 +1563,7 @@ export class StorageService implements IStorageService {
   /**
    * Store role skill relationship in staging
    */
-  private async storeRoleSkill(roleId: string, skillId: string): Promise<void> {
+  private async linkRoleSkill(roleId: string, skillId: string): Promise<void> {
     try {
       const { error } = await this.stagingClient
         .from('role_skills')
@@ -1521,48 +1598,27 @@ export class StorageService implements IStorageService {
    */
   private async storeSkillRecord(skill: { name: string; description: string; category: string; company_id: string; raw_data: any }): Promise<any[]> {
     try {
-      // First check if skill exists
-      const { data: existingSkill, error: fetchError } = await this.stagingClient
-        .from('skills')
-        .select()
-        .eq('name', skill.name)
-        .eq('company_id', skill.company_id)
-        .maybeSingle();
-
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        throw fetchError;
-      }
-
       const skillData = {
         name: skill.name,
         description: skill.description,
+        category: skill.category,
         source: 'job_description',
         is_occupation_specific: true,
         company_id: skill.company_id,
-        category: skill.category,
         sync_status: 'pending',
         last_synced_at: null,
         raw_data: skill.raw_data
       };
 
-      if (existingSkill) {
-        const { data, error: updateError } = await this.stagingClient
-          .from('skills')
-          .update(skillData)
-          .eq('id', existingSkill.id)
-          .select();
+      const { data, error } = await this.stagingClient
+        .from('skills')
+        .upsert(skillData, {
+          onConflict: 'name,company_id'
+        })
+        .select();
 
-        if (updateError) throw updateError;
-        return data;
-      } else {
-        const { data, error: insertError } = await this.stagingClient
-          .from('skills')
-          .insert(skillData)
-          .select();
-
-        if (insertError) throw insertError;
-        return data;
-      }
+      if (error) throw error;
+      return data;
     } catch (error) {
       this.logger.error('Error storing skill record:', error);
       throw error;
@@ -1629,6 +1685,197 @@ export class StorageService implements IStorageService {
       this.logger.info('Successfully stored capability embeddings');
     } catch (error) {
       this.logger.error('Error storing capability embeddings:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get taxonomy groups from the database
+   */
+  async getTaxonomyGroups(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    taxonomy_type: string;
+  }>> {
+    try {
+      const { data, error } = await this.stagingClient
+        .from('taxonomy')
+        .select('id, name, description, taxonomy_type')
+        .eq('taxonomy_type', 'core');
+
+      if (error) {
+        this.logger.error('Error getting taxonomy groups:', error);
+        throw error;
+      }
+
+      return data || [];
+
+    } catch (error) {
+      this.logger.error('Error getting taxonomy groups:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get or create a role for a job
+   */
+  async getRoleByJobDetails(job: JobDetails): Promise<{ id: string; title: string } | null> {
+    try {
+      // First create/get the company
+      const companyData = await this.storeCompanyRecord({
+        name: job.agency || 'NSW Government',
+        description: job.aboutUs || '',
+        website: '',
+        raw_data: job
+      });
+
+      if (!companyData || !companyData[0]) {
+        throw new Error('Failed to get or create company');
+      }
+
+      const companyId = companyData[0].id;
+      this.logger.info(`Using company ID ${companyId} for job ${job.id}`);
+
+      // Get or create the role
+      const { data: roleData, error: roleError } = await this.stagingClient
+        .from('roles')
+        .select('id, title')
+        .eq('title', job.title)
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      // If role exists, return it
+      if (roleData) {
+        this.logger.info(`Found existing role: ${roleData.title} (${roleData.id})`);
+        return roleData;
+      }
+
+      // If error is not PGRST116 (no rows), throw it
+      if (roleError && roleError.code !== 'PGRST116') {
+        throw roleError;
+      }
+
+      // Role doesn't exist, create it
+      const { data: newRoleData, error: createError } = await this.stagingClient
+        .from('roles')
+        .insert({
+          title: job.title,
+          company_id: companyId,
+          sync_status: 'pending',
+          last_synced_at: null,
+          raw_data: job
+        })
+        .select('id, title')
+        .single();
+
+      if (createError) {
+        this.logger.error('Error creating role:', createError);
+        throw createError;
+      }
+
+      if (!newRoleData) {
+        throw new Error('No data returned after role creation');
+      }
+
+      this.logger.info(`Created new role: ${newRoleData.title} (${newRoleData.id})`);
+      return newRoleData;
+    } catch (error) {
+      this.logger.error('Error in getRoleByJobDetails:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upsert a single skill to staging
+   */
+  private async upsertSkill(skill: { 
+    name: string; 
+    description?: string; 
+    category?: string; 
+    text?: string 
+  }, companyId: string): Promise<{ id: string; name: string }> {
+    try {
+      const skillName = skill.name || skill.text || '';
+      if (!skillName) {
+        throw new Error('Skill name is required');
+      }
+
+      // First check if skill exists
+      const { data: existingSkill, error: checkError } = await this.stagingClient
+        .from('skills')
+        .select('id, name')
+        .eq('name', skillName)
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        this.logger.error('Error checking existing skill:', {
+          error: checkError,
+          skill: skillName
+        });
+        throw checkError;
+      }
+
+      const skillData = {
+        name: skillName,
+        description: skill.description || skillName,
+        source: 'job_description',
+        is_occupation_specific: true,
+        company_id: companyId,
+        category: skill.category || 'Technical',
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: skill
+      };
+
+      let result;
+      if (existingSkill) {
+        // Update existing skill
+        const { data, error: updateError } = await this.stagingClient
+          .from('skills')
+          .update(skillData)
+          .eq('id', existingSkill.id)
+          .select('id, name')
+          .single();
+
+        if (updateError) {
+          this.logger.error('Error updating skill:', {
+            error: updateError,
+            skill: skillName
+          });
+          throw updateError;
+        }
+        result = data;
+        this.logger.info(`Successfully updated skill: ${skillName}`);
+      } else {
+        // Insert new skill
+        const { data, error: insertError } = await this.stagingClient
+          .from('skills')
+          .insert(skillData)
+          .select('id, name')
+          .single();
+
+        if (insertError) {
+          this.logger.error('Error inserting skill:', {
+            error: insertError,
+            skill: skillName
+          });
+          throw insertError;
+        }
+        result = data;
+        this.logger.info(`Successfully inserted skill: ${skillName}`);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error('Error in upsertSkill:', {
+        skill: skill.name || skill.text,
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       throw error;
     }
   }

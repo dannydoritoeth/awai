@@ -86,6 +86,11 @@ export class ProcessorService implements IProcessorService {
       // Pass the loaded capabilities to the analyzer
       await this.analyzer.setFrameworkCapabilities(this.frameworkCapabilities);
       
+      // Load and set taxonomy groups
+      this.logger.info('Loading taxonomy groups...');
+      const taxonomyGroups = await this.storageService.getTaxonomyGroups();
+      await this.analyzer.setTaxonomyGroups(taxonomyGroups);
+      
       this.logger.info('Processor service initialized');
     } catch (error) {
       this.logger.error('Error initializing processor service:', error);
@@ -148,15 +153,28 @@ export class ProcessorService implements IProcessorService {
     try {
       this.logger.info(`Starting processing for job ${job.id}: ${job.title}`);
 
+      // Get or create role first
+      const roleData = await this.storageService.getRoleByJobDetails(job);
+      if (!roleData) {
+        throw new Error('Failed to get or create role');
+      }
+      this.logger.info(`Found role ID ${roleData.id} for job ${job.id}`);
+
       // Process capabilities
       this.logger.info(`Analyzing capabilities for job ${job.id}`);
       const capabilities = await this.analyzer.analyzeCapabilities(job);
       this.logger.info(`Found ${capabilities.capabilities.length} capabilities for job ${job.id}`);
 
-      // Process taxonomy
+      // Process taxonomy using role ID
       this.logger.info(`Analyzing taxonomy for job ${job.id}`);
-      const taxonomy = await this.analyzer.analyzeTaxonomy(job);
-      this.logger.info(`Found ${taxonomy.technicalSkills.length} technical skills and ${taxonomy.softSkills.length} soft skills for job ${job.id}`);
+      const taxonomyResult = await this.analyzer.analyzeTaxonomy({
+        ...job,
+        roleId: roleData.id
+      });
+      
+      // Extract taxonomy IDs from the result
+      const taxonomyIds = taxonomyResult.roleTaxonomies.find(rt => rt.roleId === roleData.id)?.taxonomyIds || [];
+      this.logger.info(`Found ${taxonomyIds.length} taxonomies for job ${job.id}`);
 
       // Generate embeddings
       this.logger.info(`Generating embeddings for job ${job.id}`);
@@ -169,11 +187,11 @@ export class ProcessorService implements IProcessorService {
       });
 
       // Only generate embeddings for the skills we actually found
-      const allSkills = [...taxonomy.technicalSkills, ...taxonomy.softSkills];
+      const allSkills = capabilities.skills || [];
       this.logger.info(`Generating embeddings for ${allSkills.length} skills`);
       const skillEmbeddings = await Promise.all(
-        allSkills.map(async (skill: string) => 
-          this.embeddingService.generateSkillEmbedding(skill)
+        allSkills.map(async (skill) => 
+          this.embeddingService.generateSkillEmbedding(skill.name)
         )
       );
 
@@ -182,7 +200,10 @@ export class ProcessorService implements IProcessorService {
       const processedJob: ProcessedJob = {
         jobDetails: job,
         capabilities,
-        taxonomy,
+        taxonomy: {
+          taxonomyIds,
+          roleId: roleData.id
+        },
         embeddings: {
           job: jobEmbedding,
           capabilities: capabilityEmbeddings,

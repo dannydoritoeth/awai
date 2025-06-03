@@ -184,19 +184,30 @@ export interface IStorageService {
   getEmbeddingsByJobId(jobId: string): Promise<EmbeddingRecord[]>;
   getTaxonomyByJobId(jobId: string): Promise<TaxonomyRecord | null>;
   getMetrics(): StorageMetrics;
+  getTaxonomyGroups(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    taxonomy_type: string;
+  }>>;
+  getRoleByJobDetails(job: JobDetails): Promise<{ id: string; title: string } | null>;
 }
 
 export interface JobDetails {
   id: string;
   title: string;
   agency: string;
-  location: string;
+  jobType: string;
+  location: string | string[];
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  notes: string[];
+  aboutUs: string;
+  salary: string;
+  closingDate: string;
+  postedDate: string;
   url: string;
-  salary?: string;
-  closingDate?: string;
-  documents: Array<{
-    url: string;
-    title?: string;
-    type?: string;
-  }>;
+  jobReference: string;
+  documents?: string[];
 } 

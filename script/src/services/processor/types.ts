@@ -28,15 +28,21 @@ export interface ProcessorConfig {
 export interface ProcessedJob {
   jobDetails: JobDetails;
   capabilities: CapabilityAnalysisResult;
+  taxonomy: {
+    taxonomyIds: string[];
+    roleId: string;
+    technicalSkills?: string[];
+    softSkills?: string[];
+  };
   embeddings: {
     job: EmbeddingResult;
-    capabilities: EmbeddingResult[];
+    capabilities: Array<EmbeddingResult | undefined>;
     skills: EmbeddingResult[];
   };
-  taxonomy: TaxonomyAnalysisResult;
   metadata: {
     processedAt: string;
-    [key: string]: any;
+    version: string;
+    status: ProcessingStatus;
   };
 }
 
