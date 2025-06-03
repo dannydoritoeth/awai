@@ -29,13 +29,22 @@ export interface CapabilityAnalysisResult {
     description: string;
     category: 'Technical' | 'Domain Knowledge' | 'Soft Skills';
   }>;
+  taxonomies: Array<{
+    id: string;
+    name: string;
+    description: string;
+    relevance: number;
+  }>;
 }
 
 interface CapabilityGroup {
   [key: string]: string[];
 }
 
-export const createCapabilityAnalysisPrompt = (frameworkCapabilities: Array<{ id: string; name: string; description: string; group_name: string }>) => {
+export const createCapabilityAnalysisPrompt = (
+  frameworkCapabilities: Array<{ id: string; name: string; description: string; group_name: string }>,
+  taxonomyGroups: Array<{ id: string; name: string; description: string }>
+) => {
   // Generate the capabilities list for the prompt
   const capabilitiesByGroup: CapabilityGroup = {};
   frameworkCapabilities.forEach(cap => {
@@ -51,10 +60,19 @@ export const createCapabilityAnalysisPrompt = (frameworkCapabilities: Array<{ id
     capabilitiesPrompt += `${group}:\n${capabilities.map((c: string) => `- ${c}`).join('\n')}\n\n`;
   }
 
+  // Build the taxonomy section of the prompt
+  let taxonomyPrompt = 'Available Taxonomy Groups:\n';
+  taxonomyGroups.forEach(tax => {
+    taxonomyPrompt += `- ${tax.name} (${tax.id}): ${tax.description}\n`;
+  });
+
   return `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
-Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework.
+Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework,
+as well as classify the role into one or more taxonomy groups.
 
 ${capabilitiesPrompt}
+
+${taxonomyPrompt}
 
 Please provide your analysis in JSON format with the following structure:
 {
@@ -75,6 +93,12 @@ Please provide your analysis in JSON format with the following structure:
       "description": "How this skill is used in the role",
       "category": "One of: Technical, Domain Knowledge, Soft Skills"
     }
+  ],
+  "taxonomies": [
+    {
+      "id": "Taxonomy ID from the provided list",
+      "name": "Taxonomy name from the list"
+    }
   ]
 }
 
@@ -84,14 +108,16 @@ Focus on identifying:
 3. Relevant occupational groups and focus areas
 4. Technical and soft skills required for the role
 5. Clear justification for each capability's relevance
+6. Appropriate taxonomy groups that best match the role's responsibilities and requirements
 
 Ensure your analysis:
-- ONLY uses capabilities from the provided list with their exact IDs
+- ONLY uses capabilities and taxonomies from the provided lists with their exact IDs
 - Maps directly to the NSW Public Sector Capability Framework
 - Reflects the role level and responsibilities accurately
 - Provides specific evidence from the job description
 - Identifies both technical and soft skills
-- Maintains consistency with NSW Government standards`;
+- Maintains consistency with NSW Government standards
+- Assigns taxonomies based on the role's primary functions and responsibilities`;
 };
 
 export interface TaxonomyAnalysisResult {
@@ -122,4 +148,4 @@ Guidelines:
 - The summary should capture the essence of the role and its key requirements`;
 
 // Keeping the old export name for backward compatibility
-export const capabilityAnalysisPrompt = createCapabilityAnalysisPrompt([]); 
+export const capabilityAnalysisPrompt = createCapabilityAnalysisPrompt([], []); 

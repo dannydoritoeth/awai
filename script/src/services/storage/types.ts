@@ -188,7 +188,6 @@ export interface IStorageService {
     id: string;
     name: string;
     description: string;
-    taxonomy_type: string;
   }>>;
   getRoleByJobDetails(job: JobDetails): Promise<{ id: string; title: string } | null>;
 }

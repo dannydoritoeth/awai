@@ -85,7 +85,11 @@ export class AIAnalyzer {
     group_name: string;
   }> = [];
 
-  private taxonomyGroups: TaxonomyGroup[] = [];
+  private taxonomyGroups: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }> = [];
 
   constructor(
     private config: AIAnalyzerConfig,
@@ -114,9 +118,13 @@ export class AIAnalyzer {
   }
 
   /**
-   * Set the taxonomy groups for batch analysis
+   * Set the taxonomy groups for analysis
    */
-  async setTaxonomyGroups(taxonomies: TaxonomyGroup[]): Promise<void> {
+  async setTaxonomyGroups(taxonomies: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>): Promise<void> {
     this.taxonomyGroups = taxonomies;
     this.logger.info(`Set ${taxonomies.length} taxonomy groups for analysis`);
   }
@@ -355,8 +363,12 @@ export class AIAnalyzer {
         throw new Error('Framework capabilities not loaded. Please ensure initialize() is called first.');
       }
 
-      // Create the prompt with the current framework capabilities
-      const prompt = createCapabilityAnalysisPrompt(this.frameworkCapabilities);
+      if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
+        throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
+      }
+
+      // Create the prompt with the current framework capabilities and taxonomy groups
+      const prompt = createCapabilityAnalysisPrompt(this.frameworkCapabilities, this.taxonomyGroups);
 
       // Prepare the content for analysis
       const content = [

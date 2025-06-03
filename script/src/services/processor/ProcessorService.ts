@@ -160,34 +160,33 @@ export class ProcessorService implements IProcessorService {
       }
       this.logger.info(`Found role ID ${roleData.id} for job ${job.id}`);
 
-      // Process capabilities
-      this.logger.info(`Analyzing capabilities for job ${job.id}`);
-      const capabilities = await this.analyzer.analyzeCapabilities(job);
-      this.logger.info(`Found ${capabilities.capabilities.length} capabilities for job ${job.id}`);
+      // Process capabilities and taxonomies together
+      this.logger.info(`Analyzing capabilities and taxonomies for job ${job.id}`);
+      const analysis = await this.analyzer.analyzeCapabilities(job);
+      this.logger.info(`Found ${analysis.capabilities.length} capabilities and ${analysis.taxonomies.length} taxonomies for job ${job.id}`);
 
-      // Process taxonomy using role ID
-      this.logger.info(`Analyzing taxonomy for job ${job.id}`);
-      const taxonomyResult = await this.analyzer.analyzeTaxonomy({
-        ...job,
-        roleId: roleData.id
-      });
-      
-      // Extract taxonomy IDs from the result
-      const taxonomyIds = taxonomyResult.roleTaxonomies.find(rt => rt.roleId === roleData.id)?.taxonomyIds || [];
-      this.logger.info(`Found ${taxonomyIds.length} taxonomies for job ${job.id}`);
+      // Store role-taxonomy relationships
+      if (analysis.taxonomies.length > 0) {
+        await this.storageService.storeRoleTaxonomies(
+          analysis.taxonomies.map(tax => ({
+            roleId: roleData.id,
+            taxonomyId: tax.id
+          }))
+        );
+      }
 
       // Generate embeddings
       this.logger.info(`Generating embeddings for job ${job.id}`);
       const jobEmbedding = await this.embeddingService.generateJobEmbedding(job.description);
 
       // Get embeddings for the matched capabilities from our pre-generated framework embeddings
-      const capabilityEmbeddings = capabilities.capabilities.map((cap: ProcessedCapability) => {
+      const capabilityEmbeddings = analysis.capabilities.map((cap: ProcessedCapability) => {
         const frameworkCap = this.frameworkCapabilities.find(fc => fc.id === cap.id);
         return frameworkCap?.embedding;
       });
 
       // Only generate embeddings for the skills we actually found
-      const allSkills = capabilities.skills || [];
+      const allSkills = analysis.skills || [];
       this.logger.info(`Generating embeddings for ${allSkills.length} skills`);
       const skillEmbeddings = await Promise.all(
         allSkills.map(async (skill) => 
@@ -199,9 +198,9 @@ export class ProcessorService implements IProcessorService {
 
       const processedJob: ProcessedJob = {
         jobDetails: job,
-        capabilities,
+        capabilities: analysis,
         taxonomy: {
-          taxonomyIds,
+          taxonomyIds: analysis.taxonomies.map(t => t.id),
           roleId: roleData.id
         },
         embeddings: {

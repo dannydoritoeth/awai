@@ -74,7 +74,19 @@ async function main() {
       maxTokens: Number(process.env.AI_MAX_TOKENS) || 2000,
       storageService: stagingStorage
     }, logger);
-    logger.info('AIAnalyzer initialized');
+
+    // Load framework capabilities and taxonomies
+    logger.info('Loading framework capabilities and taxonomies...');
+    const frameworkCapabilities = await stagingStorage.getFrameworkCapabilities();
+    const taxonomyGroups = await stagingStorage.getTaxonomyGroups();
+
+    await aiAnalyzer.setFrameworkCapabilities(frameworkCapabilities);
+    await aiAnalyzer.setTaxonomyGroups(taxonomyGroups);
+
+    logger.info('AIAnalyzer initialized with:', {
+      frameworkCapabilitiesCount: frameworkCapabilities.length,
+      taxonomyGroupsCount: taxonomyGroups.length
+    });
 
     // Initialize Processor
     logger.info('Initializing ProcessorService...');

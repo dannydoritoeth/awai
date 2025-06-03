@@ -1690,30 +1690,31 @@ export class StorageService implements IStorageService {
   }
 
   /**
-   * Get taxonomy groups from the database
+   * Get taxonomy groups
    */
   async getTaxonomyGroups(): Promise<Array<{
     id: string;
     name: string;
     description: string;
-    taxonomy_type: string;
   }>> {
     try {
+      this.logger.info('Getting taxonomy groups');
+
       const { data, error } = await this.stagingClient
         .from('taxonomy')
-        .select('id, name, description, taxonomy_type')
-        .eq('taxonomy_type', 'core');
+        .select('id, name, description')
+        .eq('taxonomy_type', 'core')
+        .order('name');
 
       if (error) {
-        this.logger.error('Error getting taxonomy groups:', error);
         throw error;
       }
 
-      return data || [];
-
+      this.logger.info(`Retrieved ${data.length} taxonomy groups`);
+      return data;
     } catch (error) {
       this.logger.error('Error getting taxonomy groups:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -1876,6 +1877,47 @@ export class StorageService implements IStorageService {
           stack: error.stack
         } : error
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Store role-taxonomy relationships
+   */
+  async storeRoleTaxonomies(roleTaxonomies: Array<{
+    roleId: string;
+    taxonomyId: string;
+  }>): Promise<void> {
+    try {
+      this.logger.info(`Storing ${roleTaxonomies.length} role-taxonomy relationships`);
+
+      // Process in batches
+      for (let i = 0; i < this.config.batchSize; i += this.config.batchSize) {
+        const batch = roleTaxonomies.slice(i, i + this.config.batchSize);
+        
+        // Insert role-taxonomy relationships
+        const { error } = await this.stagingClient
+          .from('role_taxonomies')
+          .upsert(
+            batch.map(rt => ({
+              role_id: rt.roleId,
+              taxonomy_id: rt.taxonomyId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })),
+            {
+              onConflict: 'role_id,taxonomy_id'
+            }
+          );
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      this.logger.info('Successfully stored role-taxonomy relationships');
+    } catch (error) {
+      this.logger.error('Error storing role-taxonomy relationships:', error);
       throw error;
     }
   }
