@@ -32,9 +32,14 @@ export interface CapabilityAnalysisResult {
   taxonomies: Array<{
     id: string;
     name: string;
-    description: string;
-    relevance: number;
   }>;
+  generalRole: {
+    id?: string; // If matching an existing role
+    title: string;
+    description: string;
+    confidence: number; // Match score between 0-1
+    isNewRole?: boolean; // Indicates if this is a suggested new general role
+  };
 }
 
 interface CapabilityGroup {
@@ -43,7 +48,8 @@ interface CapabilityGroup {
 
 export const createCapabilityAnalysisPrompt = (
   frameworkCapabilities: Array<{ id: string; name: string; description: string; group_name: string }>,
-  taxonomyGroups: Array<{ id: string; name: string; description: string }>
+  taxonomyGroups: Array<{ id: string; name: string; description: string }>,
+  similarGeneralRoles: Array<{ id: string; name: string; description: string; similarity: number }>
 ) => {
   // Generate the capabilities list for the prompt
   const capabilitiesByGroup: CapabilityGroup = {};
@@ -66,13 +72,27 @@ export const createCapabilityAnalysisPrompt = (
     taxonomyPrompt += `- ${tax.name} (${tax.id}): ${tax.description}\n`;
   });
 
+  // Build the similar general roles section
+  let generalRolesPrompt = 'Similar General Roles Found:\n';
+  if (similarGeneralRoles.length > 0) {
+    similarGeneralRoles.forEach(role => {
+      generalRolesPrompt += `- ${role.name} (${role.id}) [Similarity: ${(role.similarity * 100).toFixed(1)}%]: ${role.description}\n`;
+    });
+  } else {
+    generalRolesPrompt += 'No similar general roles found. Please suggest a new general role category.\n';
+  }
+
   return `You are an expert in analyzing job descriptions and identifying capabilities required for NSW Government roles.
-Your task is to analyze the job description and identify the required capabilities from the NSW Public Sector Capability Framework,
-as well as classify the role into one or more taxonomy groups.
+Your task is to analyze the job description and:
+1. Identify required capabilities from the NSW Public Sector Capability Framework
+2. Classify the role into taxonomy groups
+3. Determine the most appropriate general role category
 
 ${capabilitiesPrompt}
 
 ${taxonomyPrompt}
+
+${generalRolesPrompt}
 
 Please provide your analysis in JSON format with the following structure:
 {
@@ -99,7 +119,14 @@ Please provide your analysis in JSON format with the following structure:
       "id": "Taxonomy ID from the provided list",
       "name": "Taxonomy name from the list"
     }
-  ]
+  ],
+  "generalRole": {
+    "id": "ID of the matching general role (if one exists)",
+    "title": "Title of the general role (existing or suggested new)",
+    "description": "Description of how this role fits the general role category",
+    "confidence": "Number between 0-1 indicating match confidence",
+    "isNewRole": "true if suggesting a new general role, false if matching existing"
+  }
 }
 
 Focus on identifying:
@@ -109,6 +136,16 @@ Focus on identifying:
 4. Technical and soft skills required for the role
 5. Clear justification for each capability's relevance
 6. Appropriate taxonomy groups that best match the role's responsibilities and requirements
+7. The most appropriate general role category, either:
+   - Matching to an existing general role if similarity is high (>0.7)
+   - Suggesting a new general role if no good matches exist
+
+For General Role Analysis:
+- If similar roles are found with high confidence (>0.7), select the best matching one
+- If no good matches exist, suggest a new general role that could apply to similar roles
+- Provide a clear description of why the role fits the general category
+- Consider the role's core functions, not just the title
+- Look for patterns in capabilities and skills that indicate role similarity
 
 Ensure your analysis:
 - ONLY uses capabilities and taxonomies from the provided lists with their exact IDs
@@ -117,7 +154,7 @@ Ensure your analysis:
 - Provides specific evidence from the job description
 - Identifies both technical and soft skills
 - Maintains consistency with NSW Government standards
-- Assigns taxonomies based on the role's primary functions and responsibilities`;
+- Makes appropriate general role categorization based on core functions`;
 };
 
 export interface TaxonomyAnalysisResult {
@@ -148,4 +185,4 @@ Guidelines:
 - The summary should capture the essence of the role and its key requirements`;
 
 // Keeping the old export name for backward compatibility
-export const capabilityAnalysisPrompt = createCapabilityAnalysisPrompt([], []); 
+export const capabilityAnalysisPrompt = createCapabilityAnalysisPrompt([], [], []); 

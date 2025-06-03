@@ -32,7 +32,24 @@ export class ConsoleLogger implements Logger {
   private formatData(data: any): string {
     if (!data) return '';
     try {
-      return typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      // Clone the data to avoid modifying the original
+      const sanitizedData = JSON.parse(JSON.stringify(data));
+      
+      // Remove embedding fields recursively
+      const removeEmbeddings = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        
+        for (const key in obj) {
+          if (key === 'embedding' || key === 'embeddings' || key === 'vector') {
+            obj[key] = '[vector data hidden]';
+          } else if (typeof obj[key] === 'object') {
+            removeEmbeddings(obj[key]);
+          }
+        }
+      };
+      
+      removeEmbeddings(sanitizedData);
+      return typeof sanitizedData === 'string' ? sanitizedData : JSON.stringify(sanitizedData, null, 2);
     } catch (error) {
       return String(data);
     }

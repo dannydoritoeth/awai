@@ -60,6 +60,13 @@ export interface AIAnalyzerConfig {
       error_message?: string;
       latency_ms?: number;
     }) => Promise<void>;
+    getSimilarGeneralRoles: (embedding: number[]) => Promise<Array<{ id: string; name: string; description: string; similarity: number }>>;
+    storeGeneralRole: (role: {
+      title: string;
+      description: string;
+      function_area: string;
+      classification_level: string;
+    }) => Promise<{ id: string }>;
   };
 }
 
@@ -367,8 +374,23 @@ export class AIAnalyzer {
         throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
       }
 
-      // Create the prompt with the current framework capabilities and taxonomy groups
-      const prompt = createCapabilityAnalysisPrompt(this.frameworkCapabilities, this.taxonomyGroups);
+      // Get similar general roles if we have a storage service
+      let similarGeneralRoles: Array<{ id: string; name: string; description: string; similarity: number }> = [];
+      if (this.config.storageService && job.embedding) {
+        try {
+          similarGeneralRoles = await this.config.storageService.getSimilarGeneralRoles(job.embedding);
+        } catch (error) {
+          this.logger.warn('Failed to get similar general roles:', error);
+          // Continue with empty similar roles
+        }
+      }
+
+      // Create the prompt with the current framework capabilities, taxonomy groups and similar roles
+      const prompt = createCapabilityAnalysisPrompt(
+        this.frameworkCapabilities, 
+        this.taxonomyGroups,
+        similarGeneralRoles
+      );
 
       // Prepare the content for analysis
       const content = [
@@ -402,6 +424,26 @@ export class AIAnalyzer {
       const result = await this.retryOperation(
         () => this.analyzeJobDescription(content, prompt)
       );
+      
+      // Store new general role if one was suggested
+      if (result.generalRole && result.generalRole.isNewRole && this.config.storageService) {
+        try {
+          const storedRole = await this.config.storageService.storeGeneralRole({
+            title: result.generalRole.title,
+            description: result.generalRole.description,
+            function_area: job.jobType || 'Unknown',
+            classification_level: job.classification || 'Unknown'
+          });
+          
+          // Update the result with the stored role ID
+          result.generalRole.id = storedRole.id;
+          result.generalRole.isNewRole = false;
+          
+          this.logger.info(`Stored new general role: ${storedRole.id}`);
+        } catch (error) {
+          this.logger.warn('Failed to store new general role:', error);
+        }
+      }
       
       this.logger.info(`Capability analysis complete for job ${job.id}`, {
         capabilitiesFound: result.capabilities.length,

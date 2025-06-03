@@ -210,6 +210,8 @@ export interface JobDetails {
   url: string;
   jobReference: string;
   documents?: string[];
+  embedding?: number[];
+  classification?: string;
 }
 
 // Re-export JobDocument for use in StorageService
