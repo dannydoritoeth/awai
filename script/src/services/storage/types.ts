@@ -15,6 +15,7 @@
  */
 
 import { ProcessedJob } from '../processor/types.js';
+import { JobDocument } from '../spider/types.js';
 
 export interface StorageConfig {
   stagingSupabaseUrl: string;
@@ -209,4 +210,7 @@ export interface JobDetails {
   url: string;
   jobReference: string;
   documents?: string[];
-} 
+}
+
+// Re-export JobDocument for use in StorageService
+export type { JobDocument }; 

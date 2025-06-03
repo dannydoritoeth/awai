@@ -15,7 +15,7 @@
  */
 
 import puppeteer, { Browser, Page } from 'puppeteer';
-import { ISpiderService, JobListing, JobDetails, SpiderConfig, SpiderMetrics } from './types.js';
+import { ISpiderService, JobListing, JobDetails, SpiderConfig, SpiderMetrics, JobDocument } from './types.js';
 import { Logger } from '../../utils/logger.js';
 import { delay } from '../../utils/helpers.js';
 
@@ -256,14 +256,69 @@ export class SpiderService implements ISpiderService {
         };
 
         // Get all document links
-        const documents: Array<{ url: string; title?: string; type?: string }> = [];
-        document.querySelectorAll('a[href*=".pdf"], a[href*=".doc"], a[href*=".docx"]').forEach(link => {
+        const documents: JobDocument[] = [];
+        
+        // Helper function to check if text indicates a relevant document
+        const isRelevantDocument = (text: string): boolean => {
+          // Primary document keywords - these are definitely role-related documents
+          const primaryKeywords = [
+            'role description',
+            'position description',
+            'job description',
+            'duty statement',
+            'statement of duties'
+          ];
+
+          // Secondary document keywords - only include if they appear with role-related terms
+          const secondaryKeywords = [
+            'information pack',
+            'candidate pack',
+            'application pack'
+          ];
+
+          const textLower = text.toLowerCase();
+          
+          // Check for primary keywords first
+          if (primaryKeywords.some(keyword => textLower.includes(keyword))) {
+            return true;
+          }
+
+          // For secondary keywords, check if they also contain role-related terms
+          if (secondaryKeywords.some(keyword => textLower.includes(keyword))) {
+            const hasRoleContext = [
+              'role',
+              'position',
+              'job',
+              'candidate',
+              'firefighter',  // Include specific role terms if they appear in the context
+              'officer'
+            ].some(term => textLower.includes(term));
+            return hasRoleContext;
+          }
+
+          return false;
+        };
+
+        // Helper function to determine document type
+        const getDocumentType = (url: string): string => {
+          if (url.toLowerCase().endsWith('.pdf')) return 'pdf';
+          if (url.toLowerCase().endsWith('.doc')) return 'doc';
+          if (url.toLowerCase().endsWith('.docx')) return 'docx';
+          if (url.toLowerCase().includes('transferrichtextfile.ashx')) return 'doc';
+          return 'unknown';
+        };
+
+        // Find all links that might be documents
+        document.querySelectorAll('a').forEach(link => {
           const url = link.getAttribute('href');
-          if (url) {
+          const text = link.textContent?.trim() || '';
+          
+          if (url && isRelevantDocument(text)) {
+            const fullUrl = url.startsWith('http') ? url : new URL(url, window.location.href).href;
             documents.push({
-              url: url.startsWith('http') ? url : new URL(url, window.location.href).href,
-              title: link.textContent?.trim() || undefined,
-              type: url.split('.').pop()?.toLowerCase()
+              url: fullUrl,
+              title: text || undefined,
+              type: getDocumentType(fullUrl)
             });
           }
         });

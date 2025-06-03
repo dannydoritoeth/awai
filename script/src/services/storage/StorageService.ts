@@ -28,7 +28,7 @@ import {
   TaxonomyRecord,
   QueryOptions,
   JobDetails,
-  TaxonomyAnalysisResult
+  JobDocument
 } from './types.js';
 import { ProcessedJob } from '../processor/types.js';
 import { EmbeddingResult } from '../embeddings/templates/embeddingTemplates.js';
@@ -299,7 +299,7 @@ export class StorageService implements IStorageService {
             });
             throw error;
           }
-        } catch (error) {
+    } catch (error) {
           this.logger.error('Error processing individual taxonomy:', {
             error: error instanceof Error ? {
               message: error.message,
@@ -364,9 +364,10 @@ export class StorageService implements IStorageService {
       };
 
       if (job.jobDetails.documents?.length) {
-        const documentUrls = job.jobDetails.documents.map(doc => ({
-          url: doc,
-          type: 'attachment'
+        const documentUrls = job.jobDetails.documents.map((doc: JobDocument) => ({
+          url: typeof doc.url === 'object' ? doc.url.url : doc.url,
+          title: doc.title,
+          type: doc.type || 'attachment'
         }));
         const { documents, analysis } = await this.processJobDocuments(jobId, documentUrls);
         if (analysis) {
@@ -461,8 +462,8 @@ export class StorageService implements IStorageService {
       await this.storeCapabilityRecords(job, allCapabilities);
       await this.storeSkillRecords(job, allSkills);
 
-      this.metrics.successfulStores++;
-      this.metrics.totalStored++;
+        this.metrics.successfulStores++;
+        this.metrics.totalStored++;
       this.logger.info(`Successfully stored job ${jobId}`);
 
     } catch (error) {
@@ -751,7 +752,7 @@ export class StorageService implements IStorageService {
       }
 
       // Store job
-      const jobRecord = {
+    const jobRecord = {
         original_id: jobDetails.id,
         source_id: 'nswgov',
         title: jobDetails.title,
@@ -767,10 +768,10 @@ export class StorageService implements IStorageService {
         sync_status: 'pending',
         last_synced_at: null,
         raw_data: jobDetails
-      };
+    };
 
       const { error: jobError } = await this.stagingClient
-        .from(this.config.jobsTable)
+      .from(this.config.jobsTable)
         .upsert(jobRecord)
         .select()
         .single();
