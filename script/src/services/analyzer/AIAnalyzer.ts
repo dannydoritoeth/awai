@@ -426,6 +426,7 @@ export class AIAnalyzer {
         () => this.analyzeJobDescription(content, prompt)
       );
       
+      this.logger.info(`General Role Result: ${JSON.stringify(result)}:`, this.config.storageService);
       // Store new general role if one was suggested
       if (result.generalRole && result.generalRole.isNewRole && this.config.storageService) {
         try {
@@ -444,6 +445,8 @@ export class AIAnalyzer {
           if (job.roleId) {
             await this.config.storageService.linkRoleToGeneralRole(job.roleId, storedRole.id);
             this.logger.info(`Linked role ${job.roleId} to general role ${storedRole.id}`);
+          } else {
+            this.logger.warn(`No roleId found for job ${(job as JobDetails).id}, cannot link to general role ${storedRole.id}`);
           }
           
           this.logger.info(`Stored new general role: ${storedRole.id}`);

@@ -159,6 +159,7 @@ export class ProcessorService implements IProcessorService {
         throw new Error('Failed to get or create role');
       }
       this.logger.info(`Found role ID ${roleData.id} for job ${job.id}`);
+      job.roleId = roleData.id;
 
       // Process capabilities and taxonomies together
       this.logger.info(`Analyzing capabilities and taxonomies for job ${job.id}`);
