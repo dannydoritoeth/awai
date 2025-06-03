@@ -20,11 +20,13 @@ import { Logger } from '../../utils/logger.js';
 import { delay } from '../../utils/helpers.js';
 import path from 'path';
 import fs from 'fs';
+import { TestDataManager } from '../../utils/TestDataManager.js';
 
 export class SpiderService implements ISpiderService {
   private browser: Browser | null = null;
   private metrics: SpiderMetrics;
   private baseUrl = process.env.NSW_JOBS_URL || "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
+  private testDataManager: TestDataManager;
 
   constructor(
     private config: SpiderConfig,
@@ -37,6 +39,7 @@ export class SpiderService implements ISpiderService {
       startTime: new Date(),
       errors: []
     };
+    this.testDataManager = new TestDataManager();
   }
 
   /**
@@ -205,6 +208,11 @@ export class SpiderService implements ISpiderService {
       // Apply maxRecords limit if specified
       const limitedListings = maxRecords ? listings.slice(0, maxRecords) : listings;
       
+      // Save test data if enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        await this.saveJobListingsData(limitedListings);
+      }
+
       // Only log the jobs we're actually going to process
       this.logger.info(`Found ${limitedListings.length} job listings${maxRecords ? ` (limited by maxRecords=${maxRecords})` : ''}`);
       limitedListings.forEach(job => {
@@ -229,38 +237,25 @@ export class SpiderService implements ISpiderService {
     }
   }
 
+  private async saveJobListingsData(listings: JobListing[]): Promise<void> {
+    try {
+      await this.testDataManager.saveJobListings(listings);
+      this.logger.info(`Saved ${listings.length} job listings to test data`);
+    } catch (error) {
+      this.logger.error('Error saving job listings data:', error);
+    }
+  }
+
   private async saveTestData(jobListing: JobListing, page: Page, jobDetails: JobDetails) {
     if (process.env.SAVE_TEST_DATA !== 'true') return;
 
-    const testDataDir = path.join(process.cwd(), 'test', 'data', 'jobs');
-    const jobDir = path.join(testDataDir, jobListing.id);
-
-    // Create directories if they don't exist
-    await fs.promises.mkdir(jobDir, { recursive: true });
-
-    // Save the raw HTML content
-    const content = await page.content();
-    await fs.promises.writeFile(
-      path.join(jobDir, 'raw.html'),
-      content,
-      'utf-8'
-    );
-
-    // Save the job details
-    await fs.promises.writeFile(
-      path.join(jobDir, 'details.json'),
-      JSON.stringify(jobDetails, null, 2),
-      'utf-8'
-    );
-
-    // Save the job listing data used to fetch the details
-    await fs.promises.writeFile(
-      path.join(jobDir, 'listing.json'),
-      JSON.stringify(jobListing, null, 2),
-      'utf-8'
-    );
-
-    this.logger.info(`Saved test data for job ${jobListing.id} to ${jobDir}`);
+    try {
+      const content = await page.content();
+      await this.testDataManager.saveJobDetails(jobListing, content, jobDetails);
+      this.logger.info(`Saved test data for job ${jobListing.id}`);
+    } catch (error) {
+      this.logger.error('Error saving job test data:', error);
+    }
   }
 
   /**

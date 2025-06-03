@@ -1,0 +1,37 @@
+{
+  "39f78749": {
+    "action_type": "analyze_job_capabilities",
+    "model_name": "gpt-4-turbo-preview",
+    "prompt_preview": "Job Title: Senior Financial Accountant\n\nAgency: Energy, Climate Change & Sustainability\n\nJob Type: F...",
+    "filename": "39f78749.json",
+    "timestamp": "2025-06-03T22:10:54.126Z"
+  },
+  "44ed8e3a": {
+    "action_type": "analyze_job_capabilities",
+    "model_name": "gpt-4-turbo-preview",
+    "prompt_preview": "Job Title: Field Supervisor (Grade 1-2)\n\nAgency: National Parks & Wildlife\n\nJob Type: Full-Time\n\nLoc...",
+    "filename": "44ed8e3a.json",
+    "timestamp": "2025-06-03T22:11:40.299Z"
+  },
+  "4b531c69": {
+    "action_type": "analyze_job_capabilities",
+    "model_name": "gpt-4-turbo-preview",
+    "prompt_preview": "Job Title: Senior Field Officer\n\nAgency: National Parks & Wildlife\n\nJob Type: Full-Time\n\nLocation: R...",
+    "filename": "4b531c69.json",
+    "timestamp": "2025-06-03T22:12:17.849Z"
+  },
+  "bd7fd343": {
+    "action_type": "analyze_job_capabilities",
+    "model_name": "gpt-4-turbo-preview",
+    "prompt_preview": "Job Title: Principal Inspector (Pipelines & Gas Networks)\n\nAgency: Energy, Climate Change & Sustaina...",
+    "filename": "bd7fd343.json",
+    "timestamp": "2025-06-03T22:12:49.325Z"
+  },
+  "7599a4e1": {
+    "action_type": "analyze_job_capabilities",
+    "model_name": "gpt-4-turbo-preview",
+    "prompt_preview": "Job Title: Administration Support Officer\n\nAgency: Strategic Policy Science & Engagement\n\nJob Type: ...",
+    "filename": "7599a4e1.json",
+    "timestamp": "2025-06-03T22:13:22.387Z"
+  }
+}

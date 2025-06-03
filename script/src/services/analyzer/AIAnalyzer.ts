@@ -19,7 +19,7 @@
  * - Capability Analysis Templates
  */
 
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 import { 
   CapabilityAnalysisResult, 
   createCapabilityAnalysisPrompt
@@ -32,6 +32,7 @@ import {
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
 import { delay } from '../../utils/helpers.js';
+import { TestDataManager } from '../../utils/TestDataManager.js';
 
 export interface AIAnalyzerConfig {
   openaiApiKey: string;
@@ -81,6 +82,7 @@ export interface BatchTaxonomyAnalysisResult {
 
 export class AIAnalyzer {
   private openai: OpenAI;
+  private testDataManager: TestDataManager;
   private maxRetries: number;
   private timeout: number;
   private model: string;
@@ -104,6 +106,7 @@ export class AIAnalyzer {
     private logger: Logger
   ) {
     this.openai = new OpenAI({ apiKey: config.openaiApiKey });
+    this.testDataManager = new TestDataManager();
     this.maxRetries = config.maxRetries || 3;
     this.timeout = config.timeout || 30000;
     this.model = config.openaiModel || "gpt-4-0125-preview";
@@ -135,6 +138,51 @@ export class AIAnalyzer {
   }>): Promise<void> {
     this.taxonomyGroups = taxonomies;
     this.logger.info(`Set ${taxonomies.length} taxonomy groups for analysis`);
+  }
+
+  /**
+   * Save AI invocation to both storage service and test data
+   */
+  private async saveAIInvocation(invocation: {
+    action_type: string;
+    model_provider: 'openai' | 'anthropic' | 'cohere';
+    model_name: string;
+    temperature?: number;
+    max_tokens?: number;
+    system_prompt?: string;
+    user_prompt: string;
+    messages?: any;
+    response_text: string;
+    response_metadata?: any;
+    token_usage?: any;
+    status: 'success' | 'error';
+    error_message?: string;
+    latency_ms?: number;
+  }): Promise<void> {
+    try {
+      const normalizedInvocation = {
+        ...invocation,
+        response_text: invocation.response_text || '',
+        response_metadata: invocation.response_metadata || {},
+        token_usage: invocation.token_usage || {},
+        error_message: invocation.error_message || undefined,
+        latency_ms: invocation.latency_ms || 0,
+        model_provider: invocation.model_provider as 'openai' | 'anthropic' | 'cohere',
+        status: invocation.status as 'success' | 'error'
+      };
+
+      // Save to storage service if configured
+      if (this.config.storageService) {
+        await this.config.storageService.storeAIInvocation(normalizedInvocation);
+      }
+
+      // Save to test data if enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        await this.testDataManager.saveAIInvocation(normalizedInvocation);
+      }
+    } catch (error) {
+      this.logger.error('Error saving AI invocation:', error);
+    }
   }
 
   /**
@@ -171,65 +219,61 @@ export class AIAnalyzer {
       const result = JSON.parse(responseContent) as CapabilityAnalysisResult;
       
       // Store the AI invocation
-      if (this.config.storageService) {
-        await this.config.storageService.storeAIInvocation({
-          action_type: 'analyze_job_capabilities',
-          model_provider: 'openai',
-          model_name: this.model,
-          temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          system_prompt: systemPrompt,
-          user_prompt: content,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt
-            },
-            {
-              role: "user",
-              content
-            }
-          ],
-          response_text: responseContent,
-          response_metadata: {
-            model: completion.model,
-            object: completion.object,
-            created: completion.created,
-            system_fingerprint: completion.system_fingerprint
+      await this.saveAIInvocation({
+        action_type: 'analyze_job_capabilities',
+        model_provider: 'openai',
+        model_name: this.model,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+        system_prompt: systemPrompt,
+        user_prompt: content,
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
           },
-          token_usage: completion.usage,
-          status: 'success',
-          latency_ms: Date.now() - startTime
-        });
-      }
+          {
+            role: "user",
+            content
+          }
+        ],
+        response_text: responseContent,
+        response_metadata: {
+          model: completion.model,
+          object: completion.object,
+          created: completion.created,
+          system_fingerprint: completion.system_fingerprint
+        },
+        token_usage: completion.usage,
+        status: 'success',
+        latency_ms: Date.now() - startTime
+      });
       
       return result;
     } catch (error) {
       // Store the failed AI invocation
-      if (this.config.storageService) {
-        await this.config.storageService.storeAIInvocation({
-          action_type: 'analyze_job_capabilities',
-          model_provider: 'openai',
-          model_name: this.model,
-          temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          system_prompt: systemPrompt,
-          user_prompt: content,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt
-            },
-            {
-              role: "user",
-              content
-            }
-          ],
-          response_text: '',
-          status: 'error',
-          error_message: error instanceof Error ? error.message : String(error)
-        });
-      }
+      await this.saveAIInvocation({
+        action_type: 'analyze_job_capabilities',
+        model_provider: 'openai',
+        model_name: this.model,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+        system_prompt: systemPrompt,
+        user_prompt: content,
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content
+          }
+        ],
+        response_text: '',
+        status: 'error',
+        error_message: error instanceof Error ? error.message : String(error)
+      });
 
       this.logger.error('Error analyzing job description:', {
         error,
@@ -295,65 +339,61 @@ export class AIAnalyzer {
       const result = JSON.parse(responseContent) as TaxonomyAnalysisResult;
 
       // Store the AI invocation
-      if (this.config.storageService) {
-        await this.config.storageService.storeAIInvocation({
-          action_type: 'analyze_job_taxonomy',
-          model_provider: 'openai',
-          model_name: this.model,
-          temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          system_prompt: systemPromptText,
-          user_prompt: userContent,
-          messages: [
-            {
-              role: "system",
-              content: systemPromptText
-            },
-            {
-              role: "user",
-              content: userContent
-            }
-          ],
-          response_text: responseContent,
-          response_metadata: {
-            model: completion.model,
-            object: completion.object,
-            created: completion.created,
-            system_fingerprint: completion.system_fingerprint
+      await this.saveAIInvocation({
+        action_type: 'analyze_job_taxonomy',
+        model_provider: 'openai',
+        model_name: this.model,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+        system_prompt: systemPromptText,
+        user_prompt: userContent,
+        messages: [
+          {
+            role: "system",
+            content: systemPromptText
           },
-          token_usage: completion.usage,
-          status: 'success',
-          latency_ms: Date.now() - startTime
-        });
-      }
+          {
+            role: "user",
+            content: userContent
+          }
+        ],
+        response_text: responseContent,
+        response_metadata: {
+          model: completion.model,
+          object: completion.object,
+          created: completion.created,
+          system_fingerprint: completion.system_fingerprint
+        },
+        token_usage: completion.usage,
+        status: 'success',
+        latency_ms: Date.now() - startTime
+      });
 
       return result;
     } catch (error) {
       // Store the failed AI invocation
-      if (this.config.storageService) {
-        await this.config.storageService.storeAIInvocation({
-          action_type: 'analyze_job_taxonomy',
-          model_provider: 'openai',
-          model_name: this.model,
-          temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          system_prompt: systemPromptText,
-          user_prompt: jobDescription,
-          messages: [
-            {
-              role: "system",
-              content: systemPromptText
-            },
-            {
-              role: "user",
-              content: jobDescription
-            }
-          ],
-          response_text: '',
-          status: 'error',
-          error_message: error instanceof Error ? error.message : String(error)
-        });
-      }
+      await this.saveAIInvocation({
+        action_type: 'analyze_job_taxonomy',
+        model_provider: 'openai',
+        model_name: this.model,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+        system_prompt: systemPromptText,
+        user_prompt: jobDescription,
+        messages: [
+          {
+            role: "system",
+            content: systemPromptText
+          },
+          {
+            role: "user",
+            content: jobDescription
+          }
+        ],
+        response_text: '',
+        status: 'error',
+        error_message: error instanceof Error ? error.message : String(error)
+      });
 
       this.logger.error('Error in createJobSummary:', error);
       throw error;
@@ -567,37 +607,35 @@ export class AIAnalyzer {
         const result = JSON.parse(responseContent) as BatchTaxonomyAnalysisResult;
 
         // Store the AI invocation
-        if (this.config.storageService) {
-          await this.config.storageService.storeAIInvocation({
-            action_type: 'analyze_batch_taxonomies',
-            model_provider: 'openai',
-            model_name: this.model,
-            temperature: this.temperature,
-            max_tokens: this.maxTokens,
-            system_prompt: systemPromptText,
-            user_prompt: content,
-            messages: [
-              {
-                role: "system",
-                content: systemPromptText
-              },
-              {
-                role: "user",
-                content
-              }
-            ],
-            response_text: responseContent,
-            response_metadata: {
-              model: completion.model,
-              object: completion.object,
-              created: completion.created,
-              system_fingerprint: completion.system_fingerprint
+        await this.saveAIInvocation({
+          action_type: 'analyze_batch_taxonomies',
+          model_provider: 'openai',
+          model_name: this.model,
+          temperature: this.temperature,
+          max_tokens: this.maxTokens,
+          system_prompt: systemPromptText,
+          user_prompt: content,
+          messages: [
+            {
+              role: "system",
+              content: systemPromptText
             },
-            token_usage: completion.usage,
-            status: 'success',
-            latency_ms: Date.now() - startTime
-          });
-        }
+            {
+              role: "user",
+              content
+            }
+          ],
+          response_text: responseContent,
+          response_metadata: {
+            model: completion.model,
+            object: completion.object,
+            created: completion.created,
+            system_fingerprint: completion.system_fingerprint
+          },
+          token_usage: completion.usage,
+          status: 'success',
+          latency_ms: Date.now() - startTime
+        });
 
         this.logger.info('Taxonomy analysis complete', {
           rolesAnalyzed: roles.length,
@@ -650,5 +688,120 @@ export class AIAnalyzer {
     }
     
     throw new Error('Operation failed after all retry attempts');
+  }
+
+  /**
+   * Analyze job details using OpenAI
+   */
+  async analyzeJob(jobDetails: JobDetails): Promise<CapabilityAnalysisResult> {
+    try {
+      const prompt = this.buildJobAnalysisPrompt(jobDetails);
+
+      // Try to load from test data first if enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        const savedInvocation = await this.testDataManager.loadAIInvocation({
+          action_type: 'job_analysis',
+          model_name: this.config.openaiModel || 'gpt-3.5-turbo',
+          user_prompt: prompt
+        });
+
+        if (savedInvocation?.response_text) {
+          this.logger.info('Using saved AI invocation from test data');
+          return JSON.parse(savedInvocation.response_text);
+        }
+      }
+
+      // Make the actual API call
+      const response = await this.openai.chat.completions.create({
+        model: this.config.openaiModel || 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a job analysis expert. Analyze the job details and extract capabilities, skills, and other relevant information.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: this.config.temperature || 0.7,
+        max_tokens: this.config.maxTokens || 1000
+      });
+
+      if (!response.choices || response.choices.length === 0) {
+        throw new Error('No choices in OpenAI response');
+      }
+
+      const firstChoice = response.choices[0];
+      if (!firstChoice.message?.content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      const result = JSON.parse(firstChoice.message.content) as CapabilityAnalysisResult;
+
+      // Save to test data if enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        await this.testDataManager.saveAIInvocation({
+          action_type: 'job_analysis',
+          model_provider: 'openai',
+          model_name: this.config.openaiModel || 'gpt-3.5-turbo',
+          user_prompt: prompt,
+          system_prompt: 'You are a job analysis expert. Analyze the job details and extract capabilities, skills, and other relevant information.',
+          temperature: this.config.temperature || 0.7,
+          max_tokens: this.config.maxTokens || 1000,
+          response_text: JSON.stringify(result, null, 2),
+          response_metadata: response,
+          token_usage: response.usage,
+          status: 'success'
+        });
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error('Error analyzing job:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Build the prompt for job analysis
+   */
+  private buildJobAnalysisPrompt(jobDetails: JobDetails): string {
+    return `
+Please analyze the following job details and extract key information:
+
+Title: ${jobDetails.title}
+Agency: ${jobDetails.agency}
+Description: ${jobDetails.description}
+
+Please provide the following in JSON format:
+1. Required capabilities with levels and behavioral indicators
+2. Technical and soft skills
+3. Occupational groups and focus areas
+4. General role classification
+
+The response should match this TypeScript type:
+
+interface CapabilityAnalysisResult {
+  capabilities: Array<{
+    name: string;
+    level: string;
+    description: string;
+    behavioral_indicators: string[];
+  }>;
+  skills: Array<{
+    name: string;
+    description: string;
+    category: string;
+  }>;
+  occupationalGroups: string[];
+  focusAreas: string[];
+  generalRole: {
+    title: string;
+    description: string;
+    confidence: number;
+  };
+}
+`;
   }
 } 

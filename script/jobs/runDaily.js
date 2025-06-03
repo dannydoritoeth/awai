@@ -5,16 +5,15 @@
  * @description Daily ETL job runner for NSW Government Jobs
  */
 
-import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const cliPath = path.resolve(projectRoot, 'src', 'cli', 'index.ts');
-const tsNodePath = path.resolve(projectRoot, 'node_modules', '.bin', 'ts-node');
 
 // Load environment variables
 const envPath = path.resolve(projectRoot, '.env.local');
@@ -70,51 +69,20 @@ const pipelineOptions = [
   '--retry-attempts', process.env.RETRY_ATTEMPTS || '3',
   '--retry-delay', process.env.RETRY_DELAY || '1000',
   '--continue-on-error'
-];
+].join(' ');
 
-// Run the CLI script with output piping
-const child = spawn(
-  process.platform === 'win32' ? `${tsNodePath}.cmd` : tsNodePath,
-  [
-    '--esm',
-    cliPath,
-    'run',
-    ...pipelineOptions
-  ],
-  {
+try {
+  // Run the CLI script using execSync
+  execSync(`npx ts-node --esm "${cliPath}" run ${pipelineOptions}`, {
     cwd: projectRoot,
     env: {
       ...process.env,
       ...envConfig.parsed,
       NODE_OPTIONS: '--loader ts-node/esm'
-    }
-  }
-);
-
-// Capture stdout
-child.stdout.on('data', (data) => {
-  console.log(data.toString());
-});
-
-// Capture stderr
-child.stderr.on('data', (data) => {
-  console.error('Error output:', data.toString());
-});
-
-// Handle process events
-child.on('error', (error) => {
-  console.error('Failed to start process:', error);
+    },
+    stdio: 'inherit'
+  });
+} catch (error) {
+  console.error('Failed to run ETL pipeline:', error);
   process.exit(1);
-});
-
-child.on('exit', (code, signal) => {
-  if (signal) {
-    console.error(`Process terminated with signal: ${signal}`);
-    process.exit(1);
-  }
-  if (code !== 0) {
-    console.error(`Process exited with code: ${code}`);
-    process.exit(code);
-  }
-  process.exit(0);
-}); 
+}

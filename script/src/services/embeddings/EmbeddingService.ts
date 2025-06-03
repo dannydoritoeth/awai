@@ -14,12 +14,14 @@
  * @since 2024-02-06
  */
 
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
 import { EmbeddingConfig, EmbeddingResult, jobEmbeddingPrompt, capabilityEmbeddingPrompt, skillEmbeddingPrompt } from './templates/embeddingTemplates.js';
 import { Logger } from '../../utils/logger.js';
+import { TestDataManager } from '../../utils/TestDataManager.js';
 
 export class EmbeddingService {
   private openai: OpenAI;
+  private testDataManager: TestDataManager;
   private maxRetries: number;
   private retryDelay: number;
 
@@ -27,9 +29,54 @@ export class EmbeddingService {
     private config: EmbeddingConfig,
     private logger: Logger
   ) {
-    this.openai = new OpenAI({ apiKey: config.openaiApiKey });
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+    this.testDataManager = new TestDataManager();
     this.maxRetries = config.maxRetries || 3;
     this.retryDelay = config.retryDelay || 1000;
+  }
+
+  /**
+   * Generate embedding for text
+   */
+  private async generateEmbedding(text: string): Promise<number[]> {
+    try {
+      // First try to load from test data if SAVE_TEST_DATA is true
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        const savedEmbedding = await this.testDataManager.loadEmbedding(text);
+        if (savedEmbedding) {
+          this.logger.info('Using saved embedding from test data');
+          return savedEmbedding.vector;
+        }
+      }
+
+      // Generate new embedding
+      const response = await this.openai.embeddings.create({
+        model: this.config.model,
+        input: text
+      });
+
+      const vector = response.data[0].embedding;
+
+      // Save to test data if enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        await this.testDataManager.saveEmbedding(text, {
+          vector,
+          text,
+          metadata: {
+            source: 'openai',
+            timestamp: new Date().toISOString(),
+            model: this.config.model
+          }
+        });
+      }
+
+      return vector;
+    } catch (error) {
+      this.logger.error('Error generating embedding:', error);
+      throw error;
+    }
   }
 
   /**
@@ -96,47 +143,6 @@ export class EmbeddingService {
       this.logger.error('Error generating skill embedding:', error);
       throw error;
     }
-  }
-
-  /**
-   * Generate embedding vector from text
-   */
-  private async generateEmbedding(text: string): Promise<number[]> {
-    try {
-      const formattedText = await this.formatContentForEmbedding(text);
-      return await this.createEmbedding(formattedText);
-    } catch (error) {
-      this.logger.error('Error generating embedding:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Format content for embedding generation
-   */
-  private async formatContentForEmbedding(text: string): Promise<string> {
-    // Clean and normalize text
-    const cleaned = text
-      .trim()
-      .replace(/\s+/g, ' ')
-      .replace(/[^\w\s.,!?-]/g, '');
-
-    // Truncate if needed
-    return cleaned.length > this.config.maxTokens
-      ? cleaned.substring(0, this.config.maxTokens)
-      : cleaned;
-  }
-
-  /**
-   * Creates the actual embedding vector using OpenAI's embedding model
-   */
-  private async createEmbedding(content: string): Promise<number[]> {
-    const response = await this.openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: content
-    });
-
-    return response.data[0].embedding;
   }
 
   /**

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node jobs/runDaily.js",
+    "start": "node --loader ts-node/esm jobs/runDaily.js",
     "build": "tsc",
     "dev": "ts-node-dev --respawn jobs/runDaily.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
