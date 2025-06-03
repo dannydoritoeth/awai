@@ -2080,4 +2080,33 @@ export class StorageService implements IStorageService {
       throw error;
     }
   }
+
+  /**
+   * Check if a job already exists and is synced
+   */
+  async checkExistingSyncedJob(jobId: string): Promise<{ exists: boolean; id?: string; title?: string }> {
+    try {
+      const { data, error } = await this.stagingClient
+        .from('jobs')
+        .select('id, title')
+        .eq('external_id', jobId)
+        .eq('source_id', 'nswgov')
+        .eq('sync_status', 'synced')
+        .maybeSingle();
+
+      if (error) {
+        this.logger.error(`Error checking for existing job ${jobId}:`, error);
+        throw error;
+      }
+
+      return {
+        exists: !!data,
+        id: data?.id,
+        title: data?.title
+      };
+    } catch (error) {
+      this.logger.error('Error in checkExistingSyncedJob:', error);
+      throw error;
+    }
+  }
 } 

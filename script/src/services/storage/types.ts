@@ -197,21 +197,16 @@ export interface JobDetails {
   id: string;
   title: string;
   agency: string;
-  jobType: string;
   location: string | string[];
-  description: string;
-  responsibilities: string[];
-  requirements: string[];
-  notes: string[];
-  aboutUs: string;
   salary: string;
   closingDate: string;
-  postedDate: string;
+  postedDate?: string;
+  jobType: string;
   url: string;
-  jobReference: string;
-  documents?: string[];
-  embedding?: number[];
-  classification?: string;
+  description: string;
+  aboutUs?: string;
+  roleId?: string;
+  documents?: JobDocument[];
 }
 
 // Re-export JobDocument for use in StorageService
