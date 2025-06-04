@@ -15,9 +15,11 @@
  */
 
 import OpenAI from 'openai';
+import { createHash } from 'crypto';
 import { EmbeddingConfig, EmbeddingResult, jobEmbeddingPrompt, capabilityEmbeddingPrompt, skillEmbeddingPrompt } from './templates/embeddingTemplates.js';
 import { Logger } from '../../utils/logger.js';
 import { TestDataManager } from '../../utils/TestDataManager.js';
+import mockEmbedding from '../../../test/data/embeddings/mock.json' assert { type: "json" };
 
 export class EmbeddingService {
   private openai: OpenAI;
@@ -42,37 +44,20 @@ export class EmbeddingService {
    */
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
-      // First try to load from test data if SAVE_TEST_DATA is true
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        const savedEmbedding = await this.testDataManager.loadEmbedding(text);
-        if (savedEmbedding) {
-          this.logger.info('Using saved embedding from test data');
-          return savedEmbedding.vector;
-        }
+      // If test scenario is enabled, return mock embedding data
+      if (process.env.LOAD_TEST_SCENARIO) {
+        this.logger.info('Using mock embedding data for test scenario');
+        // Use the pre-saved OpenAI embedding vector that we know works with Supabase
+        return mockEmbedding.result.vector;
       }
 
-      // Generate new embedding
+      // Generate new embedding from OpenAI
       const response = await this.openai.embeddings.create({
         model: this.config.model,
         input: text
       });
 
-      const vector = response.data[0].embedding;
-
-      // Save to test data if enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.testDataManager.saveEmbedding(text, {
-          vector,
-          text,
-          metadata: {
-            source: 'openai',
-            timestamp: new Date().toISOString(),
-            model: this.config.model
-          }
-        });
-      }
-
-      return vector;
+      return response.data[0].embedding;
     } catch (error) {
       this.logger.error('Error generating embedding:', error);
       throw error;

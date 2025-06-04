@@ -20,6 +20,7 @@
  */
 
 import OpenAI from 'openai';
+import { createHash } from 'crypto';
 import { 
   CapabilityAnalysisResult, 
   createCapabilityAnalysisPrompt
@@ -32,7 +33,7 @@ import {
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
 import { delay } from '../../utils/helpers.js';
-import { TestDataManager } from '../../utils/TestDataManager.js';
+import { TestDataManager, AIModelInvocation } from '../../utils/TestDataManager.js';
 
 export interface AIAnalyzerConfig {
   openaiApiKey: string;
@@ -695,14 +696,38 @@ export class AIAnalyzer {
    */
   async analyzeJob(jobDetails: JobDetails): Promise<CapabilityAnalysisResult> {
     try {
+      this.logger.info('Analyzing job:', jobDetails);
       const prompt = this.buildJobAnalysisPrompt(jobDetails);
+      // Use roleId if available, otherwise generate a hash from the job title and agency
+      const jobId = jobDetails.roleId || 
+        createHash('sha256')
+          .update(`${jobDetails.title || ''}-${jobDetails.agency || ''}`)
+          .digest('hex')
+          .substring(0, 8);
 
-      // Try to load from test data first if enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
+      // Try to load from test scenario first if enabled
+      if (process.env.LOAD_TEST_SCENARIO) {
         const savedInvocation = await this.testDataManager.loadAIInvocation({
-          action_type: 'job_analysis',
+          action_type: 'analyze_job_capabilities',
           model_name: this.config.openaiModel || 'gpt-3.5-turbo',
-          user_prompt: prompt
+          user_prompt: prompt,
+          jobId
+        });
+
+        if (savedInvocation?.response_text) {
+          this.logger.info('Using saved AI invocation from test scenario');
+          return JSON.parse(savedInvocation.response_text);
+        }
+        throw new Error('Test scenario enabled but no saved AI invocation found');
+      }
+
+      // If not in test scenario mode, try to load from test data if enabled
+      if (!process.env.LOAD_TEST_SCENARIO && process.env.SAVE_TEST_DATA === 'true') {
+        const savedInvocation = await this.testDataManager.loadAIInvocation({
+          action_type: 'analyze_job_capabilities',
+          model_name: this.config.openaiModel || 'gpt-3.5-turbo',
+          user_prompt: prompt,
+          jobId
         });
 
         if (savedInvocation?.response_text) {
@@ -740,20 +765,32 @@ export class AIAnalyzer {
       const result = JSON.parse(firstChoice.message.content) as CapabilityAnalysisResult;
 
       // Save to test data if enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.testDataManager.saveAIInvocation({
-          action_type: 'job_analysis',
+      if (!process.env.LOAD_TEST_SCENARIO && process.env.SAVE_TEST_DATA === 'true') {
+        const invocation: AIModelInvocation = {
+          action_type: 'analyze_job_capabilities',
           model_provider: 'openai',
           model_name: this.config.openaiModel || 'gpt-3.5-turbo',
-          user_prompt: prompt,
-          system_prompt: 'You are a job analysis expert. Analyze the job details and extract capabilities, skills, and other relevant information.',
           temperature: this.config.temperature || 0.7,
           max_tokens: this.config.maxTokens || 1000,
-          response_text: JSON.stringify(result, null, 2),
-          response_metadata: response,
-          token_usage: response.usage,
-          status: 'success'
-        });
+          user_prompt: prompt,
+          response_text: firstChoice.message.content,
+          response_metadata: {
+            model: response.model,
+            object: response.object,
+            created: response.created,
+            system_fingerprint: response.system_fingerprint
+          },
+          status: 'success',
+          latency_ms: 0,
+          jobId
+        };
+
+        // Only add token_usage if it exists
+        if (response.usage) {
+          invocation.token_usage = response.usage;
+        }
+
+        await this.testDataManager.saveAIInvocation(invocation);
       }
 
       return result;

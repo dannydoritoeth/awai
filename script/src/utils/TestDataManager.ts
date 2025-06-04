@@ -26,6 +26,7 @@ export interface AIModelInvocation {
   status: 'success' | 'error';
   error_message?: string;
   latency_ms?: number;
+  jobId?: string;
 }
 
 export class TestDataManager {
@@ -33,19 +34,52 @@ export class TestDataManager {
   private embeddingsDir: string;
   private aiInvocationsDir: string;
   private jobsDir: string;
+  private isTestScenario: boolean;
+  private testScenario: string | undefined;
 
   constructor(baseDir: string = process.cwd()) {
     this.testDataDir = path.join(baseDir, 'test', 'data');
     this.embeddingsDir = path.join(this.testDataDir, 'embeddings');
     this.aiInvocationsDir = path.join(this.testDataDir, 'ai_invocations');
     this.jobsDir = path.join(this.testDataDir, 'jobs');
+    this.testScenario = process.env.LOAD_TEST_SCENARIO;
+    this.isTestScenario = Boolean(this.testScenario);
 
-    // Create directories if they don't exist
-    [this.testDataDir, this.embeddingsDir, this.aiInvocationsDir, this.jobsDir].forEach(dir => {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    });
+    // Create directories if they don't exist and we're not in test scenario mode
+    if (!this.isTestScenario) {
+      [this.testDataDir, this.embeddingsDir, this.aiInvocationsDir, this.jobsDir].forEach(dir => {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+      });
+    }
+  }
+
+  /**
+   * Extract job ID from user prompt
+   */
+  private extractJobId(userPrompt: string): string | undefined {
+    // Try to find a job ID in the prompt
+    const jobIdMatch = userPrompt.match(/Job ID:\s*([A-Za-z0-9-]+)/);
+    if (jobIdMatch) {
+      return jobIdMatch[1];
+    }
+    return undefined;
+  }
+
+  /**
+   * Generate filename for AI invocation
+   */
+  private generateAIInvocationFilename(jobId: string | undefined, actionType: string): string {
+    if (jobId) {
+      return `${jobId}-${actionType}.json`;
+    }
+    // Fallback to hash if no job ID
+    const hash = crypto.createHash('sha256')
+      .update(actionType)
+      .digest('hex')
+      .substring(0, 8);
+    return `${hash}-${actionType}.json`;
   }
 
   /**
@@ -57,9 +91,52 @@ export class TestDataManager {
   }
 
   /**
+   * Load job listings from test scenario
+   */
+  async loadJobListings(): Promise<JobListing[] | null> {
+    if (!this.isTestScenario || !this.testScenario) return null;
+
+    try {
+      const scenarioFile = path.join(this.jobsDir, `${this.testScenario}.json`);
+      if (!fs.existsSync(scenarioFile)) {
+        throw new Error(`Test scenario file not found: ${scenarioFile}`);
+      }
+
+      const data = await fs.promises.readFile(scenarioFile, 'utf-8');
+      return JSON.parse(data) as JobListing[];
+    } catch (error) {
+      console.error('Error loading test scenario job listings:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Load job details from test scenario
+   */
+  async loadJobDetails(jobId: string): Promise<JobDetails | null> {
+    if (!this.isTestScenario) return null;
+
+    try {
+      const jobDir = path.join(this.jobsDir, jobId);
+      const detailsFile = path.join(jobDir, 'details.json');
+
+      if (!fs.existsSync(detailsFile)) {
+        return null;
+      }
+
+      const data = await fs.promises.readFile(detailsFile, 'utf-8');
+      return JSON.parse(data) as JobDetails;
+    } catch (error) {
+      console.error('Error loading job details from test data:', error);
+      return null;
+    }
+  }
+
+  /**
    * Save job listings data
    */
   async saveJobListings(listings: JobListing[]): Promise<void> {
+    if (this.isTestScenario) return;
     if (process.env.SAVE_TEST_DATA !== 'true') return;
 
     try {
@@ -79,6 +156,7 @@ export class TestDataManager {
    * Save job details and related data
    */
   async saveJobDetails(jobListing: JobListing, rawHtml: string, jobDetails: JobDetails): Promise<void> {
+    if (this.isTestScenario) return;
     if (process.env.SAVE_TEST_DATA !== 'true') return;
 
     try {
@@ -114,6 +192,7 @@ export class TestDataManager {
    * Save embedding result to test data
    */
   async saveEmbedding(text: string, result: EmbeddingResult): Promise<void> {
+    if (this.isTestScenario) return;
     if (process.env.SAVE_TEST_DATA !== 'true') return;
 
     try {
@@ -174,26 +253,26 @@ export class TestDataManager {
    * Save AI model invocation to test data
    */
   async saveAIInvocation(invocation: AIModelInvocation): Promise<void> {
+    if (this.isTestScenario) return;
     if (process.env.SAVE_TEST_DATA !== 'true') return;
 
     try {
-      // Create a hash of the request to use as filename
-      const requestData = {
-        action_type: invocation.action_type,
-        model_name: invocation.model_name,
-        system_prompt: invocation.system_prompt,
-        user_prompt: invocation.user_prompt,
-        messages: invocation.messages
-      };
-      const hash = this.generateHash(JSON.stringify(requestData));
-      const filename = `${hash}.json`;
+      // Extract job ID from user prompt if not provided
+      const jobId = invocation.jobId || this.extractJobId(invocation.user_prompt);
+      const filename = this.generateAIInvocationFilename(jobId, invocation.action_type);
       const filePath = path.join(this.aiInvocationsDir, filename);
 
       // Save the invocation data
       await fs.promises.writeFile(
         filePath,
         JSON.stringify({
-          request: requestData,
+          request: {
+            action_type: invocation.action_type,
+            model_name: invocation.model_name,
+            system_prompt: invocation.system_prompt,
+            user_prompt: invocation.user_prompt,
+            messages: invocation.messages
+          },
           response: {
             text: invocation.response_text,
             metadata: invocation.response_metadata,
@@ -211,9 +290,10 @@ export class TestDataManager {
         ? JSON.parse(await fs.promises.readFile(indexPath, 'utf-8'))
         : {};
 
-      index[hash] = {
+      index[filename] = {
         action_type: invocation.action_type,
         model_name: invocation.model_name,
+        job_id: jobId,
         prompt_preview: invocation.user_prompt.substring(0, 100) + (invocation.user_prompt.length > 100 ? '...' : ''),
         filename,
         timestamp: new Date().toISOString()
@@ -234,10 +314,13 @@ export class TestDataManager {
     system_prompt?: string;
     user_prompt: string;
     messages?: any;
+    jobId?: string;
   }): Promise<AIModelInvocation | null> {
     try {
-      const hash = this.generateHash(JSON.stringify(request));
-      const filePath = path.join(this.aiInvocationsDir, `${hash}.json`);
+      // Extract job ID from user prompt if not provided
+      const jobId = request.jobId || this.extractJobId(request.user_prompt);
+      const filename = this.generateAIInvocationFilename(jobId, request.action_type);
+      const filePath = path.join(this.aiInvocationsDir, filename);
 
       if (!fs.existsSync(filePath)) {
         return null;
@@ -255,7 +338,8 @@ export class TestDataManager {
         token_usage: data.response.token_usage,
         status: data.status,
         model_provider: 'openai', // Default to OpenAI for now
-        latency_ms: 0 // Not storing actual latency in test data
+        latency_ms: 0, // Not storing actual latency in test data
+        jobId
       };
     } catch (error) {
       console.error('Error loading AI invocation test data:', error);

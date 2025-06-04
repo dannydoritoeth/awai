@@ -75,6 +75,16 @@ export class SpiderService implements ISpiderService {
     this.logger.info('Starting job listings scrape');
 
     try {
+      // Try to load from test scenario first
+      const testListings = await this.testDataManager.loadJobListings();
+      if (testListings) {
+        this.logger.info(`Loaded ${testListings.length} job listings from test scenario`);
+        this.metrics.totalJobs = testListings.length;
+        this.metrics.successfulScrapes++;
+        return testListings;
+      }
+
+      // If not in test scenario mode, proceed with normal scraping
       const page = await this.getPage();
       
       // Add longer timeout and better error handling for initial page load
@@ -212,7 +222,7 @@ export class SpiderService implements ISpiderService {
       if (process.env.SAVE_TEST_DATA === 'true') {
         await this.saveJobListingsData(limitedListings);
       }
-
+      
       // Only log the jobs we're actually going to process
       this.logger.info(`Found ${limitedListings.length} job listings${maxRecords ? ` (limited by maxRecords=${maxRecords})` : ''}`);
       limitedListings.forEach(job => {
@@ -266,6 +276,15 @@ export class SpiderService implements ISpiderService {
     this.logger.info(`Job URL: ${jobListing.url}`);
 
     try {
+      // Try to load from test scenario first
+      const testDetails = await this.testDataManager.loadJobDetails(jobListing.id);
+      if (testDetails) {
+        this.logger.info(`Loaded job details from test scenario for job ${jobListing.id}`);
+        this.metrics.successfulScrapes++;
+        return testDetails;
+      }
+
+      // If not in test scenario mode, proceed with normal scraping
       const page = await this.getPage();
       await page.goto(jobListing.url, { waitUntil: 'networkidle0' });
 
