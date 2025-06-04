@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
 import { execSync } from 'child_process';
+import pg from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +33,8 @@ const requiredEnvVars = {
   SUPABASE_STAGING_KEY: 'Supabase staging database key',
   SUPABASE_LIVE_URL: 'Supabase live database URL',
   SUPABASE_LIVE_KEY: 'Supabase live database key',
-  NSW_JOBS_URL: 'NSW Government jobs portal URL'
+  NSW_JOBS_URL: 'NSW Government jobs portal URL',
+  PG_STAGING_URL: 'PostgreSQL connection string for staging database'
 };
 
 // Check for missing environment variables
@@ -45,6 +47,53 @@ if (missingVars.length > 0) {
   process.exit(1);
 }
 
+// Initialize PostgreSQL connection pool
+const pgStagingPool = new pg.Pool({
+  connectionString: process.env.PG_STAGING_URL,
+  ssl: {
+    rejectUnauthorized: false, // Required for Supabase
+  },
+});
+
+// Test PostgreSQL connection
+async function testPgConnection() {
+  let client;
+  try {
+    console.log('\n=== Testing PostgreSQL Connection ===');
+    client = await pgStagingPool.connect();
+    
+    // Get PostgreSQL version and connection info
+    const { rows: versionRows } = await client.query('SELECT version()');
+    const { rows: connectionRows } = await client.query(
+      "SELECT current_database(), current_user, inet_server_addr() as server_ip, inet_server_port() as server_port"
+    );
+
+    console.log('PostgreSQL Version:', versionRows[0].version);
+    console.log('Connection Info:', {
+      database: connectionRows[0].current_database,
+      user: connectionRows[0].current_user,
+      server: `${connectionRows[0].server_ip}:${connectionRows[0].server_port}`
+    });
+    
+    // Test a simple table count query
+    const { rows: tableRows } = await client.query(
+      "SELECT schemaname, tablename FROM pg_tables WHERE schemaname = 'public'"
+    );
+    console.log('\nAvailable tables in public schema:', tableRows.length);
+    tableRows.forEach(row => console.log(`- ${row.tablename}`));
+    
+    console.log('\nPostgreSQL connection test successful!');
+    console.log('=====================================\n');
+  } catch (error) {
+    console.error('\nError connecting to PostgreSQL staging database:', error);
+    console.log('Continuing with Supabase connection only');
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Log environment status (safely)
 console.log('Environment loaded:', {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Set' : 'Not Set',
@@ -52,7 +101,8 @@ console.log('Environment loaded:', {
   SUPABASE_STAGING_KEY: process.env.SUPABASE_STAGING_KEY ? 'Set' : 'Not Set',
   SUPABASE_LIVE_URL: process.env.SUPABASE_LIVE_URL ? 'Set' : 'Not Set',
   SUPABASE_LIVE_KEY: process.env.SUPABASE_LIVE_KEY ? 'Set' : 'Not Set',
-  NSW_JOBS_URL: process.env.NSW_JOBS_URL ? 'Set' : 'Not Set'
+  NSW_JOBS_URL: process.env.NSW_JOBS_URL ? 'Set' : 'Not Set',
+  PG_STAGING_URL: process.env.PG_STAGING_URL ? 'Set' : 'Not Set'
 });
 
 // Ensure we're in the project root directory
@@ -61,6 +111,9 @@ process.chdir(projectRoot);
 console.log('Starting ETL pipeline...');
 console.log('Project Root:', projectRoot);
 console.log('CLI Path:', cliPath);
+
+// Test PostgreSQL connection before proceeding
+await testPgConnection();
 
 // Pipeline options from environment variables or defaults
 const pipelineOptions = [
@@ -85,4 +138,7 @@ try {
 } catch (error) {
   console.error('Failed to run ETL pipeline:', error);
   process.exit(1);
+} finally {
+  // Clean up PostgreSQL connection pool
+  await pgStagingPool.end();
 }
