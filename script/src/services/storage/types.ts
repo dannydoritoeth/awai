@@ -284,5 +284,22 @@ export interface AIModel {
   updated_at?: string;
 }
 
+export interface CompanyData {
+  name: string;
+  description: string;
+  website: string;
+  raw_data: any;
+}
+
+export interface CompanyRecord {
+  id: string;
+  name: string;
+  description: string;
+  website: string;
+  raw_data: any;
+  sync_status: string;
+  last_synced_at: string;
+}
+
 // Re-export JobDocument for use in StorageService
 export type { JobDocument }; 

@@ -5,7 +5,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
-import { JobDetails, JobRecord, ProcessedJob, QueryOptions, EmbeddingRecord } from './types.js';
+import { JobDetails, JobRecord, ProcessedJob, QueryOptions, EmbeddingRecord, CompanyRecord } from './types.js';
 import { JobDocument } from '../spider/types.js';
 import { CompanyStorage } from './CompanyStorage.js';
 import { RoleStorage } from './RoleStorage.js';
@@ -13,10 +13,10 @@ import { CapabilityStorage } from './CapabilityStorage.js';
 import { SkillStorage } from './SkillStorage.js';
 
 export class JobStorage {
-  private readonly companies: CompanyStorage;
-  private readonly roles: RoleStorage;
-  private readonly capabilities: CapabilityStorage;
-  private readonly skills: SkillStorage;
+  private skills: SkillStorage;
+  private companies: CompanyStorage;
+  private roles: RoleStorage;
+  private capabilities: CapabilityStorage;
 
   constructor(
     private stagingClient: SupabaseClient,
@@ -24,9 +24,9 @@ export class JobStorage {
     private logger: Logger
   ) {
     this.companies = new CompanyStorage(stagingClient, liveClient, logger);
+    this.skills = new SkillStorage(stagingClient, liveClient, logger, this.companies);
     this.roles = new RoleStorage(stagingClient, liveClient, logger);
     this.capabilities = new CapabilityStorage(stagingClient, liveClient, logger);
-    this.skills = new SkillStorage(stagingClient, liveClient, logger);
   }
 
   /**
@@ -49,6 +49,24 @@ export class JobStorage {
   }
 
   /**
+   * Get or create a company record
+   */
+  private async getOrCreateCompany(job: JobDetails): Promise<CompanyRecord> {
+    const companyData = await this.companies.storeCompanyRecord({
+      name: job.agency || 'NSW Government',
+      description: job.aboutUs || '',
+      website: '',
+      raw_data: job
+    });
+
+    if (!companyData || !companyData[0]) {
+      throw new Error('Failed to get or create company');
+    }
+
+    return companyData[0];
+  }
+
+  /**
    * Store a processed job and its related data
    */
   async storeJob(job: ProcessedJob): Promise<void> {
@@ -63,18 +81,13 @@ export class JobStorage {
         department: job.jobDetails.agency
       });
       
-      // First store the company
-      const companyData = await this.companies.storeCompanyRecord({
-        name: job.jobDetails.agency || 'NSW Government',
-        description: '',
-        website: '',
-        raw_data: job.jobDetails
-      });
+      // Get or create company first
+      const company = await this.getOrCreateCompany(job.jobDetails);
 
       // Store the role
       const roleData = await this.roles.storeRoleRecord({
         title: job.jobDetails.title,
-        company_id: companyData[0].id,
+        company_id: company.id,
         raw_data: job.jobDetails
       });
 
@@ -100,7 +113,7 @@ export class JobStorage {
       const { data: existingJob, error: checkError } = await this.stagingClient
         .from('jobs')
         .select('id')
-        .eq('company_id', companyData[0].id)
+        .eq('company_id', company.id)
         .eq('source_id', 'nswgov')
         .eq('external_id', jobId)
         .maybeSingle();
@@ -114,7 +127,7 @@ export class JobStorage {
         external_id: jobId,
         source_id: 'nswgov',
         title: job.jobDetails.title,
-        company_id: companyData[0].id,
+        company_id: company.id,
         role_id: roleData[0].id,
         locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
         remuneration: job.jobDetails.salary,
@@ -191,14 +204,23 @@ export class JobStorage {
    * Store a batch of processed jobs
    */
   async storeBatch(jobs: ProcessedJob[]): Promise<void> {
-    this.logger.info(`Starting batch storage of ${jobs.length} jobs`);
-    
-    for (const job of jobs) {
-      try {
-        await this.storeJob(job);
-      } catch (error) {
-        this.logger.error(`Error storing job ${job.jobDetails.id}:`, error);
+    try {
+      this.logger.info(`Storing batch of ${jobs.length} jobs`);
+      const processedDocs: ProcessedJob[] = [];
+
+      for (const job of jobs) {
+        try {
+          await this.storeJob(job);
+          processedDocs.push(job);
+        } catch (error) {
+          this.logger.error(`Error storing job ${job.jobDetails.id}:`, error);
+        }
       }
+
+      this.logger.info(`Successfully processed ${processedDocs.length} out of ${jobs.length} jobs`);
+    } catch (error) {
+      this.logger.error('Error in storeBatch:', error);
+      throw error;
     }
   }
 

@@ -23,7 +23,9 @@ import OpenAI from 'openai';
 import { createHash } from 'crypto';
 import { 
   CapabilityAnalysisResult, 
-  createCapabilityAnalysisPrompt
+  createCapabilityAnalysisPrompt,
+  LLMCapabilityAnalysisResult,
+  TaxonomyAnalysisResult 
 } from './templates/capabilityAnalysis.js';
 import {
   TaxonomyAnalysisResult,
@@ -189,7 +191,7 @@ export class AIAnalyzer {
   /**
    * Analyzes a job description to extract capabilities
    */
-  async analyzeJobDescription(content: string, systemPrompt: string): Promise<CapabilityAnalysisResult> {
+  async analyzeJobDescription(content: string, systemPrompt: string): Promise<LLMCapabilityAnalysisResult> {
     try {
       const startTime = Date.now();
       
@@ -217,7 +219,7 @@ export class AIAnalyzer {
         throw new Error('No content returned from OpenAI');
       }
 
-      const result = JSON.parse(responseContent) as CapabilityAnalysisResult;
+      const result = JSON.parse(responseContent) as LLMCapabilityAnalysisResult;
       
       // Store the AI invocation
       await this.saveAIInvocation({
@@ -285,6 +287,62 @@ export class AIAnalyzer {
       });
       throw error;
     }
+  }
+
+  /**
+   * Maps the LLM capability analysis result to the final result with IDs
+   */
+  private mapCapabilityResult(llmResult: LLMCapabilityAnalysisResult): CapabilityAnalysisResult {
+    // Create maps for looking up IDs by name
+    const capabilityMap = new Map(this.frameworkCapabilities.map(c => [c.name, c.id]));
+    const taxonomyMap = new Map(this.taxonomyGroups.map(t => [t.name, t.id]));
+
+    // Map capabilities
+    const capabilities = (llmResult.capabilities || []).map(cap => ({
+      id: capabilityMap.get(cap.name) || '',
+      name: cap.name,
+      level: cap.level,
+      description: cap.description,
+      relevance: cap.relevance
+    })).filter(cap => cap.id); // Only keep capabilities we found IDs for
+
+    // Map taxonomies
+    const taxonomies = (llmResult.taxonomies || []).map(tax => ({
+      id: taxonomyMap.get(tax.name) || '',
+      name: tax.name
+    })).filter(tax => tax.id); // Only keep taxonomies we found IDs for
+
+    // Map skills (no IDs yet, will be generated when stored)
+    const skills = (llmResult.skills || []).map(skill => ({
+      id: '', // Will be generated when stored
+      name: skill.name,
+      description: skill.description,
+      category: skill.category
+    }));
+
+    // Return mapped result
+    return {
+      capabilities,
+      occupationalGroups: llmResult.occupationalGroups || [],
+      focusAreas: llmResult.focusAreas || [],
+      skills,
+      taxonomies,
+      generalRole: llmResult.generalRole ? {
+        id: '', // Will be handled by the calling code
+        name: llmResult.generalRole.name,
+        title: llmResult.generalRole.title,
+        description: llmResult.generalRole.description,
+        confidence: llmResult.generalRole.confidence,
+        isNewRole: llmResult.generalRole.isNewRole
+      } : {
+        id: '',
+        name: '',
+        title: '',
+        description: '',
+        confidence: 0,
+        isNewRole: true
+      }
+    };
   }
 
   /**
@@ -463,9 +521,12 @@ export class AIAnalyzer {
         frameworkCapabilitiesCount: this.frameworkCapabilities.length
       });
 
-      const result = await this.retryOperation(
+      const llmResult = await this.retryOperation(
         () => this.analyzeJobDescription(content, prompt)
       );
+
+      // Map the LLM result to the final result with IDs
+      const result = this.mapCapabilityResult(llmResult);
       
       this.logger.info(`General Role Result: ${JSON.stringify(result)}:`, this.config.storageService);
       // Store new general role if one was suggested

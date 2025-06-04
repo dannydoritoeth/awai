@@ -5,6 +5,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
+import { CompanyData, CompanyRecord } from './types.js';
 
 export class CompanyStorage {
   constructor(
@@ -16,7 +17,7 @@ export class CompanyStorage {
   /**
    * Store company record in staging
    */
-  async storeCompanyRecord(company: { name: string; description: string; website: string; raw_data: any }): Promise<any[]> {
+  async storeCompanyRecord(company: CompanyData): Promise<CompanyRecord[]> {
     try {
       if (!company) {
         throw new Error('Company object is required');

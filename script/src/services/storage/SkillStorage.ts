@@ -5,7 +5,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
-import { Skill, ProcessedJob, QueryOptions } from './types.js';
+import { Skill, ProcessedJob, QueryOptions, CompanyRecord } from './types.js';
 import { CompanyStorage } from './CompanyStorage.js';
 
 export class SkillStorage {
@@ -15,6 +15,24 @@ export class SkillStorage {
     private logger: Logger,
     private companies: CompanyStorage
   ) {}
+
+  /**
+   * Get or create a company record
+   */
+  private async getOrCreateCompany(job: ProcessedJob): Promise<CompanyRecord> {
+    const companyData = await this.companies.storeCompanyRecord({
+      name: job.jobDetails.agency || 'NSW Government',
+      description: job.jobDetails.aboutUs || '',
+      website: '',
+      raw_data: job.jobDetails
+    });
+
+    if (!companyData || !companyData[0]) {
+      throw new Error('Failed to get or create company');
+    }
+
+    return companyData[0];
+  }
 
   /**
    * Store a single skill record
@@ -84,8 +102,8 @@ export class SkillStorage {
         .upsert({
           role_id: roleId,
           skill_id: skillId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          sync_status: 'pending',
+          last_synced_at: null
         }, {
           onConflict: 'role_id,skill_id'
         });
@@ -110,27 +128,16 @@ export class SkillStorage {
     text?: string 
   }>): Promise<void> {
     try {
-      // Get the company first
-      const companyData = await this.companies.storeCompanyRecord({
-        name: job.jobDetails.agency || 'NSW Government',
-        description: job.jobDetails.aboutUs || '',
-        website: '',
-        raw_data: job.jobDetails
-      });
-
-      if (!companyData || !companyData[0]) {
-        throw new Error('Failed to get or create company');
-      }
-
-      const companyId = companyData[0].id;
-      this.logger.info(`Using company ID ${companyId} for skills of job ${job.jobDetails.id}`);
+      // Get or create company first
+      const company = await this.getOrCreateCompany(job);
+      this.logger.info(`Using company ID ${company.id} for skills of job ${job.jobDetails.id}`);
 
       // Get the role ID
       const { data: roleData, error: roleError } = await this.stagingClient
         .from('roles')
         .select('id')
         .eq('title', job.jobDetails.title)
-        .eq('company_id', companyId)
+        .eq('company_id', company.id)
         .single();
 
       if (roleError) {
@@ -153,7 +160,7 @@ export class SkillStorage {
       for (const skill of skills) {
         try {
           // Store skill
-          const skillRecord = await this.storeSkillRecord(skill, companyId);
+          const skillRecord = await this.storeSkillRecord(skill, company.id);
           
           // Link skill to role
           await this.linkRoleSkill(roleId, skillRecord.id);
