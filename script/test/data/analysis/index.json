@@ -1,27 +1,7 @@
 {
-  "b3f868ee-10b5-4edc-8215-3cd8b4d19ea7-capabilities.json": {
-    "jobId": "b3f868ee-10b5-4edc-8215-3cd8b4d19ea7",
+  "543085-capabilities.json": {
+    "jobId": "543085",
     "type": "capabilities",
-    "timestamp": "2025-06-04T20:39:33.677Z"
-  },
-  "35571fe3-db47-452c-bebd-fe5a8bc82e2d-capabilities.json": {
-    "jobId": "35571fe3-db47-452c-bebd-fe5a8bc82e2d",
-    "type": "capabilities",
-    "timestamp": "2025-06-04T20:40:00.685Z"
-  },
-  "41a03402-6442-4148-809b-5e5f00bfa4f1-capabilities.json": {
-    "jobId": "41a03402-6442-4148-809b-5e5f00bfa4f1",
-    "type": "capabilities",
-    "timestamp": "2025-06-04T20:40:04.804Z"
-  },
-  "8a9ed0c4-bf34-4b73-bcb5-bc04d4eb4eef-capabilities.json": {
-    "jobId": "8a9ed0c4-bf34-4b73-bcb5-bc04d4eb4eef",
-    "type": "capabilities",
-    "timestamp": "2025-06-04T20:40:05.781Z"
-  },
-  "bead506b-7d18-49f5-96c3-b298c9e64ab3-capabilities.json": {
-    "jobId": "bead506b-7d18-49f5-96c3-b298c9e64ab3",
-    "type": "capabilities",
-    "timestamp": "2025-06-04T20:40:18.993Z"
+    "timestamp": "2025-06-04T21:09:52.864Z"
   }
 }

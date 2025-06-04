@@ -406,10 +406,11 @@ export class AIAnalyzer {
    * Analyze job capabilities and skills
    */
   async analyzeCapabilities(job: JobDetails): Promise<CapabilityAnalysisResult> {
-    const jobId = job.roleId || job.id || createHash('sha256')
-      .update(`${job.title ?? ''}-${job.agency ?? ''}`)
-      .digest('hex')
-      .substring(0, 8);
+    const jobId = job.id;
+    //  || job.roleId || createHash('sha256')
+    //   .update(`${job.title ?? ''}-${job.agency ?? ''}`)
+    //   .digest('hex')
+    //   .substring(0, 8);
 
     try {
       this.logger.info(`Analyzing capabilities for job ${jobId}`);

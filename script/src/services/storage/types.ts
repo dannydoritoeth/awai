@@ -194,6 +194,7 @@ export interface IStorageService {
 
 export interface JobDetails {
   id: string;
+  external_id?: string;
   title: string;
   location: string | string[];
   agency?: string;
