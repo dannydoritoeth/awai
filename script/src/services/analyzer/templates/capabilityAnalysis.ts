@@ -87,6 +87,7 @@ Your task is to analyze the job description and:
 1. Identify required capabilities from the NSW Public Sector Capability Framework
 2. Classify the role into taxonomy groups
 3. Determine the most appropriate general role category
+4. The id must be an exact match to the id in the provided list
 
 ${capabilitiesPrompt}
 

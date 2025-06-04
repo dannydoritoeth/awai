@@ -14,7 +14,6 @@
  * @since 2024-02-06
  */
 
-import { ProcessedJob } from '../processor/types.js';
 import { JobDocument } from '../spider/types.js';
 
 export interface StorageConfig {
@@ -196,17 +195,93 @@ export interface IStorageService {
 export interface JobDetails {
   id: string;
   title: string;
-  agency: string;
   location: string | string[];
-  salary: string;
-  closingDate: string;
+  agency?: string;
+  salary?: string;
+  closingDate?: string;
   postedDate?: string;
-  jobType: string;
-  url: string;
-  description: string;
-  aboutUs?: string;
-  roleId?: string;
-  documents?: JobDocument[];
+  jobType?: string;
+  url?: string;
+  [key: string]: any;
+}
+
+export interface ProcessedJob {
+  jobDetails: JobDetails;
+  metadata?: Record<string, any>;
+  capabilities?: {
+    capabilities: Array<{
+      name: string;
+      level: string;
+      description: string;
+      behavioral_indicators: string[];
+    }>;
+    skills: Array<{
+      name: string;
+      description: string;
+      category: string;
+    }>;
+  };
+  taxonomy?: {
+    technicalSkills: string[];
+    softSkills: string[];
+  };
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Capability {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Taxonomy {
+  id: string;
+  name: string;
+  type: string;
+  parent_id?: string;
+  metadata?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Institution {
+  id: string;
+  name: string;
+  type?: string;
+  location?: string;
+  metadata?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  version?: string;
+  capabilities?: string[];
+  metadata?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Re-export JobDocument for use in StorageService

@@ -110,7 +110,7 @@ export class AIAnalyzer {
     this.testDataManager = new TestDataManager();
     this.maxRetries = config.maxRetries || 3;
     this.timeout = config.timeout || 30000;
-    this.model = config.openaiModel || "gpt-4-0125-preview";
+    this.model = config.openaiModel || "gpt-4-turbo-preview";
     this.temperature = config.temperature || 0;
     this.maxTokens = config.maxTokens || 2000;
     this.logger.info('AIAnalyzer initialized');

@@ -18,8 +18,8 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 import { ISpiderService, JobListing, JobDetails, SpiderConfig, SpiderMetrics, JobDocument } from './types.js';
 import { Logger } from '../../utils/logger.js';
 import { delay } from '../../utils/helpers.js';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { TestDataManager } from '../../utils/TestDataManager.js';
 
 export class SpiderService implements ISpiderService {
@@ -49,7 +49,6 @@ export class SpiderService implements ISpiderService {
     if (!this.browser) {
       this.logger.info('Spider name "nsw gov jobs" launched');
       this.browser = await puppeteer.launch({
-        headless: 'new',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
       this.logger.info('Browser instance initialized');
@@ -107,6 +106,11 @@ export class SpiderService implements ISpiderService {
       const pageContent = await page.content();
       this.logger.info('Current URL after navigation:', currentUrl);
       this.logger.info(`Page content length: ${pageContent.length} characters`);
+
+      // Save raw HTML if test data saving is enabled
+      if (process.env.SAVE_TEST_DATA === 'true') {
+        await this.saveRawHtml(pageContent);
+      }
 
       // Set page size if selector exists with better error handling
       try {
@@ -265,6 +269,26 @@ export class SpiderService implements ISpiderService {
       this.logger.info(`Saved test data for job ${jobListing.id}`);
     } catch (error) {
       this.logger.error('Error saving job test data:', error);
+    }
+  }
+
+  /**
+   * Save raw HTML from the page for testing/debugging
+   */
+  private async saveRawHtml(html: string): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const testDataDir = path.join(process.cwd(), 'test', 'data');
+      
+      if (!fs.existsSync(testDataDir)) {
+        fs.mkdirSync(testDataDir, { recursive: true });
+      }
+
+      const filePath = path.join(testDataDir, `raw_html_${timestamp}.html`);
+      fs.writeFileSync(filePath, html, 'utf8');
+      this.logger.info('Saved raw HTML to:', filePath);
+    } catch (error) {
+      this.logger.error('Error saving raw HTML:', error);
     }
   }
 

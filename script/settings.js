@@ -2,7 +2,7 @@
  * @description puppeteer broswer settings.
  */
 export default {
-  headless: true,
+  headless: false,
   defaultViewport: null,
   args: [
     '--start-maximized',

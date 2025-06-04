@@ -66,7 +66,7 @@ async function main() {
     logger.info('Initializing AIAnalyzer...');
     const aiAnalyzer = new AIAnalyzer({
       openaiApiKey: process.env.OPENAI_API_KEY!,
-      openaiModel: process.env.OPENAI_MODEL || 'gpt-4-0125-preview',
+      openaiModel: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
       maxRetries: Number(process.env.RETRY_ATTEMPTS) || 3,
       retryDelay: Number(process.env.RETRY_DELAY) || 1000,
       timeout: Number(process.env.AI_TIMEOUT) || 30000,
