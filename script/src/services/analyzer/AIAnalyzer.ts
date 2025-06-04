@@ -25,15 +25,15 @@ import {
   CapabilityAnalysisResult, 
   createCapabilityAnalysisPrompt,
   LLMCapabilityAnalysisResult,
-  TaxonomyAnalysisResult 
+  TaxonomyAnalysisResult as TaxonomyResult
 } from './templates/capabilityAnalysis.js';
 import {
-  TaxonomyAnalysisResult,
   createTaxonomyAnalysisPrompt,
   TaxonomyGroup
 } from './templates/taxonomyAnalysis.js';
 import { Logger } from '../../utils/logger.js';
 import { JobDetails } from '../spider/types.js';
+import { ProcessedJob } from '../storage/types.js';
 import { delay } from '../../utils/helpers.js';
 import { TestDataManager, AIModelInvocation } from '../../utils/TestDataManager.js';
 
@@ -72,6 +72,7 @@ export interface AIAnalyzerConfig {
       classification_level: string;
     }) => Promise<{ id: string }>;
     linkRoleToGeneralRole: (roleId: string, generalRoleId: string) => Promise<void>;
+    getOrCreateGeneralRole: (roleTitle: string) => Promise<{ id: string }>;
   };
 }
 
@@ -144,6 +145,45 @@ export class AIAnalyzer {
   }
 
   /**
+   * Load test data for a specific analysis task
+   */
+  private async loadTestData<T>(jobId: string, taskName: string): Promise<T | null> {
+    try {
+      if (!process.env.LOAD_TEST_SCENARIO) {
+        return null;
+      }
+
+      const filename = `${jobId}-${taskName}.json`;
+      const data = await this.testDataManager.loadTestData(filename);
+      if (data) {
+        this.logger.info(`Loaded test data for ${taskName} analysis of job ${jobId}`);
+        return data as T;
+      }
+      return null;
+    } catch (error) {
+      this.logger.warn(`Failed to load test data for ${taskName} analysis:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Save test data for a specific analysis task
+   */
+  private async saveTestData<T>(jobId: string, taskName: string, data: T): Promise<void> {
+    try {
+      if (process.env.LOAD_TEST_SCENARIO || process.env.SAVE_TEST_DATA !== 'true') {
+        return;
+      }
+
+      const filename = `${jobId}-${taskName}.json`;
+      await this.testDataManager.saveTestData(filename, data);
+      this.logger.info(`Saved test data for ${taskName} analysis of job ${jobId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to save test data for ${taskName} analysis:`, error);
+    }
+  }
+
+  /**
    * Save AI invocation to both storage service and test data
    */
   private async saveAIInvocation(invocation: {
@@ -161,6 +201,7 @@ export class AIAnalyzer {
     status: 'success' | 'error';
     error_message?: string;
     latency_ms?: number;
+    jobId?: string;
   }): Promise<void> {
     try {
       const normalizedInvocation = {
@@ -180,8 +221,24 @@ export class AIAnalyzer {
       }
 
       // Save to test data if enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.testDataManager.saveAIInvocation(normalizedInvocation);
+      if (process.env.SAVE_TEST_DATA === 'true' && invocation.jobId) {
+        const taskName = invocation.action_type.replace('analyze_', '');
+        await this.saveTestData(invocation.jobId, taskName, {
+          request: {
+            action_type: invocation.action_type,
+            model_name: invocation.model_name,
+            system_prompt: invocation.system_prompt,
+            user_prompt: invocation.user_prompt,
+            messages: invocation.messages
+          },
+          response: {
+            text: invocation.response_text,
+            metadata: invocation.response_metadata,
+            token_usage: invocation.token_usage
+          },
+          status: invocation.status,
+          timestamp: new Date().toISOString()
+        });
       }
     } catch (error) {
       this.logger.error('Error saving AI invocation:', error);
@@ -346,125 +403,16 @@ export class AIAnalyzer {
   }
 
   /**
-   * Creates a taxonomy analysis of a job posting
-   */
-  async createJobSummary(jobDescription: string, jobId: string): Promise<TaxonomyAnalysisResult> {
-    let systemPromptText = '';
-    try {
-      const startTime = Date.now();
-
-      if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
-        throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
-      }
-
-      // Create the prompt with the current taxonomy groups
-      const taxonomyData = this.taxonomyGroups.map(t => ({
-        id: t.id,
-        name: t.name,
-        description: t.description
-      }));
-      systemPromptText = createTaxonomyAnalysisPrompt(taxonomyData);
-      
-      // Prepare the content for analysis
-      const userContent = JSON.stringify({
-        roles: [{
-          id: jobId,
-          title: jobDescription
-        }]
-      }, null, 2);
-
-      const completion = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: "system",
-            content: systemPromptText
-          },
-          {
-            role: "user",
-            content: userContent
-          }
-        ],
-        temperature: this.temperature,
-        max_tokens: this.maxTokens,
-        response_format: { type: "json_object" }
-      });
-
-      const responseContent = completion.choices[0].message.content;
-      if (!responseContent) {
-        throw new Error('No content returned from OpenAI');
-      }
-
-      const result = JSON.parse(responseContent) as TaxonomyAnalysisResult;
-
-      // Store the AI invocation
-      await this.saveAIInvocation({
-        action_type: 'analyze_job_taxonomy',
-        model_provider: 'openai',
-        model_name: this.model,
-        temperature: this.temperature,
-        max_tokens: this.maxTokens,
-        system_prompt: systemPromptText,
-        user_prompt: userContent,
-        messages: [
-          {
-            role: "system",
-            content: systemPromptText
-          },
-          {
-            role: "user",
-            content: userContent
-          }
-        ],
-        response_text: responseContent,
-        response_metadata: {
-          model: completion.model,
-          object: completion.object,
-          created: completion.created,
-          system_fingerprint: completion.system_fingerprint
-        },
-        token_usage: completion.usage,
-        status: 'success',
-        latency_ms: Date.now() - startTime
-      });
-
-      return result;
-    } catch (error) {
-      // Store the failed AI invocation
-      await this.saveAIInvocation({
-        action_type: 'analyze_job_taxonomy',
-        model_provider: 'openai',
-        model_name: this.model,
-        temperature: this.temperature,
-        max_tokens: this.maxTokens,
-        system_prompt: systemPromptText,
-        user_prompt: jobDescription,
-        messages: [
-          {
-            role: "system",
-            content: systemPromptText
-          },
-          {
-            role: "user",
-            content: jobDescription
-          }
-        ],
-        response_text: '',
-        status: 'error',
-        error_message: error instanceof Error ? error.message : String(error)
-      });
-
-      this.logger.error('Error in createJobSummary:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Analyze job capabilities and skills
    */
   async analyzeCapabilities(job: JobDetails): Promise<CapabilityAnalysisResult> {
+    const jobId = job.roleId || job.id || createHash('sha256')
+      .update(`${job.title ?? ''}-${job.agency ?? ''}`)
+      .digest('hex')
+      .substring(0, 8);
+
     try {
-      this.logger.info(`Analyzing capabilities for job ${job.id}`);
+      this.logger.info(`Analyzing capabilities for job ${jobId}`);
 
       if (!this.frameworkCapabilities || this.frameworkCapabilities.length === 0) {
         throw new Error('Framework capabilities not loaded. Please ensure initialize() is called first.');
@@ -472,6 +420,15 @@ export class AIAnalyzer {
 
       if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
         throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
+      }
+
+      // Try to load from test data first
+      const savedData = await this.testDataManager.loadCapabilityAnalysis(jobId);
+      if (savedData) {
+        this.logger.info(`Using saved capability analysis for job ${jobId}`);
+        const result = this.mapCapabilityResult(savedData);
+        await this.linkGeneralRole(result, job, jobId);
+        return result;
       }
 
       // Get similar general roles if we have a storage service
@@ -485,87 +442,19 @@ export class AIAnalyzer {
         }
       }
 
-      // Create the prompt with the current framework capabilities, taxonomy groups and similar roles
-      const prompt = createCapabilityAnalysisPrompt(
-        this.frameworkCapabilities, 
-        this.taxonomyGroups,
-        similarGeneralRoles
-      );
+      // Perform AI analysis
+      const llmResult = await this.performCapabilityAnalysis(job, similarGeneralRoles);
 
-      // Prepare the content for analysis
-      const content = [
-        `Job Title: ${job.title}`,
-        `Agency: ${job.agency}`,
-        `Job Type: ${job.jobType}`,
-        `Location: ${job.location}`,
-        `Description:`,
-        job.description,
-        `Responsibilities:`,
-        ...job.responsibilities.map(r => `- ${r}`),
-        `Requirements:`,
-        ...job.requirements.map(r => `- ${r}`),
-        `Notes:`,
-        ...job.notes.map(n => `- ${n}`),
-        `About Us:`,
-        job.aboutUs
-      ].filter(Boolean).join('\n\n');
-
-      this.logger.info('Job content prepared for analysis:', {
-        title: job.title,
-        contentLength: content.length,
-        hasDescription: Boolean(job.description),
-        responsibilitiesCount: job.responsibilities.length,
-        requirementsCount: job.requirements.length,
-        notesCount: job.notes.length,
-        hasAboutUs: Boolean(job.aboutUs),
-        frameworkCapabilitiesCount: this.frameworkCapabilities.length
-      });
-
-      const llmResult = await this.retryOperation(
-        () => this.analyzeJobDescription(content, prompt)
-      );
+      // Save the analysis result
+      await this.testDataManager.saveCapabilityAnalysis(jobId, llmResult);
 
       // Map the LLM result to the final result with IDs
       const result = this.mapCapabilityResult(llmResult);
       
-      this.logger.info(`General Role Result: ${JSON.stringify(result)}:`, this.config.storageService);
-      // Store new general role if one was suggested
-      if (result.generalRole && result.generalRole.isNewRole && this.config.storageService) {
-        try {
-          const storedRole = await this.config.storageService.storeGeneralRole({
-            title: result.generalRole.title,
-            description: result.generalRole.description,
-            function_area: job.jobType || 'Unknown',
-            classification_level: job.classification || 'Unknown'
-          });
-          
-          // Update the result with the stored role ID
-          result.generalRole.id = storedRole.id;
-          result.generalRole.isNewRole = false;
-          
-          // Link the role to the general role
-          if (job.roleId) {
-            await this.config.storageService.linkRoleToGeneralRole(job.roleId, storedRole.id);
-            this.logger.info(`Linked role ${job.roleId} to general role ${storedRole.id}`);
-          } else {
-            this.logger.warn(`No roleId found for job ${(job as JobDetails).id}, cannot link to general role ${storedRole.id}`);
-          }
-          
-          this.logger.info(`Stored new general role: ${storedRole.id}`);
-        } catch (error) {
-          this.logger.warn('Failed to store new general role:', error);
-        }
-      } else if (result.generalRole && typeof result.generalRole.id === 'string' && result.generalRole.id.length > 0 && job.roleId) {
-        // If we matched an existing general role, link it
-        try {
-          await this.config.storageService.linkRoleToGeneralRole(job.roleId, result.generalRole.id);
-          this.logger.info(`Linked role ${job.roleId} to existing general role ${result.generalRole.id}`);
-        } catch (error) {
-          this.logger.warn('Failed to link role to general role:', error);
-        }
-      }
+      // Link the general role
+      await this.linkGeneralRole(result, job, jobId);
       
-      this.logger.info(`Capability analysis complete for job ${job.id}`, {
+      this.logger.info(`Capability analysis complete for job ${jobId}`, {
         capabilitiesFound: result.capabilities.length,
         skillsFound: result.skills.length,
         occupationalGroups: result.occupationalGroups,
@@ -574,15 +463,163 @@ export class AIAnalyzer {
       
       return result;
     } catch (error) {
-      this.logger.error(`Error analyzing capabilities for job ${job.id}:`, error);
+      this.logger.error(`Error analyzing capabilities for job ${jobId}:`, error);
       throw error;
     }
   }
 
   /**
+   * Perform AI analysis for job capabilities
+   */
+  private async performCapabilityAnalysis(
+    job: JobDetails, 
+    similarGeneralRoles: Array<{ id: string; name: string; description: string; similarity: number }>
+  ): Promise<LLMCapabilityAnalysisResult> {
+    // Create the prompt with the current framework capabilities, taxonomy groups and similar roles
+    const prompt = createCapabilityAnalysisPrompt(
+      this.frameworkCapabilities, 
+      this.taxonomyGroups,
+      similarGeneralRoles
+    );
+
+    // Prepare the content for analysis
+    const content = [
+      `Job Title: ${job.title}`,
+      `Agency: ${job.agency}`,
+      `Job Type: ${job.jobType}`,
+      `Location: ${job.location}`,
+      `Description:`,
+      job.description,
+      `Responsibilities:`,
+      ...(job.responsibilities || []).map((responsibility) => `- ${responsibility}`),
+      `Requirements:`,
+      ...(job.requirements || []).map((requirement) => `- ${requirement}`),
+      `Notes:`,
+      ...(job.notes || []).map((note) => `- ${note}`)
+    ].join('\n');
+
+    this.logger.info('Job content prepared for analysis:', {
+      title: job.title,
+      contentLength: content.length,
+      hasDescription: Boolean(job.description),
+      responsibilitiesCount: job.responsibilities?.length || 0,
+      requirementsCount: job.requirements?.length || 0,
+      notesCount: job.notes?.length || 0,
+      hasAboutUs: Boolean(job.aboutUs),
+      frameworkCapabilitiesCount: this.frameworkCapabilities.length
+    });
+
+    return this.retryOperation(
+      () => this.analyzeJobDescription(content, prompt)
+    );
+  }
+
+  /**
+   * Link general role to job
+   */
+  private async linkGeneralRole(
+    result: CapabilityAnalysisResult, 
+    job: JobDetails,
+    jobId: string
+  ): Promise<void> {
+    const generalRole = result?.generalRole;
+    if (generalRole?.title && this.config.storageService?.getOrCreateGeneralRole) {
+      try {
+        const storedRole = await this.config.storageService.getOrCreateGeneralRole(generalRole.title);
+        
+        if (storedRole?.id) {  // Add null check
+          // Update the result with the stored role ID
+          generalRole.id = storedRole.id;
+          
+          // Link the role to the general role
+          if (job.roleId) {
+            await this.config.storageService.linkRoleToGeneralRole(job.roleId, storedRole.id);
+            this.logger.info(`Linked role ${job.roleId} to general role ${storedRole.id}`);
+          } else {
+            this.logger.warn(`No roleId found for job ${jobId}, cannot link to general role ${storedRole.id}`);
+          }
+          
+          this.logger.info(`Stored/retrieved general role: ${storedRole.id}`);
+        }
+      } catch (error) {
+        this.logger.warn('Failed to store/retrieve general role:', error);
+      }
+    } else if (generalRole && typeof generalRole.id === 'string' && generalRole.id.length > 0 && job.roleId) {
+      // If we matched an existing general role, link it
+      try {
+        await this.config.storageService.linkRoleToGeneralRole(job.roleId, generalRole.id);
+        this.logger.info(`Linked role ${job.roleId} to existing general role ${generalRole.id}`);
+      } catch (error) {
+        this.logger.warn('Failed to link role to general role:', error);
+      }
+    }
+  }
+
+  /**
+   * Create job summary and taxonomy analysis
+   */
+  async createJobSummary(jobDescription: string, jobId: string): Promise<TaxonomyResult> {
+    try {
+      // Try to load from test data first
+      const savedData = await this.testDataManager.loadTaxonomyAnalysis(jobId);
+      if (savedData) {
+        this.logger.info(`Using saved taxonomy analysis for job ${jobId}`);
+        return savedData;
+      }
+
+      if (!this.taxonomyGroups || this.taxonomyGroups.length === 0) {
+        throw new Error('Taxonomy groups not loaded. Please ensure setTaxonomyGroups() is called first.');
+      }
+
+      // Perform AI analysis
+      const result = await this.performTaxonomyAnalysis(jobDescription);
+
+      // Save the analysis result
+      await this.testDataManager.saveTaxonomyAnalysis(jobId, result);
+
+      return result;
+    } catch (error) {
+      this.logger.error('Error in createJobSummary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Perform AI analysis for job taxonomy
+   */
+  private async performTaxonomyAnalysis(jobDescription: string): Promise<TaxonomyResult> {
+    const systemPromptText = createTaxonomyAnalysisPrompt(this.taxonomyGroups);
+    const userContent = jobDescription;
+
+    const completion = await this.openai.chat.completions.create({
+      model: this.model,
+      messages: [
+        {
+          role: "system",
+          content: systemPromptText
+        },
+        {
+          role: "user",
+          content: userContent
+        }
+      ],
+      temperature: this.temperature,
+      max_tokens: this.maxTokens,
+      response_format: { type: "json_object" }
+    });
+
+    const responseContent = completion.choices[0]?.message?.content;
+    if (!responseContent) {
+      throw new Error('No content returned from OpenAI');
+    }
+
+    return JSON.parse(responseContent) as TaxonomyResult;
+  }
+
+  /**
    * Analyze job taxonomy
    */
-  async analyzeTaxonomy(job: JobDetails & { roleId: string }): Promise<TaxonomyAnalysisResult> {
+  async analyzeTaxonomy(job: JobDetails & { roleId: string }): Promise<TaxonomyResult> {
     try {
       this.logger.info(`Analyzing taxonomy for job: ${job.title}`);
       

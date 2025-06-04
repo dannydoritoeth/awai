@@ -1,0 +1,115 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "advanced",
+      "description": "The role requires the ability to express views, accept, and commit to change in a regulatory environment, often under challenging circumstances.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Maintaining ethical standards and adherence to public sector values is crucial in a regulatory role that impacts public safety and compliance.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Self",
+      "level": "advanced",
+      "description": "Self-motivation and a proactive approach are essential for leading in a dynamic and technical field.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse backgrounds is important in a role that interacts with a wide range of stakeholders.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Clear communication and stakeholder engagement are key to promoting regulatory compliance and safety.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaboration with industry stakeholders and internal teams is essential for developing and enforcing regulatory frameworks.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "The role requires influencing industry practices and negotiating compliance and safety improvements.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Achieving safety, compliance, and regulatory outcomes is a primary goal of this role.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Analytical skills to develop practical solutions for safety and technical challenges in the gas and pipeline sector.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "The role is responsible for critical infrastructure safety, requiring a high level of accountability and adherence to policy.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Effective planning and coordination are needed for developing response plans and technical research programs.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Scientific & Technical"
+  ],
+  "focusAreas": [
+    "Energy Operations",
+    "Safety and Technical Regulation",
+    "Public Safety"
+  ],
+  "skills": [
+    {
+      "name": "Technical Expertise in Gas Networks and Pipelines",
+      "description": "In-depth knowledge of gas network and pipeline construction, operation, maintenance, and safety.",
+      "category": "Technical"
+    },
+    {
+      "name": "Regulatory Framework Development",
+      "description": "Ability to develop and enforce regulatory frameworks for public safety and compliance.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with a range of stakeholders to promote regulatory compliance and safety.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Scientific & Technical"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Regulatory Compliance and Safety Officer",
+    "description": "This role involves leading safety, technical regulation, and licensing functions within the energy sector, focusing on gas networks and pipelines. It requires a blend of technical expertise, regulatory knowledge, and stakeholder engagement to ensure public safety and compliance.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "capabilities": [
+    {
+      "name": "Finance",
+      "level": "advanced",
+      "description": "Requires advanced understanding and application of financial processes, including establishing new finance operations, policies, systems, and ensuring compliance with legislative, policy, and statutory frameworks.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for accurate accounting, compliance with relevant frameworks, and supporting financial sustainability and strategic decision-making.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Needs to effectively plan and prioritise financial operations and reporting to support the organisation's objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires the ability to analyse financial information, solve complex financial problems, and provide expert advice.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must communicate complex financial information clearly and effectively to stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Supports the organisation through financial management and reporting changes, contributing to the transition to renewable energy.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaborates with internal and external stakeholders to support financial sustainability and strategic decision-making.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Finance"
+  ],
+  "focusAreas": [
+    "Financial Management",
+    "Accounting",
+    "Compliance",
+    "Strategic Decision-Making"
+  ],
+  "skills": [
+    {
+      "name": "Financial Analysis",
+      "description": "Analyzing financial data to support decision-making and ensure compliance.",
+      "category": "Technical"
+    },
+    {
+      "name": "Strategic Financial Planning",
+      "description": "Developing financial strategies to support the organisation's long-term goals.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Communication",
+      "description": "Communicating financial information and strategies effectively to stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Legislative Compliance",
+      "description": "Ensuring all financial operations comply with relevant legislation, policies, and standards.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Finance"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Financial Accountant",
+    "description": "This role involves advanced financial management, including planning, analysis, compliance, and strategic decision-making to support the organisation's financial sustainability and strategic objectives.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

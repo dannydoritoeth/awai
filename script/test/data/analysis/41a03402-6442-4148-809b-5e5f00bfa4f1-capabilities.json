@@ -1,0 +1,97 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "The role requires strong written and verbal communication skills to develop operational policy, provide technical guidance, and engage stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Supporting a team and engaging stakeholders to influence the direction of threatened species conservation necessitates collaboration.",
+      "relevance": 1
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Assisting in the development and coordination of conservation programs to achieve specific outcomes for threatened species and ecosystems.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role involves planning and prioritizing tasks to support the strategic direction of conservation projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Requires problem-solving skills to develop practical solutions for conservation challenges.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Experience in supporting project delivery is essential, indicating a need for project management skills.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Experience in data management with Excel is required, showing the need for technological proficiency.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "The commitment to a diverse and inclusive workplace indicates the importance of valuing diversity.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Threatened Species Management"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with stakeholders to support conservation efforts and policy development.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Conservation Strategies",
+      "description": "Developing and implementing strategies for the conservation of threatened species and ecosystems.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Policy Development",
+      "description": "Assisting in the development of operational policy for conservation programs.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Data Management",
+      "description": "Managing and analyzing data related to conservation programs, using tools like Excel.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Conservation Project Officer",
+    "description": "This role focuses on supporting the development and delivery of conservation projects, particularly for threatened species, through policy development, stakeholder engagement, and technical support. It requires a blend of environmental science knowledge, project management, and communication skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

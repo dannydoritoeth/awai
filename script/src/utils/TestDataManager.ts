@@ -8,6 +8,10 @@ import path from 'path';
 import crypto from 'crypto';
 import type { EmbeddingResult } from '../services/embeddings/types.js';
 import type { JobListing, JobDetails } from '../services/spider/types.js';
+import type { 
+  LLMCapabilityAnalysisResult,
+  TaxonomyAnalysisResult 
+} from '../services/analyzer/templates/capabilityAnalysis.js';
 
 export interface AIModelInvocation {
   session_id?: string;
@@ -34,6 +38,7 @@ export class TestDataManager {
   private embeddingsDir: string;
   private aiInvocationsDir: string;
   private jobsDir: string;
+  private analysisDir: string;
   private isTestScenario: boolean;
   private testScenario: string | undefined;
 
@@ -42,12 +47,13 @@ export class TestDataManager {
     this.embeddingsDir = path.join(this.testDataDir, 'embeddings');
     this.aiInvocationsDir = path.join(this.testDataDir, 'ai_invocations');
     this.jobsDir = path.join(this.testDataDir, 'jobs');
+    this.analysisDir = path.join(this.testDataDir, 'analysis');
     this.testScenario = process.env.LOAD_TEST_SCENARIO;
     this.isTestScenario = Boolean(this.testScenario);
 
     // Create directories if they don't exist and we're not in test scenario mode
     if (!this.isTestScenario) {
-      [this.testDataDir, this.embeddingsDir, this.aiInvocationsDir, this.jobsDir].forEach(dir => {
+      [this.testDataDir, this.embeddingsDir, this.aiInvocationsDir, this.jobsDir, this.analysisDir].forEach(dir => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
@@ -343,6 +349,159 @@ export class TestDataManager {
       };
     } catch (error) {
       console.error('Error loading AI invocation test data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Load test data from a file
+   */
+  async loadTestData<T>(filename: string): Promise<T | null> {
+    try {
+      const filePath = path.join(this.aiInvocationsDir, filename);
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+
+      const data = await fs.promises.readFile(filePath, 'utf-8');
+      return JSON.parse(data) as T;
+    } catch (error) {
+      console.error('Error loading test data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save test data to a file
+   */
+  async saveTestData<T>(filename: string, data: T): Promise<void> {
+    try {
+      const filePath = path.join(this.aiInvocationsDir, filename);
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(data, null, 2),
+        'utf-8'
+      );
+
+      // Update the index file
+      const indexPath = path.join(this.aiInvocationsDir, 'index.json');
+      const index = fs.existsSync(indexPath)
+        ? JSON.parse(await fs.promises.readFile(indexPath, 'utf-8'))
+        : {};
+
+      index[filename] = {
+        filename,
+        timestamp: new Date().toISOString()
+      };
+
+      await fs.promises.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    } catch (error) {
+      console.error('Error saving test data:', error);
+    }
+  }
+
+  /**
+   * Save capability analysis result
+   */
+  async saveCapabilityAnalysis(jobId: string, result: LLMCapabilityAnalysisResult): Promise<void> {
+    if (this.isTestScenario || process.env.SAVE_TEST_DATA !== 'true') {
+      return;
+    }
+
+    try {
+      const filename = `${jobId}-capabilities.json`;
+      const filePath = path.join(this.analysisDir, filename);
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(result, null, 2),
+        'utf-8'
+      );
+
+      // Update the index file
+      const indexPath = path.join(this.analysisDir, 'index.json');
+      const index = fs.existsSync(indexPath)
+        ? JSON.parse(await fs.promises.readFile(indexPath, 'utf-8'))
+        : {};
+
+      index[filename] = {
+        jobId,
+        type: 'capabilities',
+        timestamp: new Date().toISOString()
+      };
+
+      await fs.promises.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    } catch (error) {
+      console.error('Error saving capability analysis:', error);
+    }
+  }
+
+  /**
+   * Load capability analysis result
+   */
+  async loadCapabilityAnalysis(jobId: string): Promise<LLMCapabilityAnalysisResult | null> {
+    try {
+      const filePath = path.join(this.analysisDir, `${jobId}-capabilities.json`);
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+
+      const data = await fs.promises.readFile(filePath, 'utf-8');
+      return JSON.parse(data) as LLMCapabilityAnalysisResult;
+    } catch (error) {
+      console.error('Error loading capability analysis:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save taxonomy analysis result
+   */
+  async saveTaxonomyAnalysis(jobId: string, result: TaxonomyAnalysisResult): Promise<void> {
+    if (this.isTestScenario || process.env.SAVE_TEST_DATA !== 'true') {
+      return;
+    }
+
+    try {
+      const filename = `${jobId}-taxonomy.json`;
+      const filePath = path.join(this.analysisDir, filename);
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(result, null, 2),
+        'utf-8'
+      );
+
+      // Update the index file
+      const indexPath = path.join(this.analysisDir, 'index.json');
+      const index = fs.existsSync(indexPath)
+        ? JSON.parse(await fs.promises.readFile(indexPath, 'utf-8'))
+        : {};
+
+      index[filename] = {
+        jobId,
+        type: 'taxonomy',
+        timestamp: new Date().toISOString()
+      };
+
+      await fs.promises.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    } catch (error) {
+      console.error('Error saving taxonomy analysis:', error);
+    }
+  }
+
+  /**
+   * Load taxonomy analysis result
+   */
+  async loadTaxonomyAnalysis(jobId: string): Promise<TaxonomyAnalysisResult | null> {
+    try {
+      const filePath = path.join(this.analysisDir, `${jobId}-taxonomy.json`);
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+
+      const data = await fs.promises.readFile(filePath, 'utf-8');
+      return JSON.parse(data) as TaxonomyAnalysisResult;
+    } catch (error) {
+      console.error('Error loading taxonomy analysis:', error);
       return null;
     }
   }

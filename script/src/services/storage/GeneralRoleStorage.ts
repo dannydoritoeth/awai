@@ -148,6 +148,48 @@ export class GeneralRoleStorage {
   }
 
   /**
+   * Get or create a general role by title
+   */
+  async getOrCreateGeneralRole(title: string): Promise<{ id: string }> {
+    try {
+      // Check if role with same title exists
+      const { data: existingRole, error: checkError } = await this.stagingClient
+        .from('general_roles')
+        .select('id')
+        .eq('title', title)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+      if (existingRole) {
+        return existingRole;
+      }
+
+      // Create new role if it doesn't exist
+      const roleData = {
+        title: title,
+        description: `General role for ${title}`,
+        function_area: 'Unknown',
+        classification_level: 'Unknown',
+        sync_status: 'pending',
+        last_synced_at: null
+      };
+
+      const { data, error } = await this.stagingClient
+        .from('general_roles')
+        .insert(roleData)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      this.logger.error('Error in getOrCreateGeneralRole:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get a general role by ID
    */
   async getGeneralRoleById(id: string): Promise<GeneralRoleRecord | null> {
