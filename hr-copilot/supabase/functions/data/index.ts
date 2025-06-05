@@ -203,7 +203,13 @@ const actions = {
   getCompanies: async (supabase: any, params: { searchTerm?: string; divisions?: string[] } = {}) => {
     let query = supabase
       .from('companies')
-      .select('*');
+      .select(`
+        *,
+        institution:institutions (
+          id,
+          name
+        )
+      `);
 
     if (params.searchTerm) {
       query = query.ilike('name', `%${params.searchTerm}%`);
