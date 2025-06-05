@@ -18,20 +18,21 @@ export interface JobListing {
   id: string;
   title: string;
   agency: string;
-  location: string | string[];
+  location: string;
   salary: string;
   closingDate: string;
   url: string;
-  jobUrl: string;
-  jobId: string;
+  jobReference: string;
   postedDate: string;
-  jobType?: string;
+  jobUrl?: string; // Same as url
+  jobId?: string;  // Same as id
 }
 
 export interface JobDocument {
-  url: string | { url: string; title?: string; type?: string };
-  title?: string;
-  type?: string;
+  title: string;
+  url: string;
+  type: string;
+  content?: string;
 }
 
 export interface JobDetails extends JobListing {
@@ -40,21 +41,13 @@ export interface JobDetails extends JobListing {
   requirements: string[];
   notes: string[];
   aboutUs: string;
-  jobType: string;
   contactDetails: {
     name: string;
     phone: string;
     email: string;
   };
   documents: JobDocument[];
-  metadata?: {
-    processedAt?: string;
-    source?: string;
-    version?: string;
-  };
-  embedding?: number[]; // Vector embedding for similarity matching
-  classification?: string; // Classification level of the role
-  roleId?: string; // ID of the role in the roles table
+  error?: any;
 }
 
 export interface SpiderConfig {
@@ -63,6 +56,7 @@ export interface SpiderConfig {
   retryAttempts: number;
   retryDelay: number;
   userAgent: string;
+  pageSize?: number; // Optional page size configuration
 }
 
 export interface SpiderMetrics {
@@ -72,15 +66,15 @@ export interface SpiderMetrics {
   startTime: Date;
   endTime?: Date;
   errors: {
-    url: string;
-    error: string;
     timestamp: Date;
+    error: string;
+    url: string;
   }[];
 }
 
 export interface ISpiderService {
   getJobListings(maxRecords?: number): Promise<JobListing[]>;
-  getJobDetails(jobListing: JobListing): Promise<JobDetails>;
+  getJobDetails(listing: JobListing): Promise<JobDetails>;
   getMetrics(): SpiderMetrics;
   cleanup(): Promise<void>;
 } 

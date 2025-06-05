@@ -22,6 +22,29 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { TestDataManager } from '../../utils/TestDataManager.js';
 
+export interface SpiderConfig {
+  baseUrl: string;
+  maxConcurrency: number;
+  retryAttempts: number;
+  retryDelay: number;
+  userAgent: string;
+  pageSize?: number; // Optional page size configuration
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  agency: string;
+  location: string;
+  salary: string;
+  closingDate: string;
+  url: string;
+  jobReference: string;
+  postedDate: string;
+  jobUrl?: string; // Make optional since it's the same as url
+  jobId?: string;  // Make optional since it's the same as id
+}
+
 export class SpiderService implements ISpiderService {
   private browser: Browser | null = null;
   private metrics: SpiderMetrics;
@@ -100,212 +123,139 @@ export class SpiderService implements ISpiderService {
    * Scrape job listings from the main jobs page
    */
   async getJobListings(maxRecords?: number): Promise<JobListing[]> {
-    this.metrics.startTime = new Date();
-    this.logger.info('Starting job listings scrape');
-    let allListings: JobListing[] = [];
-
     try {
-      // Try to load from test scenario first
-      const testListings = await this.testDataManager.loadJobListings();
-      if (testListings) {
-        this.logger.info(`Loaded ${testListings.length} job listings from test scenario`);
-        this.metrics.totalJobs = testListings.length;
-        this.metrics.successfulScrapes++;
-        return testListings;
+      // Try to load test data first if enabled
+      const testData = await this.testDataManager.loadJobListings();
+      if (testData) {
+        return testData;
       }
 
-      // If not in test scenario mode, proceed with normal scraping
       const page = await this.getPage();
-      
-      // Add longer timeout and better error handling for initial page load
-      this.logger.info('Loading initial URL:', this.baseUrl);
-      try {
-        await page.goto(this.baseUrl, { 
-          waitUntil: 'networkidle0',
-          timeout: 60000 // Increase timeout to 60 seconds
-        });
-      } catch (error: any) {
-        if (error?.name === 'TimeoutError') {
-          this.logger.warn('Initial page load timed out, trying to proceed anyway');
-        } else {
-          throw error;
-        }
-      }
-
-      // Log current URL and page content length for debugging
-      const currentUrl = await page.url();
-      const pageContent = await page.content();
-      this.logger.info('Current URL after navigation:', currentUrl);
-      this.logger.info(`Page content length: ${pageContent.length} characters`);
-
-      // Save raw HTML if test data saving is enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.saveRawHtml(pageContent);
-      }
-
-      // Set page size if selector exists with better error handling
-      try {
-        await page.waitForSelector('select[name="pageSize"]', { timeout: 5000 });
-        this.logger.info('Found page size selector');
-        await page.select('select[name="pageSize"]', '100');
-        this.logger.info('Successfully set page size to 100');
-        // Wait for page to reload after changing page size
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (error: any) {
-        this.logger.warn('Page size selector not found or could not be set:', error?.message || 'Unknown error');
-        this.logger.info('Continuing with default page size');
-      }
-
-      let hasNextPage = true;
+      const allListings: JobListing[] = [];
       let pageNum = 1;
+      let hasNextPage = true;
 
-      while (hasNextPage) {
-        this.logger.info(`Scraping page ${pageNum}`);
+      try {
+        // Navigate to initial URL
+        this.logger.info('Loading initial URL:', this.baseUrl);
+        await page.goto(this.baseUrl, { waitUntil: 'networkidle0' });
+        this.logger.info('Current URL after navigation:', page.url());
 
-        // Wait for job cards with better error handling
-        this.logger.info('Waiting for job cards to load...');
-        try {
-          await page.waitForSelector('.job-card, .search-result-card', { 
-            timeout: 10000,
-            visible: true 
-          });
+        // Log page content length for debugging
+        const content = await page.content();
+        this.logger.info(`Page content length: ${content.length} characters`);
+
+        // Save raw HTML for debugging if needed
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const htmlPath = path.join(process.cwd(), 'test', 'data', `raw_html_${timestamp}.html`);
+        await fs.promises.writeFile(htmlPath, content);
+        this.logger.info(`Saved raw HTML to:\n${htmlPath}`);
+
+        // Wait for initial page load
+        await delay(5000);
+
+        // Check if we need to change page size
+        if (this.config.pageSize) {
+          this.logger.info(`Setting page size to ${this.config.pageSize}`);
+          // Add logic here to change page size if needed
+        } else {
+          this.logger.info('Continuing with default page size');
+        }
+
+        while (hasNextPage) {
+          this.logger.info(`Scraping page ${pageNum}`);
+
+          // Wait for job cards to load
+          this.logger.info('Waiting for job cards to load...');
+          await page.waitForSelector('.job-card', { timeout: 10000 });
           this.logger.info('Job cards loaded');
-        } catch (error) {
-          this.logger.warn('Timeout waiting for job cards, checking if any are present');
-          const cards = await page.$$('.job-card, .search-result-card');
-          if (cards.length === 0) {
-            throw new Error('No job cards found on page');
-          }
-          this.logger.info(`Found ${cards.length} job cards despite timeout`);
-        }
 
-        // Add rate limiting delay
-        const rateLimitDelay = 2000;
-        const rateLimitJitter = 1000;
-        const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
-        await new Promise(resolve => setTimeout(resolve, delay));
+          // Extract job listings from current page
+          const pageListings = await page.evaluate(() => {
+            const cards = document.querySelectorAll('.job-card');
+            return Array.from(cards).map(card => {
+              const titleElement = card.querySelector('.job-title a') as HTMLAnchorElement | null;
+              const agencyElement = card.querySelector('.agency-link');
+              const locationElement = card.querySelector('.job-location');
+              const salaryElement = card.querySelector('.job-salary');
+              const closingElement = card.querySelector('.job-closing-date-value');
+              const jobRefElement = card.querySelector('.job-ref');
+              const postedElement = card.querySelector('.job-posted-date');
+              const id = card.getAttribute('data-jobid') || '';
+              const url = titleElement?.href || '';
 
-        // Scrape current page
-        const pageListings = await page.evaluate(() => {
-          // Helper function to safely get text content
-          const getText = (element: Element, selector: string): string => {
-            const el = element.querySelector(selector);
-            return el ? el.textContent?.trim() || '' : '';
-          };
-
-          // Use more specific selectors for job cards
-          const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
-          
-          return cards.map(element => {
-            // Get title and URL - try multiple possible selectors
-            const titleElement = 
-              element.querySelector('.card-header a') || 
-              element.querySelector('[class*="title"] a') ||
-              element.querySelector('h2 a') ||
-              element.querySelector('a');
-              
-            const title = titleElement?.querySelector('span')?.textContent?.trim() || 
-                         titleElement?.textContent?.trim() || '';
-            const url = (titleElement as HTMLAnchorElement)?.href || '';
-            
-            // Get dates - try multiple formats
-            const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
-            let postedDate = '', closingDate = '';
-            if (dateText) {
-              const dates = dateText.split('-').map((d: string) => d.trim());
-              postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
-              closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
-            }
-            
-            // Get department/agency
-            const agency = 
-              getText(element, '.job-search-result-right h2') || 
-              getText(element, '[class*="department"]') ||
-              getText(element, '[class*="agency"]') ||
-              'NSW Government'; // Fallback
-            
-            // Get location
-            const location = 
-              getText(element, '.nsw-col p:nth-child(3) span') ||
-              getText(element, '[class*="location"]') ||
-              'NSW'; // Fallback
-
-            // Get job ID/reference number
-            const jobId = 
-              getText(element, '.job-search-result-ref-no') ||
-              getText(element, '[class*="reference"]') ||
-              '';
-
-            // Ensure the URL is absolute
-            const jobUrl = url ? (url.startsWith('http') ? url : new URL(url, window.location.href).href) : '';
-
-            return {
-              id: jobId,
-              title,
-              jobUrl,
-              url: jobUrl, // Set both url and jobUrl to the same absolute URL
-              postedDate,
-              closingDate,
-              agency,
-              location,
-              jobId,
-              salary: 'Not specified' // Default value since salary is required by type
-            };
+              return {
+                id,
+                title: titleElement?.textContent?.trim() || '',
+                agency: agencyElement?.textContent?.trim() || '',
+                location: locationElement?.textContent?.trim() || '',
+                salary: salaryElement?.textContent?.trim() || '',
+                closingDate: closingElement?.textContent?.trim() || '',
+                url,
+                jobReference: jobRefElement?.textContent?.trim().replace('REF:', '').trim() || '',
+                postedDate: postedElement?.textContent?.trim() || '',
+                jobUrl: url,
+                jobId: id
+              } as JobListing;
+            });
           });
-        });
 
-        // Add listings to overall results
-        allListings = allListings.concat(pageListings);
-        this.logger.info(`Found ${pageListings.length} listings on page ${pageNum}`);
+          this.logger.info(`Found ${pageListings.length} listings on page ${pageNum}`);
+          allListings.push(...pageListings);
 
-        // Check if we've hit the max records limit
-        if (maxRecords && allListings.length >= maxRecords) {
-          this.logger.info(`Reached max records limit of ${maxRecords}`);
-          allListings = allListings.slice(0, maxRecords);
-          break;
+          // Save the current page of listings if test data saving is enabled
+          if (process.env.SAVE_TEST_DATA === 'true') {
+            await this.testDataManager.saveJobListings(pageListings, pageNum);
+          }
+
+          // Check if we've reached the maximum number of records
+          if (maxRecords && allListings.length >= maxRecords) {
+            this.logger.info(`Reached max records limit of ${maxRecords}`);
+            break;
+          }
+
+          // Check for next page button
+          const nextButton = await page.$('.pagination-next:not([disabled])');
+          if (!nextButton) {
+            this.logger.info('Next page button not found or disabled');
+            hasNextPage = false;
+            continue;
+          }
+
+          // Check if button is disabled
+          const isDisabled = await page.evaluate(
+            (button: Element): boolean => button.hasAttribute('disabled'),
+            nextButton
+          );
+
+          if (isDisabled) {
+            this.logger.info('Next page button is disabled');
+            hasNextPage = false;
+            continue;
+          }
+
+          // Click next page and wait for navigation
+          this.logger.info('Clicking next page button');
+          await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }),
+            nextButton.click()
+          ]);
+
+          // Add delay between pages
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          pageNum++;
         }
 
-        // Check for next page button and if it's disabled
-        const nextButton = await page.$('button[aria-label="Pagination - Go to Next"]');
-        if (!nextButton) {
-          this.logger.info('No next page button found');
-          hasNextPage = false;
-          continue;
-        }
+        this.metrics.totalJobs = allListings.length;
+        this.metrics.successfulScrapes++;
+        this.logger.info(`Found total of ${allListings.length} job listings`);
 
-        // Check if next button is disabled
-        const isDisabled = await page.evaluate(button => {
-          return button.classList.contains('disabled') || button.hasAttribute('disabled');
-        }, nextButton);
+        return allListings;
 
-        if (isDisabled) {
-          this.logger.info('Next page button is disabled');
-          hasNextPage = false;
-          continue;
-        }
-
-        // Click next page and wait for navigation
-        this.logger.info('Clicking next page button');
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }),
-          nextButton.click()
-        ]);
-
-        // Add delay between pages
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        pageNum++;
+      } finally {
+        // Close the page but keep the browser instance for reuse
+        await page.close();
       }
-
-      this.metrics.totalJobs = allListings.length;
-      this.metrics.successfulScrapes++;
-      this.logger.info(`Found total of ${allListings.length} job listings`);
-
-      // Save listings data if test data saving is enabled
-      if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.saveJobListingsData(allListings);
-      }
-
-      return allListings;
 
     } catch (error: any) {
       this.metrics.failedScrapes++;
