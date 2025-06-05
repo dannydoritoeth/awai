@@ -230,22 +230,32 @@ export class ProcessorService implements IProcessorService {
    */
   async processBatch(jobs: JobDetails[]): Promise<(ProcessedJob | undefined)[]> {
     this.logger.info(`Processing batch of ${jobs.length} jobs`);
-    let processed = 0;
+    const batchStartTime = Date.now();
 
-    const results = await Promise.all(
-      jobs.map(async job => {
-        const result = await this.processJob(job);
-        processed++;
-        this.logger.info(`Batch progress: ${processed}/${jobs.length} (${Math.round((processed/jobs.length)*100)}%)`);
-        return result;
-      })
-    );
+    try {
+      // Process jobs in parallel with a concurrency limit
+      const batchSize = this.config.batchSize || 10;
+      const batches = chunk(jobs, batchSize);
+      const results: (ProcessedJob | undefined)[] = [];
 
-    const succeeded = results.filter(r => r !== undefined).length;
-    const failed = results.filter(r => r === undefined).length;
-    this.logger.info(`Batch processing complete: ${succeeded} succeeded, ${failed} failed`);
+      for (const batch of batches) {
+        // Process each batch sequentially to avoid too many concurrent requests
+        const batchResults = await Promise.all(
+          batch.map(job => this.processJob(job).catch(error => {
+            this.handleProcessingError(error, job.id);
+            return undefined;
+          }))
+        );
+        results.push(...batchResults);
+      }
 
-    return results;
+      this.updateMetrics(batchStartTime);
+      return results;
+
+    } catch (error) {
+      this.logger.error('Error processing batch:', error);
+      throw error;
+    }
   }
 
   /**

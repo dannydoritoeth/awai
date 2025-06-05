@@ -36,7 +36,7 @@ export class CompanyStorage {
    * Get existing company by name or create if it doesn't exist
    */
   async getOrCreateCompany(company: CompanyData): Promise<CompanyRecord> {
-    this.logger.info(`Getting or creating company ${JSON.stringify(company)}`);
+    this.logger.info(`Getting or creating company ${company.name}`);
     try {
       if (!company) {
         throw new Error('Company object is required');

@@ -22,7 +22,8 @@ export interface JobListing {
   salary: string;
   closingDate: string;
   url: string;
-  jobReference: string;
+  jobUrl: string;
+  jobId: string;
   postedDate: string;
   jobType?: string;
 }
