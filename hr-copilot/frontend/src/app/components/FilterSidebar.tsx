@@ -20,27 +20,26 @@ interface FilterSidebarProps {
 }
 
 export default function FilterSidebar({ children, onFiltersChange }: FilterSidebarProps) {
-  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const pathname = usePathname();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [capabilities, setCapabilities] = useState<FilterOption[]>([]);
   const [careerTypes, setCareerTypes] = useState<FilterOption[]>([]);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({
     capability: [],
-    careerType: []
+    taxonomy: []
   });
 
   useEffect(() => {
     async function loadData() {
       try {
-        const companiesData = await getCompanies();
-        setCompanies(companiesData);
-
-        const [capabilitiesData, careerTypesData] = await Promise.all([
+        const [companiesData, capabilitiesData, careerTypesData] = await Promise.all([
+          getCompanies(),
           getCategories('capability'),
           getCategories('taxonomy')
         ]);
 
+        setCompanies(companiesData);
         setCapabilities(capabilitiesData.map((c: { id: string; name: string }) => ({ 
           id: c.id, 
           name: c.name, 
@@ -52,7 +51,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
           checked: false 
         })));
       } catch (error) {
-        console.error('Error loading filter data:', error);
+        console.error('Error loading data:', error);
       }
     }
     loadData();
@@ -60,66 +59,43 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
 
   const handleFilterChange = (type: string, id: string, checked: boolean) => {
     setSelectedFilters(prev => {
-      const newFilters = { ...prev };
-      if (checked) {
-        newFilters[type] = [...(prev[type] || []), id];
-      } else {
-        newFilters[type] = (prev[type] || []).filter(filterId => filterId !== id);
-      }
+      const newFilters = {
+        ...prev,
+        [type]: checked 
+          ? [...prev[type], id]
+          : prev[type].filter(filterId => filterId !== id)
+      };
       onFiltersChange?.(newFilters);
       return newFilters;
     });
   };
 
-  const handleClearFilters = () => {
-    setSelectedFilters({
-      capability: [],
-      careerType: []
-    });
-    setCapabilities(prev => prev.map(c => ({ ...c, checked: false })));
-    setCareerTypes(prev => prev.map(c => ({ ...c, checked: false })));
-    onFiltersChange?.({
-      capability: [],
-      careerType: []
-    });
-  };
-
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <div
-        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 ${
-          isMenuOpen ? 'w-64' : 'w-0'
-        }`}
+      {/* Menu Toggle Button */}
+      <button
+        onClick={() => setIsMenuOpen(!isMenuOpen)}
+        className={`fixed top-4 left-4 z-50 p-2 hover:bg-gray-100 transition-colors rounded-lg bg-white shadow-sm`}
       >
-        <div className="h-full flex flex-col">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
-            <Button
-              variant="outline"
-              className="p-2 h-auto"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </Button>
+        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Sidebar */}
+      <div 
+        className={`top-0 left-0 h-full bg-white text-gray-900 transition-all duration-300 z-4 border-r border-gray-200
+          ${isMenuOpen ? 'w-[235px]' : 'w-0 overflow-hidden'}`}
+      >
+        <div className="flex flex-col h-full w-[235px]">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200 h-16">
+            <h2 className="text-[14px] font-medium text-gray-900">Filters</h2>
           </div>
 
-          {/* Sidebar Content */}
+          {/* Filters */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Hierarchy Navigation */}
+            {/* Organization Hierarchy */}
             <div className="mb-6">
               <h3 className="text-[14px] font-medium text-gray-900 mb-2">Organization</h3>
               <HierarchyNav companies={companies} />
@@ -127,7 +103,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
 
             <CheckboxGroup
               title="Capabilities"
-              options={capabilities.map((c: FilterOption) => ({
+              options={capabilities.map(c => ({
                 ...c,
                 checked: selectedFilters.capability.includes(c.id)
               }))}
@@ -136,18 +112,29 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
 
             <CheckboxGroup
               title="Career Types"
-              options={careerTypes.map((c: FilterOption) => ({
+              options={careerTypes.map(c => ({
                 ...c,
-                checked: selectedFilters.careerType.includes(c.id)
+                checked: selectedFilters.taxonomy.includes(c.id)
               }))}
-              onChange={(id, checked) => handleFilterChange('careerType', id, checked)}
+              onChange={(id, checked) => handleFilterChange('taxonomy', id, checked)}
             />
 
             {/* Clear Filters Button */}
             <Button
-              onClick={handleClearFilters}
               variant="outline"
               className="w-full text-[14px]"
+              onClick={() => {
+                setSelectedFilters({
+                  capability: [],
+                  taxonomy: []
+                });
+                setCapabilities(prev => prev.map(c => ({ ...c, checked: false })));
+                setCareerTypes(prev => prev.map(c => ({ ...c, checked: false })));
+                onFiltersChange?.({
+                  capability: [],
+                  taxonomy: []
+                });
+              }}
             >
               Clear Filters
             </Button>
@@ -155,23 +142,11 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
         </div>
       </div>
 
-      {/* Menu Toggle Button - Only show when sidebar is closed */}
-      {!isMenuOpen && (
-        <button
-          onClick={() => setIsMenuOpen(true)}
-          className="fixed top-4 left-4 z-50 p-2 hover:bg-gray-100 rounded-lg bg-white shadow-sm"
-        >
-          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      )}
-
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isMenuOpen ? 'ml-64' : 'ml-0'}`}>
+      <div className={`flex-1 flex flex-col min-h-screen bg-white transition-all duration-300 ${isMenuOpen ? 'ml-[0px]' : 'ml-0'}`}>
         {/* Top Bar */}
         <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
-          <div className="flex items-center h-16 px-4">
+          <div className={`flex items-center h-16 ${isMenuOpen ? 'pl-4' : 'pl-20'}`}>
             <div className="text-lg font-semibold text-gray-900">
               {pathname.split('/')[1]?.charAt(0).toUpperCase() + pathname.split('/')[1]?.slice(1) || 'TalentPathAI'}
             </div>
@@ -179,7 +154,7 @@ export default function FilterSidebar({ children, onFiltersChange }: FilterSideb
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 bg-white">
           {children}
         </div>
       </div>
