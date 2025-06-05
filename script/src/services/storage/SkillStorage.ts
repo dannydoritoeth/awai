@@ -20,18 +20,12 @@ export class SkillStorage {
    * Get or create a company record
    */
   private async getOrCreateCompany(job: ProcessedJob): Promise<CompanyRecord> {
-    const companyData = await this.companies.storeCompanyRecord({
+    return await this.companies.getOrCreateCompany({
       name: job.jobDetails.agency || 'NSW Government',
       description: job.jobDetails.aboutUs || '',
       website: '',
       raw_data: job.jobDetails
     });
-
-    if (!companyData || !companyData[0]) {
-      throw new Error('Failed to get or create company');
-    }
-
-    return companyData[0];
   }
 
   /**

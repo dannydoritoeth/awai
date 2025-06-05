@@ -1,0 +1,91 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading multidisciplinary teams to plan and execute large-scale events.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Ensuring the successful planning, logistics, and execution of over 150 third-party large-scale events.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Developing and implementing detailed event management plans, managing budgets, timelines, and safety protocols.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaborating with government and private stakeholders to elevate tourism and recreation in National Parks.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Negotiating with external contractors and consultants to deliver strategically significant events.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Applying effective planning, coordination, and control methods to manage major public events and complex event projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Addressing challenges related to event development, delivery, and risk management.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Event Management",
+    "Tourism and Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Collaboration",
+      "description": "Engaging with government and private stakeholders to enhance visitation and community engagement.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Strategic Planning",
+      "description": "Developing strategies for the execution of large-scale events that align with conservation efforts and tourism enhancement.",
+      "category": "Technical"
+    },
+    {
+      "name": "Budget Management",
+      "description": "Overseeing and managing significant budgets for large-scale events.",
+      "category": "Technical"
+    },
+    {
+      "name": "Risk and WHS Management",
+      "description": "Implementing safety protocols and managing risks associated with large-scale outdoor events.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Team Leader, Events Management",
+    "description": "This role involves leading the planning, coordination, and execution of large-scale events within national parks, focusing on enhancing visitation, community engagement, and conservation efforts through strategic event management and stakeholder collaboration.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

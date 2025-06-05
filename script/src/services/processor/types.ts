@@ -34,7 +34,7 @@ export interface ProcessedJob {
     technicalSkills?: string[];
     softSkills?: string[];
   };
-  embeddings: {
+  embeddings?: {
     job: EmbeddingResult;
     capabilities: Array<EmbeddingResult | undefined>;
     skills: EmbeddingResult[];

@@ -1,0 +1,88 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "The role requires self-motivation and a measured approach in a fast-paced environment, with a commitment to learning about the division's operations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication is essential for coordinating administrative tasks and reporting activities within the division.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The officer is expected to efficiently manage financial and administrative tasks to support the division's operations.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and prioritising are crucial for managing various administrative tasks and supporting the division's compliance and operational needs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Finance",
+      "level": "intermediate",
+      "description": "Understanding and applying financial processes is necessary for handling budgets, expenditures, and financial reporting.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Proficiency in computer-based systems and content management systems is required for effective administration.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Procurement and Contract Management",
+      "level": "foundational",
+      "description": "Basic knowledge of procurement processes is needed for the preparation of purchase orders and managing contracts.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support"
+  ],
+  "focusAreas": [
+    "Financial Management",
+    "Operational Efficiency",
+    "Technology Utilization"
+  ],
+  "skills": [
+    {
+      "name": "Financial Reporting",
+      "description": "Preparing and managing financial reports, budgets, and expenditure.",
+      "category": "Technical"
+    },
+    {
+      "name": "Content Management Systems",
+      "description": "Using systems like Content Manager (CM10) for effective document and content management.",
+      "category": "Technical"
+    },
+    {
+      "name": "Procurement Processes",
+      "description": "Understanding and applying procurement and contract management processes.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Adaptability",
+      "description": "Adapting to a constantly changing environment and managing multiple tasks efficiently.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    }
+  ],
+  "generalRole": {
+    "name": "Administration Support Officer",
+    "title": "Administration Support Officer",
+    "description": "This role involves providing essential business coordination and administration services to support the operations of a division, including financial management, procurement, and technology utilization.",
+    "confidence": 0.9,
+    "isNewRole": false
+  }
+}

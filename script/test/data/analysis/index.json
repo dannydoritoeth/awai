@@ -3,5 +3,125 @@
     "jobId": "543085",
     "type": "capabilities",
     "timestamp": "2025-06-04T21:09:52.864Z"
+  },
+  "543029-capabilities.json": {
+    "jobId": "543029",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:11.396Z"
+  },
+  "542671-capabilities.json": {
+    "jobId": "542671",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:12.654Z"
+  },
+  "542937-capabilities.json": {
+    "jobId": "542937",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:14.236Z"
+  },
+  "542906-capabilities.json": {
+    "jobId": "542906",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:16.054Z"
+  },
+  "542971-capabilities.json": {
+    "jobId": "542971",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:17.477Z"
+  },
+  "543344-capabilities.json": {
+    "jobId": "543344",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:20.684Z"
+  },
+  "542890-capabilities.json": {
+    "jobId": "542890",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:21.707Z"
+  },
+  "542860-capabilities.json": {
+    "jobId": "542860",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:24.224Z"
+  },
+  "542859-capabilities.json": {
+    "jobId": "542859",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:31.689Z"
+  },
+  "542878-capabilities.json": {
+    "jobId": "542878",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:52.073Z"
+  },
+  "542991-capabilities.json": {
+    "jobId": "542991",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:56.625Z"
+  },
+  "543065-capabilities.json": {
+    "jobId": "543065",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:59.810Z"
+  },
+  "542927-capabilities.json": {
+    "jobId": "542927",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:00:59.858Z"
+  },
+  "542719-capabilities.json": {
+    "jobId": "542719",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:00.473Z"
+  },
+  "542836-capabilities.json": {
+    "jobId": "542836",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:00.526Z"
+  },
+  "542741-capabilities.json": {
+    "jobId": "542741",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:02.750Z"
+  },
+  "542347-capabilities.json": {
+    "jobId": "542347",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:08.093Z"
+  },
+  "542653-capabilities.json": {
+    "jobId": "542653",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:15.496Z"
+  },
+  "542054-capabilities.json": {
+    "jobId": "542054",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:24.219Z"
+  },
+  "543233-capabilities.json": {
+    "jobId": "543233",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:42.560Z"
+  },
+  "542973-capabilities.json": {
+    "jobId": "542973",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:45.974Z"
+  },
+  "542925-capabilities.json": {
+    "jobId": "542925",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:49.203Z"
+  },
+  "542753-capabilities.json": {
+    "jobId": "542753",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:01:52.284Z"
+  },
+  "543012-capabilities.json": {
+    "jobId": "543012",
+    "type": "capabilities",
+    "timestamp": "2025-06-05T00:02:07.356Z"
   }
 }

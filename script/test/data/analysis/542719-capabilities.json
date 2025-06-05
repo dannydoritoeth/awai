@@ -1,0 +1,98 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires strong written and verbal communication skills for handling enquiries and collaborating with stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Necessitates a professional and responsive approach to customer service, addressing a wide range of enquiries.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Essential for building relationships and working effectively with both internal and external stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Critical for managing competing demands and ensuring timely and efficient administrative support.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Finance",
+      "level": "intermediate",
+      "description": "Understanding of budgeting, purchasing, financial processes, and reports is required.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Ability to learn and use multiple software systems is necessary for the role.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Procurement and Contract Management",
+      "level": "intermediate",
+      "description": "Involves procurement and fleet management tasks.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Requires a proactive mindset and the ability to work effectively in a fast-paced environment.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Administrative Efficiency",
+    "Financial Management",
+    "Technology Utilization"
+  ],
+  "skills": [
+    {
+      "name": "Administrative Skills",
+      "description": "Essential for managing office tasks, records, and staff rostering.",
+      "category": "Technical"
+    },
+    {
+      "name": "Financial Reporting",
+      "description": "Necessary for budget review and financial reporting tasks.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Software Proficiency",
+      "description": "Important for assisting staff with technology and managing multiple software systems.",
+      "category": "Technical"
+    },
+    {
+      "name": "Team Management",
+      "description": "Required for managing and rostering a small team of administrative staff.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Administrative Support in Environmental Conservation",
+    "description": "This role involves providing essential administrative, financial, and technological support within an environmental conservation context, ensuring the smooth operation of the National Parks and Wildlife Service's area office.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

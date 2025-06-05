@@ -27,6 +27,7 @@ export class SpiderService implements ISpiderService {
   private metrics: SpiderMetrics;
   private baseUrl = process.env.NSW_JOBS_URL || "https://iworkfor.nsw.gov.au/jobs/all-keywords/all-agencies/all-organisations-entities/all-categories/all-locations/all-worktypes";
   private testDataManager: TestDataManager;
+  private currentPage = 1;
 
   constructor(
     private config: SpiderConfig,
@@ -224,11 +225,12 @@ export class SpiderService implements ISpiderService {
       
       // Save test data if enabled
       if (process.env.SAVE_TEST_DATA === 'true') {
-        await this.saveJobListingsData(limitedListings);
+        await this.saveJobListingsData(limitedListings, this.currentPage);
+        this.currentPage++; // Increment page counter for next time
       }
       
       // Only log the jobs we're actually going to process
-      this.logger.info(`Found ${limitedListings.length} job listings${maxRecords ? ` (limited by maxRecords=${maxRecords})` : ''}`);
+      this.logger.info(`Found ${limitedListings.length} job listings${maxRecords ? ` (limited by maxRecords=${maxRecords})` : ''} on page ${this.currentPage - 1}`);
       limitedListings.forEach(job => {
         this.logger.info(`Processing job listing: ${job.id}, ${job.title}`);
       });
@@ -251,10 +253,10 @@ export class SpiderService implements ISpiderService {
     }
   }
 
-  private async saveJobListingsData(listings: JobListing[]): Promise<void> {
+  private async saveJobListingsData(listings: JobListing[], page: number = 1): Promise<void> {
     try {
-      await this.testDataManager.saveJobListings(listings);
-      this.logger.info(`Saved ${listings.length} job listings to test data`);
+      await this.testDataManager.saveJobListings(listings, page);
+      this.logger.info(`Saved ${listings.length} job listings to test data (page ${page})`);
     } catch (error) {
       this.logger.error('Error saving job listings data:', error);
     }

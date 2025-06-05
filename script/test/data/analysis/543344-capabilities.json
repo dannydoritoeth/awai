@@ -1,0 +1,85 @@
+{
+  "capabilities": [
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Ability to conduct reviews, assessments, and evaluations on biodiversity conservation matters, indicating advanced problem-solving skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Providing independent advice to the Minister and conducting evaluations requires a high level of accountability and adherence to legislation.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must effectively communicate complex biodiversity conservation issues and advice to the Minister and Environment Agency Head.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Ability to advise and influence decision-making processes on biodiversity conservation at a high level.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Acknowledgement of Aboriginal custodial responsibilities and commitment to partnerships indicates valuing diversity.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Panel members must collaborate with various stakeholders, including government officials and community groups, to provide comprehensive advice.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Policy",
+    "Scientific & Technical"
+  ],
+  "focusAreas": [
+    "Biodiversity Conservation",
+    "Sustainable Development",
+    "Legislation and Policy Advisory"
+  ],
+  "skills": [
+    {
+      "name": "Technical Knowledge in Biodiversity Conservation",
+      "description": "Expertise in biodiversity conservation, sustainable development, and related fields to provide informed advice.",
+      "category": "Technical"
+    },
+    {
+      "name": "Legislative and Policy Analysis",
+      "description": "Ability to analyze and interpret legislation and policy documents related to biodiversity conservation.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with and influencing stakeholders, including government officials and the community, on biodiversity conservation issues.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Policy"
+    },
+    {
+      "name": "Scientific & Technical"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Biodiversity Conservation Advisor",
+    "description": "This role involves providing expert advice on biodiversity conservation, influencing policy and legislation, and ensuring sustainable management of natural resources. It requires advanced problem-solving, accountability, and effective communication skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

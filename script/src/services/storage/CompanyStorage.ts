@@ -15,9 +15,10 @@ export class CompanyStorage {
   ) {}
 
   /**
-   * Store company record in staging
+   * Get existing company by name or create if it doesn't exist
    */
-  async storeCompanyRecord(company: CompanyData): Promise<CompanyRecord[]> {
+  async getOrCreateCompany(company: CompanyData): Promise<CompanyRecord> {
+    this.logger.info(`Getting or creating company ${JSON.stringify(company)}`);
     try {
       if (!company) {
         throw new Error('Company object is required');
@@ -38,8 +39,8 @@ export class CompanyStorage {
 
       // If company exists, return it
       if (existingCompany) {
-        this.logger.info(`Company ${companyName} already exists with id ${existingCompany.id}`);
-        return [existingCompany];
+        this.logger.info(`Found existing company ${companyName} with id ${existingCompany.id}`);
+        return existingCompany;
       }
 
       // If error is not PGRST116 (no rows), throw it
@@ -60,21 +61,22 @@ export class CompanyStorage {
       const { data, error: insertError } = await this.stagingClient
         .from('companies')
         .insert(companyData)
-        .select();
+        .select()
+        .single();
 
       if (insertError) {
         this.logger.error('Error inserting company:', { error: insertError, company: companyData });
         throw insertError;
       }
 
-      if (!data || data.length === 0) {
+      if (!data) {
         throw new Error('No data returned after company insert');
       }
 
-      this.logger.info(`Successfully inserted company: ${companyName} with id ${data[0].id}`);
+      this.logger.info(`Created new company: ${companyName} with id ${data.id}`);
       return data;
     } catch (error) {
-      this.logger.error('Error storing company record:', error);
+      this.logger.error('Error in getOrCreateCompany:', error);
       throw error;
     }
   }

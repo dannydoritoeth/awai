@@ -1,0 +1,108 @@
+{
+  "capabilities": [
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "The role requires adherence to legislative and regulatory requirements, ensuring compliance in archival practices.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must engage and communicate strategic advice on records management to various stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for the development and implementation of archival systems, ensuring operational and historical records are preserved.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Needs to manage competing priorities while developing and implementing archival and records management strategies.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires strategic input into records and information management, including IT integration, to solve complex archival challenges.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Accountable for ensuring compliance with legislative requirements and managing the full lifecycle of records.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "advanced",
+      "description": "Expertise in using EDRMS and applying disposal schedules, as well as knowledge of emerging technologies in information management.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Involves leading the development and implementation of archival systems and training programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Promotes and delivers archival training programs, supporting change in records management practices.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "ICT & Digital",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Information Management",
+    "Archival Systems Development",
+    "Compliance and Governance"
+  ],
+  "skills": [
+    {
+      "name": "Archival and Records Management",
+      "description": "Expertise in managing the lifecycle of records, including retention, disposal, and transfer.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Ability to engage with and communicate effectively to stakeholders at various levels.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Legislative Compliance",
+      "description": "Knowledge of the State Records Act 1998, AS ISO 15489, and other relevant compliance frameworks.",
+      "category": "Technical"
+    },
+    {
+      "name": "EDRMS Usage",
+      "description": "Experience using Electronic Document and Records Management Systems, preferably Compass, Content Manager.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "ICT & Digital"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Archivist",
+    "description": "A Senior Archivist in the NSW Government is responsible for leading the development and implementation of archival systems, ensuring compliance with legislative requirements, and enhancing access to documentation across the organisation. This role requires advanced capabilities in integrity, communication, results delivery, planning, problem-solving, accountability, technology, and project management.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

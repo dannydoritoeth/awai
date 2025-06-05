@@ -213,18 +213,14 @@ export class RoleStorage {
   async getRoleByJobDetails(job: JobDetails): Promise<{ id: string; title: string } | null> {
     try {
       // First create/get the company
-      const companyData = await this.companies.storeCompanyRecord({
+      const company = await this.companies.getOrCreateCompany({
         name: job.agency || 'NSW Government',
         description: job.aboutUs || '',
         website: '',
         raw_data: job
       });
 
-      if (!companyData || !companyData[0]) {
-        throw new Error('Failed to get or create company');
-      }
-
-      const companyId = companyData[0].id;
+      const companyId = company.id;
       this.logger.info(`Using company ID ${companyId} for job ${job.id}`);
 
       // Get or create the role

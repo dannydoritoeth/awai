@@ -50,7 +50,7 @@ export class StorageService {
   private readonly logger: Logger;
 
   // Method bindings
-  public readonly storeCompanyRecord: typeof CompanyStorage.prototype.storeCompanyRecord;
+  public readonly getOrCreateCompany: typeof CompanyStorage.prototype.getOrCreateCompany;
   public readonly storeJob: typeof JobStorage.prototype.storeJob;
   public readonly storeBatch: typeof JobStorage.prototype.storeBatch;
   public readonly getJobById: typeof JobStorage.prototype.getJobById;
@@ -89,7 +89,7 @@ export class StorageService {
     this.aiModels = new AIModelStorage(this.stagingClient, this.liveClient, this.logger);
 
     // Bind methods
-    this.storeCompanyRecord = this.companies.storeCompanyRecord.bind(this.companies);
+    this.getOrCreateCompany = this.companies.getOrCreateCompany.bind(this.companies);
     this.storeJob = this.jobs.storeJob.bind(this.jobs);
     this.storeBatch = this.jobs.storeBatch.bind(this.jobs);
     this.getJobById = this.jobs.getJobById.bind(this.jobs);

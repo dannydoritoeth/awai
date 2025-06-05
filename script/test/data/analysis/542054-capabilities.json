@@ -1,0 +1,121 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "The role requires openness, honesty, and the willingness to accept and commit to change, especially in dynamic outdoor environments and in managing cultural heritage.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Ethical and professional behavior is crucial in managing natural and cultural resources, and in interactions with communities and stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Self-motivation and a measured approach are essential for independent work and decision-making in field operations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "advanced",
+      "description": "Respect for diverse backgrounds and perspectives is critical, especially given the role's focus on Aboriginal cultural heritage and community engagement.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Clear communication and active listening are vital for teamwork, community engagement, and managing contractors.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with team members, Traditional Owners, and the community is essential for the successful management of conservation lands.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Efficient use of resources and a commitment to quality outcomes are necessary for the maintenance and enhancement of park facilities and natural heritage.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and prioritizing are required to effectively implement works and maintenance programs in a dynamic environment.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role demands practical problem-solving skills for on-the-spot decision-making in field operations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Accountability to legislation, policy, and risk management is crucial in the conservation of natural and cultural heritage.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Effective planning, coordination, and control methods are needed for leading field operations and maintenance programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "The role involves supervising field officers and contractors, requiring skills in engaging, motivating, and developing team capabilities.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation Management",
+    "Aboriginal Cultural Heritage"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Heritage Management",
+      "description": "Understanding and respecting Aboriginal cultural heritage and working with Traditional Owners to manage and protect cultural sites.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Environmental Conservation",
+      "description": "Implementing conservation practices to protect natural resources and biodiversity.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Team Leadership",
+      "description": "Leading and supervising a team in field operations, including maintenance, construction, and conservation activities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with community members, Traditional Owners, and other stakeholders in the management of conservation lands.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "Conservation and Cultural Heritage Management",
+    "title": "Senior Field Officer - Conservation and Cultural Heritage",
+    "description": "This role involves leading field operations for the conservation and management of natural and cultural heritage, with a focus on Aboriginal cultural heritage. It requires a blend of environmental science, project management, and community engagement skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

@@ -25,26 +25,44 @@ export class JobStorage {
   ) {
     this.companies = new CompanyStorage(stagingClient, liveClient, logger);
     this.skills = new SkillStorage(stagingClient, liveClient, logger, this.companies);
-    this.roles = new RoleStorage(stagingClient, liveClient, logger);
+    this.roles = new RoleStorage(stagingClient, liveClient, logger, this.companies);
     this.capabilities = new CapabilityStorage(stagingClient, liveClient, logger);
   }
 
   /**
    * Process job documents
    */
-  private async processJobDocuments(jobId: string, documents: Array<{ url: string; title?: string; type?: string; }>): Promise<{ documents: any[], analysis: any }> {
+  private async processJobDocuments(jobId: string, documents: Array<{ url: string; title: string; type: string; }>): Promise<{
+    documents: Array<{ url: string; title: string; type: string; }>;
+    analysis?: {
+      capabilities: any[];
+      skills: any[];
+    };
+  }> {
     try {
-      const processedDocs = [];
-      let combinedAnalysis = {
-        capabilities: [],
-        skills: []
-      };
+      const processedDocs: Array<{ url: string; title: string; type: string; }> = [];
+      
+      // Process each document
+      for (const doc of documents) {
+        try {
+          processedDocs.push({
+            url: doc.url,
+            title: doc.title,
+            type: doc.type
+          });
+        } catch (error) {
+          this.logger.error(`Error processing document for job ${jobId}:`, error);
+        }
+      }
 
-      this.logger.info(`Processing ${documents.length} documents for job ${jobId}`);
-      return { documents: processedDocs, analysis: combinedAnalysis };
+      return {
+        documents: processedDocs
+      };
     } catch (error) {
-      this.logger.error('Error processing documents:', error);
-      throw error;
+      this.logger.error(`Error processing documents for job ${jobId}:`, error);
+      return {
+        documents: []
+      };
     }
   }
 
@@ -52,18 +70,12 @@ export class JobStorage {
    * Get or create a company record
    */
   private async getOrCreateCompany(job: JobDetails): Promise<CompanyRecord> {
-    const companyData = await this.companies.storeCompanyRecord({
+    return await this.companies.getOrCreateCompany({
       name: job.agency || 'NSW Government',
       description: job.aboutUs || '',
       website: '',
       raw_data: job
     });
-
-    if (!companyData || !companyData[0]) {
-      throw new Error('Failed to get or create company');
-    }
-
-    return companyData[0];
   }
 
   /**

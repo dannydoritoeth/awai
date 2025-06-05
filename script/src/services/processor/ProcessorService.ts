@@ -184,27 +184,6 @@ export class ProcessorService implements IProcessorService {
         );
       }
 
-      // Generate embeddings
-      this.logger.info(`Generating embeddings for job ${job.id}`);
-      const jobEmbedding = await this.embeddingService.generateJobEmbedding(job.description);
-
-      // Get embeddings for the matched capabilities from our pre-generated framework embeddings
-      const capabilityEmbeddings = analysis.capabilities.map((cap: ProcessedCapability) => {
-        const frameworkCap = this.frameworkCapabilities.find(fc => fc.id === cap.id);
-        return frameworkCap?.embedding;
-      });
-
-      // Only generate embeddings for the skills we actually found
-      const allSkills = analysis.skills || [];
-      this.logger.info(`Generating embeddings for ${allSkills.length} skills`);
-      const skillEmbeddings = await Promise.all(
-        allSkills.map(async (skill) => 
-          this.embeddingService.generateSkillEmbedding(skill.name)
-        )
-      );
-
-      this.logger.info(`Generated ${1 + capabilityEmbeddings.length + skillEmbeddings.length} total embeddings for job ${job.id}`);
-
       const processedJob: ProcessedJob = {
         jobDetails: job,
         capabilities: analysis,
@@ -213,9 +192,17 @@ export class ProcessorService implements IProcessorService {
           roleId: roleData.id
         },
         embeddings: {
-          job: jobEmbedding,
-          capabilities: capabilityEmbeddings,
-          skills: skillEmbeddings
+          job: { 
+            vector: [], 
+            text: '', 
+            metadata: {
+              source: 'placeholder',
+              timestamp: new Date().toISOString(),
+              model: 'text-embedding-ada-002'
+            }
+          },
+          capabilities: [],
+          skills: []
         },
         metadata: {
           processedAt: new Date().toISOString(),
@@ -227,15 +214,7 @@ export class ProcessorService implements IProcessorService {
       this.metrics.successfulProcesses++;
       this.metrics.totalProcessed++;
       
-      // Log processed job without embeddings
-      this.logger.info(`Successfully processed job ${job.id}`, {
-        ...processedJob,
-        embeddings: {
-          job: { ...jobEmbedding, vector: '[vector data hidden]' },
-          capabilities: capabilityEmbeddings.map(e => ({ ...e, vector: '[vector data hidden]' })),
-          skills: skillEmbeddings.map(e => ({ ...e, vector: '[vector data hidden]' }))
-        }
-      });
+      this.logger.info(`Successfully processed job ${job.id}`);
 
       return processedJob;
 

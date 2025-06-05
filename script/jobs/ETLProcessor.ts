@@ -693,32 +693,9 @@ export class ETLProcessor {
                 throw jobError;
             }
 
-            // If no data returned, try to fetch the record
-            if (!jobData || jobData.length === 0) {
-                const { data: fetchedJob, error: fetchError } = await this.#supabase
-                    .from('jobs')
-                    .select('*')
-                    .eq('source_id', source)
-                    .eq('original_id', details.jobId)
-                    .maybeSingle();
-
-                if (fetchError) {
-                    logger.error('Error fetching job:', {
-                        error: {
-                            message: fetchError.message,
-                            details: fetchError.details,
-                            hint: fetchError.hint
-                        }
-                    });
-                    throw fetchError;
-                }
-
-                return fetchedJob;
-            }
-
-            return jobData[0];
+            return jobData;
         } catch (error) {
-            logger.error('Error processing job details:', { error, jobId, details });
+            logger.error('Error in processJobDetails:', { error, jobId });
             throw error;
         }
     }

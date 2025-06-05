@@ -1,0 +1,161 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "advanced",
+      "description": "Leading large teams in dynamic environments requires resilience and the courage to make tough decisions.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Managing sensitive environmental and cultural heritage areas demands high ethical standards.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "advanced",
+      "description": "Self-management is crucial for balancing the diverse responsibilities of the role.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "advanced",
+      "description": "Engagement with Aboriginal communities and managing diverse teams highlight the importance of valuing diversity.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Effective communication is essential for leading teams and engaging with stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaboration with stakeholders and teams is key to achieving conservation and management goals.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Negotiating with stakeholders and influencing outcomes are critical for successful park management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "The role requires efficient resource use and a commitment to quality outcomes in park management.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Strategic planning and prioritization are necessary for managing multiple park management operations.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Problem-solving is essential for addressing the complex challenges of park management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Accountability is crucial for managing public resources and achieving organisational objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Finance",
+      "level": "advanced",
+      "description": "Strong financial management skills are needed to deliver critical insurance works and manage budgets.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Effective planning, coordination, and control methods are required for managing park management programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading and developing a large, multidisciplinary team is a core function of the role.",
+      "relevance": 1
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicating goals and vision is essential for leading teams towards achieving conservation outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Optimise Business Outcomes",
+      "level": "advanced",
+      "description": "Resource management and workforce planning are key to optimizing outcomes in park management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "The ability to champion and manage change is important for implementing new strategies and programs.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Park Management",
+    "Conservation",
+    "Stakeholder Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Leadership",
+      "description": "Leading teams and setting strategic direction for park management and conservation efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Financial Management",
+      "description": "Managing budgets and financial resources to deliver park management programs.",
+      "category": "Technical"
+    },
+    {
+      "name": "Project Management",
+      "description": "Planning and executing park management and conservation projects.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with Aboriginal communities, local stakeholders, and joint management boards.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Conservation Planning",
+      "description": "Developing and implementing plans for environmental conservation and heritage management.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Area Manager - Environmental Conservation",
+    "description": "This role involves leading and managing teams to implement park management programs, ensuring the conservation and protection of natural and cultural heritage within national parks. It requires a blend of strategic leadership, financial and project management, and stakeholder engagement skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

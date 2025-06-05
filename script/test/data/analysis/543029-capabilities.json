@@ -1,0 +1,74 @@
+{
+  "capabilities": [
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "The role requires providing high-quality customer service, responding to visitor needs in a professional, courteous, and friendly manner.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires excellent oral communication skills for dealing with customer inquiries and providing up-to-date visitor information.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "The role demands managing competing priorities in a high-volume environment, requiring self-motivation and a measured approach.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "Involves working as part of a close-knit team to support day-to-day operations of Visitor Entrance Stations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Basic computer skills are required for administrative duties and operating a two-way radio.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Customer Service"
+  ],
+  "focusAreas": [
+    "Visitor Services",
+    "Park Management"
+  ],
+  "skills": [
+    {
+      "name": "Customer Inquiry Management",
+      "description": "Handling and managing customer inquiries in a manner that addresses concerns and provides relevant information.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Fee Collection",
+      "description": "Collecting park use fees as part of park compliance administrative duties.",
+      "category": "Technical"
+    },
+    {
+      "name": "Use of Technology",
+      "description": "Utilizing basic computer systems and two-way radios for effective communication and administrative tasks.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Field Operations"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Visitor Service Support Specialist",
+    "description": "This role specializes in providing visitor services and administrative support at national park entrance stations, focusing on customer service, fee collection, and compliance duties.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}
