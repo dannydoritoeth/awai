@@ -26,7 +26,7 @@ export class JobStorage {
     this.companies = new CompanyStorage(stagingClient, liveClient, logger);
     this.skills = new SkillStorage(stagingClient, liveClient, logger, this.companies);
     this.roles = new RoleStorage(stagingClient, liveClient, logger, this.companies);
-    this.capabilities = new CapabilityStorage(stagingClient, liveClient, logger);
+    this.capabilities = new CapabilityStorage(stagingClient, liveClient, logger, this.companies);
   }
 
   /**
@@ -104,7 +104,21 @@ export class JobStorage {
       });
 
       // Process any attached documents
-      let documentAnalysis = {
+      let documentAnalysis: {
+        capabilities: Array<{
+          id?: string;
+          name: string;
+          level: string;
+          description: string;
+          behavioral_indicators: string[];
+        }>;
+        skills: Array<{
+          name: string;
+          description?: string;
+          category?: string;
+          text?: string;
+        }>;
+      } = {
         capabilities: [],
         skills: []
       };

@@ -6,12 +6,14 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
 import { Capability, ProcessedJob, QueryOptions } from './types.js';
+import { CompanyStorage } from './CompanyStorage.js';
 
 export class CapabilityStorage {
   constructor(
     private stagingClient: SupabaseClient,
     private liveClient: SupabaseClient,
-    private logger: Logger
+    private logger: Logger,
+    private companies: CompanyStorage
   ) {}
 
   /**
@@ -220,19 +222,15 @@ export class CapabilityStorage {
     behavioral_indicators: string[];
   }>): Promise<void> {
     try {
-      // Get the company first
-      const { data: companyData, error: companyError } = await this.stagingClient
-        .from('companies')
-        .select('id')
-        .eq('name', job.jobDetails.agency)
-        .single();
+      // Get or create the company first
+      const company = await this.companies.getOrCreateCompany({
+        name: job.jobDetails.agency || 'NSW Government',
+        description: job.jobDetails.aboutUs || '',
+        website: '',
+        raw_data: job.jobDetails
+      });
 
-      if (companyError) {
-        this.logger.error('Error fetching company:', companyError);
-        throw companyError;
-      }
-
-      if (!companyData) {
+      if (!company) {
         this.logger.error('Company not found:', job.jobDetails.agency);
         throw new Error('Company not found');
       }
@@ -242,7 +240,7 @@ export class CapabilityStorage {
         .from('roles')
         .select('id')
         .eq('title', job.jobDetails.title)
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .single();
 
       if (roleError) {

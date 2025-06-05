@@ -73,6 +73,9 @@ export interface AIAnalyzerConfig {
     }) => Promise<{ id: string }>;
     linkRoleToGeneralRole: (roleId: string, generalRoleId: string) => Promise<void>;
     getOrCreateGeneralRole: (roleTitle: string) => Promise<{ id: string }>;
+    generalRoles: {
+      getOrCreateGeneralRole: (roleTitle: string, description: string) => Promise<{ id: string }>;
+    };
   };
 }
 
@@ -525,10 +528,12 @@ export class AIAnalyzer {
   ): Promise<void> {
     const generalRole = result?.generalRole;
     this.logger.info(`Linking general role ${JSON.stringify(generalRole)}`);
-    this.logger.info(`Storage service ${this.config.storageService?.getOrCreateGeneralRole}`);
-    if (generalRole?.title && this.config.storageService?.getOrCreateGeneralRole) {
+    if (generalRole?.title && this.config.storageService?.generalRoles) {
       try {
-        const storedRole = await this.config.storageService.getOrCreateGeneralRole(generalRole.title);
+        const storedRole = await this.config.storageService.generalRoles.getOrCreateGeneralRole(
+          generalRole.title,
+          generalRole.description || `General role for ${generalRole.title}`
+        );
         
         if (storedRole?.id) {  // Add null check
           // Update the result with the stored role ID

@@ -5,13 +5,14 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
+import { Pool } from 'pg';
 
 export interface GeneralRoleData {
   id?: string;
   title: string;
   description: string;
-  function_area: string;
-  classification_level: string;
+  function_area?: string;
+  classification_level?: string;
   raw_data?: any;
 }
 
@@ -30,7 +31,8 @@ export class GeneralRoleStorage {
   constructor(
     private stagingClient: SupabaseClient,
     private liveClient: SupabaseClient,
-    private logger: Logger
+    private logger: Logger,
+    private pgStagingPool?: Pool
   ) {}
 
   /**
@@ -150,39 +152,78 @@ export class GeneralRoleStorage {
   /**
    * Get or create a general role by title
    */
-  async getOrCreateGeneralRole(title: string): Promise<{ id: string }> {
+  async getOrCreateGeneralRole(title: string, description: string): Promise<{ id: string }> {
     try {
-      // Check if role with same title exists
-      const { data: existingRole, error: checkError } = await this.stagingClient
-        .from('general_roles')
-        .select('id')
-        .eq('title', title)
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') throw checkError;
-
-      if (existingRole) {
-        return existingRole;
+      if (!title) {
+        throw new Error('Title is required');
       }
 
-      // Create new role if it doesn't exist
-      const roleData = {
-        title: title,
-        description: `General role for ${title}`,
-        function_area: 'Unknown',
-        classification_level: 'Unknown',
-        sync_status: 'pending',
-        last_synced_at: null
-      };
+      // Use PostgreSQL pool if available, otherwise fall back to Supabase
+      if (this.pgStagingPool) {
+        const client = await this.pgStagingPool.connect();
+        try {
+          // First check if role exists
+          const existingRoleResult = await client.query(
+            'SELECT id FROM general_roles WHERE title = $1',
+            [title]
+          );
 
-      const { data, error } = await this.stagingClient
-        .from('general_roles')
-        .insert(roleData)
-        .select('id')
-        .single();
+          // If role exists, return it
+          if (existingRoleResult.rows.length > 0) {
+            this.logger.info(`Found existing general role ${title} with id ${existingRoleResult.rows[0].id}`);
+            return existingRoleResult.rows[0];
+          }
 
-      if (error) throw error;
-      return data;
+          // Role doesn't exist, create it
+          const insertResult = await client.query(
+            `INSERT INTO general_roles 
+            (title, description, sync_status, last_synced_at)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id`,
+            [
+              title,
+              description,
+              'pending',
+              new Date().toISOString()
+            ]
+          );
+
+          const newRole = insertResult.rows[0];
+          this.logger.info(`Created new general role: ${title} with id ${newRole.id}`);
+          return newRole;
+        } finally {
+          client.release();
+        }
+      } else {
+        // Fall back to Supabase client
+        // Check if role exists
+        const { data: existingRole, error: checkError } = await this.stagingClient
+          .from('general_roles')
+          .select('id')
+          .eq('title', title)
+          .maybeSingle();
+
+        if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+        if (existingRole) {
+          return existingRole;
+        }
+
+        // Create new role
+        const { data, error } = await this.stagingClient
+          .from('general_roles')
+          .insert({
+            title,
+            description,
+            sync_status: 'pending',
+            last_synced_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
     } catch (error) {
       this.logger.error('Error in getOrCreateGeneralRole:', error);
       throw error;

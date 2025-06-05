@@ -17,6 +17,7 @@ import { SkillStorage } from './SkillStorage.js';
 import { TaxonomyStorage } from './TaxonomyStorage.js';
 import { InstitutionStorage } from './InstitutionStorage.js';
 import { AIModelStorage } from './AIModelStorage.js';
+import { GeneralRoleStorage } from './GeneralRoleStorage.js';
 
 interface StorageConfig {
   stagingSupabaseUrl: string;
@@ -46,6 +47,7 @@ export class StorageService {
   public readonly taxonomies: TaxonomyStorage;
   public readonly institutions: InstitutionStorage;
   public readonly aiModels: AIModelStorage;
+  public readonly generalRoles: GeneralRoleStorage;
 
   private readonly stagingClient: SupabaseClient;
   private readonly liveClient: SupabaseClient;
@@ -86,11 +88,12 @@ export class StorageService {
     this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
     this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger);
     this.roles = new RoleStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
-    this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger);
+    this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
     this.skills = new SkillStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
     this.taxonomies = new TaxonomyStorage(this.stagingClient, this.liveClient, this.logger);
     this.institutions = new InstitutionStorage(this.stagingClient, this.liveClient, this.logger);
     this.aiModels = new AIModelStorage(this.stagingClient, this.liveClient, this.logger);
+    this.generalRoles = new GeneralRoleStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
 
     // Bind methods
     this.getOrCreateCompany = this.companies.getOrCreateCompany.bind(this.companies);
