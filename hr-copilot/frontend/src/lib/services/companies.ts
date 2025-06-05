@@ -8,6 +8,7 @@ export interface Company {
   logo_url: string | null;
   created_at: string;
   institution_id: string | null;
+  parent_company_id: string | null;
   institution?: {
     id: string;
     name: string;

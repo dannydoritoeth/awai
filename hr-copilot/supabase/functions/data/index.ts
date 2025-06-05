@@ -46,7 +46,9 @@ interface Company {
   name: string;
   description: string | null;
   website: string | null;
-  created_at: string;
+  institution_id?: string;
+  parent_company_id?: string;
+  slug?: string;
 }
 
 interface Division {

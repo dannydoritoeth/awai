@@ -66,7 +66,7 @@ export default function InstitutionsPage() {
                   )}
                 </div>
                 
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex justify-between items-center">
                   <div className="space-x-4">
                     <span>
                       <span className="font-medium text-gray-900">Companies: </span>
@@ -78,15 +78,16 @@ export default function InstitutionsPage() {
                     </span>
                   </div>
                   {institution.website_url && (
-                    <a 
-                      href={institution.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                      onClick={(e) => e.stopPropagation()}
+                    <div 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.open(institution.website_url, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="text-blue-600 hover:underline cursor-pointer"
                     >
                       Visit Website
-                    </a>
+                    </div>
                   )}
                 </div>
               </CardContent>
