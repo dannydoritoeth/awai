@@ -1,0 +1,93 @@
+{
+  "capabilities": [
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role requires forming professional relationships with Aboriginal Owners, various commonwealth and state agencies, and stakeholders, indicating a need for effective collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Strong communication skills are essential for visitor and stakeholder liaison, as well as for supporting the community and managing reserve priorities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Rangers must balance outdoor duties with indoor work like project management, requiring effective planning and prioritisation.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role demands strong decision-making and the ability to think on one's feet to tackle evolving reserve management priorities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Supporting Aboriginal Owners to protect cultural heritage and promoting a diverse and inclusive culture are key aspects of the role.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Rangers are responsible for undertaking, coordinating, and supervising various projects and activities, requiring a high level of accountability.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "The role requires personal fitness, enthusiasm, and a proactive approach to learning and development.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Managing projects and providing administrative support to the Board of Management for Jointly Managed reserves are critical functions.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Protected Area Management",
+    "Aboriginal Cultural Heritage Protection",
+    "Fire and Incident Management"
+  ],
+  "skills": [
+    {
+      "name": "Natural Land Management",
+      "description": "Applying knowledge of natural land management strategies to protect and maintain natural places.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with Aboriginal Owners, government agencies, and the community to manage reserves effectively.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Firefighting and Incident Control",
+      "description": "Undertaking firefighting and incident control duties, requiring specific certifications and physical fitness.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Field Officer",
+    "description": "This role involves a combination of field-based activities, environmental management, and stakeholder engagement, primarily focused on the conservation and protection of natural environments and cultural heritage.",
+    "confidence": 0.85,
+    "isNewRole": true
+  }
+}

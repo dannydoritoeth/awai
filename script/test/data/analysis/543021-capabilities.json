@@ -1,0 +1,102 @@
+{
+  "capabilities": [
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "The role requires providing high-level leadership and strategic direction, particularly in climate change and strategy.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Essential for engaging with key stakeholders across all levels of government and the community.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Critical for leading consultations and negotiations with various stakeholders to improve sustainability practices and implement net zero strategy measures.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Important for leading the transition to net zero and building resilience to climate change.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Necessary for overseeing high-quality analysis, advice, and ensuring strategic decisions support the Minister effectively.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Essential for strategic policy development and managing cross-sector initiatives.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Key for leading and coordinating inter-agency, inter-government, and cross-sectoral initiatives.",
+      "relevance": 1
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Fundamental for maintaining ethical standards and professionalism in a high-level executive role.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Executive & Leadership",
+    "Policy",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Climate Change Strategy",
+    "Energy Transition",
+    "Sustainability Practices"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Leadership",
+      "description": "Leading the direction and strategy for climate change initiatives and energy transition.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building and managing relationships with government, industry partners, and communities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Policy Development",
+      "description": "Formulating strategic policies to address climate change and energy transition.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Sustainability Practices",
+      "description": "Implementing and improving sustainability practices within agencies and authorities.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Executive & Leadership"
+    },
+    {
+      "name": "Policy"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Executive Director, Climate Change and Strategy",
+    "description": "This role involves leading strategic initiatives and policy development for climate change and energy transition, providing high-level advice, and building key partnerships to drive the sustainable transition to a net zero economy.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

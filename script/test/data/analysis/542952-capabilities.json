@@ -1,0 +1,101 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading a multi-disciplinary team to deliver science programs, requiring advanced people management skills.",
+      "relevance": 1
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicating goals and vision for science programs related to estuaries and freshwater catchments.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for project development, implementation, and delivery, ensuring high-quality outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Addressing key threats and risks to NSW marine estate, requiring problem-solving for environmental challenges.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Open communication and collaboration within the department and with external stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Working with a geographically dispersed team and external partners to deliver science programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Coordinating resources, managing budgets, and delivering reports for scientific projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Adhering to public sector values and department policies in managing scientific projects.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Scientific & Technical"
+  ],
+  "focusAreas": [
+    "Estuaries and Freshwater Catchments Management",
+    "Environmental Policy and Management"
+  ],
+  "skills": [
+    {
+      "name": "Leadership in Science",
+      "description": "Leading and developing rigorous science programs and teams.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Establishing and fostering relationships with government agencies, external clients, and collaborators.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Environmental Science",
+      "description": "Expertise in estuaries, freshwater catchments, and environmental management.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Project Coordination",
+      "description": "Managing the development, implementation, and delivery of scientific projects.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Scientific & Technical"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Science Program Leader",
+    "description": "This role involves leading a team in the development and delivery of science programs focused on estuaries and freshwater catchments, aiming to inform and improve environmental policy and management.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

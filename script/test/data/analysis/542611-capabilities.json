@@ -1,0 +1,85 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The role requires achieving impactful project outcomes efficiently, aligning with environmental and conservation priorities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and coordinating project activities to align with strategic conservation goals is essential.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role involves developing practical solutions for project management within the context of environmental conservation.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for managing budgets, contracts, and timelines effectively, adhering to policies and legislation.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires excellent communication skills for stakeholder engagement and reporting.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with various stakeholders is crucial for delivering projects that support environmental goals.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Essential for planning, coordinating, and monitoring project initiatives effectively.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Project Management in Environmental Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with various stakeholders to align project outcomes with conservation priorities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Budget and Contract Management",
+      "description": "Managing project budgets and contracts to ensure effective use of resources and compliance.",
+      "category": "Technical"
+    },
+    {
+      "name": "Environmental Conservation Knowledge",
+      "description": "Understanding of environmental and conservation principles to align projects with sustainable outcomes.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Project Officer",
+    "description": "This role involves managing and supporting projects within the environmental conservation sector, focusing on sustainable outcomes and protection of natural and cultural heritage.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

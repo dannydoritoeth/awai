@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Responsible for coordinating and monitoring visitor activities to enhance understanding of the cultural landscape, requiring efficient use of resources.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Needs to organize team schedules, manage budgets, and plan community events, indicating strong planning and prioritization skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Leads and supervises a team of Visitor Services Assistants, indicating a need for developing team capability.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Works closely with Traditional Owners, community groups, and local government, requiring effective collaboration.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Must communicate across cultures and with a variety of stakeholders, indicating the need for clear and respectful communication.",
+      "relevance": 1
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Role requires working closely with Aboriginal communities and respecting cultural knowledge, highlighting the importance of valuing diversity.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for the care, control, and management of the Worimi Conservation Lands, requiring adherence to policies and proactive risk management.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Management",
+    "Conservation Land Management"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Knowledge Sharing",
+      "description": "Sharing and appropriately communicating Worimi cultural knowledge with visitors and stakeholders.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with community groups, local government, and commercial tour operators to plan and deliver community events.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Team Leadership",
+      "description": "Leading and supervising a team of Visitor Services Assistants, developing their capabilities.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Cultural Heritage and Conservation Coordinator",
+    "description": "This role involves coordinating visitor services and activities within conservation lands, with a focus on enhancing understanding of Aboriginal cultural landscapes, managing and developing a team, and working collaboratively with various stakeholders to protect and respect cultural and environmental values.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

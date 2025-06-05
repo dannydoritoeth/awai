@@ -66,6 +66,7 @@ export class SpiderService implements ISpiderService {
         this.logger.info('Spider name "nsw gov jobs" launched');
         if (!this.browser) {
           this.browser = await puppeteer.launch({
+            headless: "new",
             args: ['--no-sandbox', '--disable-setuid-sandbox']
           });
           this.browserInitialized = true;

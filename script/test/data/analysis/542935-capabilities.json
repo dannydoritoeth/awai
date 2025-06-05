@@ -1,0 +1,102 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "The role requires clear communication to develop and implement communication and engagement strategies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with various teams within the department is essential for a coordinated approach to communications and engagement.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and prioritizing are crucial for managing multiple projects and engagement activities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Identifying emerging stakeholder issues and synthesizing information requires problem-solving skills.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "intermediate",
+      "description": "The role involves influencing stakeholders and negotiating to achieve positive engagement outcomes.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for the development and delivery of communication materials and updating stakeholder information.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Providing customer-centric services aligns with the role's focus on stakeholder and community engagement.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Supporting the delivery of communications for various programs requires adaptability to change.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Communications",
+    "Community Engagement"
+  ],
+  "focusAreas": [
+    "Stakeholder Engagement",
+    "Public Relations"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Management",
+      "description": "Identifying, mapping, and engaging with stakeholders to support sensitive and complex programs.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Event Coordination",
+      "description": "Coordinating town hall meetings, consultation forums, and online engagements.",
+      "category": "Technical"
+    },
+    {
+      "name": "Data Management",
+      "description": "Updating and managing stakeholder information in a Customer Relationship Management system.",
+      "category": "Technical"
+    },
+    {
+      "name": "Strategic Communication",
+      "description": "Developing and executing communication strategies across various channels.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Adaptability",
+      "description": "Quickly adapting to emerging stakeholder matters and changing project priorities.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Policy"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Communications and Engagement Advisor",
+    "description": "This role involves developing and implementing communication and engagement strategies for government programs, requiring skills in stakeholder management, strategic communication, and adaptability to change.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

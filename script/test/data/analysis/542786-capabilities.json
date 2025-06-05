@@ -1,0 +1,127 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Managing ecological restoration projects and implementing fire management programs require efficient use of resources and a commitment to quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role involves coordinating and supervising projects, environmental assessments, and field-based activities, necessitating effective planning and prioritization skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Developing environmental plans and management strategies requires analytical thinking and practical solution development.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "The ranger is responsible for the conservation of natural and cultural values within parks, demonstrating accountability through adherence to legislation and policy.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "foundational",
+      "description": "Working in a supportive team that values connection to Country implies a need to engage and motivate staff and develop their capabilities.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "foundational",
+      "description": "Communicating goals and priorities related to the care, control, and management of the Worimi Conservation Lands.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "foundational",
+      "description": "Supporting and promoting change in land management practices in alignment with environmental and heritage obligations.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "The role requires openness and honesty in managing sensitive environmental and cultural heritage areas, and a willingness to commit to change.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Adhering to public sector values and professional ethics, especially in managing Aboriginal heritage and natural resources.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse backgrounds, experiences, and perspectives, especially in working closely with Traditional Owners and the Aboriginal community.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Clear communication and active listening are crucial in engaging with the community and stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with team members, Traditional Owners, and other stakeholders is essential for the role.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Effective planning, coordination, and control methods are needed for managing ecological restoration projects and fire management programs.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Management",
+    "Environmental Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with community and stakeholders to support conservation efforts and visitor experiences.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Environmental Assessment",
+      "description": "Conducting environmental assessments to inform conservation strategies and management plans.",
+      "category": "Technical"
+    },
+    {
+      "name": "Incident Management",
+      "description": "Planning and participating in field-based activities, including emergency response and law enforcement.",
+      "category": "Technical"
+    },
+    {
+      "name": "Cultural Heritage Management",
+      "description": "Understanding and respecting the cultural significance of Worimi Country in conservation practices.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Aboriginal Cultural and Environmental Ranger",
+    "description": "This role combines environmental conservation with the management of Aboriginal cultural heritage, focusing on the care, control, and management of conservation lands in collaboration with Traditional Owners and the community.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

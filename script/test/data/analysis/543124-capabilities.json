@@ -1,0 +1,87 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "The role requires effective liaison and communication with Aboriginal community representatives, native title groups, and NPWS staff to support joint management programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with diverse stakeholders, including government and Aboriginal organizations, is crucial for developing and implementing joint management programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and prioritizing are essential for the successful delivery of administrative and project support within the joint management framework.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting and valuing diverse backgrounds, especially Aboriginal cultural knowledge and connections, are central to the role.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Understanding and applying effective planning, coordination, and control methods to develop and implement joint management programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Maintaining professionalism and adherence to public sector values, especially in managing sensitive cultural heritage issues.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Being responsible for actions and outcomes related to joint management programs, including adherence to legislation and policy.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Administrative Support"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Management",
+    "Environmental Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Knowledge",
+      "description": "Understanding and respecting Aboriginal cultural heritage and practices to ensure culturally appropriate outcomes.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Effectively engaging with and managing relationships between Aboriginal communities, government agencies, and other stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Program Coordination",
+      "description": "Coordinating and implementing joint management programs that protect cultural heritage and the environment.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Cultural Heritage and Environmental Program Coordinator",
+    "description": "This role involves coordinating and implementing programs that protect and manage cultural heritage and the environment, requiring a blend of administrative, project management, and cultural knowledge skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

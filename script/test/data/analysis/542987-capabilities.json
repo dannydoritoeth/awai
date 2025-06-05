@@ -1,0 +1,103 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for the end-to-end management of grant programs, ensuring projects are financially monitored and achieve intended outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Leads the delivery of state-wide planning and implementation of grant projects, requiring effective prioritization and planning skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Addresses complex issues with grantees, requiring analytical skills to develop practical solutions.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Accountable for administering a large volume of projects, adhering to guidelines and policies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Guides team members on grant processes and decision-making, developing their capabilities.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "intermediate",
+      "description": "Communicates goals and priorities to team members and stakeholders, inspiring engagement with the grant program's objectives.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Establishes and maintains stakeholder relationships through effective communication and negotiation.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Engages stakeholders and ensures consistency in outcomes through skilled negotiation and influence.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Oversees the end-to-end management of grantee projects, requiring advanced project management skills.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Grant Management",
+    "Coastal Management"
+  ],
+  "skills": [
+    {
+      "name": "Project Management",
+      "description": "Overseeing grant projects from inception to completion, ensuring they meet governance and financial monitoring requirements.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building and maintaining relationships with internal and external stakeholders, including effective communication and negotiation.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Budget Management",
+      "description": "Monitoring program expenditure and managing budgets to ensure financial efficiency.",
+      "category": "Technical"
+    },
+    {
+      "name": "Grants Administration",
+      "description": "Understanding and applying NSW Government grants administration guidelines to manage the grant lifecycle.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Project Officer - Grants Management",
+    "description": "This role involves the advanced management of grant programs, focusing on environmental projects under the NSW Coastal Management Framework. It requires a blend of project management, stakeholder engagement, and financial oversight, making it distinct in its focus on environmental grant administration.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

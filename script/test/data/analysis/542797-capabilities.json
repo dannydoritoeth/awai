@@ -1,0 +1,126 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for the delivery of strategic and operational priorities, ensuring conservation and protection of cultural, natural, and historic values.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Coordinates the development and implementation of strategic plans, programs, and operations for the Worimi Conservation Lands.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Accountable for the quality, integrity, and accuracy of cultural advice, adhering to statutory responsibilities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Provides guidance, mentoring, and support to staff, focusing on cultural leadership and conservation efforts.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicates goals and priorities related to the conservation and cultural significance of the Worimi Conservation Lands.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Leads cultural and conservation initiatives, supporting and promoting change within the organization and community.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "advanced",
+      "description": "Demonstrates openness and honesty in cultural leadership, ready to face challenges in conservation management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Upholds ethical standards and public sector values, especially in managing lands of significant Aboriginal cultural heritage.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "advanced",
+      "description": "Shows respect for diverse backgrounds, especially in recognizing the cultural significance of the Worimi Conservation Lands to the Worimi People.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaborates with the Worimi Conservation Lands Board, community, and staff, valuing their contributions to conservation efforts.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Engages with various stakeholders to gain consensus and commitment towards the conservation and cultural priorities of the Worimi Conservation Lands.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Applies effective planning, coordination, and control methods to conservation projects and initiatives.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Conservation Management",
+    "Cultural Heritage Management",
+    "Aboriginal Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Leadership",
+      "description": "Leading with a focus on cultural priorities, ensuring the protection of cultural, natural, and historic values.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Strategic Planning",
+      "description": "Developing and implementing strategic plans for the conservation and management of the Worimi Conservation Lands.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with the community, Traditional Owners, and other stakeholders to support conservation efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Conservation Techniques",
+      "description": "Applying knowledge of conservation practices to protect and manage natural and cultural heritage.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Cultural and Environmental Conservation Manager",
+    "description": "This role involves leading the conservation and management of natural, cultural, and historic values within a significant Aboriginal joint-managed park, focusing on strategic planning, stakeholder engagement, and cultural leadership.",
+    "confidence": 0.95,
+    "isNewRole": true
+  }
+}

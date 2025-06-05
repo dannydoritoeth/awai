@@ -1,0 +1,122 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The role requires achieving effective pest control outcomes and ensuring activities are integrated with broader pest management strategies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Responsible for planning and prioritising pest control activities and ensuring compliance with safety and legislative requirements.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Needs to develop practical solutions for pest control challenges and ensure safe work practices.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Accountable for the safety and effectiveness of pest control operations, including compliance with legislation and policies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Supervises and trains staff and volunteers in pest control techniques and safety procedures.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "intermediate",
+      "description": "Motivates team members by communicating the importance of their role in preserving natural environments.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Promotes and supports changes in pest control practices to improve effectiveness and safety.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Demonstrates resilience in challenging outdoor conditions and courage in making tough decisions.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Upholds ethical standards and complies with all relevant legislation and policies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effectively communicates with a diverse range of stakeholders, including volunteers, staff, and the community.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaborates with team members, other NPWS staff, and external partners to achieve pest control objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Applies project management principles to plan, execute, and oversee pest control projects.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Pest Control",
+    "Wildlife Management",
+    "Safety Compliance"
+  ],
+  "skills": [
+    {
+      "name": "Pest Management",
+      "description": "Knowledge and experience in pest animal control techniques and strategies.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Legislation Compliance",
+      "description": "Understanding of and adherence to firearms legislation and safety regulations.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Team Leadership",
+      "description": "Ability to lead, motivate, and develop a team of staff and volunteers.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Safety Procedures",
+      "description": "Implementation and monitoring of safe work practices in pest control operations.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Operations Supervisor",
+    "description": "This role involves supervising and coordinating field operations related to environmental conservation, specifically focusing on pest control within national parks. It requires a blend of technical knowledge in pest management, leadership skills, and a commitment to safety and environmental preservation.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

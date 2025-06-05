@@ -1,0 +1,90 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires clear communication with Aboriginal Joint Management Committees and external stakeholders to support liaison and deliver on commitments.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Essential for establishing and managing joint management committees and collaborating with key stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Necessary for managing multiple tasks, including executive administrative support, program implementation, and project advancement.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Important for developing practical solutions to advance joint management objectives and assist in the delivery of culturally relevant educational and tourism activities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "advanced",
+      "description": "Critical for respecting and working closely with Traditional Owners and valuing connection to Country.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for adhering to memorandum of understanding agreements, Indigenous Land Use Agreements, and reserve plans of management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Support and promote change in management practices to better incorporate Aboriginal heritage and cultural knowledge.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Administrative Support"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Management",
+    "Environmental Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Executive Administrative Support",
+      "description": "Providing a wide range of executive administrative services to support the liaison between NPWS and Aboriginal Joint Management Committees.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Collaboration",
+      "description": "Collaborating with key stakeholders to establish and manage joint management committees and deliver on NPWS commitments.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Cultural Knowledge",
+      "description": "Understanding and respecting Aboriginal culture and heritage, essential for working effectively in this role.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Administrative Support"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Aboriginal Joint Management Coordinator",
+    "description": "This role involves coordinating with Aboriginal Joint Management Committees to conserve and protect Aboriginal heritage and the natural environment, requiring a blend of administrative, project delivery, and environmental science skills, with a strong emphasis on cultural knowledge and collaboration.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

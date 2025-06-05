@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Providing visitor service support and promoting visitor attractions and experiences, responding to customer enquiries.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Yarning with community, dealing effectively with cultural differences, and handling customer enquiries with diplomacy.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Working as part of a team that values connection to Country, respects cultural knowledge, and works closely with Traditional Owners.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting and valuing the deep spiritual and cultural significance of Worimi Country and its conservation lands.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Adhering to the provisions of the NSW Anti-discrimination Act (1977) in an Aboriginal-identified role.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Maintaining a high level of vigilance and awareness of personal safety during park compliance patrol duties.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for managing and promoting visitor attractions and experiences, including compliance patrol duties.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Conservation",
+    "Visitor Services Management"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Knowledge and Sensitivity",
+      "description": "Understanding and respecting Aboriginal cultural heritage and working closely with Traditional Owners.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Customer Service and Negotiation",
+      "description": "Providing support for visitor services and effectively handling enquiries and negotiations.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Safety and Compliance Awareness",
+      "description": "Conducting park compliance patrol duties with a high level of vigilance and awareness of personal safety.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Aboriginal Cultural Heritage and Visitor Services Coordinator",
+    "description": "This role involves working on Country to manage and protect natural and cultural values, providing visitor services, and engaging with the community and Traditional Owners. It requires a blend of environmental conservation skills, cultural sensitivity, and customer service.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

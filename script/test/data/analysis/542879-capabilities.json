@@ -1,0 +1,138 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "foundational",
+      "description": "The role requires working in challenging outdoor conditions and dealing with unexpected situations, necessitating resilience and courage.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "foundational",
+      "description": "Field Officers must adhere to environmental laws and regulations, demonstrating integrity in their work.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Self",
+      "level": "foundational",
+      "description": "The ability to work independently or with minimal supervision is crucial, highlighting the need for self-management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "foundational",
+      "description": "Respecting diverse backgrounds is essential in a role that serves the community and works towards the conservation of natural and cultural heritage.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "Field Officers are expected to efficiently complete tasks such as maintenance, pest control, and fire management to achieve conservation goals.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "The role involves managing a variety of tasks in changing conditions, requiring effective planning and prioritization.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "foundational",
+      "description": "Field Officers must address and solve problems encountered during conservation and maintenance activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "foundational",
+      "description": "Officers are responsible for their actions and the safe operation of equipment, emphasizing accountability.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "foundational",
+      "description": "Effective communication is vital for teamwork and interacting with the public during visitor enquiries.",
+      "relevance": 1
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "foundational",
+      "description": "Providing information and assistance to park visitors requires a commitment to customer service.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "The role involves working closely with team members and other stakeholders to achieve conservation goals.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "foundational",
+      "description": "May need to negotiate or influence others in compliance activities or when working with community groups.",
+      "relevance": 0.6
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Operating and maintaining various types of plant and equipment requires basic technological proficiency.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Field Officers participate in projects related to conservation works and asset management, necessitating project management skills.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Park Management"
+  ],
+  "skills": [
+    {
+      "name": "Outdoor Work Proficiency",
+      "description": "Ability to perform physically demanding tasks in outdoor settings.",
+      "category": "Technical"
+    },
+    {
+      "name": "Equipment Operation",
+      "description": "Skills in operating and maintaining various types of equipment and vehicles.",
+      "category": "Technical"
+    },
+    {
+      "name": "Fire Management",
+      "description": "Knowledge and skills in fire management practices and firefighting.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Ability to work effectively as part of a team.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Problem Solving",
+      "description": "Ability to identify and solve problems encountered in the field.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Field Conservation Officer",
+    "description": "This role involves a combination of outdoor physical work, conservation efforts, and interaction with the public to maintain and improve park assets and natural heritage. It requires a blend of technical skills, environmental knowledge, and soft skills to effectively contribute to the conservation and management of natural parks.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

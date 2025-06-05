@@ -1,0 +1,110 @@
+{
+  "capabilities": [
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role requires planning and prioritizing work to implement maintenance and conservation programs effectively.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Needs to solve problems on the spot when working in the field, especially in emergency situations like wildfire response.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for ensuring work complies with statutory obligations related to conservation and heritage.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Supervises field officers and contractors, requiring skills in people management and development.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "The role involves working in challenging outdoor conditions and emergency situations, requiring resilience.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Must adhere to public sector values and statutory obligations, especially in conservation and heritage protection.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Essential for maintaining relationships with field staff, contractors, and the broader team.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Must collaborate with various stakeholders to achieve conservation goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Requires coordinating and implementing field and operational activities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Needs to work with various software programs for administrative and organisational tasks.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Heritage Protection",
+    "Fire Management"
+  ],
+  "skills": [
+    {
+      "name": "Leadership in Field Operations",
+      "description": "Leading teams in the field for conservation, maintenance, and emergency response activities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Conservation Techniques",
+      "description": "Knowledge of conservation practices for flora, fauna, and cultural heritage.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Emergency Response",
+      "description": "Skills in fire management and response to natural disasters.",
+      "category": "Technical"
+    },
+    {
+      "name": "Operational Planning",
+      "description": "Planning and executing field operations and maintenance programs.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Field Operations Officer",
+    "description": "This role involves leading field operations for conservation and maintenance within national parks, including supervising teams, planning and executing programs, and ensuring compliance with environmental and heritage protection laws.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

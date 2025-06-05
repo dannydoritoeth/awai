@@ -1,0 +1,92 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Responsible for coordinating and supervising operations to ensure revenue generation and service quality.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Needs to effectively manage visitor centre operations, including events and retail, requiring planning and prioritization.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Accountable for the financial performance, stock control, and security of the visitor centre.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Responsible for recruiting, supervising, and developing staff, volunteers, and contractors.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Must have strong communication skills to provide exceptional service and support to the team.",
+      "relevance": 1
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Essential to provide customer-centric services to visitors, ensuring a great experience.",
+      "relevance": 1
+    },
+    {
+      "name": "Finance",
+      "level": "intermediate",
+      "description": "Requires experience managing financial budgets and reporting for the visitor centre.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Involves coordinating marketing and events management, akin to project management tasks.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Customer Service",
+    "Retail Management"
+  ],
+  "focusAreas": [
+    "Tourism and Hospitality",
+    "Retail Operations"
+  ],
+  "skills": [
+    {
+      "name": "Leadership",
+      "description": "Leading a small frontline team to deliver exceptional visitor services.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Retail Management Systems",
+      "description": "Using systems for financial performance, stock control, and security monitoring.",
+      "category": "Technical"
+    },
+    {
+      "name": "Customer Service Excellence",
+      "description": "Ensuring visitors have a great experience through high-quality service.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Visitor Centre Supervisor",
+    "description": "This role involves supervising and coordinating the operations of a visitor centre, including staff management, customer service, financial reporting, and project management related to events and marketing.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,155 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for leading strategic planning and program design, ensuring efficient use of resources to achieve quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Coordinates cross-functional teams to assess priorities, delivery models, and resource needs for environmental programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Navigates complex and diverse inputs to bring clarity and direction to planning efforts.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Ensures planning is grounded in robust governance, aligned with policy approaches, legislative and regulatory frameworks.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Leads and motivates cross-functional teams, developing capability and potential in others.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicates goals, priorities, and vision for environmental programs, recognising achievements.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Optimise Business Outcomes",
+      "level": "intermediate",
+      "description": "Manages resources effectively, applying sound workforce planning principles.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Supports, promotes, and champions change, assisting others to engage with change in environmental management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Prepared to express views and accept and commit to change in environmental policy and management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Adheres to public sector values in managing complex environmental programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Shows drive and motivation in leading environmental programs, with a commitment to learning and improvement.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Shows respect for diverse backgrounds in engaging with community stakeholders and government agencies.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Communicates complex concepts to a range of audiences, including executives and government partners.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Provides customer-centric services aligned with public service and organisational objectives in environmental management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaborates with government, legal, policy, and community stakeholders, valuing their contribution.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Gains consensus and commitment from regional government agencies, local councils, and community stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Applies effective planning, coordination, and control methods to environmental program management.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Executive & Leadership"
+  ],
+  "focusAreas": [
+    "Water Resource Management",
+    "Environmental Program Management"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Planning",
+      "description": "Leading the strategic planning and program design for environmental programs.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building strong relationships across government and with community stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Risk Management",
+      "description": "Managing risk and driving continuous improvement in program delivery.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Governance and Compliance",
+      "description": "Ensuring planning and execution are grounded in robust governance and compliance with legislative frameworks.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Executive & Leadership"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Program Management Executive",
+    "description": "This role involves leading strategic planning and program design for environmental programs, coordinating cross-functional teams, and managing stakeholder engagement to ensure sustainable and healthy environments.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

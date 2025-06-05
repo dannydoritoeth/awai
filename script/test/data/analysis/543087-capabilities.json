@@ -1,0 +1,98 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Managing and coordinating the development, implementation, and evaluation of new digital functionalities within deadlines, quality standards, and budget.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Planning digital project delivery in an agile environment, ensuring efficient use of resources and alignment with strategic objectives.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Developing innovative digital solutions to enhance park visitor experiences and environmental programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Ensuring projects adhere to environmental safety, risk management policies, and legislative requirements.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Great communication and collaboration skills required for working with a diverse team and managing vendor and contract relationships.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Strong project management experience in an agile setting, including user research, UX design, and analytics.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "advanced",
+      "description": "Extensive digital skills and familiarity with software platforms and tools like Sitecore CMS, Smartsheet, and Azure DevOps.",
+      "relevance": 1
+    },
+    {
+      "name": "Procurement and Contract Management",
+      "level": "advanced",
+      "description": "Understanding of best practices in procurement, tendering, and contract preparation for managing project teams and consultants.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "ICT & Digital"
+  ],
+  "focusAreas": [
+    "Digital Project Management",
+    "Agile Methodology",
+    "Environmental Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Agile Project Management",
+      "description": "Managing digital projects in an agile environment, ensuring adaptability and efficient delivery.",
+      "category": "Technical"
+    },
+    {
+      "name": "Digital Communication Platforms",
+      "description": "Utilizing various digital tools and platforms for project management and delivery.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with internal and external stakeholders, including vendors and consultants, to ensure project success.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Environmental Policy Compliance",
+      "description": "Applying environmental safety and risk management policies in project execution.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "ICT & Digital"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Digital Project Management in Environmental Conservation",
+    "description": "This role involves leading digital project delivery within an environmental conservation context, utilizing advanced project management and technology skills to enhance visitor experiences and support environmental programs.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

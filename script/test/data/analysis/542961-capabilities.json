@@ -1,0 +1,124 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for the development and delivery of strategic communications and engagement activities, ensuring quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Manages planning, development, implementation, and evaluation of communication strategies and activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Identifies emerging stakeholder issues and synthesizes information for executive consideration.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Advises and works closely with program teams to ensure activities align with departmental policies and procedures.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "Leads a small team, engaging and motivating staff to develop their capabilities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "intermediate",
+      "description": "Communicates goals and priorities to the team and recognizes achievements.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Optimise Business Outcomes",
+      "level": "intermediate",
+      "description": "Manages resources effectively to support strategic communications and engagement activities.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Supports and promotes change related to the Reconnecting River Country Program and other Water Group initiatives.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Manages the delivery of communication materials and channels, ensuring clear and effective communication.",
+      "relevance": 1
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Ensures community and stakeholders are informed and have opportunities for feedback.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Works closely with various teams across the department for a coordinated approach to communications and engagement.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Provides expert advice and support to senior executives and business units, influencing engagement strategies.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Applies effective planning, coordination, and control methods to manage communications and engagement projects.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Communications"
+  ],
+  "focusAreas": [
+    "Strategic Communications",
+    "Stakeholder Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Planning",
+      "description": "Developing and implementing strategic communication and engagement plans.",
+      "category": "Technical"
+    },
+    {
+      "name": "Leadership",
+      "description": "Leading a team and managing a diverse range of communication activities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Management",
+      "description": "Identifying and managing relationships with various stakeholders.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Event Management",
+      "description": "Designing and delivering stakeholder and community events.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Manager Communications and Engagement",
+    "description": "This role involves leading the development and delivery of strategic communications and engagement activities for government programs, requiring advanced communication, planning, and team management skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

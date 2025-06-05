@@ -12,6 +12,7 @@ import type {
   LLMCapabilityAnalysisResult,
   TaxonomyAnalysisResult 
 } from '../services/analyzer/templates/capabilityAnalysis.js';
+import { ConsoleLogger } from './logger.js';
 
 export interface AIModelInvocation {
   session_id?: string;
@@ -41,6 +42,9 @@ export class TestDataManager {
   private analysisDir: string;
   private isTestScenario: boolean;
   private testScenario: string | undefined;
+  private shouldSaveTestData: boolean;
+  private shouldLoadTestData: boolean;
+  private logger: ConsoleLogger;
 
   constructor(baseDir: string = process.cwd()) {
     this.testDataDir = path.join(baseDir, 'test', 'data');
@@ -50,9 +54,12 @@ export class TestDataManager {
     this.analysisDir = path.join(this.testDataDir, 'analysis');
     this.testScenario = process.env.LOAD_TEST_SCENARIO;
     this.isTestScenario = Boolean(this.testScenario);
+    this.shouldSaveTestData = process.env.SAVE_TEST_DATA === 'true';
+    this.shouldLoadTestData = process.env.LOAD_TEST_DATA === 'true';
+    this.logger = new ConsoleLogger('TestDataManager');
 
-    // Create directories if they don't exist and we're not in test scenario mode
-    if (!this.isTestScenario) {
+    // Create directories if they don't exist and we're saving test data
+    if (this.shouldSaveTestData) {
       [this.testDataDir, this.embeddingsDir, this.aiInvocationsDir, this.jobsDir, this.analysisDir].forEach(dir => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
@@ -97,64 +104,80 @@ export class TestDataManager {
   }
 
   /**
-   * Save job listings data
-   */
-  async saveJobListings(listings: JobListing[], page: number = 1): Promise<void> {
-    if (this.isTestScenario) return;
-    if (process.env.SAVE_TEST_DATA !== 'true') return;
-
-    try {
-      // Save listings to a JSON file with page number
-      const listingsFile = path.join(this.jobsDir, `job_listings_page_${page}.json`);
-      await fs.promises.writeFile(
-        listingsFile, 
-        JSON.stringify(listings, null, 2),
-        'utf-8'
-      );
-    } catch (error) {
-      console.error('Error saving job listings data:', error);
-    }
-  }
-
-  /**
    * Load job listings from test scenario or saved pages
    */
   async loadJobListings(): Promise<JobListing[] | null> {
     try {
-      // If in test scenario mode, try to load from test scenario first
-      if (this.isTestScenario && this.testScenario) {
+      // Only attempt to load data if LOAD_TEST_DATA is true
+      if (!this.shouldLoadTestData) {
+        this.logger.info('LOAD_TEST_DATA is false, proceeding with live scraping');
+        return null;
+      }
+
+      // If LOAD_TEST_SCENARIO is set, try to load that specific file
+      if (this.testScenario) {
         const scenarioFile = path.join(this.jobsDir, `${this.testScenario}.json`);
         if (fs.existsSync(scenarioFile)) {
+          this.logger.info(`Loading test scenario from ${scenarioFile}`);
           const data = await fs.promises.readFile(scenarioFile, 'utf-8');
           return JSON.parse(data) as JobListing[];
+        } else {
+          this.logger.info(`Test scenario file not found: ${scenarioFile}`);
         }
       }
 
-      // If no test scenario or test file doesn't exist, try to load all saved pages
+      // If no test scenario or it wasn't found, try to load saved pages
       const files = await fs.promises.readdir(this.jobsDir);
       const pageFiles = files.filter(f => f.startsWith('job_listings_page_') && f.endsWith('.json'));
       
-      if (pageFiles.length === 0) return null;
+      if (pageFiles.length > 0) {
+        this.logger.info(`Found ${pageFiles.length} saved page files`);
+        
+        // Sort files by page number
+        pageFiles.sort((a, b) => {
+          const pageA = parseInt(a.match(/page_(\d+)/)?.[1] || '0');
+          const pageB = parseInt(b.match(/page_(\d+)/)?.[1] || '0');
+          return pageA - pageB;
+        });
 
-      // Sort files by page number
-      pageFiles.sort((a, b) => {
-        const pageA = parseInt(a.match(/page_(\d+)/)?.[1] || '0');
-        const pageB = parseInt(b.match(/page_(\d+)/)?.[1] || '0');
-        return pageA - pageB;
-      });
+        // Load and combine all pages
+        const allListings: JobListing[] = [];
+        for (const file of pageFiles) {
+          this.logger.info(`Loading listings from ${file}`);
+          const data = await fs.promises.readFile(path.join(this.jobsDir, file), 'utf-8');
+          const listings = JSON.parse(data) as JobListing[];
+          allListings.push(...listings);
+        }
 
-      // Load and combine all pages
-      const allListings: JobListing[] = [];
-      for (const file of pageFiles) {
-        const data = await fs.promises.readFile(path.join(this.jobsDir, file), 'utf-8');
-        const listings = JSON.parse(data) as JobListing[];
-        allListings.push(...listings);
+        this.logger.info(`Loaded ${allListings.length} total listings from saved pages`);
+        return allListings;
       }
 
-      return allListings;
-    } catch (error) {
-      console.error('Error loading job listings:', error);
+      // If we get here, no test data was found
+      this.logger.info('No test data found, proceeding with live scraping');
       return null;
+    } catch (error) {
+      this.logger.error('Error loading job listings:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save job listings to a file
+   */
+  async saveJobListings(listings: JobListing[], page: number): Promise<void> {
+    if (!this.shouldSaveTestData) {
+      this.logger.info('SAVE_TEST_DATA is false, skipping save');
+      return;
+    }
+
+    try {
+      const filename = `job_listings_page_${page}.json`;
+      const filepath = path.join(this.jobsDir, filename);
+      await fs.promises.writeFile(filepath, JSON.stringify(listings, null, 2));
+      this.logger.info(`Saved ${listings.length} listings to ${filename}`);
+    } catch (error) {
+      this.logger.error('Error saving job listings:', error);
     }
   }
 

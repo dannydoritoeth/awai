@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Developing and supporting the implementation of flood risk management programs requires advanced planning and prioritization skills to address complex challenges.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires advanced problem-solving skills to understand and manage complex flooding processes and develop practical solutions for flood risk management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for delivering projects within the scope of relevant policy, guidance, and legislation, demonstrating a high level of accountability.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must excel at building strong relationships with stakeholders and providing expert advice, necessitating advanced communication skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Thrives in collaborative, multidisciplinary environments, indicating a need for advanced collaboration skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Extensive experience in delivering projects to support flood risk management indicates a need for advanced project management skills.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Likely requires the use of specialized software and technology for flood risk analysis and management.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Flood Risk Management",
+    "Environmental Engineering"
+  ],
+  "skills": [
+    {
+      "name": "Flood Risk Analysis",
+      "description": "Analyzing flood processes and assessing risk to inform management plans.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building relationships with government and industry stakeholders for collaborative flood management efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Legislative Compliance",
+      "description": "Understanding and applying relevant legislation, policies, and guidelines in flood risk management.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Project Officer in Environmental Management",
+    "description": "This role involves advanced project management, problem-solving, and collaborative skills to develop and support the implementation of flood risk management programs, requiring a deep understanding of environmental science and engineering principles.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

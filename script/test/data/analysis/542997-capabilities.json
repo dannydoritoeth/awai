@@ -1,0 +1,113 @@
+{
+  "capabilities": [
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "The role requires working as part of a team to maintain and improve park assets, indicating a foundational level of collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "Field Officers are expected to contribute towards the conservation of the natural environment, requiring a foundational ability to deliver results.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "The role involves assisting with a diverse range of activities, necessitating foundational skills in planning and prioritising.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "foundational",
+      "description": "Given the physically demanding and outdoor nature of the work, foundational resilience and courage are essential.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "foundational",
+      "description": "Field Officers must adhere to safety and environmental regulations, demonstrating foundational integrity.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "foundational",
+      "description": "The ability to work alone or with minimal supervision requires foundational self-management skills.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "foundational",
+      "description": "The commitment to work with Aboriginal communities and manage cultural heritage sites indicates a foundational appreciation for diversity.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Operating and maintaining plant and equipment requires foundational technology skills.",
+      "relevance": 0.6
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Participation in fire management activities and maintenance projects requires foundational project management skills.",
+      "relevance": 0.5
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Park Management"
+  ],
+  "skills": [
+    {
+      "name": "Four-wheel driving",
+      "description": "Ability to operate four-wheel drive vehicles in various terrains.",
+      "category": "Technical"
+    },
+    {
+      "name": "First Aid",
+      "description": "Ability to provide first aid assistance in emergency situations.",
+      "category": "Technical"
+    },
+    {
+      "name": "Firefighting",
+      "description": "Skills in frontline firefighting and support roles.",
+      "category": "Technical"
+    },
+    {
+      "name": "Equipment Operation",
+      "description": "Operate and maintain a range of plant and equipment.",
+      "category": "Technical"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Work effectively as part of a team in diverse and dynamic environments.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Communication",
+      "description": "Respond to visitor enquiries and communicate effectively with team members.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Field Officer",
+    "description": "This role involves a combination of field operations and environmental science, focusing on the conservation of natural environments, flora, fauna, and cultural heritage through maintenance, compliance, and engagement activities.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

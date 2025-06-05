@@ -1,0 +1,98 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The role requires achieving outcomes in the maintenance and improvement of park assets, including pest and weed control, and fire management activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Field Officers must effectively plan and prioritize tasks to manage the diverse range of activities related to park maintenance and conservation.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role involves solving problems in the field, requiring analytical thinking and practical solution development.",
+      "relevance": 0.85
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Field Officers are responsible for their actions, adhering to legislation and policy, and proactively addressing risks in their day-to-day work.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Requires self-motivation and a measured approach to work, with a commitment to learning and developing the necessary skills for the role.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication is essential for yarning with the community, responding to visitor enquiries, and working closely with the team.",
+      "relevance": 0.95
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role involves working as part of a team, requiring collaboration and valuing the contribution of others.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting cultural knowledge and working alongside Traditional Owners is a key aspect of the role.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Field Officers assist with projects related to the conservation and maintenance of park assets.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Cultural Heritage Management"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Knowledge",
+      "description": "Understanding and respecting the cultural significance of Worimi Conservation Lands and working with Aboriginal communities.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Safety and Compliance",
+      "description": "Adhering to safety protocols and obtaining necessary certifications for equipment operation and firefighting.",
+      "category": "Technical"
+    },
+    {
+      "name": "Physical Fitness",
+      "description": "Maintaining a level of fitness necessary for outdoor work, including firefighting and equipment operation.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Conservation and Cultural Heritage Field Officer",
+    "description": "This role involves a combination of environmental conservation tasks and cultural heritage management, specifically within Aboriginal-owned lands, requiring a blend of technical skills, cultural knowledge, and physical fitness.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "capabilities": [
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicates goals, priorities, and vision to guide and motivate the communications team.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "highly advanced",
+      "description": "Requires exceptional communication skills for developing and delivering strategic communications and engaging with senior stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Essential for coordinating with executives and managing stakeholder relationships.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Leads teams through operational change and navigates sensitive political matters.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Critical for developing communication strategies that address complex policy and regulatory issues.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Necessary for strategic planning and delivery of communications that support organizational priorities.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for ensuring communications align with NSW Government priorities and standards.",
+      "relevance": 1
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Upholds ethical standards and public sector values in all communications.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leads and motivates the communications team, developing their capabilities.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Oversees campaigns, announcements, and communication activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Manages digital content governance and online presence.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Executive & Leadership",
+    "Policy",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Corporate Communications",
+    "Stakeholder Engagement",
+    "Digital Strategy"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Communications",
+      "description": "Developing and implementing communication strategies to support service delivery and reform.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership",
+      "description": "Providing high-level leadership and direction to the communications team.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Establishing and driving positive relationships with internal and external stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Digital Content Management",
+      "description": "Overseeing website strategy and ensuring digital content is user-centered and aligned with strategic priorities.",
+      "category": "Technical"
+    },
+    {
+      "name": "Brand Management",
+      "description": "Managing brand, content strategy, and social media presence.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Executive & Leadership"
+    },
+    {
+      "name": "Policy"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Director of Corporate Communications",
+    "description": "This role involves leading the strategic direction, planning, and delivery of communications to support organizational priorities, managing stakeholder engagement, and overseeing digital content and brand management.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

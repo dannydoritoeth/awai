@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "The role requires advanced communication skills to develop and implement communication strategies, ensuring clear and cohesive messaging across diverse stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Given the role's focus on managing multiple stakeholders and potentially conflicting priorities, advanced skills in influencing and negotiating are essential.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Responsible for leading the communication efforts in the transition to renewable energy, the role requires an advanced ability to support, promote, and champion significant changes.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "The role involves strategic planning and prioritization of communication campaigns to effectively promote EnergyCo's initiatives.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "The manager must demonstrate accountability by adhering to policies and legislation while proactively addressing risks in communication strategies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaboration with communities, investors, and industry stakeholders is crucial for the planning and coordination of infrastructure projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Value Diversity",
+      "level": "advanced",
+      "description": "The role requires respecting and valuing diverse backgrounds, experiences, and perspectives, especially in engaging with Aboriginal communities and diverse stakeholders.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Executive & Leadership"
+  ],
+  "focusAreas": [
+    "Strategic Communications",
+    "Renewable Energy Promotion"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Communication Planning",
+      "description": "Developing, planning, and implementing communication strategies to support the transition to renewable energy.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Management",
+      "description": "Managing relationships with diverse stakeholders, including communities, investors, and industry partners.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership in Communications",
+      "description": "Leading a communications unit to balance strategic and operational functions effectively.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Executive & Leadership"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Strategic Communications and Campaigns Manager",
+    "description": "This role involves leading strategic communication and campaign efforts to promote renewable energy initiatives, requiring advanced communication, negotiation, and change management skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}
