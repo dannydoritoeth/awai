@@ -7,6 +7,7 @@ import { SupabaseClient, createClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
 import path from 'path';
 import fs from 'fs';
+import { Pool } from 'pg';
 
 import { CompanyStorage } from './CompanyStorage.js';
 import { JobStorage } from './JobStorage.js';
@@ -33,6 +34,7 @@ interface StorageConfig {
   maxRetries?: number;
   retryDelay?: number;
   institutionId?: string;
+  pgStagingPool?: Pool;
 }
 
 export class StorageService {
@@ -48,6 +50,7 @@ export class StorageService {
   private readonly stagingClient: SupabaseClient;
   private readonly liveClient: SupabaseClient;
   private readonly logger: Logger;
+  private readonly pgStagingPool?: Pool;
 
   // Method bindings
   public readonly getOrCreateCompany: typeof CompanyStorage.prototype.getOrCreateCompany;
@@ -71,6 +74,7 @@ export class StorageService {
       this.stagingClient = createClient(config.stagingSupabaseUrl, config.stagingSupabaseKey);
       this.liveClient = createClient(config.liveSupabaseUrl, config.liveSupabaseKey);
       this.logger = loggerOrLiveClient as Logger;
+      this.pgStagingPool = config.pgStagingPool;
     } else {
       // Direct client injection
       this.stagingClient = configOrClient as SupabaseClient;
@@ -79,7 +83,7 @@ export class StorageService {
     }
 
     // Initialize storage modules
-    this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger);
+    this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
     this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger);
     this.roles = new RoleStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
     this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger);

@@ -10,11 +10,22 @@ import { StorageService } from '../services/storage/StorageService.js';
 import { SpiderService } from '../services/spider/SpiderService.js';
 import { OrchestratorService } from '../services/orchestrator/OrchestratorService.js';
 import { ConsoleLogger } from '../utils/logger.js';
+import { Pool } from 'pg';
 
 async function main() {
   try {
     // Initialize Logger
     const logger = new ConsoleLogger('cli');
+
+    // Parse the pool if it was passed
+    let pgStagingPool: Pool | undefined;
+    if (process.env.PG_STAGING_POOL) {
+      try {
+        pgStagingPool = JSON.parse(process.env.PG_STAGING_POOL);
+      } catch (error) {
+        logger.warn('Failed to parse PG_STAGING_POOL:', error);
+      }
+    }
 
     // Initialize Storage Services
     logger.info('Initializing StorageService...');
@@ -33,7 +44,8 @@ async function main() {
       batchSize: Number(process.env.BATCH_SIZE) || 10,
       maxRetries: Number(process.env.RETRY_ATTEMPTS) || 3,
       retryDelay: Number(process.env.RETRY_DELAY) || 1000,
-      institutionId: process.env.INSTITUTION_ID || ''
+      institutionId: process.env.INSTITUTION_ID || '',
+      pgStagingPool
     }, logger);
 
     // Initialize staging DB

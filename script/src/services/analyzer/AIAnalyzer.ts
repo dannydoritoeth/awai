@@ -524,6 +524,8 @@ export class AIAnalyzer {
     jobId: string
   ): Promise<void> {
     const generalRole = result?.generalRole;
+    this.logger.info(`Linking general role ${JSON.stringify(generalRole)}`);
+    this.logger.info(`Storage service ${this.config.storageService?.getOrCreateGeneralRole}`);
     if (generalRole?.title && this.config.storageService?.getOrCreateGeneralRole) {
       try {
         const storedRole = await this.config.storageService.getOrCreateGeneralRole(generalRole.title);
