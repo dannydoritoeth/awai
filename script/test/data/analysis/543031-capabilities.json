@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role requires effective planning to implement biodiversity programs and manage knowledge resources.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Analyzing data to identify trends and recommending improvements requires problem-solving skills.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Clear communication is essential for developing training resources and engaging with stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with team members and stakeholders is crucial for the role's success.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Managing and implementing biodiversity programs aligns with project management capabilities.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "The role requires adherence to policies and proactive risk management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse backgrounds and perspectives is important in engaging with a wide range of stakeholders.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Biodiversity Conservation",
+    "Project Management"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging effectively with stakeholders to provide advice and support on biodiversity policies.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Data Analysis",
+      "description": "Analyzing data to identify trends and improve program outcomes.",
+      "category": "Technical"
+    },
+    {
+      "name": "Biodiversity Policy Knowledge",
+      "description": "Understanding of biodiversity policy and programs, including the Biodiversity Offset Scheme.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Project Officer",
+    "description": "This role focuses on the development and implementation of environmental programs, specifically related to biodiversity conservation. It requires a blend of project management skills, stakeholder engagement, and a deep understanding of environmental policies.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

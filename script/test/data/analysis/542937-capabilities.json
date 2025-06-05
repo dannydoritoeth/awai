@@ -1,0 +1,104 @@
+{
+  "capabilities": [
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role requires forming professional relationships with Traditional Owners, agencies, and stakeholders, indicating a need for effective collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Strong communication skills are essential for liaising with visitors, stakeholders, and managing evolving priorities across various estates.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Managing projects, environmental assessments, and field-based activities requires effective planning and prioritization to handle the role's diversity and flexibility.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role demands strong decision-making and the ability to think on one's feet, especially in managing natural, historic, and Aboriginal heritage.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Accountability is crucial for undertaking and supervising projects, ensuring adherence to legislation and policy, especially in environmental and heritage conservation.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "The role's physical demands and the need for fitness, enthusiasm, and a proactive approach to learning and development highlight the importance of self-management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Creating a positive, safe, diverse, and inclusive culture is a key part of the role, requiring respect for diverse backgrounds and perspectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Managing capital improvements to infrastructure and bushfire management projects requires effective planning, coordination, and control methods.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Understanding and using available technologies is necessary for maximizing efficiencies in managing over 1,000km of roads and trails and 35 walking tracks.",
+      "relevance": 0.6
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Heritage Management",
+    "Stakeholder Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Natural Land Management",
+      "description": "Applying knowledge of natural land management strategies to conserve flora, fauna, and heritage within national parks.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Liaison",
+      "description": "Engaging with Traditional Owners, agencies, and stakeholders to manage conservation projects and initiatives.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Wildfire Management",
+      "description": "Planning and executing burn planning and wildfire management to protect natural environments.",
+      "category": "Technical"
+    },
+    {
+      "name": "Law Enforcement",
+      "description": "Enforcing laws and regulations to protect natural, historic, and Aboriginal heritage within national parks.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Conservation Officer",
+    "description": "This role involves managing natural, historic, and Aboriginal heritage within national parks, including undertaking and supervising conservation projects, environmental assessments, and field-based activities. It requires a blend of technical knowledge in natural land management, strong communication and collaboration skills, and the ability to plan, prioritize, and solve problems effectively.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

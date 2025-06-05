@@ -1,0 +1,99 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "The role requires achieving conservation and maintenance outcomes efficiently.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "The officer needs to manage various tasks such as pest control, maintenance, and fire management effectively.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "foundational",
+      "description": "Problem-solving is essential for dealing with unexpected issues in conservation and maintenance work.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "foundational",
+      "description": "The role requires adherence to safety and operational guidelines in a highly regulated environment.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "foundational",
+      "description": "Self-management is crucial due to the role's requirement for working independently or with minimal supervision.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "foundational",
+      "description": "Effective communication is needed for interacting with the community, team members, and during visitor enquiries.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "The role involves working as part of a team to achieve conservation goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "foundational",
+      "description": "Understanding and respecting Aboriginal cultural issues is a key aspect of the role.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Coordination and control methods are needed for asset construction and conservation works.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Cultural Heritage Management",
+    "Fire Management"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Competency",
+      "description": "Ability to engage respectfully and effectively with Aboriginal communities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Safety Compliance",
+      "description": "Adherence to safety protocols and ability to obtain relevant certifications.",
+      "category": "Technical"
+    },
+    {
+      "name": "Physical Fitness",
+      "description": "Maintain fitness levels required for fieldwork and firefighting duties.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Field Conservation Officer",
+    "description": "This role involves a combination of field operations and environmental conservation tasks, including maintenance of park assets, pest and weed control, fire management, and supporting cultural heritage conservation within NSW National Parks. The role requires a blend of physical fitness, technical skills, and cultural competency, particularly in engaging with Aboriginal communities and respecting cultural heritage.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

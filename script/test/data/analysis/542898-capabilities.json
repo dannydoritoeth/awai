@@ -1,0 +1,97 @@
+{
+  "capabilities": [
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role requires working as part of a team to contribute towards conservation efforts, indicating a need for effective collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Field Officers are expected to assist with a range of activities to maintain and improve park assets, requiring a focus on achieving quality outcomes.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role involves responding to changing circumstances in park maintenance and conservation, necessitating effective planning and prioritization.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Field Officers must lead operations and solve problems in the field, highlighting the need for practical solution development.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "The physically demanding and outdoor nature of the work requires resilience and the courage to face challenging conditions.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Given the role's focus on Aboriginal heritage and working with communities, acting with integrity and respect for cultural values is crucial.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "The role's requirement for Aboriginal identity and cultural knowledge emphasizes the importance of valuing and respecting diversity.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Field Officers assist with conservation works and the installation of new assets, requiring basic project management skills.",
+      "relevance": 0.6
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Cultural Heritage Management"
+  ],
+  "skills": [
+    {
+      "name": "Firefighting",
+      "description": "Ability to carry out frontline firefighting duties and support roles, including obtaining and maintaining necessary certifications.",
+      "category": "Technical"
+    },
+    {
+      "name": "Equipment Operation",
+      "description": "Operate and maintain a range of plant and equipment, including conditionally registered vehicles and chainsaws.",
+      "category": "Technical"
+    },
+    {
+      "name": "Cultural Competency",
+      "description": "Understanding and respecting Aboriginal cultural issues, and the ability to communicate across cultures.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Work effectively as part of a team, contributing to conservation efforts and park maintenance.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "Conservation and Heritage Field Officer",
+    "title": "Conservation and Heritage Field Officer (Aboriginal Identified)",
+    "description": "This role focuses on the conservation of natural environments and cultural heritage within NSW National Parks, requiring a blend of technical skills, cultural competency, and the ability to work both independently and as part of a team in outdoor settings.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

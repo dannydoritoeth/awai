@@ -1,0 +1,85 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "The role requires well-developed written and verbal communication skills to engage with a wide range of audiences.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Effective collaboration skills are essential for drawing in expertise and supporting colleagues and other teams to achieve their goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Excellent time management is crucial for meeting deadlines and ensuring smooth operation of executive schedules and project deliverables.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Ability to remain calm and focused under pressure and competing priorities indicates strong self-management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The role involves contributing to the continual improvement of the team's work and the organisational maturity, indicating a focus on delivering quality outcomes.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Undertaking a range of project support activities requires a basic understanding of project management principles.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Administrative Support"
+  ],
+  "focusAreas": [
+    "Project Support",
+    "Executive Assistance"
+  ],
+  "skills": [
+    {
+      "name": "Diary and Records Management",
+      "description": "Managing executive schedules and handling governance documents.",
+      "category": "Technical"
+    },
+    {
+      "name": "Event Coordination",
+      "description": "Assisting with travel arrangements and managing logistics for branch events.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Liaison",
+      "description": "Acting as a liaison between the executive and stakeholders, requiring effective communication and relationship management.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Report Preparation",
+      "description": "Preparing reports and briefing documents for executive meetings.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Administrative Support"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Assistant Project Officer",
+    "description": "This role involves a blend of project support, administrative tasks, and stakeholder engagement to facilitate the delivery of strategic projects within a government context. It requires a mix of communication, collaboration, planning, and project management skills.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Responsible for delivering tasks on time, within budget, and to expected standards of quality.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Plans to achieve priority outcomes for infrastructure projects and adapts to changing circumstances.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Uses analytical skills to solve issues and improve portfolio quality.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Ensures effective communication with internal and external stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaborates with various teams and business partners on infrastructure projects.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Supports project management and assurance frameworks for infrastructure projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Utilizes Excel, SQL, & BI tools for data analytics and reporting.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Infrastructure Development",
+    "Data Analytics"
+  ],
+  "skills": [
+    {
+      "name": "Data Analytics",
+      "description": "Analyzing project performance data to prepare reports and advice.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Management",
+      "description": "Establishing and maintaining relationships with internal and external stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Continuous Improvement",
+      "description": "Identifying and implementing opportunities to improve project delivery processes.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Infrastructure Project Performance Specialist",
+    "description": "Specializes in monitoring and reporting on the performance of infrastructure projects within an environmental context, ensuring projects are delivered effectively and contribute to sustainable management.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

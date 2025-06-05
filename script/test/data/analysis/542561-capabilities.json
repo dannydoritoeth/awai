@@ -1,0 +1,119 @@
+{
+  "capabilities": [
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "The role requires communicating goals, priorities, and vision to lead a diverse team across various locations, ensuring alignment with strategic objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading a multidisciplinary team necessitates engaging, motivating, and developing the capabilities and potential of staff.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for delivering conservation programs, visitor services, and infrastructure management, requiring efficient resource use and commitment to quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Must plan and deliver a diverse range of park management operations and visitor services, requiring effective prioritization and strategic planning skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "The role involves environmental assessment, conservation planning, and incident management, necessitating advanced problem-solving skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Requires highly skilled communication to lead change, deliver high performance, and collaborate with local communities and stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Must collaborate with a broad range of stakeholders, including Aboriginal joint management committees, requiring a strong ability to work together towards common goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "The role involves leading change within the organization and assisting others to engage with change, requiring advanced change management skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Finance",
+      "level": "intermediate",
+      "description": "Responsible for finance management within the area, necessitating an understanding of financial processes to achieve value for money.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Oversees various conservation and infrastructure projects, requiring effective planning, coordination, and control methods.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Conservation Programs",
+    "Visitor Services",
+    "Infrastructure Management"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Leadership",
+      "description": "Leading a large, multidisciplinary team to achieve strategic objectives and operational goals.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Change Management",
+      "description": "Effectively leading and managing change within the organization and its operations.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Working collaboratively with local communities, Aboriginal committees, and other key stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Conservation Planning",
+      "description": "Planning and implementing conservation strategies for protected areas.",
+      "category": "Technical"
+    },
+    {
+      "name": "Incident Management",
+      "description": "Planning and controlling incident management operations, particularly related to fire planning and response.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Conservation Leader",
+    "description": "This role encompasses strategic leadership, conservation program management, stakeholder engagement, and operational acumen in managing protected area reserve systems. It requires a blend of environmental science knowledge, field operations expertise, and project delivery skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

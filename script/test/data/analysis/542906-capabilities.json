@@ -1,0 +1,89 @@
+{
+  "capabilities": [
+    {
+      "name": "Finance",
+      "level": "advanced",
+      "description": "Requires advanced understanding and application of financial processes, policies, and systems to ensure accurate accounting and compliance with legislative frameworks.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Must be responsible for accurate financial reporting and compliance with relevant legislation, policy, and statutory frameworks.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Needs to effectively plan and prioritise financial operations and reporting to support the organisation's strategic decision-making.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires the ability to analyse financial information, identify issues, and develop practical solutions to support financial sustainability.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must communicate complex financial information clearly to stakeholders and provide expert advice to support decision-making.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Essential to act ethically and professionally, ensuring transparency in financial management and reporting.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Self",
+      "level": "advanced",
+      "description": "Requires self-motivation and a commitment to continuous learning in the evolving field of finance and accounting standards.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Understanding and application of project management principles in establishing new finance operations and systems.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Finance"
+  ],
+  "focusAreas": [
+    "Financial Management",
+    "Accounting",
+    "Compliance"
+  ],
+  "skills": [
+    {
+      "name": "Financial Analysis",
+      "description": "Analyzing financial data to support strategic decision-making and ensure financial sustainability.",
+      "category": "Technical"
+    },
+    {
+      "name": "Legislative Compliance",
+      "description": "Understanding and applying finance legislation, directions, policies, and standards.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Communication",
+      "description": "Communicating financial information and advice effectively to various stakeholders.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Finance"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Financial Accountant",
+    "description": "This role involves advanced financial management, including analysis, advice, and reporting to ensure compliance and support strategic decision-making within a government context.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

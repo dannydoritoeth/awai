@@ -1,0 +1,97 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "The role requires achieving results through efficient use of resources and a commitment to quality outcomes in field operations, maintenance activities, and project delivery.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Involves planning, prioritisation, scheduling, and tracking of works and resources, essential for the effective delivery of projects and work programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires well-developed communication skills for collaboration with stakeholders, contractors, and staff.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Coordination with the Team Leader Field Operations, other field team supervisors, and external parties is crucial for the role.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Understanding and applying effective planning, coordination, and control methods to manage multiple concurrent projects.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "foundational",
+      "description": "Supports and promotes change in field operations and maintenance activities, adapting to new methods or processes.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for own actions, adherence to legislation and policy, and proactive risk management in field operations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Finance",
+      "level": "foundational",
+      "description": "Involves budget management and reporting, ensuring value for money in project execution.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Park Management",
+    "Environmental Conservation",
+    "Operational Efficiency"
+  ],
+  "skills": [
+    {
+      "name": "Leadership in Field Operations",
+      "description": "Supervisory and team leadership skills for the implementation of field and operational activities.",
+      "category": "Technical"
+    },
+    {
+      "name": "Budgeting and Financial Management",
+      "description": "Ability to manage budgets, perform cost estimation, and financial planning for projects.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Collaborating with stakeholders, contractors, and staff to effectively plan and deliver projects.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Field Supervisor",
+    "description": "This role involves supervising and coordinating field operations related to environmental conservation, including maintenance, construction, and land management tasks. It requires a blend of technical skills, project management, and stakeholder engagement to ensure the protection and sustainable management of natural resources.",
+    "confidence": 0.85,
+    "isNewRole": true
+  }
+}

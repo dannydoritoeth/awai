@@ -1,0 +1,131 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "The role requires achieving significant outcomes in water infrastructure project delivery, ensuring efficient use of resources and commitment to quality outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Strategic planning and prioritization are crucial for managing complex water infrastructure projects and meeting the sustainable water management goals.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "The role involves developing practical solutions for complex and politically sensitive issues in water infrastructure.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "High level of accountability is required for managing public resources, adhering to legislation, and addressing risks in project delivery.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leadership in human resource management and development is essential for leading teams in the delivery of water infrastructure projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Communicating goals and vision is key to guiding teams and stakeholders towards sustainable water management objectives.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "The role requires leading change to improve service delivery in water management programs, necessitating support and promotion of change initiatives.",
+      "relevance": 1
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "advanced",
+      "description": "The ability to express views, accept, and commit to change is crucial in managing contentious issues and leading complex projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Ethical and professional behavior is essential in dealing with complex, politically sensitive issues and diverse stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Clear communication is vital for managing stakeholder expectations and providing expert advice on water infrastructure projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaboration with a wide range of community, government, and industry stakeholders is essential for successful project outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "The role requires gaining consensus and commitment from stakeholders with conflicting priorities within tight timeframes.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Expertise in project management is crucial for the planning, coordination, and delivery of large and complex water infrastructure projects.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Executive & Leadership",
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Water Infrastructure Management",
+    "Sustainable Water Management"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Planning",
+      "description": "Developing long-term strategies for sustainable water management and infrastructure development.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Management",
+      "description": "Engaging and managing relationships with diverse stakeholders to align expectations and achieve project objectives.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Risk Management",
+      "description": "Identifying, assessing, and mitigating risks associated with water infrastructure projects.",
+      "category": "Technical"
+    },
+    {
+      "name": "Change Management",
+      "description": "Leading and managing change initiatives to improve service delivery in water management programs.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Executive & Leadership"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Director of Infrastructure Projects",
+    "description": "This role involves executive leadership in the planning, development, and delivery of water infrastructure projects to support sustainable water management, requiring advanced capabilities in project management, strategic planning, stakeholder engagement, and change management.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Ability to face challenging outdoor conditions and emergency situations such as firefighting.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Adherence to safety protocols and environmental conservation laws.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Self-motivation and fitness are crucial for success in physically demanding tasks.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respect for Aboriginal heritage and commitment to inclusive practices.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Clear communication with team members and the public, including responding to visitor enquiries.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Teamwork is essential for conservation efforts and emergency response.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Achievement of conservation goals and maintenance of park assets.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Problem-solving in field operations and emergency situations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsibility for safe operation and maintenance of equipment.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Use of two-way radios and other technology for communication and operations.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Participation in conservation projects and park maintenance activities.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Fire Management",
+    "Park Maintenance"
+  ],
+  "skills": [
+    {
+      "name": "Four-wheel driving",
+      "description": "Navigating rough terrains within parks and reserves.",
+      "category": "Technical"
+    },
+    {
+      "name": "First Aid",
+      "description": "Providing immediate medical response in emergencies.",
+      "category": "Technical"
+    },
+    {
+      "name": "Chainsaw Operation",
+      "description": "Safe use of chainsaws for tree felling and crosscutting.",
+      "category": "Technical"
+    },
+    {
+      "name": "Firefighting",
+      "description": "Frontline firefighting duties and support roles.",
+      "category": "Technical"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Working collaboratively with team members for conservation efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Problem-solving",
+      "description": "Identifying and resolving issues in field operations.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Field Conservation Officer",
+    "description": "This role involves a combination of field operations, environmental conservation, and emergency response activities, requiring a blend of technical skills, physical fitness, and teamwork.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

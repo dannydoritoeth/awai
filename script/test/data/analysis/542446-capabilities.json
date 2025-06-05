@@ -1,0 +1,97 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Responsible for processing license applications and renewals efficiently and accurately.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Must manage competing priorities in a high-volume, fast-paced environment.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Ensures accuracy and compliance with policies, procedures, and legislation.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Frequent engagement with a diverse range of stakeholders and clear, professional correspondence.",
+      "relevance": 1
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "Delivering high-quality customer service and adapting to changing systems and priorities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Working as part of the Conservation Programs team and with various stakeholders.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Working independently with minimal supervision and a commitment to learning.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Engagement with diverse communities and commitment to inclusive workplace.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Wildlife Licensing",
+    "Conservation Programs"
+  ],
+  "skills": [
+    {
+      "name": "Administrative and Organisational Skills",
+      "description": "Well-developed skills for managing licensing processes and supporting conservation objectives.",
+      "category": "Technical"
+    },
+    {
+      "name": "Attention to Detail",
+      "description": "Critical for reviewing and processing licensing information accurately.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with internal and external stakeholders regarding wildlife licensing.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Adaptability",
+      "description": "Flexibility to adapt to changing systems, processes, and priorities.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Licensing Support Officer",
+    "description": "This role involves administrative support within an environmental context, focusing on the processing and management of wildlife licensing to support conservation efforts. It requires a blend of administrative skills, customer service, and an understanding of environmental policies.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

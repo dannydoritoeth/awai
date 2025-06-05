@@ -1,0 +1,109 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Expected to implement works and maintenance programs independently and supervise contractors and field staff.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Needs to plan works and operational activities, including pest and weed control and fire management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Must be a practical decision-maker, capable of solving problems on the spot in a remote setting.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires clear communication with field staff, contractors, and the broader team, especially in remote locations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Part of a team working towards the conservation of natural and cultural heritage, necessitating collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Must operate independently in remote locations, demonstrating self-motivation and a measured approach.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for the safe and effective implementation of field and operational activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Capacity for working with various software programs and the Agency’s financial and asset management systems.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Implementing and supervising works and maintenance programs requires basic project management skills.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Heritage Preservation",
+    "Infrastructure Maintenance"
+  ],
+  "skills": [
+    {
+      "name": "Fire Management",
+      "description": "Includes hazard reduction burns, wildfire response, and other fire management activities.",
+      "category": "Technical"
+    },
+    {
+      "name": "Pest and Weed Control",
+      "description": "Implementing control programs for pest animals and plants.",
+      "category": "Technical"
+    },
+    {
+      "name": "Facility and Grounds Maintenance",
+      "description": "Maintenance and construction of park facilities and grounds.",
+      "category": "Technical"
+    },
+    {
+      "name": "Leadership",
+      "description": "Supervising contractors and field staff, leading teams in the field.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Decision Making",
+      "description": "Practical decision-making skills, especially in remote and challenging environments.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "Senior Field Officer",
+    "title": "Senior Field Officer",
+    "description": "A role focused on the conservation of natural and cultural heritage, maintenance of infrastructure and assets, and supervision of field operations in remote locations.",
+    "confidence": 1,
+    "isNewRole": true
+  }
+}

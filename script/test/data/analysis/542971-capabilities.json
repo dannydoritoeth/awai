@@ -1,0 +1,98 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Ensures efficient and safe undertaking of works and maintenance activities, assists with planning and tracking of works and resources.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Assists with planning, prioritisation, scheduling of works and resources, and staff rostering.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires well-developed communication skills for collaboration with stakeholders, contractors, and staff.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Coordinates the field teamwork program in collaboration with the Team Leader Field Operations and other supervisors.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Involved in project management, including planning and delivery of projects and work programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Supports and promotes change in field operations and maintenance activities.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for budget management and reporting, adhering to legislation and policy.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Finance",
+      "level": "intermediate",
+      "description": "Experience in cost estimation, budgeting, and financial management related to field operations.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Procurement and Contract Management",
+      "level": "intermediate",
+      "description": "Coordinates with contractors and manages contractor relationships and performance.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Environmental Conservation",
+    "Park Management"
+  ],
+  "skills": [
+    {
+      "name": "Leadership in Field Operations",
+      "description": "Supervisory and team leadership skills for field and operational activities, including construction, maintenance, and pest control.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Fire Management",
+      "description": "Ability and experience in crew leadership for fire management, including obtaining necessary firefighting certifications.",
+      "category": "Technical"
+    },
+    {
+      "name": "Machinery Operation",
+      "description": "Operation of machinery, plant, and equipment for maintenance and construction work.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "Field Operations Supervisor",
+    "title": "Field Operations Supervisor",
+    "description": "This role involves supervising and coordinating field operations and maintenance activities, including planning, budgeting, and project management, to ensure the efficient and safe execution of work programs.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

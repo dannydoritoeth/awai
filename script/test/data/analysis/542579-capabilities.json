@@ -1,0 +1,80 @@
+{
+  "capabilities": [
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role requires effective planning and prioritisation to implement and coordinate threatened species projects, often under dynamic conditions.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Problem-solving is essential for adapting to field-based challenges and developing practical solutions for conservation outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "The role demands accountability through adherence to safety protocols and accurate data collection in independent work settings.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication skills are crucial for collaborating with a range of stakeholders and reporting on project outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with rangers, field staff, and contractors is key to the successful implementation of threatened species programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Strong project management and coordination skills are required to support multiple conservation projects.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Threatened Species Recovery"
+  ],
+  "skills": [
+    {
+      "name": "Ecology",
+      "description": "Understanding of ecological principles and experience in field-based conservation projects.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Ability to engage and work collaboratively with various stakeholders for conservation efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Data Collection and Analysis",
+      "description": "Skills in accurate data collection and analysis for reporting on project outcomes.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "Conservation Project Officer",
+    "title": "Assistant Project Officer Threatened Species",
+    "description": "This role involves planning, implementing, and monitoring conservation projects with a focus on threatened species, requiring a blend of ecological knowledge, project management, and stakeholder engagement skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

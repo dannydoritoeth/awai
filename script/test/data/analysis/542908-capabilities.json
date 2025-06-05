@@ -1,0 +1,102 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for leading the implementation and oversight of the Enterprise Risk Management framework, ensuring efficient use of resources to achieve quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Acts as the Chief Audit Executive, reporting on audit outcomes and compliance matters, showing responsibility for actions and adherence to legislation and policy.",
+      "relevance": 0.95
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Leading a risk management function within a startup organisation, supporting and promoting change.",
+      "relevance": 0.85
+    },
+    {
+      "name": "Finance",
+      "level": "advanced",
+      "description": "Understanding of public sector risk management policies and frameworks, and exposure to financial and investment sector risk management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Procurement and Contract Management",
+      "level": "intermediate",
+      "description": "Knowledge of business systems improvement, implying an understanding of procurement processes to ensure effective purchasing and contract performance.",
+      "relevance": 0.75
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "Requires ethical and professional behavior, adhering to public sector values in a governance and audit role.",
+      "relevance": 0.95
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must communicate audit outcomes and compliance matters clearly to the Audit and Risk Committee.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Needs to gain consensus and commitment from various stakeholders, including the private sector, for clean energy projects.",
+      "relevance": 0.85
+    }
+  ],
+  "occupationalGroups": [
+    "Finance",
+    "Project Delivery",
+    "Executive & Leadership"
+  ],
+  "focusAreas": [
+    "Risk Management",
+    "Governance",
+    "Audit"
+  ],
+  "skills": [
+    {
+      "name": "Risk Management",
+      "description": "Oversight of highly effective risk management and internal audit function.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership",
+      "description": "Leading the risk management function and acting as Chief Audit Executive.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Public Sector Compliance",
+      "description": "Strong understanding of public sector risk management policies and frameworks.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with the private sector and internal stakeholders to support NSW's transition to renewable energy.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Finance"
+    },
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Executive & Leadership"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Manager - Risk, Governance & Audit",
+    "description": "This role involves leading the risk management, governance, and audit functions within a new statutory corporation, focusing on accelerating investment in clean energy projects and supporting NSW's transition to renewable energy. It requires advanced capabilities in delivering results, demonstrating accountability, managing reform and change, and acting with integrity, alongside strong financial and procurement management skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

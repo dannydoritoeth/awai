@@ -1,0 +1,87 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading the development and evaluation of volunteer programs requires advanced skills in engaging, motivating, and developing the capabilities of volunteers.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Needs to effectively gain consensus and commitment from a wide range of stakeholders, including volunteers, community groups, and government agencies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Responsible for planning and prioritizing volunteer programs and activities that align with NPWS goals and objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Must collaborate with multi-disciplinary, cross-organisational project teams, internal and external stakeholders to achieve objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Expected to achieve results through the effective management and implementation of volunteer programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for the management of associated risks and ensuring programs contribute to NPWS goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Requires advanced project management skills to coordinate volunteer programs, including planning, monitoring, and evaluating outcomes.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Volunteer Management",
+    "Community Engagement",
+    "Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Volunteer Program Development",
+      "description": "Developing, promoting, and evaluating volunteer programs to support conservation efforts.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building and maintaining relationships with volunteers, community groups, and other stakeholders.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Risk Management",
+      "description": "Identifying and managing risks associated with volunteer programs and activities.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Team Leader Volunteers",
+    "description": "This role involves leading the development, promotion, and evaluation of volunteer programs within the National Parks & Wildlife Service, requiring advanced skills in people management, project management, and stakeholder engagement to support conservation efforts.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

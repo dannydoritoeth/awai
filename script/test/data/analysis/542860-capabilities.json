@@ -1,0 +1,99 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Supervises field officers and contractors to implement works and maintenance programs effectively.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Plans works, operates independently, and maintains relationships to ensure successful project outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Uses practical knowledge and life skills to solve problems on the spot in a diverse, fast-paced environment.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Works closely with the Field Supervisor and team to preserve natural and cultural heritage.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Responsible for supervising safe work practices and adherence to WH&S requirements.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Shows enthusiasm and motivation to work with others and succeed in a diverse role.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Maintains relationships with field staff, contractors, and the broader Area team.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Uses various software programs for administrative and organisational tasks.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Coordinates tasks such as maintenance, construction, pest and weed control, and fire management activities.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation",
+    "Cultural Heritage Preservation",
+    "Fire Management"
+  ],
+  "skills": [
+    {
+      "name": "Leadership",
+      "description": "Leading a team in the field to maintain and construct park facilities and protect cultural sites.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Operational Planning",
+      "description": "Planning and executing field and operational activities, including pest and weed control.",
+      "category": "Technical"
+    },
+    {
+      "name": "Safety Management",
+      "description": "Ensuring all duties are carried out safely in accordance with WH&S requirements.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Field Operations Officer",
+    "description": "This role involves supervising field operations related to conservation, maintenance, and enhancement of natural and cultural heritage within national parks, requiring a blend of technical, operational, and leadership skills.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

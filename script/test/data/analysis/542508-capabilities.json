@@ -1,0 +1,93 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "Ensuring administrative tasks are completed efficiently to support the team's objectives.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "Managing competing demands to provide timely administrative support.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "foundational",
+      "description": "Adhering to organisational policies and ensuring compliance with audit and statutory requirements.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "foundational",
+      "description": "Providing high-quality customer service to internal and external stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Commit to Customer Service",
+      "level": "foundational",
+      "description": "Delivering high-quality support and service to the team and stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "Working as part of a team to contribute towards conservation goals.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Finance",
+      "level": "foundational",
+      "description": "Undertaking financial transactions, creating purchase orders, and processing invoices.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Using computer-based systems for word processing, spreadsheet management, and records management.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support"
+  ],
+  "focusAreas": [
+    "Environmental Conservation",
+    "Office Management"
+  ],
+  "skills": [
+    {
+      "name": "Financial Management",
+      "description": "Handling financial transactions and managing invoices and purchase orders.",
+      "category": "Technical"
+    },
+    {
+      "name": "Records Management",
+      "description": "Using systems for effective records management and data analysis.",
+      "category": "Technical"
+    },
+    {
+      "name": "Attention to Detail",
+      "description": "Maintaining high attention to detail in managing administrative tasks and financial transactions.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Customer Service",
+      "description": "Providing high-quality service to internal and external stakeholders.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    }
+  ],
+  "generalRole": {
+    "name": "Administrative Assistant",
+    "title": "Administrative Assistant in Environmental Conservation",
+    "description": "This role involves providing administrative support within an environmental conservation context, focusing on office management, financial transactions, and compliance with organisational policies.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

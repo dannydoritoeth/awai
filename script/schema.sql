@@ -315,7 +315,8 @@ CREATE TABLE IF NOT EXISTS "public"."capabilities" (
     "embedding_text_hash" "text",
     "sync_status" "text",
     "last_synced_at" timestamp with time zone,
-    "normalized_key" "text"
+    "normalized_key" "text",
+    "raw_data" "jsonb"
 );
 
 
@@ -459,7 +460,9 @@ CREATE TABLE IF NOT EXISTS "public"."general_roles" (
     "classification_level" "text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "embedding" "extensions"."vector"(1536)
+    "embedding" "extensions"."vector"(1536),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -490,7 +493,8 @@ CREATE TABLE IF NOT EXISTS "public"."job_documents" (
     "title" "text",
     "url" "text",
     "sync_status" "text",
-    "last_synced_at" timestamp with time zone
+    "last_synced_at" timestamp with time zone,
+    "raw_data" "jsonb"
 );
 
 
@@ -533,7 +537,8 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "last_updated_at" timestamp without time zone DEFAULT "now"(),
     "sync_status" "text",
     "last_synced_at" timestamp with time zone,
-    "raw_data" "jsonb"
+    "raw_data" "jsonb",
+    "closing_date" timestamp with time zone
 );
 
 
@@ -648,7 +653,8 @@ CREATE TABLE IF NOT EXISTS "public"."role_capabilities" (
     "capability_type" "text" NOT NULL,
     "level" "text",
     "sync_status" "text",
-    "last_synced_at" timestamp with time zone
+    "last_synced_at" timestamp with time zone,
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
@@ -671,7 +677,8 @@ CREATE TABLE IF NOT EXISTS "public"."role_skills" (
     "role_id" "uuid" NOT NULL,
     "skill_id" "uuid" NOT NULL,
     "sync_status" "text",
-    "last_synced_at" timestamp with time zone
+    "last_synced_at" timestamp with time zone,
+    "updated_at" timestamp with time zone DEFAULT "now"()
 );
 
 
@@ -714,7 +721,8 @@ CREATE TABLE IF NOT EXISTS "public"."roles" (
     "sync_status" "text",
     "last_synced_at" timestamp with time zone,
     "normalized_key" "text",
-    "raw_data" "jsonb"
+    "raw_data" "jsonb",
+    "general_role_id" "uuid"
 );
 
 
@@ -734,7 +742,8 @@ CREATE TABLE IF NOT EXISTS "public"."skills" (
     "company_id" "uuid",
     "embedding_text_hash" "text",
     "sync_status" "text",
-    "last_synced_at" timestamp with time zone
+    "last_synced_at" timestamp with time zone,
+    "raw_data" "jsonb"
 );
 
 
@@ -747,7 +756,9 @@ CREATE TABLE IF NOT EXISTS "public"."taxonomy" (
     "description" "text",
     "taxonomy_type" "text" DEFAULT 'core'::"text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"()
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "sync_status" "text",
+    "last_synced_at" timestamp with time zone
 );
 
 
@@ -1511,6 +1522,11 @@ ALTER TABLE ONLY "public"."role_taxonomies"
 
 ALTER TABLE ONLY "public"."roles"
     ADD CONSTRAINT "roles_division_id_fkey" FOREIGN KEY ("division_id") REFERENCES "public"."divisions"("id");
+
+
+
+ALTER TABLE ONLY "public"."roles"
+    ADD CONSTRAINT "roles_general_role_id_fkey" FOREIGN KEY ("general_role_id") REFERENCES "public"."general_roles"("id");
 
 
 

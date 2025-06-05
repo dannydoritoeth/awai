@@ -1,0 +1,104 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "The role requires achieving project outcomes and supporting organizational objectives through efficient use of resources and commitment to quality outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "The role involves developing, implementing, and monitoring strategic and operational plans for complex programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires superior knowledge to develop practical solutions for the successful delivery of natural capital accounting programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for leading project teams and managing project outcomes, adhering to legislation and policy.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Involves leading multidisciplinary and geographically dispersed teams, engaging and motivating staff.",
+      "relevance": 1
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Requires providing direction and achieving results through teams, communicating goals and priorities.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "The role supports, promotes, and champions change within the context of strategic Natural Capital Accounting projects.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Essential for leading teams, developing plans, and ensuring the success of complex programs.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Requires collaboration with project teams, stakeholders, and partners to deliver project outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Critical for planning, coordinating, and controlling project activities to deliver strategic Natural Capital Accounting projects.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Project Delivery",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Natural Capital Accounting",
+    "Strategic Project Management"
+  ],
+  "skills": [
+    {
+      "name": "Strategic Planning",
+      "description": "Developing and implementing strategic and operational plans for natural capital accounting programs.",
+      "category": "Technical"
+    },
+    {
+      "name": "Leadership",
+      "description": "Leading multidisciplinary and geographically dispersed teams to achieve project and organizational objectives.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Change Management",
+      "description": "Supporting, promoting, and managing change within the context of strategic projects.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Project Delivery"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Strategic Environmental Program Manager",
+    "description": "This role involves leading the development, delivery, monitoring, and evaluation of strategic environmental projects, specifically focusing on natural capital accounting, to support organizational objectives and environmentally sustainable outcomes.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

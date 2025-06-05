@@ -1,0 +1,82 @@
+{
+  "capabilities": [
+    {
+      "name": "Commit to Customer Service",
+      "level": "intermediate",
+      "description": "The role requires providing professional and focused customer services, including visitor information, site reception services, and processing bookings.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Requires clear communication skills for handling customer enquiries and providing visitor information.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The individual must have strong teamwork skills to work effectively with colleagues and provide a positive visitor experience.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "The role demands initiative and a proactive approach in managing stock, processing transactions, and using digital systems.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Confidence in using a range of digital software, such as point-of-sale and financial recording platforms, is essential.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Problem-solving skills are crucial for addressing customer enquiries and ensuring a positive visitor experience.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Customer Service"
+  ],
+  "focusAreas": [
+    "Retail Operations",
+    "Customer Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Digital Literacy",
+      "description": "Using digital systems such as point-of-sale and financial recording platforms efficiently.",
+      "category": "Technical"
+    },
+    {
+      "name": "Customer Service",
+      "description": "Providing professional and focused customer services, handling enquiries, and processing bookings.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Working effectively with colleagues to provide a positive visitor experience.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Problem Solving",
+      "description": "Identifying and resolving issues to ensure customer satisfaction.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    }
+  ],
+  "generalRole": {
+    "name": "Customer Service and Support",
+    "title": "Information & Retail Assistant",
+    "description": "This role involves providing customer service and support, including handling enquiries, processing transactions, and managing stock, in a retail or visitor information context.",
+    "confidence": 0.9,
+    "isNewRole": false
+  }
+}

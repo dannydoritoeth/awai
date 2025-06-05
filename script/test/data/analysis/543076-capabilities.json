@@ -1,0 +1,92 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Members must be open and honest, prepared to express their views on sensitive cultural heritage issues, and willing to accept and commit to change to protect and manage Aboriginal cultural heritage.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Integrity is crucial as members will handle sensitive cultural heritage matters and must adhere to ethical standards and public sector values.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Members need to show drive and motivation in contributing to the committee's work, demonstrating a commitment to learning and understanding cultural heritage management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse Aboriginal cultures and perspectives is essential in advising on cultural heritage matters.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication is key in advising the Minister and Department on cultural heritage matters and in working collaboratively with other committee members.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Members must collaborate with other committee members and stakeholders to address cultural heritage management issues.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "intermediate",
+      "description": "Providing leadership, vision, and strategic direction to enhance the profile and integrity of ACHAC.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "intermediate",
+      "description": "Members should support and promote innovative ways of thinking and changes in cultural heritage management practices.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Cultural Heritage Management"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Knowledge",
+      "description": "Applying cultural knowledge and lived experience to advise on the identification, assessment, and care of Aboriginal cultural heritage.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership",
+      "description": "Providing leadership, vision, and strategic direction to the committee.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Corporate Governance",
+      "description": "Ensuring effective and sound corporate governance in committee operations.",
+      "category": "Technical"
+    },
+    {
+      "name": "Innovative Thinking",
+      "description": "Introducing new ways of thinking to address cultural heritage management issues.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "Aboriginal Cultural Heritage Advisory Committee Member",
+    "title": "Aboriginal Cultural Heritage Advisory Committee Member",
+    "description": "This role involves advising on the identification, assessment, and care of Aboriginal cultural heritage in NSW, requiring a deep understanding of cultural heritage management and the ability to work collaboratively and communicate effectively.",
+    "confidence": 1,
+    "isNewRole": true
+  }
+}

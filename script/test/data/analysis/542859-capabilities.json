@@ -1,0 +1,126 @@
+{
+  "capabilities": [
+    {
+      "name": "Display Resilience and Courage",
+      "level": "advanced",
+      "description": "The role requires the ability to express views, accept, and commit to change in a regulatory environment, ensuring public safety and compliance.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "High ethical standards and professionalism are crucial in dealing with sensitive regulatory compliance and enforcement activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "advanced",
+      "description": "Self-motivation and a proactive approach are essential for leading in a dynamic and technical field.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respect for diverse backgrounds is important in a collaborative and inclusive team environment.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Effective communication skills are required for engaging with a range of stakeholders and promoting regulatory compliance.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Collaboration with industry stakeholders, regulatory bodies, and internal teams is key to achieving safety and compliance outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Ability to influence and negotiate with industry stakeholders to ensure compliance and safety is critical.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "The role requires achieving safety and compliance outcomes through effective regulatory frameworks and enforcement activities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Strategic planning and prioritization are necessary for developing and implementing regulatory frameworks.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Critical thinking and problem-solving are required for addressing safety and technical challenges in the gas and pipeline sector.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "The role demands accountability in regulatory compliance, enforcement activities, and risk management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "intermediate",
+      "description": "Effective planning, coordination, and control methods are needed for leading technical research programs and developing industry guidelines.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Field Operations",
+    "Scientific & Technical"
+  ],
+  "focusAreas": [
+    "Energy Operations",
+    "Safety and Technical Regulation",
+    "Gas Networks and Pipeline Management"
+  ],
+  "skills": [
+    {
+      "name": "Regulatory Compliance",
+      "description": "Ensuring adherence to laws, regulations, guidelines, and specifications relevant to gas networks and pipelines.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Technical Expertise in Gas Networks",
+      "description": "In-depth knowledge of gas network and pipeline construction, operation, maintenance, and safety.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building and maintaining relationships with internal and external stakeholders to promote regulatory compliance and safety.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Risk Management",
+      "description": "Identifying, assessing, and mitigating risks to public safety and infrastructure integrity.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Scientific & Technical"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Principal Inspector in Energy Regulation",
+    "description": "This role involves leading safety, technical regulation, and licensing functions for pipelines and gas networks, ensuring public safety and compliance with regulatory frameworks. It requires a blend of technical expertise, stakeholder engagement, and strategic planning.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

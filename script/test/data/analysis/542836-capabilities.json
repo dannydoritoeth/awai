@@ -1,0 +1,120 @@
+{
+  "capabilities": [
+    {
+      "name": "Act with Integrity",
+      "level": "advanced",
+      "description": "The role requires ethical decision-making and adherence to environmental laws and regulations.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must communicate complex environmental planning information clearly to various stakeholders.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Requires collaboration with government agencies, developers, and community groups to achieve environmental outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Needs to negotiate and influence outcomes with various stakeholders for improved environmental and conservation outcomes.",
+      "relevance": 1
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for leading teams to deliver timely and accurate environmental planning and assessment advice.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Must plan and prioritise complex planning matters and team workloads effectively.",
+      "relevance": 1
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Requires strong analytical skills to identify solutions within legislative frameworks.",
+      "relevance": 1
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Accountable for the strategic counsel provided to the Minister, Executive, and consent authorities.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Involves leading and managing multidisciplinary teams.",
+      "relevance": 1
+    },
+    {
+      "name": "Inspire Direction and Purpose",
+      "level": "advanced",
+      "description": "Must communicate goals and vision to teams and stakeholders for environmental conservation.",
+      "relevance": 1
+    },
+    {
+      "name": "Manage Reform and Change",
+      "level": "advanced",
+      "description": "Supports and promotes change towards improved environmental and conservation outcomes.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Policy",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Environmental Planning and Assessment",
+    "Conservation Outcomes",
+    "Stakeholder Engagement"
+  ],
+  "skills": [
+    {
+      "name": "Environmental Legislation Knowledge",
+      "description": "Understanding of the Biodiversity Conservation Act 2016 and Environmental Planning and Assessment Act 1979.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership",
+      "description": "Ability to lead and manage multidisciplinary teams towards achieving environmental outcomes.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Management",
+      "description": "Proficiency in engaging with and influencing outcomes among government agencies, developers, and community groups.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Strategic Planning",
+      "description": "Capability to provide strategic counsel and plan for sustainable development and conservation.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Policy"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Environmental Planning and Conservation Leader",
+    "description": "This role involves leading multidisciplinary teams to deliver improved environmental and conservation outcomes through strategic planning, stakeholder engagement, and application of environmental laws and regulations.",
+    "confidence": 1,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "capabilities": [
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role requires working as part of a team in field operations, emphasizing teamwork and collaboration.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication across cultures is essential, especially given the role's focus on Aboriginal cultural knowledge and connections.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Understanding and respecting Aboriginal cultural issues are critical for this role.",
+      "relevance": 1
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "The role involves planning and prioritizing tasks such as pest and weed control, fire management, and maintenance of parks and facilities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "Problem-solving skills are necessary for leading operations and addressing issues in the field.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "The role requires adherence to safety standards and environmental regulations, demonstrating accountability.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Display Resilience and Courage",
+      "level": "intermediate",
+      "description": "Field officers must be resilient and courageous, especially in challenging outdoor conditions and during firefighting duties.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Self-management is crucial for working independently or with minimal supervision in remote locations.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Knowledge",
+    "Environmental Conservation",
+    "Fire Management"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Competency",
+      "description": "Ability to communicate and work effectively across cultures, particularly with Aboriginal communities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Safety and Equipment Operation",
+      "description": "Skills in safely operating and maintaining a range of plant and equipment, including firefighting tools.",
+      "category": "Technical"
+    },
+    {
+      "name": "Environmental Conservation Techniques",
+      "description": "Knowledge of and ability to apply techniques for pest and weed control, and environmental conservation.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Field Officer (Aboriginal Identified)",
+    "description": "This role focuses on hands-on field operations to maintain and improve national parks, with a significant emphasis on Aboriginal cultural knowledge and environmental conservation.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

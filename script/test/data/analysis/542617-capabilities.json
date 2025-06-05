@@ -1,0 +1,97 @@
+{
+  "capabilities": [
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "The role requires strong communication skills to develop and implement education programs and to engage with internal and external stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with internal and external suppliers is essential for the development and implementation of education and tour programs.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning and prioritising are necessary to effectively develop and implement innovative education programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "intermediate",
+      "description": "The role requires problem-solving skills to continuously improve programs through data analysis and stakeholder engagement.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Accountability is needed to ensure the programs achieve sustainable visitation and increased knowledge of NPWS' assets.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Manage Self",
+      "level": "intermediate",
+      "description": "Self-management is important for continuously improving programs and adapting to changing needs.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse backgrounds is crucial in promoting environmental awareness and cultural and historic heritage.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "intermediate",
+      "description": "Skilled use of digital technologies is required for the development of engaging learning experiences.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Education"
+  ],
+  "focusAreas": [
+    "Education Program Development",
+    "Visitor Experience Enhancement"
+  ],
+  "skills": [
+    {
+      "name": "Program Development",
+      "description": "Supporting the development of engaging learning experiences across schools and visitors.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with internal and external suppliers to achieve program goals.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Data Analysis",
+      "description": "Using data analysis to continuously improve education programs.",
+      "category": "Technical"
+    },
+    {
+      "name": "Digital Technologies",
+      "description": "Utilizing digital technologies in the development of education programs.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Education Program Coordinator",
+    "description": "This role involves the development and implementation of educational programs focused on environmental awareness, cultural, and historic heritage within national parks. It requires a blend of technical skills in program development and digital technologies, alongside soft skills such as communication and collaboration.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

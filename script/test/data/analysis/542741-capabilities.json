@@ -1,0 +1,99 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage and Develop People",
+      "level": "advanced",
+      "description": "Leading the development and implementation of education programs requires advanced skills in engaging, motivating, and developing staff capabilities.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "The role involves achieving project deadlines and milestones within budget, necessitating an advanced ability to efficiently use resources and commit to quality outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Requires advanced planning skills to achieve priority outcomes in the development and promotion of education programs.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Needs to develop practical solutions for education and visitor experience enhancement, requiring advanced problem-solving skills.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Essential for promoting education programs and collaborating with internal and external suppliers, necessitating advanced communication skills.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "The role involves partnership with internal and external suppliers, requiring an advanced level of collaborative work.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Respecting diverse backgrounds is crucial in developing education programs for a geographically and culturally diverse client base.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Requires advanced project management skills for overseeing the development, promotion, and evaluation of education programs.",
+      "relevance": 0.9
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery",
+    "Educational Services"
+  ],
+  "focusAreas": [
+    "Education Program Development",
+    "Visitor Experience Enhancement",
+    "Conservation Awareness"
+  ],
+  "skills": [
+    {
+      "name": "Education Program Development",
+      "description": "Developing and implementing comprehensive education programs for diverse audiences.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Leadership and Supervision",
+      "description": "Guiding and supervising staff to achieve project deadlines and quality standards.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Collaborating with internal and external suppliers to enhance education and visitor experiences.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Knowledge of Environmental Conservation",
+      "description": "Understanding of natural environment, Aboriginal culture, and conservation issues to inform education programs.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Education Program Leader",
+    "description": "This role involves leading the development, promotion, and evaluation of education programs focused on environmental conservation, visitor experience, and cultural heritage awareness within national parks. It requires a blend of project management, educational program development, and stakeholder engagement skills.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

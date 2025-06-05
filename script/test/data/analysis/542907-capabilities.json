@@ -1,0 +1,92 @@
+{
+  "capabilities": [
+    {
+      "name": "Plan and Prioritise",
+      "level": "advanced",
+      "description": "Strategic implementation of environmental water programs requires advanced planning and prioritization skills to manage complex projects and achieve ecological outcomes.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "Developing solutions for the management and conservation of wetlands and rivers involves complex problem-solving skills, considering ecological, hydrological, and legislative factors.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "advanced",
+      "description": "Responsible for monitoring, evaluation, and reporting against ecological objectives, ensuring actions align with legislative and policy requirements.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must present complex technical information clearly to non-technical audiences and develop effective partnerships with key stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "Requires a collaborative approach to work across government and non-government organisations, ensuring the effective use of environmental water.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Influence and Negotiate",
+      "level": "advanced",
+      "description": "Engaging with various stakeholders to gain consensus and commitment on water use and conservation strategies.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "Acknowledges and respects diverse backgrounds, especially the custodial responsibilities of Aboriginal peoples towards the environment.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Environmental Science",
+      "level": "advanced",
+      "description": "Requires in-depth knowledge of river and wetland ecology, hydrology, and environmental conservation practices.",
+      "relevance": 1
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Project Delivery"
+  ],
+  "focusAreas": [
+    "Water Resource Management",
+    "Ecological Conservation"
+  ],
+  "skills": [
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Building and maintaining relationships with government, community, and industry partners for environmental conservation efforts.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Legislative Compliance",
+      "description": "Understanding and applying relevant environmental legislation and policies, including water and biodiversity conservation laws.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Project Management",
+      "description": "Coordinating environmental water programs, including planning, delivery, monitoring, and reporting.",
+      "category": "Technical"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Project Delivery"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Environmental Conservation Officer",
+    "description": "This role focuses on the strategic planning, implementation, and management of environmental conservation projects, specifically related to wetlands and rivers. It involves collaboration with stakeholders, application of environmental science knowledge, and adherence to legislative requirements to achieve ecological outcomes.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "capabilities": [
+    {
+      "name": "Manage and Develop People",
+      "level": "intermediate",
+      "description": "The role requires supervising housekeeping staff, assigning daily tasks, and mentoring team members.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "intermediate",
+      "description": "Responsible for maintaining high cleaning standards and ensuring a well-maintained environment.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "intermediate",
+      "description": "Ensuring compliance with health, safety, and hygiene regulations.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Must effectively communicate with staff and guests to manage and handle requests related to housekeeping services.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "The role involves working closely with the housekeeping team and other departments to ensure a seamless visitor experience.",
+      "relevance": 0.7
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "intermediate",
+      "description": "Planning daily tasks and prioritising activities to ensure efficient operation of housekeeping services.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Field Operations"
+  ],
+  "focusAreas": [
+    "Hospitality Management",
+    "Facilities Maintenance"
+  ],
+  "skills": [
+    {
+      "name": "Staff Supervision",
+      "description": "Overseeing housekeeping staff and ensuring tasks are completed efficiently.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Safety Compliance",
+      "description": "Ensuring all activities comply with health and safety regulations.",
+      "category": "Technical"
+    },
+    {
+      "name": "Customer Service",
+      "description": "Handling guest requests and ensuring a positive visitor experience.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Field Operations"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Hospitality and Facilities Management Leader",
+    "description": "This role involves leading a team in maintaining cleanliness and hygiene standards in a hospitality setting, ensuring compliance with safety regulations, and providing excellent customer service. It requires a blend of administrative support and field operations skills, with a focus on people management, results delivery, and effective communication.",
+    "confidence": 0.8,
+    "isNewRole": true
+  }
+}

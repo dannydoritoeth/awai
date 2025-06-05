@@ -1,0 +1,108 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "Field Officers must efficiently use resources to maintain and improve park assets, demonstrating a commitment to quality outcomes in environmental conservation.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "Officers need to plan daily tasks such as pest and weed control, maintenance, and fire management, adapting to changing circumstances and priorities.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Think and Solve Problems",
+      "level": "foundational",
+      "description": "Solving problems in the field, such as responding to visitor enquiries and addressing maintenance issues, requires analytical thinking and practical solutions.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Demonstrate Accountability",
+      "level": "foundational",
+      "description": "Officers are responsible for their actions, adhering to safety and environmental regulations while proactively addressing risks in park management.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "foundational",
+      "description": "The role requires self-motivation and a measured approach to work, with a commitment to learning and personal development in environmental conservation.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "foundational",
+      "description": "Respecting diverse backgrounds and perspectives is crucial, especially in working closely with Traditional Owners and the Aboriginal community.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "foundational",
+      "description": "Working as part of a team is essential, requiring collaboration with colleagues, the community, and Traditional Owners in managing the conservation lands.",
+      "relevance": 1
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "foundational",
+      "description": "Effective communication skills are needed for yarning with the community, responding to visitor enquiries, and working within the team.",
+      "relevance": 1
+    },
+    {
+      "name": "Project Management",
+      "level": "foundational",
+      "description": "Understanding and applying effective planning and coordination methods is necessary for the construction and installation of new assets and conservation works.",
+      "relevance": 0.8
+    }
+  ],
+  "occupationalGroups": [
+    "Field Operations",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Conservation Management",
+    "Cultural Heritage Preservation"
+  ],
+  "skills": [
+    {
+      "name": "Fire Management",
+      "description": "Participate in fire management activities, requiring knowledge of fire control and safety procedures.",
+      "category": "Technical"
+    },
+    {
+      "name": "Equipment Operation",
+      "description": "Operate and maintain a range of plant and equipment, including vehicles and chainsaws, for park maintenance and conservation.",
+      "category": "Technical"
+    },
+    {
+      "name": "Cultural Knowledge",
+      "description": "Understanding and respecting the cultural significance of Worimi Conservation Lands and working closely with Traditional Owners.",
+      "category": "Domain Knowledge"
+    },
+    {
+      "name": "Teamwork",
+      "description": "Ability to work effectively as part of a team, supporting colleagues and collaborating on projects.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Problem Solving",
+      "description": "Identify and resolve issues in the field, from maintenance challenges to visitor enquiries.",
+      "category": "Soft Skills"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Field Operations"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Conservation Field Officer",
+    "description": "This role involves working on conservation lands to maintain and improve environmental assets, manage pests and weeds, and support fire management activities. It requires a blend of technical skills, cultural knowledge, and the ability to work collaboratively with a focus on environmental and cultural conservation.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}

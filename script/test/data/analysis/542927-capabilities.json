@@ -1,0 +1,92 @@
+{
+  "capabilities": [
+    {
+      "name": "Think and Solve Problems",
+      "level": "advanced",
+      "description": "The role requires advanced problem-solving skills to translate complex climate change data into practical insights for decision-making.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "advanced",
+      "description": "Must communicate complex scientific information clearly to a variety of stakeholders.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Deliver Results",
+      "level": "advanced",
+      "description": "Responsible for leading data delivery and insight development for climate change adaptation strategies.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Project Management",
+      "level": "advanced",
+      "description": "Requires effective planning, coordination, and control methods to manage data-driven projects.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "advanced",
+      "description": "High proficiency in GIS, Python, Power BI, and AI for processing and translating large datasets.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "advanced",
+      "description": "The role involves working across disciplines and with various stakeholders to develop data-driven solutions.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "The department values diversity and seeks to understand and serve the diverse communities of NSW.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Environmental Science",
+    "Scientific & Technical"
+  ],
+  "focusAreas": [
+    "Climate Change Adaptation",
+    "Data Leadership",
+    "Insight Development"
+  ],
+  "skills": [
+    {
+      "name": "GIS and Data Analysis",
+      "description": "Using geographic information systems and data analysis tools to process and interpret environmental data.",
+      "category": "Technical"
+    },
+    {
+      "name": "Python Programming",
+      "description": "Applying Python programming for data analysis and model development in climate science.",
+      "category": "Technical"
+    },
+    {
+      "name": "Stakeholder Engagement",
+      "description": "Engaging with internal and external partners to support climate change adaptation strategies.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "MERI Strategy Development",
+      "description": "Developing and implementing Monitoring, Evaluation, Reporting, and Improvement strategies.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Environmental Science"
+    },
+    {
+      "name": "Scientific & Technical"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Senior Scientist in Climate Change Adaptation",
+    "description": "This role focuses on providing advanced technical, scientific, and analytical support for climate change-related programs, specifically in data leadership and insight development for adaptation strategies.",
+    "confidence": 0,
+    "isNewRole": true
+  }
+}

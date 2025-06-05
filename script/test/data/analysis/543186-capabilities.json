@@ -1,0 +1,92 @@
+{
+  "capabilities": [
+    {
+      "name": "Deliver Results",
+      "level": "foundational",
+      "description": "The role requires achieving outcomes such as conservation of the natural environment and Aboriginal heritage, indicating a need for efficient use of resources and commitment to quality outcomes.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Plan and Prioritise",
+      "level": "foundational",
+      "description": "Given the casual nature of the role and the variety of tasks including administrative support, event support, and incident management, the ability to plan and prioritise work is essential.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Communicate Effectively",
+      "level": "intermediate",
+      "description": "Effective communication is crucial for this role, as it involves working closely with the community, Traditional Owners, and providing customer service.",
+      "relevance": 1
+    },
+    {
+      "name": "Value Diversity",
+      "level": "intermediate",
+      "description": "The role requires respecting and valuing cultural knowledge and connections, indicating a high relevance of valuing diversity.",
+      "relevance": 1
+    },
+    {
+      "name": "Work Collaboratively",
+      "level": "intermediate",
+      "description": "Collaboration with team members, Traditional Owners, and the community is a key aspect of the role, highlighting the importance of working collaboratively.",
+      "relevance": 1
+    },
+    {
+      "name": "Act with Integrity",
+      "level": "intermediate",
+      "description": "Integrity is crucial in respecting the cultural significance of Worimi Country and managing the Worimi Conservation Lands responsibly.",
+      "relevance": 0.9
+    },
+    {
+      "name": "Manage Self",
+      "level": "foundational",
+      "description": "The ability to work alone or with minimal supervision, as mentioned in the job description, requires effective self-management.",
+      "relevance": 0.8
+    },
+    {
+      "name": "Technology",
+      "level": "foundational",
+      "description": "Experience with computer-based systems for administration tasks is required, indicating the need for foundational technology skills.",
+      "relevance": 0.7
+    }
+  ],
+  "occupationalGroups": [
+    "Administrative Support",
+    "Environmental Science"
+  ],
+  "focusAreas": [
+    "Aboriginal Cultural Heritage Conservation",
+    "Administrative Support in Environmental Context"
+  ],
+  "skills": [
+    {
+      "name": "Cultural Competency",
+      "description": "Understanding and respecting Aboriginal cultural heritage and working effectively with Aboriginal communities.",
+      "category": "Soft Skills"
+    },
+    {
+      "name": "Administrative Proficiency",
+      "description": "Handling administrative tasks, financial transactions, and using computer-based systems efficiently.",
+      "category": "Technical"
+    },
+    {
+      "name": "Emergency Response Support",
+      "description": "Supporting incident management activities such as fires and search and rescues.",
+      "category": "Domain Knowledge"
+    }
+  ],
+  "taxonomies": [
+    {
+      "name": "Administrative Support"
+    },
+    {
+      "name": "Environmental Science"
+    }
+  ],
+  "generalRole": {
+    "name": "",
+    "title": "Cultural Heritage Administrative Assistant",
+    "description": "This role combines administrative support with a focus on environmental and cultural heritage conservation, requiring a unique blend of administrative skills, cultural competency, and environmental awareness.",
+    "confidence": 0.9,
+    "isNewRole": true
+  }
+}
