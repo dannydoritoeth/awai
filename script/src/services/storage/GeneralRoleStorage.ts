@@ -191,41 +191,76 @@ export class GeneralRoleStorage {
           const newRole = insertResult.rows[0];
           this.logger.info(`Created new general role: ${title} with id ${newRole.id}`);
           return newRole;
+        } catch (error) {
+          this.logger.error('Error in PostgreSQL operation:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : '',
+            title,
+            description
+          });
+          throw error;
         } finally {
           client.release();
         }
-      } else {
-        // Fall back to Supabase client
-        // Check if role exists
-        const { data: existingRole, error: checkError } = await this.stagingClient
-          .from('general_roles')
-          .select('id')
-          .eq('title', title)
-          .maybeSingle();
-
-        if (checkError && checkError.code !== 'PGRST116') throw checkError;
-
-        if (existingRole) {
-          return existingRole;
-        }
-
-        // Create new role
-        const { data, error } = await this.stagingClient
-          .from('general_roles')
-          .insert({
-            title,
-            description,
-            sync_status: 'pending',
-            last_synced_at: new Date().toISOString()
-          })
-          .select('id')
-          .single();
-
-        if (error) throw error;
-        return data;
       }
+      
+      // Fall back to Supabase client
+      // Check if role exists
+      const { data: existingRole, error: checkError } = await this.stagingClient
+        .from('general_roles')
+        .select('id')
+        .eq('title', title)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        this.logger.error('Error checking existing role:', {
+          error: checkError.message,
+          code: checkError.code,
+          title
+        });
+        throw checkError;
+      }
+
+      if (existingRole) {
+        this.logger.info(`Found existing general role: ${title} with id ${existingRole.id}`);
+        return existingRole;
+      }
+
+      // Create new role
+      const { data, error } = await this.stagingClient
+        .from('general_roles')
+        .insert({
+          title,
+          description,
+          sync_status: 'pending',
+          last_synced_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        this.logger.error('Error creating new role:', {
+          error: error.message,
+          code: error.code,
+          title,
+          description
+        });
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error(`Failed to create general role: ${title} - no data returned`);
+      }
+
+      this.logger.info(`Created new general role: ${title} with id ${data.id}`);
+      return data;
     } catch (error) {
-      this.logger.error('Error in getOrCreateGeneralRole:', error);
+      this.logger.error('Error in getOrCreateGeneralRole:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : '',
+        title,
+        description
+      });
       throw error;
     }
   }

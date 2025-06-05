@@ -75,6 +75,7 @@ export interface AIAnalyzerConfig {
     getOrCreateGeneralRole: (roleTitle: string) => Promise<{ id: string }>;
     generalRoles: {
       getOrCreateGeneralRole: (roleTitle: string, description: string) => Promise<{ id: string }>;
+      linkRoleToGeneralRole: (roleId: string, generalRoleId: string) => Promise<void>;
     };
   };
 }
@@ -541,24 +542,43 @@ export class AIAnalyzer {
           
           // Link the role to the general role
           if (job.roleId) {
-            await this.config.storageService.linkRoleToGeneralRole(job.roleId, storedRole.id);
+            await this.config.storageService.generalRoles.linkRoleToGeneralRole(job.roleId, storedRole.id);
             this.logger.info(`Linked role ${job.roleId} to general role ${storedRole.id}`);
           } else {
             this.logger.warn(`No roleId found for job ${jobId}, cannot link to general role ${storedRole.id}`);
           }
           
           this.logger.info(`Stored/retrieved general role: ${storedRole.id}`);
+        } else {
+          this.logger.warn(`Failed to store/retrieve general role: No ID returned for ${generalRole.title}`);
         }
       } catch (error) {
-        this.logger.warn('Failed to store/retrieve general role:', error);
+        // Improved error logging
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : '';
+        this.logger.warn('Failed to store/retrieve general role:', {
+          error: errorMessage,
+          stack: errorStack,
+          generalRole: generalRole.title,
+          jobId
+        });
       }
     } else if (generalRole && typeof generalRole.id === 'string' && generalRole.id.length > 0 && job.roleId) {
       // If we matched an existing general role, link it
       try {
-        await this.config.storageService.linkRoleToGeneralRole(job.roleId, generalRole.id);
+        await this.config.storageService.generalRoles.linkRoleToGeneralRole(job.roleId, generalRole.id);
         this.logger.info(`Linked role ${job.roleId} to existing general role ${generalRole.id}`);
       } catch (error) {
-        this.logger.warn('Failed to link role to general role:', error);
+        // Improved error logging
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : '';
+        this.logger.warn('Failed to link role to general role:', {
+          error: errorMessage,
+          stack: errorStack,
+          roleId: job.roleId,
+          generalRoleId: generalRole.id,
+          jobId
+        });
       }
     }
   }
