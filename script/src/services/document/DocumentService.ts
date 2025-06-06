@@ -3,6 +3,7 @@ import { Logger } from '../../utils/logger.js';
 import { Document, PDFStructure, DOCXStructure, TextStructure } from '../../models/job.js';
 import PDFParser from 'pdf2json';
 import mammoth from 'mammoth';
+import fs from 'fs';
 
 export class DocumentService {
   private logger: Logger;
@@ -173,35 +174,58 @@ export class DocumentService {
         specifiedType: type
       });
       
-      const response = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 30000,
-        maxContentLength: 10 * 1024 * 1024,
-        headers: {
-          'Accept': 'application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*'
+      let buffer: Buffer;
+      let contentType: string | undefined;
+
+      // Handle file:// URLs for testing
+      if (url.startsWith('file://')) {
+        const filePath = url.replace('file://', '');
+        buffer = fs.readFileSync(filePath);
+        contentType = type || this.getDocumentType(url);
+      } else {
+        const response = await axios.get(url, {
+          responseType: 'arraybuffer',
+          timeout: 30000,
+          maxContentLength: 10 * 1024 * 1024,
+          headers: {
+            'Accept': 'application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*'
+          },
+          validateStatus: (status) => status === 200 // Only accept 200 OK
+        });
+
+        buffer = Buffer.from(response.data);
+        contentType = response.headers['content-type'];
+
+        // Validate content type
+        if (contentType && !contentType.includes('pdf') && !contentType.includes('word') && !contentType.includes('docx')) {
+          throw new Error(`Invalid content type: ${contentType}`);
         }
-      });
 
-      this.logger.info(`Document downloaded successfully:`, {
-        url,
-        contentType: response.headers['content-type'],
-        contentLength: response.headers['content-length'],
-        status: response.status
-      });
+        this.logger.info(`Document downloaded successfully:`, {
+          url,
+          contentType: contentType,
+          contentLength: response.headers['content-length'],
+          status: response.status
+        });
+      }
 
-      const buffer = Buffer.from(response.data);
       let content = buffer.toString('base64');
       let parsedContent = undefined;
 
       // Determine document type
-      const documentType = type || this.getDocumentType(url, response.headers['content-type']);
+      const documentType = type || this.getDocumentType(url, contentType);
       this.logger.info(`Determined document type:`, {
         url,
         documentType,
         fromType: !!type,
         fromUrl: url.toLowerCase().endsWith(`.${documentType}`),
-        fromContentType: response.headers['content-type']
+        fromContentType: contentType
       });
+
+      // Validate document type
+      if (documentType === 'unknown') {
+        throw new Error('Unknown document type');
+      }
       
       // Parse based on document type
       try {
@@ -209,6 +233,12 @@ export class DocumentService {
           case 'pdf': {
             this.logger.info(`Starting PDF parsing:`, { url });
             const { text, structure } = await this.parsePDF(buffer);
+            
+            // Basic validation of PDF structure
+            if (!structure.pages || structure.pages.length === 0) {
+              throw new Error('Invalid PDF structure: no pages found');
+            }
+
             parsedContent = {
               text,
               structure,
@@ -225,6 +255,12 @@ export class DocumentService {
           case 'docx': {
             this.logger.info(`Starting DOCX parsing:`, { url });
             const { text, structure } = await this.parseDOCX(buffer);
+
+            // Basic validation of DOCX structure
+            if (!structure.paragraphs || structure.paragraphs.length === 0) {
+              throw new Error('Invalid DOCX structure: no paragraphs found');
+            }
+
             parsedContent = {
               text,
               structure,
@@ -239,29 +275,7 @@ export class DocumentService {
           }
 
           default: {
-            this.logger.info(`Attempting to parse unknown document type as text:`, {
-              url,
-              contentType: response.headers['content-type']
-            });
-            try {
-              const text = buffer.toString('utf-8');
-              const structure: TextStructure = { content: text };
-              parsedContent = {
-                text,
-                structure,
-                type: 'text' as const
-              };
-              this.logger.info(`Text parsing completed:`, {
-                url,
-                textLength: text.length
-              });
-            } catch (error) {
-              this.logger.warn(`Unable to parse document as text:`, {
-                url,
-                error: error,
-                message: (error as Error)?.message
-              });
-            }
+            throw new Error(`Unsupported document type: ${documentType}`);
           }
         }
       } catch (error) {
@@ -272,6 +286,7 @@ export class DocumentService {
           message: (error as Error)?.message,
           stack: (error as Error)?.stack
         });
+        throw error; // Re-throw to be caught by the outer try-catch
       }
       
       const result = {
