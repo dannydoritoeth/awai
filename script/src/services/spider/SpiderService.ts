@@ -64,14 +64,14 @@ export class SpiderService implements ISpiderService {
     this.browserInitPromise = (async () => {
       try {
         this.logger.info('Spider name "nsw gov jobs" launched');
-        if (!this.browser) {
-          this.browser = await puppeteer.launch({
+    if (!this.browser) {
+      this.browser = await puppeteer.launch({
             headless: "new",
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-          });
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
           this.browserInitialized = true;
-          this.logger.info('Browser instance initialized');
-        }
+      this.logger.info('Browser instance initialized');
+    }
       } finally {
         // Clear the promise once initialization is complete
         this.browserInitPromise = null;
@@ -162,92 +162,92 @@ export class SpiderService implements ISpiderService {
       while (hasNextPage) {
         this.logger.info(`Scraping page ${pageNum}`);
 
-        // Wait for job cards with better error handling
-        this.logger.info('Waiting for job cards to load...');
-        try {
-          await page.waitForSelector('.job-card, .search-result-card', { 
-            timeout: 10000,
-            visible: true 
-          });
-          this.logger.info('Job cards loaded');
-        } catch (error) {
-          this.logger.warn('Timeout waiting for job cards, checking if any are present');
-          const cards = await page.$$('.job-card, .search-result-card');
-          if (cards.length === 0) {
-            throw new Error('No job cards found on page');
-          }
-          this.logger.info(`Found ${cards.length} job cards despite timeout`);
+      // Wait for job cards with better error handling
+      this.logger.info('Waiting for job cards to load...');
+      try {
+        await page.waitForSelector('.job-card, .search-result-card', { 
+          timeout: 10000,
+          visible: true 
+        });
+        this.logger.info('Job cards loaded');
+      } catch (error) {
+        this.logger.warn('Timeout waiting for job cards, checking if any are present');
+        const cards = await page.$$('.job-card, .search-result-card');
+        if (cards.length === 0) {
+          throw new Error('No job cards found on page');
         }
+        this.logger.info(`Found ${cards.length} job cards despite timeout`);
+      }
 
-        // Add rate limiting delay
-        const rateLimitDelay = 2000;
-        const rateLimitJitter = 1000;
-        const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
-        await new Promise(resolve => setTimeout(resolve, delay));
+      // Add rate limiting delay
+      const rateLimitDelay = 2000;
+      const rateLimitJitter = 1000;
+      const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
+      await new Promise(resolve => setTimeout(resolve, delay));
 
         // Scrape current page
         const pageListings = await page.evaluate(() => {
-          // Helper function to safely get text content
-          const getText = (element: Element, selector: string): string => {
-            const el = element.querySelector(selector);
-            return el ? el.textContent?.trim() || '' : '';
-          };
+        // Helper function to safely get text content
+        const getText = (element: Element, selector: string): string => {
+          const el = element.querySelector(selector);
+          return el ? el.textContent?.trim() || '' : '';
+        };
 
-          // Use more specific selectors for job cards
-          const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
-          
-          return cards.map(element => {
-            // Get title and URL - try multiple possible selectors
-            const titleElement = 
-              element.querySelector('.card-header a') || 
-              element.querySelector('[class*="title"] a') ||
-              element.querySelector('h2 a') ||
-              element.querySelector('a');
-              
-            const title = titleElement?.querySelector('span')?.textContent?.trim() || 
-                         titleElement?.textContent?.trim() || '';
+        // Use more specific selectors for job cards
+        const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
+        
+        return cards.map(element => {
+          // Get title and URL - try multiple possible selectors
+          const titleElement = 
+            element.querySelector('.card-header a') || 
+            element.querySelector('[class*="title"] a') ||
+            element.querySelector('h2 a') ||
+            element.querySelector('a');
+            
+          const title = titleElement?.querySelector('span')?.textContent?.trim() || 
+                       titleElement?.textContent?.trim() || '';
             const url = (titleElement as HTMLAnchorElement)?.href || '';
-            
-            // Get dates - try multiple formats
-            const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
-            let postedDate = '', closingDate = '';
-            if (dateText) {
-              const dates = dateText.split('-').map((d: string) => d.trim());
-              postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
-              closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
-            }
-            
-            // Get department/agency
-            const agency = 
-              getText(element, '.job-search-result-right h2') || 
-              getText(element, '[class*="department"]') ||
-              getText(element, '[class*="agency"]') ||
-              'NSW Government'; // Fallback
-            
-            // Get location
-            const location = 
-              getText(element, '.nsw-col p:nth-child(3) span') ||
-              getText(element, '[class*="location"]') ||
-              'NSW'; // Fallback
-
+          
+          // Get dates - try multiple formats
+          const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
+          let postedDate = '', closingDate = '';
+          if (dateText) {
+            const dates = dateText.split('-').map((d: string) => d.trim());
+            postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
+            closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
+          }
+          
+          // Get department/agency
+          const agency = 
+            getText(element, '.job-search-result-right h2') || 
+            getText(element, '[class*="department"]') ||
+            getText(element, '[class*="agency"]') ||
+            'NSW Government'; // Fallback
+          
+          // Get location
+          const location = 
+            getText(element, '.nsw-col p:nth-child(3) span') ||
+            getText(element, '[class*="location"]') ||
+            'NSW'; // Fallback
+          
             // Get job ID/reference number
             const jobId = 
-              getText(element, '.job-search-result-ref-no') ||
-              getText(element, '[class*="reference"]') ||
+            getText(element, '.job-search-result-ref-no') ||
+            getText(element, '[class*="reference"]') ||
               '';
 
             // Ensure the URL is absolute
             const jobUrl = url ? (url.startsWith('http') ? url : new URL(url, window.location.href).href) : '';
 
-            return {
+          return {
               id: jobId,
-              title,
+            title,
               jobUrl,
               url: jobUrl, // Set both url and jobUrl to the same absolute URL
               postedDate,
               closingDate,
-              agency,
-              location,
+            agency,
+            location,
               jobId,
               salary: 'Not specified' // Default value since salary is required by type
             };
@@ -299,7 +299,7 @@ export class SpiderService implements ISpiderService {
       this.metrics.totalJobs = allListings.length;
       this.metrics.successfulScrapes++;
       this.logger.info(`Found total of ${allListings.length} job listings`);
-
+      
       // Save listings data if test data saving is enabled
       if (process.env.SAVE_TEST_DATA === 'true') {
         await this.saveJobListingsData(allListings);
@@ -397,7 +397,7 @@ export class SpiderService implements ISpiderService {
           dataset: { [key: string]: string | undefined };
           className: string;
         };
-
+        
         // Helper function to check if text indicates a relevant document
         const isRelevantDocument = (text: string): boolean => {
           const textLower = text.toLowerCase();
@@ -417,7 +417,7 @@ export class SpiderService implements ISpiderService {
             'candidate pack',
             'application pack'
           ];
-
+          
           // Check for primary keywords first
           if (primaryKeywords.some(keyword => textLower.includes(keyword))) {
             return true;
@@ -507,7 +507,7 @@ export class SpiderService implements ISpiderService {
 
         // Get all document links
         const documents: JobDocument[] = [];
-        
+
         // Helper function to determine document type
         const getDocumentType = (url: string): string => {
           const urlLower = url.toLowerCase();
@@ -530,11 +530,11 @@ export class SpiderService implements ISpiderService {
 
         // Convert relevant links to documents
         rawLinks.forEach(link => {
-          documents.push({
+            documents.push({
             url: link.url,
             title: link.text || undefined,
             type: getDocumentType(link.url)
-          });
+            });
         });
 
         // Get job details from the summary table
@@ -671,9 +671,9 @@ export class SpiderService implements ISpiderService {
    */
   async cleanup(): Promise<void> {
     try {
-      if (this.browser) {
-        await this.browser.close();
-        this.browser = null;
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
         this.browserInitialized = false;
         this.browserInitPromise = null;
         this.logger.info('Browser instance closed');

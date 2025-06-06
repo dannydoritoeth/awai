@@ -55,7 +55,6 @@ export interface Document {
   url: string;
   title?: string;
   type: string;
-  content?: string;
   parsedContent?: {
     text: string;
     structure: DocumentStructure;
@@ -75,6 +74,7 @@ export interface PDFStructure {
       fontSize: number;
     }>;
     number: number;
+    text: string;
   }>;
 }
 

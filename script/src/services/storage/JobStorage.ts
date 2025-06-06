@@ -61,6 +61,8 @@ export class JobStorage {
         processedCount: processedDocs.length,
         successfulUrls: processedDocs.map(d => d.url)
       });
+
+      this.logger.info(`Processed documents: ${JSON.stringify(processedDocs)}`);
       
       // Use PostgreSQL pool if available, otherwise fall back to Supabase
       if (this.pgStagingPool) {
@@ -164,12 +166,18 @@ export class JobStorage {
         this.logger.info(`Using Supabase client for job ${jobId} document storage`);
         
         // First get the job ID
-        this.logger.info(`Looking up job ID in Supabase for ${jobId}`);
-        const { data: jobData, error: jobError } = await this.stagingClient
-          .from('jobs')
-          .select('id')
-          .eq('external_id', jobId)
-          .single();
+        this.logger.info(`Looking up job ID for ${jobId}`);
+        let jobData = null;
+        let jobError = null;
+        try {
+          jobData = await this.getJobByExternalId(jobId);
+        } catch (error) {
+          jobError = {
+            code: (error as any)?.code,
+            message: (error as Error)?.message,
+            details: (error as any)?.details
+          };
+        }
 
         if (jobError) {
           this.logger.error(`Error looking up job in Supabase:`, {
@@ -369,8 +377,8 @@ export class JobStorage {
           });
           return {
             url,
-            title: doc.title,
-            type: doc.type || 'attachment'
+          title: doc.title,
+          type: doc.type || 'attachment'
           };
         });
 
@@ -494,15 +502,15 @@ export class JobStorage {
       } else {
         // Fall back to Supabase client
         this.logger.info(`Using Supabase client for job ${jobId} (PostgreSQL pool not available)`);
-        
-        // Check if job exists
-        const { data: existingJob, error: checkError } = await this.stagingClient
-          .from('jobs')
-          .select('id')
-          .eq('company_id', company.id)
-          .eq('source_id', 'nswgov')
-          .eq('external_id', jobId)
-          .maybeSingle();
+
+      // Check if job exists
+      const { data: existingJob, error: checkError } = await this.stagingClient
+        .from('jobs')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('source_id', 'nswgov')
+        .eq('external_id', jobId)
+        .maybeSingle();
 
         if (checkError) {
           this.logger.error(`Error checking existing job ${jobId}:`, {
@@ -513,8 +521,8 @@ export class JobStorage {
             message: checkError.message
           });
           if (checkError.code !== 'PGRST116') {
-            throw checkError;
-          }
+        throw checkError;
+      }
         }
 
         this.logger.info(`Checked existing job ${jobId} with Supabase:`, {
@@ -522,36 +530,36 @@ export class JobStorage {
           existingId: existingJob?.id
         });
 
-        // Prepare job record
-        const jobRecord = {
-          external_id: jobId,
-          source_id: 'nswgov',
-          title: job.jobDetails.title,
-          company_id: company.id,
-          role_id: roleData[0].id,
-          locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
-          remuneration: job.jobDetails.salary,
-          close_date: job.jobDetails.closingDate === 'Ongoing' ? null : job.jobDetails.closingDate,
-          open_date: job.jobDetails.postedDate || new Date().toISOString(),
-          job_type: job.jobDetails.jobType,
-          source_url: job.jobDetails.url,
-          raw_json: job.jobDetails,
-          sync_status: 'pending',
-          last_synced_at: null,
-          raw_data: job.jobDetails
-        };
+      // Prepare job record
+      const jobRecord = {
+        external_id: jobId,
+        source_id: 'nswgov',
+        title: job.jobDetails.title,
+        company_id: company.id,
+        role_id: roleData[0].id,
+        locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
+        remuneration: job.jobDetails.salary,
+        close_date: job.jobDetails.closingDate === 'Ongoing' ? null : job.jobDetails.closingDate,
+        open_date: job.jobDetails.postedDate || new Date().toISOString(),
+        job_type: job.jobDetails.jobType,
+        source_url: job.jobDetails.url,
+        raw_json: job.jobDetails,
+        sync_status: 'pending',
+        last_synced_at: null,
+        raw_data: job.jobDetails
+      };
 
-        if (existingJob) {
-          // Update existing job
+      if (existingJob) {
+        // Update existing job
           this.logger.info(`Updating existing job ${jobId} with Supabase:`, {
             existingId: existingJob.id
           });
-          const { error: updateError } = await this.stagingClient
-            .from('jobs')
-            .update(jobRecord)
-            .eq('id', existingJob.id)
-            .select()
-            .single();
+        const { error: updateError } = await this.stagingClient
+          .from('jobs')
+          .update(jobRecord)
+          .eq('id', existingJob.id)
+          .select()
+          .single();
 
           if (updateError) {
             this.logger.error(`Error updating job ${jobId} with Supabase:`, {
@@ -564,14 +572,14 @@ export class JobStorage {
             throw updateError;
           }
           this.logger.info(`Successfully updated job ${jobId} with Supabase`);
-        } else {
-          // Insert new job
+      } else {
+        // Insert new job
           this.logger.info(`Inserting new job ${jobId} with Supabase`);
-          const { error: insertError } = await this.stagingClient
-            .from('jobs')
-            .insert(jobRecord)
-            .select()
-            .single();
+        const { error: insertError } = await this.stagingClient
+          .from('jobs')
+          .insert(jobRecord)
+          .select()
+          .single();
 
           if (insertError) {
             this.logger.error(`Error inserting job ${jobId} with Supabase:`, {
@@ -754,6 +762,44 @@ export class JobStorage {
     } catch (error) {
       this.logger.error('Error in getEmbeddingsByJobId:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get a job by its external ID
+   */
+  private async getJobByExternalId(externalId: string): Promise<{ id: string } | null> {
+    if (!this.pgStagingPool) {
+      throw new Error('PostgreSQL pool is required');
+    }
+
+    const client = await this.pgStagingPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Look up job - use FOR UPDATE to lock the row
+      const existingJobResult = await client.query(
+        'SELECT id FROM jobs WHERE external_id = $1 OR original_id = $1 FOR UPDATE',
+        [externalId]
+      );
+
+      await client.query('COMMIT');
+      
+      if (existingJobResult.rows.length === 0) {
+        return null;
+      }
+
+      const job = existingJobResult.rows[0];
+      this.logger.info(`Found job with external ID ${externalId}:`, {
+        id: job.id
+      });
+      return job;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      this.logger.error(`Error getting job by external ID ${externalId}:`, error);
+      throw error;
+    } finally {
+      client.release();
     }
   }
 } 

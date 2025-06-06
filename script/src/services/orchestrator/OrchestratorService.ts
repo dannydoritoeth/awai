@@ -298,40 +298,40 @@ export class OrchestratorService implements IOrchestratorService {
       const batches = chunk(jobListings, batchSize);
 
       for (const batch of batches) {
-        if (this.stopRequested) {
+      if (this.stopRequested) {
           this.logger.info('Stop requested, halting job scraping');
-          break;
-        }
+        break;
+      }
 
         await this.waitForResume();
 
         try {
           // Process each batch sequentially
-          const batchResults = await Promise.allSettled(
+      const batchResults = await Promise.allSettled(
             batch.map(listing => this.spider.getJobDetails(listing))
-          );
+      );
 
           // Handle results
           batchResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
+        if (result.status === 'fulfilled') {
               success.push(result.value);
-              this.state.metrics.jobsScraped++;
-            } else {
+          this.state.metrics.jobsScraped++;
+        } else {
               const failedJob = {
                 ...batch[index],
                 error: result.reason,
-                description: '',
-                responsibilities: [],
-                requirements: [],
-                notes: [],
-                aboutUs: '',
+            description: '',
+            responsibilities: [],
+            requirements: [],
+            notes: [],
+            aboutUs: '',
                 contactDetails: { name: '', phone: '', email: '' },
-                documents: []
+            documents: []
               } as JobDetails;
               failed.push(failedJob);
-              this.state.metrics.failedScrapes++;
+          this.state.metrics.failedScrapes++;
               this.addError('scraping', result.reason, batch[index].id);
-            }
+        }
           });
 
           this.logger.info(`Batch progress: ${success.length + failed.length}/${jobListings.length} jobs processed`);

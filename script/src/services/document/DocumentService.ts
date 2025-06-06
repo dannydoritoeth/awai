@@ -21,25 +21,72 @@ export class DocumentService {
 
       pdfParser.on('pdfParser_dataReady', (pdfData) => {
         try {
-          // Get raw text content
-          const text = pdfParser.getRawTextContent();
-          
-          // Clean up the JSON data to remove unnecessary properties
-          const structure: PDFStructure = {
-            pages: pdfData.Pages.map((page, index) => ({
-              texts: page.Texts.map(text => ({
-                text: decodeURIComponent(text.R[0].T),
+          // Extract and clean text from each page
+          const pages = pdfData.Pages.map((page, pageIndex) => {
+            // Sort texts by Y position first, then X position for proper reading order
+            const sortedTexts = page.Texts.sort((a, b) => {
+              const yDiff = a.y - b.y;
+              return yDiff !== 0 ? yDiff : a.x - b.x;
+            });
+
+            // Process texts with proper spacing and line breaks
+            const processedTexts = sortedTexts.map((text, index) => {
+              const decodedText = decodeURIComponent(text.R[0].T).trim();
+              const prevText = index > 0 ? sortedTexts[index - 1] : null;
+              
+              // Add spacing based on position differences
+              let prefix = '';
+              if (prevText) {
+                const yDiff = text.y - prevText.y;
+                const xDiff = text.x - prevText.x;
+                
+                if (yDiff > 1) {
+                  // New paragraph
+                  prefix = '\n\n';
+                } else if (yDiff > 0.1) {
+                  // New line
+                  prefix = '\n';
+                } else if (xDiff > 1 && !decodedText.startsWith(' ')) {
+                  // Same line but significant x difference
+                  prefix = ' ';
+                }
+              }
+
+              return {
+                text: decodedText,
                 x: text.x,
                 y: text.y,
-                fontSize: text.R[0].TS[2]
+                fontSize: text.R[0].TS[2],
+                prefix
+              };
+            });
+
+            // Combine texts with proper spacing
+            const pageText = processedTexts.map(t => t.prefix + t.text).join('');
+
+            return {
+              texts: processedTexts.map(({ text, x, y, fontSize }) => ({
+                text,
+                x,
+                y,
+                fontSize
               })),
-              number: index + 1
-            }))
-          };
+              number: pageIndex + 1,
+              text: pageText.trim()
+            };
+          });
+
+          // Combine all page texts with proper spacing
+          const text = pages
+            .map(p => p.text)
+            .join('\n\n')
+            .replace(/\n{3,}/g, '\n\n')  // Replace multiple newlines with double newline
+            .replace(/\s+/g, ' ')         // Replace multiple spaces with single space
+            .trim();
 
           resolve({
             text,
-            structure
+            structure: { pages }
           });
         } catch (error) {
           reject({
@@ -72,23 +119,61 @@ export class DocumentService {
    */
   private async parseDOCX(docxBuffer: Buffer): Promise<{text: string; structure: DOCXStructure}> {
     try {
-      const result = await mammoth.extractRawText({ buffer: docxBuffer });
-      const text = result.value;
+      // Use mammoth options to transform the document
+      const options = {
+        styleMap: [
+          "p[style-name='Heading 1'] => h1:fresh",
+          "p[style-name='Heading 2'] => h2:fresh",
+          "p[style-name='Heading 3'] => h3:fresh",
+          "p => p:fresh",
+          "r => span"
+        ],
+        transformDocument: (element: { type: string; }) => {
+          // Remove comments
+          if (element.type === "comment") {
+            return [];
+          }
+          // Keep the element unchanged
+          return element;
+        }
+      };
 
-      // Create a simple structure representation
-      const paragraphs = text.split('\n\n').filter(p => p.trim());
+      // Extract both raw text and HTML structure
+      const [rawResult, htmlResult] = await Promise.all([
+        mammoth.extractRawText({ buffer: docxBuffer }),
+        mammoth.convertToHtml({ buffer: docxBuffer }, options)
+      ]);
+
+      // Get clean text without excessive whitespace
+      const text = rawResult.value
+        .replace(/\n{3,}/g, '\n\n')  // Replace multiple newlines with double newline
+        .replace(/\s+/g, ' ')        // Replace multiple spaces with single space
+        .trim();                     // Trim whitespace from ends
+
+      // Create a structured representation
+      const paragraphs = text.split('\n\n')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);  // Remove empty paragraphs
+
       const structure: DOCXStructure = {
         paragraphs: paragraphs.map((p, i) => ({
           index: i,
-          text: p.trim()
+          text: p
         }))
       };
+
+      // Log any warnings from both conversions
+      const warnings = [...rawResult.messages, ...htmlResult.messages];
+      if (warnings.length > 0) {
+        this.logger.warn('DOCX parsing warnings:', warnings);
+      }
 
       return {
         text,
         structure
       };
     } catch (error) {
+      this.logger.error('Error parsing DOCX:', error);
       throw {
         parserError: error,
         message: 'Error parsing DOCX content'
@@ -209,7 +294,6 @@ export class DocumentService {
         });
       }
 
-      let content = buffer.toString('base64');
       let parsedContent = undefined;
 
       // Determine document type
@@ -293,7 +377,6 @@ export class DocumentService {
         url,
         title: title || '',
         type: documentType,
-        content,
         parsedContent,
         lastModified: new Date(),
       };
@@ -301,9 +384,7 @@ export class DocumentService {
       this.logger.info(`Document processing completed:`, {
         url,
         documentType,
-        hasContent: !!content,
         hasParsedContent: !!parsedContent,
-        contentLength: content.length,
         parsedTextLength: parsedContent?.text.length
       });
 
