@@ -6,8 +6,7 @@ import { cn } from '@/lib/utils';
 
 const categories = [
   { name: 'Institutions', href: '/institutions' },
-  { name: 'Companies', href: '/companies' },
-  { name: 'Divisions', href: '/divisions' },
+  { name: 'Organizations', href: '/companies' },
   { name: 'Career Type', href: '/taxonomies' },
   { name: 'Capabilities', href: '/capabilities' },
   { name: 'Skills', href: '/skills' },

@@ -1,222 +1,193 @@
 import { useState, useMemo } from 'react';
 import { Button } from './button';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
-import { type Division } from '@/lib/services/divisions';
+import { type Company } from '@/lib/services/companies';
 import { useRouter } from 'next/navigation';
 
 interface HierarchyNavProps {
-  divisions: Division[];
+  companies: Company[];
 }
 
-export function HierarchyNav({ divisions }: HierarchyNavProps) {
+export function HierarchyNav({ companies }: HierarchyNavProps) {
   const router = useRouter();
-  console.log('HierarchyNav rendered with divisions:', divisions);
 
-  const [currentLevel, setCurrentLevel] = useState<'institution' | 'company' | 'division'>('institution');
+  const [currentLevel, setCurrentLevel] = useState<'institution' | 'parent_org' | 'org'>('institution');
   const [selectedInstitution, setSelectedInstitution] = useState<string | null>(null);
-  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [selectedParentOrg, setSelectedParentOrg] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<{ level: string; name: string }>>([]);
 
-  // Group divisions by institution and company
+  // Group companies by institution and parent organization
   const hierarchy = useMemo(() => {
-    console.log('Building hierarchy from divisions:', divisions);
-    const institutions = new Map<string, { id: string; name: string; companies: Map<string, { id: string; name: string; divisions: Division[] }> }>();
+    const institutions = new Map<string, { 
+      id: string; 
+      name: string; 
+      parentOrgs: Map<string, { 
+        id: string; 
+        name: string; 
+        orgs: Company[] 
+      }> 
+    }>();
 
-    // Create a "No Institution" entry
-    const NO_INSTITUTION_ID = 'no-institution';
-    institutions.set(NO_INSTITUTION_ID, {
-      id: NO_INSTITUTION_ID,
-      name: 'Other Companies',
-      companies: new Map()
+    // First pass: Identify parent organizations
+    const parentOrgs = new Map<string, Company>();
+    companies.forEach(company => {
+      if (!company.parent_company_id) {
+        parentOrgs.set(company.id, company);
+      }
     });
 
-    divisions.forEach(division => {
-      console.log('Processing division:', division);
-      if (!division.company) {
-        console.warn('Division missing company:', division);
+    // Second pass: Group companies by institution and parent org
+    companies.forEach(company => {
+      const institution = company.institution;
+      const parentOrgId = company.parent_company_id;
+
+      // Skip parent orgs in this pass
+      if (!parentOrgId && parentOrgs.has(company.id)) {
         return;
       }
-
-      const company = division.company;
-      const institution = company.institution;
 
       // Determine which institution to use
       const targetInstitution = institution 
         ? institutions.has(institution.id)
           ? institutions.get(institution.id)!
           : (() => {
-              console.log('Creating new institution:', institution);
               const newInst = {
                 id: institution.id,
                 name: institution.name,
-                companies: new Map()
+                parentOrgs: new Map()
               };
               institutions.set(institution.id, newInst);
               return newInst;
             })()
-        : institutions.get(NO_INSTITUTION_ID)!;
+        : null;
 
-      // Add company if it doesn't exist
-      if (!targetInstitution.companies.has(company.id)) {
-        console.log('Adding company to institution:', company);
-        targetInstitution.companies.set(company.id, {
-          id: company.id,
-          name: company.name,
-          divisions: []
+      if (!targetInstitution) {
+        return; // Skip if no institution
+      }
+
+      // Get the parent org
+      const parentOrg = parentOrgId ? parentOrgs.get(parentOrgId) : null;
+      const parentOrgMapId = parentOrg?.id || 'no-parent';
+
+      // Add parent org if it doesn't exist
+      if (!targetInstitution.parentOrgs.has(parentOrgMapId)) {
+        targetInstitution.parentOrgs.set(parentOrgMapId, {
+          id: parentOrgMapId,
+          name: parentOrg ? parentOrg.name : 'Direct Organizations',
+          orgs: []
         });
       }
 
-      targetInstitution.companies.get(company.id)!.divisions.push(division);
+      // Add company to parent org group
+      targetInstitution.parentOrgs.get(parentOrgMapId)!.orgs.push(company);
     });
 
-    // Remove "No Institution" if it has no companies
-    if (institutions.get(NO_INSTITUTION_ID)?.companies.size === 0) {
-      institutions.delete(NO_INSTITUTION_ID);
-    }
-
-    console.log('Final hierarchy:', Object.fromEntries(institutions));
     return institutions;
-  }, [divisions]);
+  }, [companies]);
+
+  const handleInstitutionClick = (id: string, name: string) => {
+    router.push(`/institutions/${id}`);
+    setSelectedInstitution(id);
+    setCurrentLevel('parent_org');
+    setHistory([{ level: 'institution', name }]);
+  };
+
+  const handleParentOrgClick = (id: string, name: string) => {
+    router.push(`/companies/${id}`);
+    setSelectedParentOrg(id);
+    setCurrentLevel('org');
+    setHistory(prev => [...prev, { level: 'parent_org', name }]);
+  };
 
   const handleBack = () => {
-    console.log('Navigating back from level:', currentLevel);
-    
-    if (currentLevel === 'division') {
-      // Going back to company view
-      const company = currentCompany;
-      if (company) {
-        router.push(`/companies/${company.id}`);
-      }
-      setCurrentLevel('company');
-      setSelectedCompany(null);
+    if (currentLevel === 'org') {
+      const parentOrgId = selectedParentOrg;
+      setCurrentLevel('parent_org');
+      setSelectedParentOrg(null);
       setHistory(prev => prev.slice(0, -1));
-    } else if (currentLevel === 'company') {
-      // Going back to institution view
-      const institution = currentInstitution;
-      if (institution && institution.id !== 'no-institution') {
-        router.push(`/institutions/${institution.id}`);
+      if (parentOrgId) {
+        router.push(`/companies/${parentOrgId}`);
       }
+    } else if (currentLevel === 'parent_org') {
+      const institutionId = selectedInstitution;
       setCurrentLevel('institution');
       setSelectedInstitution(null);
-      setSelectedCompany(null);
-      setHistory(prev => prev.slice(0, -1));
-    }
-  };
-
-  const handleSelect = (id: string, name: string, level: 'institution' | 'company' | 'division') => {
-    console.log('Selected item:', { id, name, level });
-    if (level === 'institution') {
-      if (id === 'no-institution') {
-        // Just expand the view for "Other Companies"
-        setSelectedInstitution(id);
-        setCurrentLevel('company');
-        setHistory(prev => [...prev, { level: 'institution', name }]);
-      } else {
-        // Navigate to institution page and expand view
-        router.push(`/institutions/${id}`);
-        setSelectedInstitution(id);
-        setCurrentLevel('company');
-        setHistory(prev => [...prev, { level: 'institution', name }]);
+      setHistory([]);
+      if (institutionId) {
+        router.push(`/institutions/${institutionId}`);
       }
-    } else if (level === 'company') {
-      // Navigate to company page and expand view
-      router.push(`/companies/${id}`);
-      setSelectedCompany(id);
-      setCurrentLevel('division');
-      setHistory(prev => [...prev, { level: 'company', name }]);
-    } else {
-      // Navigate to division detail page
-      router.push(`/divisions/${id}`);
     }
   };
-
-  const currentInstitution = selectedInstitution ? hierarchy.get(selectedInstitution) : null;
-  const currentCompany = currentInstitution && selectedCompany ? currentInstitution.companies.get(selectedCompany) : null;
-
-  console.log('Current view state:', {
-    currentLevel,
-    selectedInstitution,
-    selectedCompany,
-    history,
-    institutionsCount: hierarchy.size,
-    currentInstitutionCompaniesCount: currentInstitution?.companies.size,
-    currentCompanyDivisionsCount: currentCompany?.divisions.length
-  });
 
   return (
-    <div className="space-y-2">
-      {/* Navigation Header */}
-      {currentLevel !== 'institution' && (
-        <div className="flex items-center gap-2 mb-2">
+    <div className="space-y-1">
+      {/* Institution Level */}
+      {currentLevel === 'institution' && Array.from(hierarchy.values()).map(institution => (
+        <div key={institution.id}>
           <Button
-            variant="link"
-            className="text-[14px] text-blue-600 hover:text-blue-800 p-0 h-auto"
-            onClick={handleBack}
+            variant="default"
+            className="w-full text-left text-[14px] text-gray-700 hover:text-gray-900 justify-between px-2 py-1 h-auto font-normal bg-transparent hover:bg-gray-100"
+            onClick={() => handleInstitutionClick(institution.id, institution.name)}
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back
+            {institution.name}
+            <span className="text-gray-500">{'>'}</span>
           </Button>
-          <span className="text-[14px] text-gray-600">
-            {history[history.length - 1]?.name}
-          </span>
         </div>
+      ))}
+
+      {/* Parent Org Level */}
+      {currentLevel === 'parent_org' && selectedInstitution && (
+        <>
+          <div className="flex items-center gap-1 mb-2">
+            <Button
+              variant="default"
+              className="text-[14px] text-gray-700 hover:text-gray-900 p-0 h-auto font-normal bg-transparent"
+              onClick={handleBack}
+            >
+              {'< Back'}
+            </Button>
+            <span className="text-gray-500">/</span>
+            <span className="text-[14px] text-gray-700">{history[0].name}</span>
+          </div>
+          {Array.from(hierarchy.get(selectedInstitution)?.parentOrgs.values() || []).map(parentOrg => (
+            <Button
+              key={parentOrg.id}
+              variant="default"
+              className="w-full text-left text-[14px] text-gray-700 hover:text-gray-900 justify-between px-2 py-1 h-auto font-normal bg-transparent hover:bg-gray-100"
+              onClick={() => handleParentOrgClick(parentOrg.id, parentOrg.name)}
+            >
+              <span className="pl-4">{parentOrg.name}</span>
+              <span className="text-gray-500">{'>'}</span>
+            </Button>
+          ))}
+        </>
       )}
 
-      {/* List */}
-      <div className="space-y-1">
-        {currentLevel === 'institution' && (
-          <>
-            {/* Show institutions */}
-            {Array.from(hierarchy.values()).map(institution => (
-              <button
-                key={institution.id}
-                onClick={() => handleSelect(institution.id, institution.name, 'institution')}
-                className="flex items-center justify-between w-full text-left px-2 py-1 rounded-sm hover:bg-gray-100"
-              >
-                <span className="text-[14px] leading-[20px] text-gray-700">
-                  {institution.name}
-                </span>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
-              </button>
-            ))}
-          </>
-        )}
-
-        {currentLevel === 'company' && currentInstitution && (
-          <>
-            {/* Show companies */}
-            {Array.from(currentInstitution.companies.values()).map(company => (
-              <button
-                key={company.id}
-                onClick={() => handleSelect(company.id, company.name, 'company')}
-                className="flex items-center justify-between w-full text-left px-2 py-1 rounded-sm hover:bg-gray-100"
-              >
-                <span className="text-[14px] leading-[20px] text-gray-700">
-                  {company.name}
-                </span>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
-              </button>
-            ))}
-          </>
-        )}
-
-        {currentLevel === 'division' && currentCompany && (
-          <>
-            {/* Show divisions */}
-            {currentCompany.divisions.map(division => (
-              <button
-                key={division.id}
-                onClick={() => handleSelect(division.id, division.name, 'division')}
-                className="flex items-center justify-between w-full text-left px-2 py-1 rounded-sm hover:bg-gray-100"
-              >
-                <span className="text-[14px] leading-[20px] text-gray-700">
-                  {division.name}
-                </span>
-              </button>
-            ))}
-          </>
-        )}
-      </div>
+      {/* Org Level */}
+      {currentLevel === 'org' && selectedParentOrg && selectedInstitution && (
+        <>
+          <div className="flex items-center gap-1 mb-2">
+            <Button
+              variant="default"
+              className="text-[14px] text-gray-700 hover:text-gray-900 p-0 h-auto font-normal bg-transparent"
+              onClick={handleBack}
+            >
+              {'< Back'}
+            </Button>
+            <span className="text-gray-500">/</span>
+            <span className="text-[14px] text-gray-700">{history[0].name}</span>
+          </div>
+          {hierarchy.get(selectedInstitution)?.parentOrgs.get(selectedParentOrg)?.orgs.map(org => (
+            <Button
+              key={org.id}
+              variant="default"
+              className="w-full text-left text-[14px] text-gray-700 hover:text-gray-900 px-2 py-1 h-auto font-normal bg-transparent hover:bg-gray-100"
+              onClick={() => router.push(`/companies/${org.id}`)}
+            >
+              <span className="pl-8">{org.name}</span>
+            </Button>
+          ))}
+        </>
+      )}
     </div>
   );
 } 

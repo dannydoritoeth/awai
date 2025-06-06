@@ -416,6 +416,7 @@ export class OrchestratorService implements IOrchestratorService {
             ...job,
             capabilities: {
               capabilities: job.capabilities.capabilities.map(cap => ({
+                id: cap.id,
                 name: cap.name,
                 level: cap.level,
                 description: cap.description,

@@ -46,7 +46,9 @@ interface Company {
   name: string;
   description: string | null;
   website: string | null;
-  created_at: string;
+  institution_id?: string;
+  parent_company_id?: string;
+  slug?: string;
 }
 
 interface Division {
@@ -201,7 +203,13 @@ const actions = {
   getCompanies: async (supabase: any, params: { searchTerm?: string; divisions?: string[] } = {}) => {
     let query = supabase
       .from('companies')
-      .select('*');
+      .select(`
+        *,
+        institution:institutions (
+          id,
+          name
+        )
+      `);
 
     if (params.searchTerm) {
       query = query.ilike('name', `%${params.searchTerm}%`);
