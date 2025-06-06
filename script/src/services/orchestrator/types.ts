@@ -110,15 +110,14 @@ export type PipelineResult = {
   };
 };
 
-export type PipelineMode = 'scrapeOnly' | 'processOnly' | 'all';
-
-export interface PipelineOptions {
+export type PipelineOptions = {
   maxRecords?: number;
+  migrateToLive?: boolean;
   skipProcessing?: boolean;
   skipStorage?: boolean;
-  migrateToLive?: boolean;
-  pipelineMode?: PipelineMode;
-}
+  skipMigration?: boolean;
+  continueOnError?: boolean;
+};
 
 export interface IOrchestratorService {
   runPipeline(options?: PipelineOptions): Promise<PipelineResult>;

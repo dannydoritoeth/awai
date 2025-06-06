@@ -74,95 +74,36 @@ export class OrchestratorService implements IOrchestratorService {
     try {
       await this.initializePipeline(options);
       
-      const mode = options?.pipelineMode || 'all';
-      this.logger.info('Running pipeline in mode:', mode);
+      this.logger.info('=== Pipeline Options ===');
+      this.logger.info('Initial options:', {
+        maxRecords: options?.maxRecords,
+        skipProcessing: options?.skipProcessing,
+        skipStorage: options?.skipStorage,
+        migrateToLive: options?.migrateToLive
+      });
+      this.logger.info('State options:', {
+        maxRecords: this.state.options?.maxRecords,
+        skipProcessing: this.state.options?.skipProcessing,
+        skipStorage: this.state.options?.skipStorage,
+        migrateToLive: this.state.options?.migrateToLive
+      });
+      
+      // Scrape jobs
+      const { success: scrapedJobs, failed: failedScrapes } = await this.scrapeJobs(this.state.options);
+      this.logger.info(`Storing ${scrapedJobs.length} jobs in staging database`);
 
-      let scrapedJobs: JobDetails[] = [];
-      let processedJobs: ProcessedJob[] = [];
-      let failedScrapes: JobDetails[] = [];
-
-      // Scraping phase
-      if (mode === 'scrapeOnly' || mode === 'all') {
-        const scrapeResult = await this.scrapeJobs(this.state.options);
-        scrapedJobs = scrapeResult.success;
-        failedScrapes = scrapeResult.failed;
-        
-        if (mode === 'scrapeOnly') {
-          // Return early with just scraping results
-          return {
-            status: this.stopRequested ? 'stopped' as const : 'completed' as const,
-            metrics: {
-              ...this.state.metrics,
-              endTime: new Date(),
-              totalDuration: Date.now() - this.state.metrics.startTime.getTime(),
-              scraping: {
-                total: scrapedJobs.length + failedScrapes.length,
-                successful: scrapedJobs.length,
-                failed: failedScrapes.length
-              },
-              processing: { total: 0, successful: 0, failed: 0 },
-              storage: { total: 0, successful: 0, failed: 0, migratedToLive: 0 }
-            },
-            jobs: {
-              scraped: scrapedJobs.map(job => ({
-                ...job,
-                documents: []
-              })),
-              processed: [],
-              stored: [],
-              failed: {
-                scraping: failedScrapes.map(job => ({
-                  ...job,
-                  documents: []
-                })),
-                processing: [],
-                storage: []
-              }
-            }
-          };
-        }
-      }
-
-      // Processing phase
-      if (mode === 'processOnly' || mode === 'all') {
-        // If in processOnly mode and no jobs provided, return empty result
-        if (mode === 'processOnly' && scrapedJobs.length === 0) {
-          this.logger.warn('No jobs provided for processing in processOnly mode');
-          return {
-            status: 'completed' as const,
-            metrics: {
-              ...this.state.metrics,
-              endTime: new Date(),
-              totalDuration: Date.now() - this.state.metrics.startTime.getTime(),
-              scraping: { total: 0, successful: 0, failed: 0 },
-              processing: { total: 0, successful: 0, failed: 0 },
-              storage: { total: 0, successful: 0, failed: 0, migratedToLive: 0 }
-            },
-            jobs: {
-              scraped: [],
-              processed: [],
-              stored: [],
-              failed: {
-                scraping: [],
-                processing: [],
-                storage: []
-              }
-            }
-          };
-        }
-
-        processedJobs = await this.processJobs(scrapedJobs, this.state.options);
-        
-        // Store jobs
-        await this.storeJobs(processedJobs, this.state.options);
-      }
+      // Process jobs
+      const processedJobs = await this.processJobs(scrapedJobs, this.state.options);
+      
+      // Store jobs
+      await this.storeJobs(processedJobs, this.state.options);
 
       // Complete pipeline
       this.logger.info('Completing pipeline...');
       await this.cleanup();
 
       // Return final result
-      return {
+      const pipelineResult: PipelineResult = {
         status: this.stopRequested ? 'stopped' as const : 'completed' as const,
         metrics: {
           ...this.state.metrics,
@@ -216,6 +157,9 @@ export class OrchestratorService implements IOrchestratorService {
           }
         }
       };
+
+      this.logger.info('Pipeline execution complete:', pipelineResult);
+      return pipelineResult;
 
     } catch (error) {
       this.logger.error('Pipeline failed:', error);
