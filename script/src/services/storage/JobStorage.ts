@@ -143,7 +143,7 @@ export class JobStorage {
         // Store each processed document
         for (const doc of processedDocs) {
           try {
-            await this.storeJobDocument(jobUUID.id, doc);
+            await this.storeJobDocument(jobUUID, doc);
           } catch (error) {
             this.logger.error(`Failed to store document for job ${jobId}:`, {
               error: error,
@@ -197,6 +197,13 @@ export class JobStorage {
    */
   async storeRaw(job: ProcessedJob): Promise<void> {
     const jobId = job.jobDetails.id;
+
+    const jobUUID = await this.getJobByExternalId(jobId);
+    if (jobUUID) {
+      this.logger.info(`Job already exists with ID ${jobUUID}, skipping storage`);
+      return;
+    }
+
     try {
       if (!jobId) throw new Error('Job ID is required');
       this.logger.info(`Starting raw storage for job ${jobId}`);
@@ -242,10 +249,12 @@ export class JobStorage {
             raw_data: job.jobDetails
           };
 
+          let jobUUID: string;
           if (existingJobResult.rows.length > 0) {
             // Update existing job
+            jobUUID = existingJobResult.rows[0].id;
             this.logger.info(`Updating existing job ${jobId}:`, {
-              jobRecordId: existingJobResult.rows[0].id
+              jobRecordId: jobUUID
             });
             await client.query(
               `UPDATE jobs 
@@ -268,14 +277,14 @@ export class JobStorage {
                 jobRecord.sync_status,
                 jobRecord.last_synced_at,
                 jobRecord.raw_data,
-                existingJobResult.rows[0].id
+                jobUUID
               ]
             );
             this.logger.info(`Successfully updated job ${jobId}`);
           } else {
             // Insert new job
             this.logger.info(`Inserting new job ${jobId}`);
-            await client.query(
+            const insertResult = await client.query(
               `INSERT INTO jobs 
               (external_id, source_id, title, company_id, role_id, locations, 
                remuneration, close_date, open_date, job_type, source_url, 
@@ -300,11 +309,47 @@ export class JobStorage {
                 jobRecord.raw_data
               ]
             );
+            jobUUID = insertResult.rows[0].id;
             this.logger.info(`Successfully inserted job ${jobId}`);
           }
 
           await client.query('COMMIT');
           this.logger.info(`Committed transaction for job ${jobId}`);
+
+          // Process documents if any exist
+          if (job.jobDetails.documents?.length) {
+            const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
+              const url = typeof doc.url === 'object' ? doc.url.url : doc.url;
+              return {
+                url,
+                title: doc.title,
+                type: doc.type || 'attachment'
+              };
+            });
+
+            // Download and process all documents
+            const processedDocs = await this.documentService.processDocuments(documentUrls);
+            
+            // Store each processed document
+            for (const doc of processedDocs) {
+              try {
+                await this.storeJobDocument(jobUUID, doc);
+              } catch (error) {
+                this.logger.error(`Failed to store document for job ${jobId}:`, {
+                  error: error,
+                  url: doc.url
+                });
+              }
+            }
+
+            this.logger.info(`Completed document processing for job ${jobId}:`, {
+              totalDocuments: documentUrls.length,
+              processedDocuments: processedDocs.length,
+              successfulUrls: processedDocs.map(d => d.url)
+            });
+          }
+
+          this.logger.info(`Completed raw storage for job ${jobId}`);
         } catch (error) {
           await client.query('ROLLBACK');
           this.logger.error(`Rolled back transaction for job ${jobId}:`, error);
@@ -313,29 +358,9 @@ export class JobStorage {
           client.release();
           this.logger.info(`Released client connection for job ${jobId}`);
         }
+      } else {
+        throw new Error('PostgreSQL pool not available');
       }
-
-      // Process and store documents if any
-      if (job.jobDetails.documents?.length) {
-        this.logger.info(`Processing ${job.jobDetails.documents.length} documents for job ${jobId}`);
-        const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
-          const url = typeof doc.url === 'object' ? doc.url.url : doc.url;
-          this.logger.info(`Processing document for job ${jobId}:`, {
-            url,
-            title: doc.title,
-            type: doc.type || 'attachment'
-          });
-          return {
-            url,
-            title: doc.title,
-            type: doc.type || 'attachment'
-          };
-        });
-
-        await this.processJobDocuments(jobId, documentUrls);
-      }
-
-      this.logger.info(`Completed raw storage for job ${jobId}`);
     } catch (error) {
       this.logger.error(`Error in storeRaw for job ${jobId}:`, {
         error,
@@ -582,7 +607,7 @@ export class JobStorage {
   /**
    * Get a job by its external ID
    */
-  private async getJobByExternalId(externalId: string): Promise<{ id: string } | null> {
+  private async getJobByExternalId(externalId: string): Promise<string | null> {
     if (!this.pgStagingPool) {
       throw new Error('PostgreSQL pool is required');
     }
@@ -607,7 +632,7 @@ export class JobStorage {
       this.logger.info(`Found job with external ID ${externalId}:`, {
         id: job.id
       });
-      return job;
+      return job.id;
     } catch (error) {
       await client.query('ROLLBACK');
       this.logger.error(`Error getting job by external ID ${externalId}:`, error);
