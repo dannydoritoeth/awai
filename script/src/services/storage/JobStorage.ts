@@ -6,12 +6,13 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
 import { JobDetails, JobRecord, ProcessedJob, QueryOptions, EmbeddingRecord, CompanyRecord } from './types.js';
-import { JobDocument } from '../spider/types.js';
+import { JobDocument as SpiderJobDocument } from '../spider/types.js';
 import { CompanyStorage } from './CompanyStorage.js';
 import { RoleStorage } from './RoleStorage.js';
 import { CapabilityStorage } from './CapabilityStorage.js';
 import { SkillStorage } from './SkillStorage.js';
 import { DocumentService } from '../document/DocumentService.js';
+import { JobDocument } from '../../models/job.js';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 
@@ -33,6 +34,74 @@ export class JobStorage {
     this.roles = new RoleStorage(stagingClient, liveClient, logger, this.companies);
     this.capabilities = new CapabilityStorage(stagingClient, liveClient, logger, this.companies);
     this.documentService = new DocumentService(logger);
+  }
+
+  /**
+   * Store a single job document in the database
+   */
+  private async storeJobDocument(jobUUID: string, doc: JobDocument): Promise<void> {
+    if (!this.pgStagingPool) {
+      throw new Error('PostgreSQL pool is required');
+    }
+
+    const client = await this.pgStagingPool.connect();
+    try {
+      const documentId = crypto.randomUUID();
+      this.logger.info(`Storing document for job:`, {
+        jobUUID,
+        documentId,
+        url: doc.url,
+        type: doc.type,
+        title: doc.title,
+        hasParsedContent: !!doc.parsedContent
+      });
+
+      await client.query(
+        `INSERT INTO job_documents (
+          job_id,
+          document_id,
+          document_url,
+          document_type,
+          title,
+          url,
+          sync_status,
+          last_synced_at,
+          raw_data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          jobUUID,
+          documentId,
+          doc.url,
+          doc.type,
+          doc.title || '',
+          doc.url,
+          'pending',
+          null,
+          {
+            lastModified: doc.lastModified,
+            parsedContent: doc.parsedContent || null
+          }
+        ]
+      );
+      
+      this.logger.info(`Successfully stored document:`, {
+        jobUUID,
+        documentId,
+        url: doc.url
+      });
+    } catch (error) {
+      this.logger.error(`Error storing document:`, {
+        error: error,
+        code: (error as any)?.code,
+        message: (error as Error)?.message,
+        constraint: (error as any)?.constraint,
+        detail: (error as any)?.detail,
+        url: doc.url
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -61,208 +130,22 @@ export class JobStorage {
         processedCount: processedDocs.length,
         successfulUrls: processedDocs.map(d => d.url)
       });
-
-      this.logger.info(`Processed documents: ${JSON.stringify(processedDocs)}`);
       
-      // Use PostgreSQL pool if available, otherwise fall back to Supabase
-      if (this.pgStagingPool) {
-        this.logger.info(`Using PostgreSQL pool for job ${jobId} document storage`);
-        const client = await this.pgStagingPool.connect();
+      // Get job UUID for document storage
+      const jobUUID = await this.getJobByExternalId(jobId);
+      if (!jobUUID) {
+        throw new Error(`No job found with ID ${jobId}`);
+      }
+
+      // Store each processed document
+      for (const doc of processedDocs) {
         try {
-          // First get the UUID for this job from the jobs table
-          this.logger.info(`Looking up job UUID for ${jobId}`);
-          const jobResult = await client.query(
-            'SELECT id FROM jobs WHERE external_id = $1 OR original_id = $1',
-            [jobId]
-          );
-
-          if (!jobResult.rows.length) {
-            const error = new Error(`No job found with ID ${jobId}`);
-            this.logger.error(`Job lookup failed:`, {
-              jobId,
-              error: error.message
-            });
-            throw error;
-          }
-
-          const jobUUID = jobResult.rows[0].id;
-          this.logger.info(`Found job UUID:`, {
-            jobId,
-            jobUUID
-          });
-          
-          // Store documents in the database
-          for (const doc of processedDocs) {
-            try {
-              const documentId = crypto.randomUUID();
-              this.logger.info(`Storing document for job ${jobId}:`, {
-                jobUUID,
-                documentId,
-                url: doc.url,
-                type: doc.type,
-                title: doc.title,
-                hasContent: !!doc.content,
-                hasParsedContent: !!doc.parsedContent
-              });
-
-              await client.query(
-                `INSERT INTO job_documents (
-                  job_id,
-                  document_id,
-                  document_url,
-                  document_type,
-                  title,
-                  url,
-                  sync_status,
-                  last_synced_at,
-                  raw_data
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                [
-                  jobUUID,
-                  documentId,
-                  doc.url,
-                  doc.type,
-                  doc.title || '',
-                  doc.url,
-                  'pending',
-                  null,
-                  {
-                    content: doc.content,
-                    lastModified: doc.lastModified,
-                    parsedContent: doc.parsedContent || null
-                  }
-                ]
-              );
-              this.logger.info(`Successfully stored document:`, {
-                jobId,
-                documentId,
-                url: doc.url
-              });
-            } catch (error) {
-              this.logger.error(`Error storing document for job ${jobId}:`, {
-                error: error,
-                code: (error as any)?.code,
-                message: (error as Error)?.message,
-                constraint: (error as any)?.constraint,
-                detail: (error as any)?.detail,
-                url: doc.url
-              });
-            }
-          }
+          await this.storeJobDocument(jobUUID.id, doc);
         } catch (error) {
-          this.logger.error(`Error in PostgreSQL document storage for job ${jobId}:`, {
+          this.logger.error(`Failed to store document for job ${jobId}:`, {
             error: error,
-            code: (error as any)?.code,
-            message: (error as Error)?.message,
-            stack: (error as Error)?.stack
+            url: doc.url
           });
-          throw error;
-        } finally {
-          client.release();
-          this.logger.info(`Released PostgreSQL client for job ${jobId}`);
-        }
-      } else {
-        // Fall back to Supabase client
-        this.logger.info(`Using Supabase client for job ${jobId} document storage`);
-        
-        // First get the job ID
-        this.logger.info(`Looking up job ID for ${jobId}`);
-        let jobData = null;
-        let jobError = null;
-        try {
-          jobData = await this.getJobByExternalId(jobId);
-        } catch (error) {
-          jobError = {
-            code: (error as any)?.code,
-            message: (error as Error)?.message,
-            details: (error as any)?.details
-          };
-        }
-
-        if (jobError) {
-          this.logger.error(`Error looking up job in Supabase:`, {
-            jobId,
-            error: jobError,
-            code: jobError.code,
-            message: jobError.message,
-            details: jobError.details
-          });
-          throw jobError;
-        }
-
-        if (!jobData) {
-          const error = new Error(`No job found with ID ${jobId}`);
-          this.logger.error(`Job lookup failed in Supabase:`, {
-            jobId,
-            error: error.message
-          });
-          throw error;
-        }
-
-        this.logger.info(`Found job in Supabase:`, {
-          jobId,
-          supabaseId: jobData.id
-        });
-
-        // Store documents using Supabase
-        for (const doc of processedDocs) {
-          try {
-            const documentId = crypto.randomUUID();
-            this.logger.info(`Storing document in Supabase for job ${jobId}:`, {
-              jobId: jobData.id,
-              documentId,
-              url: doc.url,
-              type: doc.type,
-              title: doc.title,
-              hasContent: !!doc.content,
-              hasParsedContent: !!doc.parsedContent
-            });
-
-            const { error } = await this.stagingClient
-              .from('job_documents')
-              .insert({
-                job_id: jobData.id,
-                document_id: documentId,
-                document_url: doc.url,
-                document_type: doc.type,
-                title: doc.title || '',
-                url: doc.url,
-                sync_status: 'pending',
-                last_synced_at: null,
-                raw_data: {
-                  content: doc.content,
-                  lastModified: doc.lastModified,
-                  parsedContent: doc.parsedContent || null
-                }
-              });
-
-            if (error) {
-              this.logger.error(`Error storing document in Supabase:`, {
-                jobId,
-                documentId,
-                url: doc.url,
-                error: error,
-                code: error.code,
-                message: error.message,
-                details: error.details
-              });
-            } else {
-              this.logger.info(`Successfully stored document in Supabase:`, {
-                jobId,
-                documentId,
-                url: doc.url
-              });
-            }
-          } catch (error) {
-            this.logger.error(`Error in Supabase document storage:`, {
-              jobId,
-              url: doc.url,
-              error: error,
-              code: (error as any)?.code,
-              message: (error as Error)?.message,
-              details: (error as any)?.details
-            });
-          }
         }
       }
 
@@ -368,7 +251,7 @@ export class JobStorage {
 
       if (job.jobDetails.documents?.length) {
         this.logger.info(`Processing ${job.jobDetails.documents.length} documents for job ${jobId}`);
-        const documentUrls = job.jobDetails.documents.map((doc: JobDocument) => {
+        const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
           const url = typeof doc.url === 'object' ? doc.url.url : doc.url;
           this.logger.info(`Processing document for job ${jobId}:`, {
             url,

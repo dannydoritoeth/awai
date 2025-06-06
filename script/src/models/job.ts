@@ -32,7 +32,7 @@ export interface Job {
   source?: string;
   institution?: string;
   details?: JobDetails;
-  documents?: Document[];
+  documents?: JobDocument[];
   company_id?: string;
 }
 
@@ -42,7 +42,7 @@ export interface JobDetails {
   category?: string;
   skills?: string[];
   capabilities?: Capability[];
-  documents?: Document[];
+  documents?: JobDocument[];
   tableDetails?: {
     capabilities?: string;
     skills?: string;
@@ -50,7 +50,7 @@ export interface JobDetails {
   additionalDetails?: string[];
 }
 
-export interface Document {
+export interface JobDocument {
   id?: string;
   url: string;
   title?: string;
