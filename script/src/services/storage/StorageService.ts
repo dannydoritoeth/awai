@@ -86,7 +86,7 @@ export class StorageService {
 
     // Initialize storage modules
     this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
-    this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger);
+    this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
     this.roles = new RoleStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
     this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
     this.skills = new SkillStorage(this.stagingClient, this.liveClient, this.logger, this.companies);

@@ -56,10 +56,40 @@ export interface Document {
   title?: string;
   type: string;
   content?: string;
+  parsedContent?: {
+    text: string;
+    structure: DocumentStructure;
+    type: 'pdf' | 'docx' | 'text';
+  };
   lastModified?: Date;
   source?: string;
   jobId?: string;
 }
+
+export interface PDFStructure {
+  pages: Array<{
+    texts: Array<{
+      text: string;
+      x: number;
+      y: number;
+      fontSize: number;
+    }>;
+    number: number;
+  }>;
+}
+
+export interface DOCXStructure {
+  paragraphs: Array<{
+    index: number;
+    text: string;
+  }>;
+}
+
+export interface TextStructure {
+  content: string;
+}
+
+export type DocumentStructure = PDFStructure | DOCXStructure | TextStructure;
 
 export interface Capability {
   id?: string;
