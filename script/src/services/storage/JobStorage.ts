@@ -190,66 +190,17 @@ export class JobStorage {
   }
 
   /**
-   * Store a processed job and its related data
+   * Store just the raw job and its documents
    */
-  async storeJob(job: ProcessedJob): Promise<void> {
+  async storeRaw(job: ProcessedJob): Promise<void> {
+    const jobId = job.jobDetails.id;
     try {
-      const jobId = job.jobDetails.id;
       if (!jobId) throw new Error('Job ID is required');
+      this.logger.info(`Starting raw storage for job ${jobId}`);
 
-      this.logger.info('Processing job:', {
-        id: jobId,
-        title: job.jobDetails.title,
-        location: job.jobDetails.location,
-        department: job.jobDetails.agency,
-        documentsCount: job.jobDetails.documents?.length || 0
-      });
-      
       // Get or create company first
-      this.logger.info(`Getting/creating company for job ${jobId}:`, {
-        agency: job.jobDetails.agency || 'NSW Government'
-      });
       const company = await this.getOrCreateCompany(job.jobDetails);
-      this.logger.info(`Company found/created for job ${jobId}:`, {
-        companyId: company.id,
-        companyName: company.name
-      });
-
-      // Store the role
-      this.logger.info(`Storing role for job ${jobId}:`, {
-        title: job.jobDetails.title,
-        companyId: company.id
-      });
-      const roleData = await this.roles.storeRoleRecord({
-        title: job.jobDetails.title,
-        company_id: company.id,
-        raw_data: job.jobDetails
-      });
-      this.logger.info(`Role stored for job ${jobId}:`, {
-        roleId: roleData[0]?.id,
-        roleTitle: roleData[0]?.title
-      });
-
-      // Process any attached documents
-      let documentAnalysis: {
-        capabilities: Array<{
-          id?: string;
-          name: string;
-          level: string;
-          description: string;
-          behavioral_indicators: string[];
-        }>;
-        skills: Array<{
-          name: string;
-          description?: string;
-          category?: string;
-          text?: string;
-        }>;
-      } = {
-        capabilities: [],
-        skills: []
-      };
-
+      
       // Use PostgreSQL pool if available
       if (this.pgStagingPool) {
         this.logger.info(`Using PostgreSQL pool for job ${jobId}`);
@@ -275,13 +226,13 @@ export class JobStorage {
             source_id: 'nswgov',
             title: job.jobDetails.title,
             company_id: company.id,
-            role_id: roleData[0].id,
+            role_id: job.jobDetails.roleId,
             locations: Array.isArray(job.jobDetails.location) ? job.jobDetails.location : [job.jobDetails.location],
-            remuneration: job.jobDetails.salary,
+            remuneration: job.jobDetails.salary || '',
             close_date: job.jobDetails.closingDate === 'Ongoing' ? null : job.jobDetails.closingDate,
             open_date: job.jobDetails.postedDate || new Date().toISOString(),
-            job_type: job.jobDetails.jobType,
-            source_url: job.jobDetails.url,
+            job_type: job.jobDetails.jobType || '',
+            source_url: job.jobDetails.url || '',
             raw_json: job.jobDetails,
             sync_status: 'pending',
             last_synced_at: null,
@@ -295,12 +246,14 @@ export class JobStorage {
             });
             await client.query(
               `UPDATE jobs 
-              SET title = $1, role_id = $2, locations = $3, remuneration = $4, 
-                  close_date = $5, open_date = $6, job_type = $7, source_url = $8,
-                  raw_json = $9, sync_status = $10, last_synced_at = $11, raw_data = $12
-              WHERE id = $13`,
+              SET title = $1, company_id = $2, role_id = $3, locations = $4,
+                  remuneration = $5, close_date = $6, open_date = $7, job_type = $8,
+                  source_url = $9, raw_json = $10, sync_status = $11, last_synced_at = $12,
+                  raw_data = $13
+              WHERE id = $14`,
               [
                 jobRecord.title,
+                jobRecord.company_id,
                 jobRecord.role_id,
                 jobRecord.locations,
                 jobRecord.remuneration,
@@ -357,8 +310,9 @@ export class JobStorage {
           client.release();
           this.logger.info(`Released client connection for job ${jobId}`);
         }
-      } 
+      }
 
+      // Process and store documents if any
       if (job.jobDetails.documents?.length) {
         this.logger.info(`Processing ${job.jobDetails.documents.length} documents for job ${jobId}`);
         const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
@@ -370,12 +324,61 @@ export class JobStorage {
           });
           return {
             url,
-          title: doc.title,
-          type: doc.type || 'attachment'
+            title: doc.title,
+            type: doc.type || 'attachment'
           };
         });
 
-        const { documents, analysis } = await this.processJobDocuments(jobId, documentUrls);
+        await this.processJobDocuments(jobId, documentUrls);
+      }
+
+      this.logger.info(`Completed raw storage for job ${jobId}`);
+    } catch (error) {
+      this.logger.error(`Error in storeRaw for job ${jobId}:`, {
+        error,
+        code: (error as any)?.code,
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        message: (error as any)?.message,
+        stack: (error as Error)?.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Store a job with full processing (documents, capabilities, skills)
+   */
+  async storeAll(job: ProcessedJob): Promise<void> {
+    const jobId = job.jobDetails.id;
+    try {
+      this.logger.info(`Starting full storage for job ${jobId}`);
+
+      // First store the raw job and documents
+      await this.storeRaw(job);
+
+      // Process documents for analysis
+      let documentAnalysis: {
+        capabilities: Array<{
+          id?: string;
+          name: string;
+          level: string;
+          description: string;
+          behavioral_indicators: string[];
+        }>;
+        skills: Array<{
+          name: string;
+          description?: string;
+          category?: string;
+          text?: string;
+        }>;
+      } = {
+        capabilities: [],
+        skills: []
+      };
+
+      if (job.jobDetails.documents?.length) {
+        const { analysis } = await this.processJobDocuments(jobId, job.jobDetails.documents);
         if (analysis) {
           documentAnalysis = analysis;
           this.logger.info(`Document analysis completed for job ${jobId}:`, {
@@ -417,9 +420,9 @@ export class JobStorage {
       await this.capabilities.storeCapabilityRecords(job, allCapabilities);
       await this.skills.storeSkillRecords(job, allSkills);
 
-      this.logger.info(`Completed processing job ${jobId}`);
+      this.logger.info(`Completed full storage for job ${jobId}`);
     } catch (error) {
-      this.logger.error(`Error in storeJob for job ${job.jobDetails.id}:`, {
+      this.logger.error(`Error in storeAll for job ${jobId}:`, {
         error,
         code: (error as any)?.code,
         details: (error as any)?.details,
@@ -429,6 +432,13 @@ export class JobStorage {
       });
       throw error;
     }
+  }
+
+  /**
+   * Store a job (alias for storeAll for backward compatibility)
+   */
+  async storeJob(job: ProcessedJob): Promise<void> {
+    return this.storeAll(job);
   }
 
   /**
