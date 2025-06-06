@@ -32,7 +32,7 @@ export interface Job {
   source?: string;
   institution?: string;
   details?: JobDetails;
-  documents?: Document[];
+  documents?: JobDocument[];
   company_id?: string;
 }
 
@@ -42,7 +42,7 @@ export interface JobDetails {
   category?: string;
   skills?: string[];
   capabilities?: Capability[];
-  documents?: Document[];
+  documents?: JobDocument[];
   tableDetails?: {
     capabilities?: string;
     skills?: string;
@@ -50,16 +50,46 @@ export interface JobDetails {
   additionalDetails?: string[];
 }
 
-export interface Document {
+export interface JobDocument {
   id?: string;
   url: string;
   title?: string;
   type: string;
-  content?: string;
+  parsedContent?: {
+    text: string;
+    structure: DocumentStructure;
+    type: 'pdf' | 'docx' | 'text';
+  };
   lastModified?: Date;
   source?: string;
   jobId?: string;
 }
+
+export interface PDFStructure {
+  pages: Array<{
+    texts: Array<{
+      text: string;
+      x: number;
+      y: number;
+      fontSize: number;
+    }>;
+    number: number;
+    text: string;
+  }>;
+}
+
+export interface DOCXStructure {
+  paragraphs: Array<{
+    index: number;
+    text: string;
+  }>;
+}
+
+export interface TextStructure {
+  content: string;
+}
+
+export type DocumentStructure = PDFStructure | DOCXStructure | TextStructure;
 
 export interface Capability {
   id?: string;

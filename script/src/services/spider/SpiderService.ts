@@ -64,14 +64,14 @@ export class SpiderService implements ISpiderService {
     this.browserInitPromise = (async () => {
       try {
         this.logger.info('Spider name "nsw gov jobs" launched');
-        if (!this.browser) {
-          this.browser = await puppeteer.launch({
+    if (!this.browser) {
+      this.browser = await puppeteer.launch({
             headless: "new",
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-          });
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
           this.browserInitialized = true;
-          this.logger.info('Browser instance initialized');
-        }
+      this.logger.info('Browser instance initialized');
+    }
       } finally {
         // Clear the promise once initialization is complete
         this.browserInitPromise = null;
@@ -162,92 +162,92 @@ export class SpiderService implements ISpiderService {
       while (hasNextPage) {
         this.logger.info(`Scraping page ${pageNum}`);
 
-        // Wait for job cards with better error handling
-        this.logger.info('Waiting for job cards to load...');
-        try {
-          await page.waitForSelector('.job-card, .search-result-card', { 
-            timeout: 10000,
-            visible: true 
-          });
-          this.logger.info('Job cards loaded');
-        } catch (error) {
-          this.logger.warn('Timeout waiting for job cards, checking if any are present');
-          const cards = await page.$$('.job-card, .search-result-card');
-          if (cards.length === 0) {
-            throw new Error('No job cards found on page');
-          }
-          this.logger.info(`Found ${cards.length} job cards despite timeout`);
+      // Wait for job cards with better error handling
+      this.logger.info('Waiting for job cards to load...');
+      try {
+        await page.waitForSelector('.job-card, .search-result-card', { 
+          timeout: 10000,
+          visible: true 
+        });
+        this.logger.info('Job cards loaded');
+      } catch (error) {
+        this.logger.warn('Timeout waiting for job cards, checking if any are present');
+        const cards = await page.$$('.job-card, .search-result-card');
+        if (cards.length === 0) {
+          throw new Error('No job cards found on page');
         }
+        this.logger.info(`Found ${cards.length} job cards despite timeout`);
+      }
 
-        // Add rate limiting delay
-        const rateLimitDelay = 2000;
-        const rateLimitJitter = 1000;
-        const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
-        await new Promise(resolve => setTimeout(resolve, delay));
+      // Add rate limiting delay
+      const rateLimitDelay = 2000;
+      const rateLimitJitter = 1000;
+      const delay = rateLimitDelay + (Math.random() * rateLimitJitter);
+      await new Promise(resolve => setTimeout(resolve, delay));
 
         // Scrape current page
         const pageListings = await page.evaluate(() => {
-          // Helper function to safely get text content
-          const getText = (element: Element, selector: string): string => {
-            const el = element.querySelector(selector);
-            return el ? el.textContent?.trim() || '' : '';
-          };
+        // Helper function to safely get text content
+        const getText = (element: Element, selector: string): string => {
+          const el = element.querySelector(selector);
+          return el ? el.textContent?.trim() || '' : '';
+        };
 
-          // Use more specific selectors for job cards
-          const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
-          
-          return cards.map(element => {
-            // Get title and URL - try multiple possible selectors
-            const titleElement = 
-              element.querySelector('.card-header a') || 
-              element.querySelector('[class*="title"] a') ||
-              element.querySelector('h2 a') ||
-              element.querySelector('a');
-              
-            const title = titleElement?.querySelector('span')?.textContent?.trim() || 
-                         titleElement?.textContent?.trim() || '';
+        // Use more specific selectors for job cards
+        const cards = Array.from(document.querySelectorAll('.job-card, .search-result-card'));
+        
+        return cards.map(element => {
+          // Get title and URL - try multiple possible selectors
+          const titleElement = 
+            element.querySelector('.card-header a') || 
+            element.querySelector('[class*="title"] a') ||
+            element.querySelector('h2 a') ||
+            element.querySelector('a');
+            
+          const title = titleElement?.querySelector('span')?.textContent?.trim() || 
+                       titleElement?.textContent?.trim() || '';
             const url = (titleElement as HTMLAnchorElement)?.href || '';
-            
-            // Get dates - try multiple formats
-            const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
-            let postedDate = '', closingDate = '';
-            if (dateText) {
-              const dates = dateText.split('-').map((d: string) => d.trim());
-              postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
-              closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
-            }
-            
-            // Get department/agency
-            const agency = 
-              getText(element, '.job-search-result-right h2') || 
-              getText(element, '[class*="department"]') ||
-              getText(element, '[class*="agency"]') ||
-              'NSW Government'; // Fallback
-            
-            // Get location
-            const location = 
-              getText(element, '.nsw-col p:nth-child(3) span') ||
-              getText(element, '[class*="location"]') ||
-              'NSW'; // Fallback
-
+          
+          // Get dates - try multiple formats
+          const dateText = getText(element, '.card-body p') || getText(element, '[class*="date"]');
+          let postedDate = '', closingDate = '';
+          if (dateText) {
+            const dates = dateText.split('-').map((d: string) => d.trim());
+            postedDate = dates[0]?.replace(/^(Job posting:|Posted:)/, '').trim();
+            closingDate = dates[1]?.replace(/^(Closing date:|Closes:)/, '').trim();
+          }
+          
+          // Get department/agency
+          const agency = 
+            getText(element, '.job-search-result-right h2') || 
+            getText(element, '[class*="department"]') ||
+            getText(element, '[class*="agency"]') ||
+            'NSW Government'; // Fallback
+          
+          // Get location
+          const location = 
+            getText(element, '.nsw-col p:nth-child(3) span') ||
+            getText(element, '[class*="location"]') ||
+            'NSW'; // Fallback
+          
             // Get job ID/reference number
             const jobId = 
-              getText(element, '.job-search-result-ref-no') ||
-              getText(element, '[class*="reference"]') ||
+            getText(element, '.job-search-result-ref-no') ||
+            getText(element, '[class*="reference"]') ||
               '';
 
             // Ensure the URL is absolute
             const jobUrl = url ? (url.startsWith('http') ? url : new URL(url, window.location.href).href) : '';
 
-            return {
+          return {
               id: jobId,
-              title,
+            title,
               jobUrl,
               url: jobUrl, // Set both url and jobUrl to the same absolute URL
               postedDate,
               closingDate,
-              agency,
-              location,
+            agency,
+            location,
               jobId,
               salary: 'Not specified' // Default value since salary is required by type
             };
@@ -299,7 +299,7 @@ export class SpiderService implements ISpiderService {
       this.metrics.totalJobs = allListings.length;
       this.metrics.successfulScrapes++;
       this.logger.info(`Found total of ${allListings.length} job listings`);
-
+      
       // Save listings data if test data saving is enabled
       if (process.env.SAVE_TEST_DATA === 'true') {
         await this.saveJobListingsData(allListings);
@@ -321,7 +321,7 @@ export class SpiderService implements ISpiderService {
 
   private async saveJobListingsData(listings: JobListing[]): Promise<void> {
     try {
-      await this.testDataManager.saveJobListings(listings);
+      await this.testDataManager.saveJobListings(listings, this.currentPage);
       this.logger.info(`Saved ${listings.length} job listings to test data`);
     } catch (error) {
       this.logger.error('Error saving job listings data:', error);
@@ -386,28 +386,22 @@ export class SpiderService implements ISpiderService {
       const page = await this.getPage();
       await page.goto(targetUrl, { waitUntil: 'networkidle0' });
 
-      const details = await page.evaluate((listing) => {
-        const getTextContent = (selector: string): string => {
-          const elements = document.querySelectorAll(selector);
-          return Array.from(elements)
-            .map(el => el.textContent?.trim())
-            .filter(Boolean)
-            .join('\n\n');
+      // First extract all links and their titles for raw_json
+      const allLinks = await page.evaluate(() => {
+        // Define the type for our link objects
+        type RelevantLink = {
+          url: string;
+          text: string;
+          title: string;
+          parentText: string;
+          dataset: { [key: string]: string | undefined };
+          className: string;
         };
-
-        const getTableValue = (label: string): string => {
-          const row = Array.from(document.querySelectorAll('table.job-summary tr')).find(row => {
-            const labelCell = row.querySelector('td:first-child');
-            return labelCell?.textContent?.trim().toLowerCase().includes(label.toLowerCase());
-          });
-          return row?.querySelector('td:last-child')?.textContent?.trim() || '';
-        };
-
-        // Get all document links
-        const documents: JobDocument[] = [];
         
         // Helper function to check if text indicates a relevant document
         const isRelevantDocument = (text: string): boolean => {
+          const textLower = text.toLowerCase();
+          
           // Primary document keywords - these are definitely role-related documents
           const primaryKeywords = [
             'role description',
@@ -423,8 +417,6 @@ export class SpiderService implements ISpiderService {
             'candidate pack',
             'application pack'
           ];
-
-          const textLower = text.toLowerCase();
           
           // Check for primary keywords first
           if (primaryKeywords.some(keyword => textLower.includes(keyword))) {
@@ -447,28 +439,95 @@ export class SpiderService implements ISpiderService {
           return false;
         };
 
+        // Only collect links that are likely to be role-related documents
+        return Array.from(document.querySelectorAll('a')).reduce<RelevantLink[]>((relevantLinks, link) => {
+          const text = link.textContent?.trim() || '';
+          const parentText = link.parentElement?.textContent?.trim() || '';
+          const url = link.href;
+          
+          // Skip non-document links
+          if (url.startsWith('javascript:') || 
+              url === '#' || 
+              url.includes('#') ||
+              !url.startsWith('http')) {
+            return relevantLinks;
+          }
+
+          // Skip common utility links
+          const skipPatterns = [
+            'back to top',
+            'email to a friend',
+            'sign in',
+            'login',
+            'contact us',
+            'apply online',
+            'share',
+            'print'
+          ];
+          
+          if (skipPatterns.some(pattern => 
+              text.toLowerCase().includes(pattern) || 
+              link.title?.toLowerCase().includes(pattern))) {
+            return relevantLinks;
+          }
+          
+          // Check if either the link text or its parent context indicates a relevant document
+          if (isRelevantDocument(text) || isRelevantDocument(parentText)) {
+            relevantLinks.push({
+              url: url,
+              text: text,
+              title: link.getAttribute('title') || '',
+              parentText: parentText,
+              dataset: Object.fromEntries(Object.entries(link.dataset)),
+              className: link.className
+            });
+          }
+          return relevantLinks;
+        }, []);
+      });
+
+      this.logger.info(`Found ${allLinks.length} relevant links:`, allLinks);
+
+      const details = await page.evaluate((listing, rawLinks) => {
+        const getTextContent = (selector: string): string => {
+          const elements = document.querySelectorAll(selector);
+          return Array.from(elements)
+            .map(el => el.textContent?.trim())
+            .filter(Boolean)
+            .join('\n\n');
+        };
+
+        const getTableValue = (label: string): string => {
+          const row = Array.from(document.querySelectorAll('table.job-summary tr')).find(row => {
+            const labelCell = row.querySelector('td:first-child');
+            return labelCell?.textContent?.trim().toLowerCase().includes(label.toLowerCase());
+          });
+          return row?.querySelector('td:last-child')?.textContent?.trim() || '';
+        };
+
+        // Get all document links
+        const documents: JobDocument[] = [];
+
         // Helper function to determine document type
         const getDocumentType = (url: string): string => {
-          if (url.toLowerCase().endsWith('.pdf')) return 'pdf';
-          if (url.toLowerCase().endsWith('.doc')) return 'doc';
-          if (url.toLowerCase().endsWith('.docx')) return 'docx';
-          if (url.toLowerCase().includes('transferrichtextfile.ashx')) return 'doc';
+          const urlLower = url.toLowerCase();
+          
+          // Check file extensions only
+          if (urlLower.endsWith('.pdf')) return 'pdf';
+          if (urlLower.endsWith('.doc')) return 'doc';
+          if (urlLower.endsWith('.docx')) return 'docx';
+          
+          // For all other URLs, mark as unknown and let DocumentService determine type
           return 'unknown';
         };
 
-        // Find all links that might be documents
-        document.querySelectorAll('a').forEach(link => {
-          const url = link.getAttribute('href');
-          const text = link.textContent?.trim() || '';
-          
-          if (url && isRelevantDocument(text)) {
-            const fullUrl = url.startsWith('http') ? url : new URL(url, window.location.href).href;
+        // Convert relevant links to documents
+        rawLinks.forEach(link => {
             documents.push({
-              url: fullUrl,
-              title: text || undefined,
-              type: getDocumentType(fullUrl)
+            url: link.url,
+            title: link.text || undefined,
+            type: getDocumentType(link.url)
             });
-          }
         });
 
         // Get job details from the summary table
@@ -532,9 +591,24 @@ export class SpiderService implements ISpiderService {
           notes,
           aboutUs,
           contactDetails,
-          documents
+          documents,
+          raw_json: {
+            ...listing,
+            all_links: rawLinks,
+            extracted_documents: documents,
+            agency,
+            jobType,
+            location,
+            jobReference,
+            description,
+            responsibilities,
+            requirements,
+            notes,
+            aboutUs,
+            contactDetails
+          }
         };
-      }, jobListing);
+      }, jobListing, allLinks);
 
       // Save test data if enabled
       await this.saveTestData(jobListing, page, details);
@@ -590,9 +664,9 @@ export class SpiderService implements ISpiderService {
    */
   async cleanup(): Promise<void> {
     try {
-      if (this.browser) {
-        await this.browser.close();
-        this.browser = null;
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
         this.browserInitialized = false;
         this.browserInitPromise = null;
         this.logger.info('Browser instance closed');

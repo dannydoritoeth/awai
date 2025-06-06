@@ -187,6 +187,9 @@ export class TestDataManager {
    */
   async loadJobDetails(jobId: string): Promise<JobDetails | null> {
     if (!this.isTestScenario) return null;
+    if (process.env.LOAD_TEST_DATA !== 'true') {
+      return null;
+    }
 
     try {
       const jobDir = path.join(this.jobsDir, jobId);

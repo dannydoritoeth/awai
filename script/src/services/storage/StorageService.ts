@@ -36,6 +36,7 @@ interface StorageConfig {
   retryDelay?: number;
   institutionId?: string;
   pgStagingPool?: Pool;
+  pgStagingUrl?: string;
 }
 
 export class StorageService {
@@ -76,20 +77,48 @@ export class StorageService {
       this.stagingClient = createClient(config.stagingSupabaseUrl, config.stagingSupabaseKey);
       this.liveClient = createClient(config.liveSupabaseUrl, config.liveSupabaseKey);
       this.logger = loggerOrLiveClient as Logger;
-      this.pgStagingPool = config.pgStagingPool;
+
+      // Initialize PostgreSQL pool either from provided pool or connection string
+      if (config.pgStagingPool) {
+        this.pgStagingPool = config.pgStagingPool;
+      } else if (config.pgStagingUrl || process.env.PG_STAGING_URL) {
+        const connectionString = config.pgStagingUrl || process.env.PG_STAGING_URL;
+        this.pgStagingPool = new Pool({
+          connectionString,
+          ssl: {
+            rejectUnauthorized: false, // Required for Supabase
+          },
+        });
+      }
     } else {
       // Direct client injection
       this.stagingClient = configOrClient as SupabaseClient;
       this.liveClient = loggerOrLiveClient as SupabaseClient;
       this.logger = logger!;
+      
+      // Try to initialize PostgreSQL pool from environment variable
+      if (process.env.PG_STAGING_URL) {
+        this.pgStagingPool = new Pool({
+          connectionString: process.env.PG_STAGING_URL,
+          ssl: {
+            rejectUnauthorized: false, // Required for Supabase
+          },
+        });
+      }
     }
+
+    this.logger.info('Storage service initialized', { 
+      hasPool: !!this.pgStagingPool,
+      hasPoolFromConfig: !!(configOrClient as StorageConfig).pgStagingPool,
+      hasPoolFromUrl: !!(configOrClient as StorageConfig).pgStagingUrl || !!process.env.PG_STAGING_URL
+    });
 
     // Initialize storage modules
     this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
-    this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger);
-    this.roles = new RoleStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
-    this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
-    this.skills = new SkillStorage(this.stagingClient, this.liveClient, this.logger, this.companies);
+    this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
+    this.roles = new RoleStorage(this.stagingClient, this.liveClient, this.logger, this.companies, this.pgStagingPool);
+    this.capabilities = new CapabilityStorage(this.stagingClient, this.liveClient, this.logger, this.companies, this.pgStagingPool);
+    this.skills = new SkillStorage(this.stagingClient, this.liveClient, this.logger, this.companies, this.pgStagingPool);
     this.taxonomies = new TaxonomyStorage(this.stagingClient, this.liveClient, this.logger);
     this.institutions = new InstitutionStorage(this.stagingClient, this.liveClient, this.logger);
     this.aiModels = new AIModelStorage(this.stagingClient, this.liveClient, this.logger);
