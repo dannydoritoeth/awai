@@ -172,9 +172,7 @@ export class TestDataManager {
     }
 
     try {
-      // Ensure page is a valid number
-      const pageNum = typeof page === 'number' && !isNaN(page) ? page : 1;
-      const filename = `job_listings_page_${pageNum}.json`;
+      const filename = `job_listings_page_${page}.json`;
       const filepath = path.join(this.jobsDir, filename);
       await fs.promises.writeFile(filepath, JSON.stringify(listings, null, 2));
       this.logger.info(`Saved ${listings.length} listings to ${filename}`);
