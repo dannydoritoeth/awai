@@ -84,6 +84,8 @@ export class StorageService {
       this.logger = logger!;
     }
 
+    this.logger.info('Storage service initialized', { pgStagingPool: this.pgStagingPool });
+
     // Initialize storage modules
     this.companies = new CompanyStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);
     this.jobs = new JobStorage(this.stagingClient, this.liveClient, this.logger, this.pgStagingPool);

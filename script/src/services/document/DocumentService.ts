@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Logger } from '../../utils/logger.js';
-import { Document, PDFStructure, DOCXStructure, TextStructure } from '../../models/job.js';
+import { JobDocument, PDFStructure, DOCXStructure, TextStructure } from '../../models/job.js';
 import PDFParser from 'pdf2json';
 import mammoth from 'mammoth';
 import fs from 'fs';
@@ -182,10 +182,42 @@ export class DocumentService {
   }
 
   /**
+   * Extract filename from Content-Disposition header
+   */
+  private getFilenameFromHeader(contentDisposition?: string): string | undefined {
+    if (!contentDisposition) return undefined;
+
+    // Try filename*=UTF-8'' format first (RFC 5987)
+    const utf8FilenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8FilenameMatch) {
+      try {
+        return decodeURIComponent(utf8FilenameMatch[1]);
+      } catch (e) {
+        this.logger.warn('Failed to decode UTF-8 filename', { error: e });
+      }
+    }
+
+    // Try regular filename format
+    const filenameMatch = contentDisposition.match(/filename=["']?([^"';]+)/i);
+    if (filenameMatch) {
+      return filenameMatch[1];
+    }
+
+    return undefined;
+  }
+
+  /**
    * Determines document type from URL or content
    */
-  private getDocumentType(url: string, contentType?: string): string {
-    // First check the URL extension
+  private async determineDocumentType(buffer: Buffer, url: string, contentType?: string, filename?: string): Promise<string> {
+    // First check the actual filename if available (from Content-Disposition)
+    if (filename) {
+      const filenameLower = filename.toLowerCase();
+      if (filenameLower.endsWith('.pdf')) return 'pdf';
+      if (filenameLower.endsWith('.docx') || filenameLower.endsWith('.doc')) return 'docx';
+    }
+
+    // Then check the URL extension
     const urlLower = url.toLowerCase();
     if (urlLower.endsWith('.pdf')) return 'pdf';
     if (urlLower.endsWith('.docx') || urlLower.endsWith('.doc')) return 'docx';
@@ -197,13 +229,47 @@ export class DocumentService {
       if (contentTypeLower.includes('word') || contentTypeLower.includes('docx')) return 'docx';
     }
 
-    return 'unknown';
+    // If type is still unknown, try to parse as both types
+    try {
+      // Try PDF first
+      try {
+        await this.parsePDF(buffer);
+        return 'pdf';
+      } catch (pdfError) {
+        this.logger.debug('Failed to parse as PDF, trying DOCX', { error: pdfError });
+      }
+
+      // Try DOCX next
+      try {
+        await this.parseDOCX(buffer);
+        return 'docx';
+      } catch (docxError) {
+        this.logger.debug('Failed to parse as DOCX', { error: docxError });
+      }
+
+      // If both fail, log and return unknown
+      this.logger.warn('Could not determine document type by parsing', {
+        url,
+        contentType,
+        filename,
+        bufferLength: buffer.length
+      });
+      return 'unknown';
+    } catch (error) {
+      this.logger.error('Error while determining document type', {
+        error,
+        url,
+        contentType,
+        filename
+      });
+      return 'unknown';
+    }
   }
 
   /**
    * Processes multiple documents in parallel
    */
-  async processDocuments(documents: Array<{ url: string; title?: string; type?: string; }>): Promise<Document[]> {
+  async processDocuments(documents: Array<{ url: string; title?: string; type?: string; }>): Promise<JobDocument[]> {
     try {
       this.logger.info(`Starting to process ${documents.length} documents`);
       
@@ -229,7 +295,7 @@ export class DocumentService {
         }))
       );
 
-      const successfulDocs = results.filter((doc): doc is Document => doc !== null);
+      const successfulDocs = results.filter((doc): doc is JobDocument => doc !== null);
       this.logger.info(`Document processing completed:`, {
         total: documents.length,
         successful: successfulDocs.length,
@@ -251,22 +317,28 @@ export class DocumentService {
   /**
    * Downloads and processes a document from a URL
    */
-  async downloadAndProcessDocument(url: string, title?: string, type?: string): Promise<Document> {
+  async downloadAndProcessDocument(url: string, title?: string, type?: string): Promise<JobDocument> {
     try {
+      // Only accept valid types, otherwise treat as undefined
+      const validType = type && ['pdf', 'docx'].includes(type.toLowerCase()) ? type.toLowerCase() : undefined;
+      
       this.logger.info(`Starting document download:`, {
         url,
         title,
-        specifiedType: type
+        specifiedType: type,
+        validType
       });
       
       let buffer: Buffer;
       let contentType: string | undefined;
+      let filename: string | undefined;
 
       // Handle file:// URLs for testing
       if (url.startsWith('file://')) {
         const filePath = url.replace('file://', '');
         buffer = fs.readFileSync(filePath);
-        contentType = type || this.getDocumentType(url);
+        contentType = validType;
+        filename = filePath.split('/').pop();
       } else {
         const response = await axios.get(url, {
           responseType: 'arraybuffer',
@@ -280,36 +352,39 @@ export class DocumentService {
 
         buffer = Buffer.from(response.data);
         contentType = response.headers['content-type'];
-
-        // Validate content type
-        if (contentType && !contentType.includes('pdf') && !contentType.includes('word') && !contentType.includes('docx')) {
-          throw new Error(`Invalid content type: ${contentType}`);
-        }
+        filename = this.getFilenameFromHeader(response.headers['content-disposition']);
 
         this.logger.info(`Document downloaded successfully:`, {
           url,
-          contentType: contentType,
+          contentType,
           contentLength: response.headers['content-length'],
+          contentDisposition: response.headers['content-disposition'],
+          filename,
           status: response.status
         });
       }
 
-      let parsedContent = undefined;
-
       // Determine document type
-      const documentType = type || this.getDocumentType(url, contentType);
+      const documentType = validType || await this.determineDocumentType(buffer, url, contentType, filename);
       this.logger.info(`Determined document type:`, {
         url,
         documentType,
-        fromType: !!type,
+        fromType: !!validType,
+        fromFilename: filename ? filename.toLowerCase().endsWith(`.${documentType}`) : false,
         fromUrl: url.toLowerCase().endsWith(`.${documentType}`),
-        fromContentType: contentType
+        fromContentType: contentType ? contentType.toLowerCase().includes(documentType) : false,
+        wasGuessed: !validType && 
+          !filename?.toLowerCase().endsWith(`.${documentType}`) && 
+          !url.toLowerCase().endsWith(`.${documentType}`) && 
+          (!contentType || !contentType.toLowerCase().includes(documentType))
       });
 
       // Validate document type
       if (documentType === 'unknown') {
-        throw new Error('Unknown document type');
+        throw new Error('Could not determine document type');
       }
+      
+      let parsedContent = undefined;
       
       // Parse based on document type
       try {

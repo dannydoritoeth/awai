@@ -512,19 +512,12 @@ export class SpiderService implements ISpiderService {
         const getDocumentType = (url: string): string => {
           const urlLower = url.toLowerCase();
           
-          // Check file extensions first
+          // Check file extensions only
           if (urlLower.endsWith('.pdf')) return 'pdf';
           if (urlLower.endsWith('.doc')) return 'doc';
           if (urlLower.endsWith('.docx')) return 'docx';
-          if (urlLower.includes('transferrichtextfile.ashx')) return 'doc';
-
-          // Check known URL patterns for role descriptions
-          if (urlLower.includes('dpie.nsw.gov.au/?a=')) return 'pdf'; // DPIE role description URLs
-          if (urlLower.includes('iworkfor.nsw.gov.au/role-description')) return 'pdf';
-          if (urlLower.includes('/role-description/')) return 'pdf';
-          if (urlLower.includes('/position-description/')) return 'pdf';
-          if (urlLower.includes('/job-description/')) return 'pdf';
           
+          // For all other URLs, mark as unknown and let DocumentService determine type
           return 'unknown';
         };
 
