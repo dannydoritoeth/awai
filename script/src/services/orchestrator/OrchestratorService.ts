@@ -350,47 +350,74 @@ export class OrchestratorService implements IOrchestratorService {
       // Get job details for each listing
       const success: JobDetails[] = [];
       const failed: JobDetails[] = [];
+      const skipped: JobDetails[] = [];
       const batchSize = this.config.batchSize || 10;
       const batches = chunk(jobListings, batchSize);
 
       for (const batch of batches) {
-      if (this.stopRequested) {
+        if (this.stopRequested) {
           this.logger.info('Stop requested, halting job scraping');
-        break;
-      }
+          break;
+        }
 
         await this.waitForResume();
 
         try {
-          // Process each batch sequentially
-      const batchResults = await Promise.allSettled(
-            batch.map(listing => this.spider.getJobDetails(listing))
-      );
+          // Check which jobs should be skipped
+          const skipChecks = await Promise.all(
+            batch.map(async listing => {
+              const shouldSkip = await this.storage.shouldSkipScraping(listing.id);
+              if (shouldSkip) {
+                const status = await this.storage.checkJobStatus(listing.id);
+                this.logger.info(`Skipping job ${listing.id} (${listing.title}) - already exists with status: ${status.status}`);
+                skipped.push(listing);
+              }
+              return shouldSkip;
+            })
+          );
+
+          // Filter out jobs that should be skipped
+          const jobsToScrape = batch.filter((_, index) => !skipChecks[index]);
+          
+          if (jobsToScrape.length < batch.length) {
+            const skippedCount = batch.length - jobsToScrape.length;
+            this.logger.info(`Batch summary: ${skippedCount} jobs skipped (already processed or pending), ${jobsToScrape.length} jobs to scrape`);
+          }
+
+          if (jobsToScrape.length === 0) {
+            this.logger.info('Skipping entire batch - all jobs already processed or pending');
+            continue;
+          }
+
+          // Process remaining jobs
+          const batchResults = await Promise.allSettled(
+            jobsToScrape.map(listing => this.spider.getJobDetails(listing))
+          );
 
           // Handle results
           batchResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
+            if (result.status === 'fulfilled') {
               success.push(result.value);
-          this.state.metrics.jobsScraped++;
-        } else {
+              this.state.metrics.jobsScraped++;
+            } else {
               const failedJob = {
-                ...batch[index],
+                ...jobsToScrape[index],
                 error: result.reason,
-            description: '',
-            responsibilities: [],
-            requirements: [],
-            notes: [],
-            aboutUs: '',
+                description: '',
+                responsibilities: [],
+                requirements: [],
+                notes: [],
+                aboutUs: '',
                 contactDetails: { name: '', phone: '', email: '' },
-            documents: []
+                documents: []
               } as JobDetails;
               failed.push(failedJob);
-          this.state.metrics.failedScrapes++;
-              this.addError('scraping', result.reason, batch[index].id);
-        }
+              this.state.metrics.failedScrapes++;
+              this.addError('scraping', result.reason, jobsToScrape[index].id);
+            }
           });
 
-          this.logger.info(`Batch progress: ${success.length + failed.length}/${jobListings.length} jobs processed`);
+          this.logger.info(`Batch progress: ${success.length + failed.length + skipped.length}/${jobListings.length} jobs processed (${skipped.length} skipped)`);
         } finally {
           // Cleanup after each batch to prevent browser instance accumulation
           await this.spider.cleanup();
@@ -398,7 +425,10 @@ export class OrchestratorService implements IOrchestratorService {
       }
 
       // Log final results
-      this.logger.info(`Job scraping complete: ${success.length} succeeded, ${failed.length} failed`);
+      this.logger.info('Job scraping complete:');
+      this.logger.info(`- Succeeded: ${success.length} jobs`);
+      this.logger.info(`- Failed: ${failed.length} jobs`);
+      this.logger.info(`- Skipped: ${skipped.length} jobs (already processed or pending)`);
       return { success, failed };
 
     } catch (error) {
@@ -415,6 +445,7 @@ export class OrchestratorService implements IOrchestratorService {
     this.state.currentStage = 'processing';
     const success: ProcessedJob[] = [];
     const failed: JobDetails[] = [];
+    const skipped: JobDetails[] = [];
 
     // Apply maxRecords limit if specified
     const maxRecords = options?.maxRecords || 0;
@@ -429,7 +460,33 @@ export class OrchestratorService implements IOrchestratorService {
       while (this.pauseRequested) await delay(1000);
 
       this.state.currentBatch = index + 1;
-      const results = await this.processor.processBatch(batch);
+
+      // Check which jobs should be skipped
+      const skipChecks = await Promise.all(
+        batch.map(async job => {
+          const shouldSkip = await this.storage.shouldSkipProcessing(job.id);
+          if (shouldSkip) {
+            this.logger.info(`Skipping job ${job.id} (${job.title}) - already processed`);
+            skipped.push(job);
+          }
+          return shouldSkip;
+        })
+      );
+
+      // Filter out jobs that should be skipped
+      const jobsToProcess = batch.filter((_, index) => !skipChecks[index]);
+      
+      if (jobsToProcess.length < batch.length) {
+        const skippedCount = batch.length - jobsToProcess.length;
+        this.logger.info(`Batch ${index + 1} summary: ${skippedCount} jobs skipped (already processed), ${jobsToProcess.length} jobs to process`);
+      }
+
+      if (jobsToProcess.length === 0) {
+        this.logger.info(`Skipping batch ${index + 1} - all jobs already processed`);
+        continue;
+      }
+
+      const results = await this.processor.processBatch(jobsToProcess);
 
       results.forEach((result, i) => {
         if (result) {
@@ -441,7 +498,15 @@ export class OrchestratorService implements IOrchestratorService {
           this.addError('processing', 'Processing failed', batch[i].id);
         }
       });
+
+      this.logger.info(`Batch ${index + 1} complete: ${success.length + failed.length + skipped.length}/${limitedJobs.length} jobs handled (${skipped.length} skipped)`);
     }
+
+    // Log final processing results
+    this.logger.info('Job processing complete:');
+    this.logger.info(`- Succeeded: ${success.length} jobs`);
+    this.logger.info(`- Failed: ${failed.length} jobs`);
+    this.logger.info(`- Skipped: ${skipped.length} jobs (already processed)`);
 
     // Apply maxRecords limit again to be safe
     return maxRecords > 0 ? success.slice(0, maxRecords) : success;

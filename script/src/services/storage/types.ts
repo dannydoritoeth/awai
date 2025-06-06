@@ -15,6 +15,7 @@
  */
 
 import { JobDocument } from '../spider/types.js';
+import { ProcessedJob } from '../processor/types.js';
 
 export interface StorageConfig {
   stagingSupabaseUrl: string;
@@ -303,4 +304,15 @@ export interface CompanyRecord {
 }
 
 // Re-export JobDocument for use in StorageService
-export type { JobDocument }; 
+export type { JobDocument };
+
+export type StorageJob = ProcessedJob;
+
+export interface StorageService {
+  initialize(): Promise<void>;
+  cleanup(): Promise<void>;
+  storeBatch(jobs: StorageJob[]): Promise<void>;
+  checkJobStatus(jobId: string): Promise<{ exists: boolean; id?: string; title?: string; status?: string }>;
+  shouldSkipScraping(jobId: string): Promise<boolean>;
+  shouldSkipProcessing(jobId: string): Promise<boolean>;
+} 

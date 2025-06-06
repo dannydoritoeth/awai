@@ -154,10 +154,9 @@ export class ProcessorService implements IProcessorService {
       this.logger.info(`Starting processing for job ${job.id}: ${job.title}`);
 
       // Check if job already exists and is synced
-      const existingJob = await this.storageService.checkExistingSyncedJob(job.id);
-      
-      if (existingJob.exists) {
-        this.logger.info(`Skipping job ${job.id} - already exists and synced with ID ${existingJob.id}`);
+      const existingJob = await this.storageService.checkJobStatus(job.id);
+      if (existingJob.exists && existingJob.status === 'synced') {
+        this.logger.info(`Job ${job.id} already exists and is synced, skipping processing`);
         return undefined;
       }
 
