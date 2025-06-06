@@ -107,7 +107,7 @@ export class JobStorage {
   /**
    * Process job documents
    */
-  private async processJobDocuments(jobId: string, documents: Array<{ url: string; title?: string; type: string; }>): Promise<{
+  private async processJobDocuments(jobId: string, documents: Array<{ url: string; title?: string; type: string; }>, skipStorage: boolean = false): Promise<{
     documents: Array<{ url: string; title?: string; type: string; }>;
     analysis?: {
       capabilities: any[];
@@ -131,22 +131,25 @@ export class JobStorage {
         successfulUrls: processedDocs.map(d => d.url)
       });
       
-      // Get job UUID for document storage
-      const jobUUID = await this.getJobByExternalId(jobId);
-      
-      if (!jobUUID) {
-        throw new Error(`No job found with ID ${jobId}`);
-      }
+      // Only store documents if not skipping storage
+      if (!skipStorage) {
+        // Get job UUID for document storage
+        const jobUUID = await this.getJobByExternalId(jobId);
+        
+        if (!jobUUID) {
+          throw new Error(`No job found with ID ${jobId}`);
+        }
 
-      // Store each processed document
-      for (const doc of processedDocs) {
-        try {
-          await this.storeJobDocument(jobUUID.id, doc);
-        } catch (error) {
-          this.logger.error(`Failed to store document for job ${jobId}:`, {
-            error: error,
-            url: doc.url
-          });
+        // Store each processed document
+        for (const doc of processedDocs) {
+          try {
+            await this.storeJobDocument(jobUUID.id, doc);
+          } catch (error) {
+            this.logger.error(`Failed to store document for job ${jobId}:`, {
+              error: error,
+              url: doc.url
+            });
+          }
         }
       }
 
@@ -357,7 +360,7 @@ export class JobStorage {
       // First store the raw job and documents
       await this.storeRaw(job);
 
-      // Process documents for analysis
+      // Analyze documents for capabilities/skills if any exist
       let documentAnalysis: {
         capabilities: Array<{
           id?: string;
@@ -378,7 +381,18 @@ export class JobStorage {
       };
 
       if (job.jobDetails.documents?.length) {
-        const { analysis } = await this.processJobDocuments(jobId, job.jobDetails.documents);
+        this.logger.info(`Analyzing ${job.jobDetails.documents.length} documents for job ${jobId}`);
+        const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
+          const url = typeof doc.url === 'object' ? doc.url.url : doc.url;
+          return {
+            url,
+            title: doc.title,
+            type: doc.type || 'attachment'
+          };
+        });
+
+        // Process documents for analysis only, don't store them again
+        const { analysis } = await this.processJobDocuments(jobId, documentUrls, true);
         if (analysis) {
           documentAnalysis = analysis;
           this.logger.info(`Document analysis completed for job ${jobId}:`, {
