@@ -172,7 +172,8 @@ export class TestDataManager {
     }
 
     try {
-      const filename = `job_listings_page_${page}.json`;
+      const pageNum = typeof page === 'number' && !isNaN(page) ? page : 1;
+      const filename = `job_listings_page_${pageNum}.json`;
       const filepath = path.join(this.jobsDir, filename);
       await fs.promises.writeFile(filepath, JSON.stringify(listings, null, 2));
       this.logger.info(`Saved ${listings.length} listings to ${filename}`);
@@ -484,6 +485,11 @@ export class TestDataManager {
    * Load capability analysis result
    */
   async loadCapabilityAnalysis(jobId: string): Promise<LLMCapabilityAnalysisResult | null> {
+
+    if (process.env.LOAD_TEST_DATA !== 'true') {
+      return null;
+    }
+
     try {
       const filePath = path.join(this.analysisDir, `${jobId}-capabilities.json`);
       if (!fs.existsSync(filePath)) {
@@ -537,6 +543,10 @@ export class TestDataManager {
    * Load taxonomy analysis result
    */
   async loadTaxonomyAnalysis(jobId: string): Promise<TaxonomyAnalysisResult | null> {
+    if (process.env.LOAD_TEST_DATA !== 'true') {
+      return null;
+    }
+
     try {
       const filePath = path.join(this.analysisDir, `${jobId}-taxonomy.json`);
       if (!fs.existsSync(filePath)) {

@@ -43,7 +43,6 @@ export class SkillStorage {
         .from('skills')
         .select('id, name')
         .eq('name', skill.name || skill.text)
-        .eq('company_id', companyId)
         .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {

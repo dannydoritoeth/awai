@@ -356,22 +356,52 @@ export class AIAnalyzer {
   private mapCapabilityResult(llmResult: LLMCapabilityAnalysisResult): CapabilityAnalysisResult {
     // Create maps for looking up IDs by name
     const capabilityMap = new Map(this.frameworkCapabilities.map(c => [c.name, c.id]));
-    const taxonomyMap = new Map(this.taxonomyGroups.map(t => [t.name, t.id]));
+    
+    // Log available capabilities for matching
+    // this.logger.info('Available capabilities for matching:', 
+    //   Array.from(capabilityMap.entries()).map(([name, id]) => ({ name, id }))
+    // );
+
+    // Log capabilities we're trying to match
+    // this.logger.info('Capabilities from LLM to match:', 
+    //   llmResult.capabilities?.map(cap => ({
+    //     name: cap.name,
+    //     level: cap.level
+    //   }))
+    // );
 
     // Map capabilities
-    const capabilities = (llmResult.capabilities || []).map(cap => ({
-      id: capabilityMap.get(cap.name) || '',
-      name: cap.name,
-      level: cap.level,
-      description: cap.description,
-      relevance: cap.relevance
-    })).filter(cap => cap.id); // Only keep capabilities we found IDs for
+    const capabilities = (llmResult.capabilities || []).map(cap => {
+      const id = capabilityMap.get(cap.name);
+      if (!id) {
+        this.logger.warn(`No matching capability found for: ${cap.name}`);
+      } else {
+        this.logger.info(`Matched capability ${cap.name} to ID ${id}`);
+      }
+      return {
+        id: id || '',
+        name: cap.name,
+        level: cap.level,
+        description: cap.description,
+        relevance: cap.relevance
+      };
+    }).filter(cap => {
+      if (!cap.id) {
+        this.logger.warn(`Filtering out capability with no ID: ${cap.name}`);
+        return false;
+      }
+      return true;
+    });
+
+    // Log final mapped capabilities
+    // this.logger.info('Final mapped capabilities:', capabilities);
 
     // Map taxonomies
+    const taxonomyMap = new Map(this.taxonomyGroups.map(t => [t.name, t.id]));
     const taxonomies = (llmResult.taxonomies || []).map(tax => ({
       id: taxonomyMap.get(tax.name) || '',
       name: tax.name
-    })).filter(tax => tax.id); // Only keep taxonomies we found IDs for
+    })).filter(tax => tax.id);
 
     // Map skills (no IDs yet, will be generated when stored)
     const skills = (llmResult.skills || []).map(skill => ({
