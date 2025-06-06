@@ -308,8 +308,8 @@ export class JobStorage {
             job_type: job.jobDetails.jobType,
             source_url: job.jobDetails.url,
             raw_json: job.jobDetails,
-            sync_status: 'processed',
-            last_synced_at: new Date().toISOString(),
+            sync_status: 'pending',
+            last_synced_at: null,
             raw_data: job.jobDetails
           };
 
@@ -427,8 +427,8 @@ export class JobStorage {
         job_type: job.jobDetails.jobType,
         source_url: job.jobDetails.url,
         raw_json: job.jobDetails,
-        sync_status: 'processed',
-        last_synced_at: new Date().toISOString(),
+        sync_status: 'pending',
+        last_synced_at: null,
         raw_data: job.jobDetails
       };
 
@@ -602,59 +602,31 @@ export class JobStorage {
   }
 
   /**
-   * Check if a job exists with a specific status
+   * Check if a job already exists and is synced
    */
-  async checkJobStatus(jobId: string): Promise<{ exists: boolean; id?: string; title?: string; status?: string }> {
+  async checkExistingSyncedJob(jobId: string): Promise<{ exists: boolean; id?: string; title?: string }> {
     try {
       const { data, error } = await this.stagingClient
         .from('jobs')
-        .select('id, title, sync_status')
+        .select('id, title')
         .eq('external_id', jobId)
         .eq('source_id', 'nswgov')
+        .eq('sync_status', 'synced')
         .maybeSingle();
 
       if (error) {
-        this.logger.error(`Error checking status for job ${jobId}:`, error);
+        this.logger.error(`Error checking for existing job ${jobId}:`, error);
         throw error;
       }
 
       return {
         exists: !!data,
         id: data?.id,
-        title: data?.title,
-        status: data?.sync_status
+        title: data?.title
       };
     } catch (error) {
-      this.logger.error('Error in checkJobStatus:', error);
+      this.logger.error('Error in checkExistingSyncedJob:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Check if a job should be skipped for scraping
-   * Skip if job exists and has status of either 'pending' or 'processed'
-   */
-  async shouldSkipScraping(jobId: string): Promise<boolean> {
-    try {
-      const jobStatus = await this.checkJobStatus(jobId);
-      return jobStatus.exists && ['pending', 'processed'].includes(jobStatus.status || '');
-    } catch (error) {
-      this.logger.error('Error in shouldSkipScraping:', error);
-      return false; // On error, don't skip to ensure we don't miss jobs
-    }
-  }
-
-  /**
-   * Check if a job should be skipped for processing
-   * Skip if job exists and has status of 'processed'
-   */
-  async shouldSkipProcessing(jobId: string): Promise<boolean> {
-    try {
-      const jobStatus = await this.checkJobStatus(jobId);
-      return jobStatus.exists && jobStatus.status === 'processed';
-    } catch (error) {
-      this.logger.error('Error in shouldSkipProcessing:', error);
-      return false; // On error, don't skip to ensure we don't miss jobs
     }
   }
 

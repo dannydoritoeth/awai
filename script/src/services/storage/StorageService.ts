@@ -61,9 +61,7 @@ export class StorageService {
   public readonly storeBatch: typeof JobStorage.prototype.storeBatch;
   public readonly getJobById: typeof JobStorage.prototype.getJobById;
   public readonly getJobsByFilter: typeof JobStorage.prototype.getJobsByFilter;
-  public readonly checkJobStatus: typeof JobStorage.prototype.checkJobStatus;
-  public readonly shouldSkipScraping: typeof JobStorage.prototype.shouldSkipScraping;
-  public readonly shouldSkipProcessing: typeof JobStorage.prototype.shouldSkipProcessing;
+  public readonly checkExistingSyncedJob: typeof JobStorage.prototype.checkExistingSyncedJob;
   public readonly getRoleByJobDetails: typeof RoleStorage.prototype.getRoleByJobDetails;
   public readonly storeCapabilityEmbeddings: typeof CapabilityStorage.prototype.storeCapabilityEmbeddings;
   public readonly storeAIInvocation: typeof AIModelStorage.prototype.storeAIInvocation;
@@ -132,9 +130,7 @@ export class StorageService {
     this.storeBatch = this.jobs.storeBatch.bind(this.jobs);
     this.getJobById = this.jobs.getJobById.bind(this.jobs);
     this.getJobsByFilter = this.jobs.getJobsByFilter.bind(this.jobs);
-    this.checkJobStatus = this.jobs.checkJobStatus.bind(this.jobs);
-    this.shouldSkipScraping = this.jobs.shouldSkipScraping.bind(this.jobs);
-    this.shouldSkipProcessing = this.jobs.shouldSkipProcessing.bind(this.jobs);
+    this.checkExistingSyncedJob = this.jobs.checkExistingSyncedJob.bind(this.jobs);
     this.getRoleByJobDetails = this.roles.getRoleByJobDetails.bind(this.roles);
     this.storeCapabilityEmbeddings = this.capabilities.storeCapabilityEmbeddings.bind(this.capabilities);
     this.storeAIInvocation = this.aiModels.storeAIInvocation.bind(this.aiModels);
