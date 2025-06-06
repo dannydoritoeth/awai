@@ -321,7 +321,7 @@ export class SpiderService implements ISpiderService {
 
   private async saveJobListingsData(listings: JobListing[]): Promise<void> {
     try {
-      await this.testDataManager.saveJobListings(listings);
+      await this.testDataManager.saveJobListings(listings, this.currentPage);
       this.logger.info(`Saved ${listings.length} job listings to test data`);
     } catch (error) {
       this.logger.error('Error saving job listings data:', error);
@@ -386,7 +386,109 @@ export class SpiderService implements ISpiderService {
       const page = await this.getPage();
       await page.goto(targetUrl, { waitUntil: 'networkidle0' });
 
-      const details = await page.evaluate((listing) => {
+      // First extract all links and their titles for raw_json
+      const allLinks = await page.evaluate(() => {
+        // Define the type for our link objects
+        type RelevantLink = {
+          url: string;
+          text: string;
+          title: string;
+          parentText: string;
+          dataset: { [key: string]: string | undefined };
+          className: string;
+        };
+
+        // Helper function to check if text indicates a relevant document
+        const isRelevantDocument = (text: string): boolean => {
+          // Primary document keywords - these are definitely role-related documents
+          const primaryKeywords = [
+            'role description',
+            'position description',
+            'job description',
+            'duty statement',
+            'statement of duties'
+          ];
+
+          // Secondary document keywords - only include if they appear with role-related terms
+          const secondaryKeywords = [
+            'information pack',
+            'candidate pack',
+            'application pack'
+          ];
+
+          const textLower = text.toLowerCase();
+          
+          // Check for primary keywords first
+          if (primaryKeywords.some(keyword => textLower.includes(keyword))) {
+            return true;
+          }
+
+          // For secondary keywords, check if they also contain role-related terms
+          if (secondaryKeywords.some(keyword => textLower.includes(keyword))) {
+            const hasRoleContext = [
+              'role',
+              'position',
+              'job',
+              'candidate',
+              'firefighter',  // Include specific role terms if they appear in the context
+              'officer'
+            ].some(term => textLower.includes(term));
+            return hasRoleContext;
+          }
+
+          return false;
+        };
+
+        // Only collect links that are likely to be role-related documents
+        return Array.from(document.querySelectorAll('a')).reduce<RelevantLink[]>((relevantLinks, link) => {
+          const text = link.textContent?.trim() || '';
+          const parentText = link.parentElement?.textContent?.trim() || '';
+          const url = link.href;
+          
+          // Skip non-document links
+          if (url.startsWith('javascript:') || 
+              url === '#' || 
+              url.includes('#') ||
+              !url.startsWith('http')) {
+            return relevantLinks;
+          }
+
+          // Skip common utility links
+          const skipPatterns = [
+            'back to top',
+            'email to a friend',
+            'sign in',
+            'login',
+            'contact us',
+            'apply online',
+            'share',
+            'print'
+          ];
+          
+          if (skipPatterns.some(pattern => 
+              text.toLowerCase().includes(pattern) || 
+              link.title?.toLowerCase().includes(pattern))) {
+            return relevantLinks;
+          }
+          
+          // Check if either the link text or its parent context indicates a relevant document
+          if (isRelevantDocument(text) || isRelevantDocument(parentText)) {
+            relevantLinks.push({
+              url: url,
+              text: text,
+              title: link.getAttribute('title') || '',
+              parentText: parentText,
+              dataset: Object.fromEntries(Object.entries(link.dataset)),
+              className: link.className
+            });
+          }
+          return relevantLinks;
+        }, []);
+      });
+
+      this.logger.info(`Found ${allLinks.length} relevant links:`, allLinks);
+
+      const details = await page.evaluate((listing, rawLinks) => {
         const getTextContent = (selector: string): string => {
           const elements = document.querySelectorAll(selector);
           return Array.from(elements)
@@ -449,10 +551,21 @@ export class SpiderService implements ISpiderService {
 
         // Helper function to determine document type
         const getDocumentType = (url: string): string => {
-          if (url.toLowerCase().endsWith('.pdf')) return 'pdf';
-          if (url.toLowerCase().endsWith('.doc')) return 'doc';
-          if (url.toLowerCase().endsWith('.docx')) return 'docx';
-          if (url.toLowerCase().includes('transferrichtextfile.ashx')) return 'doc';
+          const urlLower = url.toLowerCase();
+          
+          // Check file extensions first
+          if (urlLower.endsWith('.pdf')) return 'pdf';
+          if (urlLower.endsWith('.doc')) return 'doc';
+          if (urlLower.endsWith('.docx')) return 'docx';
+          if (urlLower.includes('transferrichtextfile.ashx')) return 'doc';
+
+          // Check known URL patterns for role descriptions
+          if (urlLower.includes('dpie.nsw.gov.au/?a=')) return 'pdf'; // DPIE role description URLs
+          if (urlLower.includes('iworkfor.nsw.gov.au/role-description')) return 'pdf';
+          if (urlLower.includes('/role-description/')) return 'pdf';
+          if (urlLower.includes('/position-description/')) return 'pdf';
+          if (urlLower.includes('/job-description/')) return 'pdf';
+          
           return 'unknown';
         };
 
@@ -532,9 +645,24 @@ export class SpiderService implements ISpiderService {
           notes,
           aboutUs,
           contactDetails,
-          documents
+          documents,
+          raw_json: {
+            ...listing,
+            all_links: rawLinks,
+            extracted_documents: documents,
+            agency,
+            jobType,
+            location,
+            jobReference,
+            description,
+            responsibilities,
+            requirements,
+            notes,
+            aboutUs,
+            contactDetails
+          }
         };
-      }, jobListing);
+      }, jobListing, allLinks);
 
       // Save test data if enabled
       await this.saveTestData(jobListing, page, details);

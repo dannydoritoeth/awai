@@ -123,3 +123,5 @@ drop
 
 
 supabase db dump --schema public > schema.sql
+
+wsl --shutdown

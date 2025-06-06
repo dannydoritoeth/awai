@@ -55,6 +55,18 @@ export interface JobDetails extends JobListing {
   embedding?: number[]; // Vector embedding for similarity matching
   classification?: string; // Classification level of the role
   roleId?: string; // ID of the role in the roles table
+  raw_json?: {
+    all_links: Array<{
+      url: string;
+      text: string;
+      title: string;
+      parentText: string;
+      dataset: { [key: string]: string | undefined };
+      className: string;
+    }>;
+    extracted_documents: JobDocument[];
+    [key: string]: any;
+  };
 }
 
 export interface SpiderConfig {
