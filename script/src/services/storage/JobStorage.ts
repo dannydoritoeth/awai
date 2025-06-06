@@ -405,28 +405,6 @@ export class JobStorage {
         skills: []
       };
 
-      if (job.jobDetails.documents?.length) {
-        this.logger.info(`Analyzing ${job.jobDetails.documents.length} documents for job ${jobId}`);
-        const documentUrls = job.jobDetails.documents.map((doc: SpiderJobDocument) => {
-          const url = typeof doc.url === 'object' ? doc.url.url : doc.url;
-          return {
-            url,
-            title: doc.title,
-            type: doc.type || 'attachment'
-          };
-        });
-
-        // Process documents for analysis only, don't store them again
-        const { analysis } = await this.processJobDocuments(jobId, documentUrls, true);
-        if (analysis) {
-          documentAnalysis = analysis;
-          this.logger.info(`Document analysis completed for job ${jobId}:`, {
-            capabilitiesFound: analysis.capabilities.length,
-            skillsFound: analysis.skills.length
-          });
-        }
-      }
-
       // Store capabilities and skills from both job and documents
       const allCapabilities = [
         ...(job.capabilities?.capabilities || []).map(cap => ({
