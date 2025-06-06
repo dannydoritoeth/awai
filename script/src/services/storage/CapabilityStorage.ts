@@ -7,13 +7,15 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../../utils/logger.js';
 import { Capability, ProcessedJob, QueryOptions } from './types.js';
 import { CompanyStorage } from './CompanyStorage.js';
+import { Pool } from 'pg';
 
 export class CapabilityStorage {
   constructor(
     private stagingClient: SupabaseClient,
     private liveClient: SupabaseClient,
     private logger: Logger,
-    private companies: CompanyStorage
+    private companies: CompanyStorage,
+    private pgStagingPool?: Pool
   ) {}
 
   /**
