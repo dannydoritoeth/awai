@@ -156,6 +156,19 @@ export class SpiderService implements ISpiderService {
         this.logger.info('Continuing with default page size');
       }
 
+      // Click the "Advertised date" sort button
+      try {
+        await page.waitForSelector('a[sortby="Advertised date"]', { timeout: 5000 });
+        this.logger.info('Found sort by date button');
+        await page.click('a[sortby="Advertised date"]');
+        this.logger.info('Successfully clicked sort by date button');
+        // Wait for page to reload after changing sort order
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error: any) {
+        this.logger.warn('Sort by date button not found or could not be clicked:', error?.message || 'Unknown error');
+        this.logger.info('Continuing with default sort order');
+      }
+
       let hasNextPage = true;
       let pageNum = 1;
 
@@ -386,21 +399,22 @@ export class SpiderService implements ISpiderService {
       const page = await this.getPage();
       await page.goto(targetUrl, { waitUntil: 'networkidle0' });
 
+      // Define the type for our link objects
+      type RelevantLink = {
+        url: string;
+        text: string;
+        title: string;
+        parentText: string;
+        dataset: { [key: string]: string | undefined };
+        className: string;
+      };
+
       // First extract all links and their titles for raw_json
-      const allLinks = await page.evaluate(() => {
-        // Define the type for our link objects
-        type RelevantLink = {
-          url: string;
-          text: string;
-          title: string;
-          parentText: string;
-          dataset: { [key: string]: string | undefined };
-          className: string;
-        };
-        
+      const allLinks = await page.evaluate((jobTitle: string) => {
         // Helper function to check if text indicates a relevant document
         const isRelevantDocument = (text: string): boolean => {
           const textLower = text.toLowerCase();
+          const jobTitleLower = jobTitle.toLowerCase();
           
           // Primary document keywords - these are definitely role-related documents
           const primaryKeywords = [
@@ -434,6 +448,23 @@ export class SpiderService implements ISpiderService {
               'officer'
             ].some(term => textLower.includes(term));
             return hasRoleContext;
+          }
+
+          // Check if the link text contains significant parts of the job title
+          const jobTitleWords = jobTitleLower.split(/[\s-()]+/).filter((word: string) => 
+            word.length > 3 && 
+            !['the', 'and', 'for', 'with', 'role', 'job', 'position'].includes(word)
+          );
+          
+          // If we find at least 2 significant words from the job title, consider it relevant
+          const matchingWords = jobTitleWords.filter((word: string) => textLower.includes(word));
+          if (matchingWords.length >= 2) {
+            return true;
+          }
+
+          // If there's only one word in the job title, match that single word
+          if (jobTitleWords.length === 1 && matchingWords.length === 1) {
+            return true;
           }
 
           return false;
@@ -484,11 +515,11 @@ export class SpiderService implements ISpiderService {
           }
           return relevantLinks;
         }, []);
-      });
+      }, jobListing.title);
 
       this.logger.info(`Found ${allLinks.length} relevant links:`, allLinks);
 
-      const details = await page.evaluate((listing, rawLinks) => {
+      const details = await page.evaluate((listing: JobListing, rawLinks: RelevantLink[]) => {
         const getTextContent = (selector: string): string => {
           const elements = document.querySelectorAll(selector);
           return Array.from(elements)
