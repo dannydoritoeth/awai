@@ -468,7 +468,7 @@ export class JobStorage {
 
       for (const job of jobs) {
         try {
-          await this.storeJob(job);
+          await this.storeAll(job);
           processedDocs.push(job);
         } catch (error) {
           this.logger.error(`Error storing job ${job.jobDetails.id}:`, error);

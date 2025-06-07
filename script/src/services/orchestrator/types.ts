@@ -117,6 +117,11 @@ export type PipelineOptions = {
   skipStorage?: boolean;
   skipMigration?: boolean;
   continueOnError?: boolean;
+  scrapeOnly?: boolean;
+  startDate?: Date;
+  endDate?: Date;
+  agencies?: string[];
+  locations?: string[];
 };
 
 export interface IOrchestratorService {

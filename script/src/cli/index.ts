@@ -123,10 +123,22 @@ async function main() {
 
     // Run the pipeline
     logger.info('Starting pipeline execution...');
-    const result = await orchestrator.runPipeline({
-      maxRecords: Number(process.env.MAX_RECORDS) || 0,
-      continueOnError: true
+    logger.info('Environment options:', {
+      MAX_RECORDS: process.env.MAX_RECORDS,
+      SCRAPE_ONLY: process.env.SCRAPE_ONLY,
+      BATCH_SIZE: process.env.BATCH_SIZE,
+      RETRY_ATTEMPTS: process.env.RETRY_ATTEMPTS,
+      RETRY_DELAY: process.env.RETRY_DELAY
     });
+
+    const pipelineOptions = {
+      maxRecords: Number(process.env.MAX_RECORDS) || 0,
+      continueOnError: true,
+      scrapeOnly: process.env.SCRAPE_ONLY === 'true'
+    };
+
+    logger.info('Pipeline options:', pipelineOptions);
+    const result = await orchestrator.runPipeline(pipelineOptions);
 
     logger.info('Pipeline execution complete');
   } catch (error) {

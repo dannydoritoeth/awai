@@ -239,23 +239,33 @@ export class OrchestratorService implements IOrchestratorService {
     this.stopRequested = false;
     this.pauseRequested = false;
     
-    // Only use MAX_RECORDS from environment
+    // Log all pipeline options
     this.logger.info('=== Pipeline Initialization ===');
-    this.logger.info(`MAX_RECORDS environment variable: ${process.env.MAX_RECORDS}`);
-    const maxRecords = process.env.MAX_RECORDS ? parseInt(process.env.MAX_RECORDS, 10) : 0;
-    this.logger.info(`Parsed maxRecords: ${maxRecords}`);
+    this.logger.info('Pipeline options:', {
+      maxRecords: options?.maxRecords,
+      skipProcessing: options?.skipProcessing,
+      skipStorage: options?.skipStorage,
+      migrateToLive: options?.migrateToLive,
+      scrapeOnly: options?.scrapeOnly,
+      continueOnError: options?.continueOnError,
+      startDate: options?.startDate,
+      endDate: options?.endDate,
+      agencies: options?.agencies,
+      locations: options?.locations
+    });
     
-    // Update options with environment variable
+    // Store all options in state
     this.state.options = {
-      ...options,
-      maxRecords
+      ...options
     };
     
-    // Log initialization with maxRecords value
+    // Log initialization with all options
     this.logger.info('Pipeline initialized', { 
-      maxRecords,
-      maxRecordsEnabled: maxRecords > 0 ? 'yes' : 'no',
-      maxRecordsSource: 'environment'
+      maxRecords: options?.maxRecords,
+      maxRecordsEnabled: options?.maxRecords ? options.maxRecords > 0 : false,
+      scrapeOnly: options?.scrapeOnly || false,
+      maxRecordsSource: 'environment',
+      allOptions: this.state.options
     });
 
     try {
@@ -404,6 +414,15 @@ export class OrchestratorService implements IOrchestratorService {
       
       // Store in staging DB
       this.logger.info(`Storing ${limitedJobs.length} jobs in staging database${maxRecords > 0 ? ` (limited by maxRecords=${maxRecords})` : ''}`);
+      this.logger.info('Storage options:', {
+        scrapeOnly: options?.scrapeOnly,
+        maxRecords: options?.maxRecords,
+        skipProcessing: options?.skipProcessing,
+        skipStorage: options?.skipStorage,
+        continueOnError: options?.continueOnError
+      });
+      this.logger.info('Storage mode:', options?.scrapeOnly ? 'scrapeOnly=true (raw storage only)' : 'scrapeOnly=false (full processing)');
+      
       const batches = chunk(limitedJobs, this.config.batchSize);
       
       for (const batch of batches) {
@@ -441,20 +460,29 @@ export class OrchestratorService implements IOrchestratorService {
                 .map(s => s.name)
             }
           }));
+
+          // If scrapeOnly is true, use storeRaw, otherwise use storeBatch
+          if (options?.scrapeOnly) {
+            this.logger.info(`Using storeRaw for scrapeOnly mode - processing batch of ${batch.length} jobs`);
+            for (const job of storageJobs) {
+              await this.storage.jobs.storeRaw(job);
+              this.logger.info(`Successfully stored raw job ${job.jobDetails.id}`);
+            }
+            this.logger.info(`Completed raw storage for batch of ${batch.length} jobs`);
+          } else {
+            this.logger.info(`Using full processing mode - processing batch of ${batch.length} jobs`);
+            await this.storage.storeBatch(storageJobs);
+            this.logger.info(`Completed full processing for batch of ${batch.length} jobs`);
+          }
           
-          await this.storage.storeBatch(storageJobs);
-          this.state.metrics.jobsStored += batch.length;
-          this.logger.info(`Successfully stored batch of ${batch.length} jobs`);
         } catch (error) {
-          this.state.metrics.failedStorage += batch.length;
-          this.addError('storage', error);
           this.logger.error('Error storing batch:', error);
+          if (!this.state.options?.continueOnError) throw error;
         }
       }
-
     } catch (error) {
-      this.addError('storage', error);
-      this.logger.error('Error in storage stage:', error);
+      this.logger.error('Error in storeJobs:', error);
+      throw error;
     }
   }
 

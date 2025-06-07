@@ -37,6 +37,22 @@ const requiredEnvVars = {
   PG_STAGING_URL: 'PostgreSQL connection string for staging database'
 };
 
+// Optional environment variables with defaults
+const optionalEnvVars = {
+  MAX_RECORDS: '0',
+  BATCH_SIZE: '10',
+  RETRY_ATTEMPTS: '3',
+  RETRY_DELAY: '1000',
+  SCRAPE_ONLY: 'false'
+};
+
+// Set default values for optional variables
+Object.entries(optionalEnvVars).forEach(([key, defaultValue]) => {
+  if (!process.env[key]) {
+    process.env[key] = defaultValue;
+  }
+});
+
 // Check for missing environment variables
 const missingVars = Object.entries(requiredEnvVars)
   .filter(([key]) => !process.env[key])
@@ -94,15 +110,16 @@ async function testPgConnection() {
   }
 }
 
-// Log environment status (safely)
+// Log loaded environment variables
 console.log('Environment loaded:', {
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Set' : 'Not Set',
-  SUPABASE_STAGING_URL: process.env.SUPABASE_STAGING_URL ? 'Set' : 'Not Set',
-  SUPABASE_STAGING_KEY: process.env.SUPABASE_STAGING_KEY ? 'Set' : 'Not Set',
-  SUPABASE_LIVE_URL: process.env.SUPABASE_LIVE_URL ? 'Set' : 'Not Set',
-  SUPABASE_LIVE_KEY: process.env.SUPABASE_LIVE_KEY ? 'Set' : 'Not Set',
-  NSW_JOBS_URL: process.env.NSW_JOBS_URL ? 'Set' : 'Not Set',
-  PG_STAGING_URL: process.env.PG_STAGING_URL ? 'Set' : 'Not Set'
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Set' : 'Not set',
+  SUPABASE_STAGING_URL: process.env.SUPABASE_STAGING_URL ? 'Set' : 'Not set',
+  SUPABASE_STAGING_KEY: process.env.SUPABASE_STAGING_KEY ? 'Set' : 'Not set',
+  SUPABASE_LIVE_URL: process.env.SUPABASE_LIVE_URL ? 'Set' : 'Not set',
+  SUPABASE_LIVE_KEY: process.env.SUPABASE_LIVE_KEY ? 'Set' : 'Not set',
+  NSW_JOBS_URL: process.env.NSW_JOBS_URL ? 'Set' : 'Not set',
+  PG_STAGING_URL: process.env.PG_STAGING_URL ? 'Set' : 'Not set',
+  SCRAPE_ONLY: process.env.SCRAPE_ONLY
 });
 
 // Ensure we're in the project root directory
@@ -121,8 +138,12 @@ const pipelineOptions = [
   '--batch-size', process.env.BATCH_SIZE || '10',
   '--retry-attempts', process.env.RETRY_ATTEMPTS || '3',
   '--retry-delay', process.env.RETRY_DELAY || '1000',
-  '--continue-on-error'
-].join(' ');
+  '--continue-on-error',
+  process.env.SCRAPE_ONLY === 'true' ? '--scrape-only' : ''
+].filter(Boolean).join(' ');
+
+// Log the pipeline options being used
+console.log('Pipeline options:', pipelineOptions);
 
 try {
   // Run the CLI script using execSync

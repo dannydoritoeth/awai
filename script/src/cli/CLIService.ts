@@ -20,10 +20,12 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { CLIService, CLIOptions, CLIArguments, CLICommand } from './types.js';
 import { PipelineOptions } from '../services/orchestrator/types.js';
+import { ConsoleLogger } from '../utils/logger.js';
 
 export class CommandLineService implements CLIService {
   private spinner = ora();
   private program: Command;
+  private logger = new ConsoleLogger('CLI');
 
   constructor(private version: string) {
     this.program = new Command();
@@ -168,6 +170,7 @@ export class CommandLineService implements CLIService {
       .option('--skip-processing', 'Skip job processing')
       .option('--skip-storage', 'Skip job storage')
       .option('--continue-on-error', 'Continue pipeline on errors')
+      .option('--scrape-only', 'Only scrape and store raw jobs without processing')
       .option('-m, --max-records <number>', 'Maximum number of records to process (0 for all)', '0');
   }
 
@@ -176,11 +179,18 @@ export class CommandLineService implements CLIService {
    */
   private parsePipelineOptions(args: CLIArguments): PipelineOptions | undefined {
     const hasOptions = args.startDate || args.endDate || args.agencies || 
-      args.locations || args.skipProcessing || args.skipStorage || args.continueOnError || args.maxRecords;
+      args.locations || args.skipProcessing || args.skipStorage || args.continueOnError || args.maxRecords || args.scrapeOnly;
 
     if (!hasOptions) return undefined;
 
     const maxRecords = args.maxRecords ? parseInt(args.maxRecords.toString(), 10) : 0;
+
+    // Log the parsed options for debugging
+    this.logger.info('Parsing CLI arguments:', {
+      args,
+      scrapeOnly: args.scrapeOnly,
+      parsedScrapeOnly: Boolean(args.scrapeOnly)
+    });
 
     return {
       startDate: args.startDate ? new Date(args.startDate) : undefined,
@@ -190,7 +200,8 @@ export class CommandLineService implements CLIService {
       skipProcessing: args.skipProcessing,
       skipStorage: args.skipStorage,
       continueOnError: args.continueOnError,
-      maxRecords
+      maxRecords,
+      scrapeOnly: Boolean(args.scrapeOnly)
     };
   }
 } 
