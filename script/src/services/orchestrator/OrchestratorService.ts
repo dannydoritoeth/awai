@@ -73,96 +73,34 @@ export class OrchestratorService implements IOrchestratorService {
   async runPipeline(options?: PipelineOptions): Promise<PipelineResult> {
     try {
       await this.initializePipeline(options);
-      
-      this.logger.info('=== Pipeline Options ===');
-      this.logger.info('Initial options:', {
-        maxRecords: options?.maxRecords,
-        skipProcessing: options?.skipProcessing,
-        skipStorage: options?.skipStorage,
-        migrateToLive: options?.migrateToLive,
-        scrapeOnly: options?.scrapeOnly
-      });
-      this.logger.info('State options:', {
-        maxRecords: this.state.options?.maxRecords,
-        skipProcessing: this.state.options?.skipProcessing,
-        skipStorage: this.state.options?.skipStorage,
-        migrateToLive: this.state.options?.migrateToLive,
-        scrapeOnly: this.state.options?.scrapeOnly
-      });
-      
-      // Scrape jobs
-      const { success: scrapedJobs, failed: failedScrapes } = await this.scrapeJobs(this.state.options);
-      this.logger.info(`Storing ${scrapedJobs.length} jobs in staging database`);
+      this.logger.info('Starting pipeline execution');
 
-      let processedJobs: ProcessedJob[];
-      if (this.state.options?.scrapeOnly) {
-        // If scrapeOnly, just convert scraped jobs to ProcessedJob format without actual processing
-        this.logger.info('Scrape only mode - skipping processing, preparing jobs for raw storage');
-        processedJobs = scrapedJobs.map(job => ({
-          jobDetails: job,
-          capabilities: {
-            capabilities: [],
-            occupationalGroups: [],
-            focusAreas: [],
-            skills: [],
-            taxonomies: [],
-            generalRole: {
-              id: '',
-              name: '',
-              title: '',
-              description: '',
-              confidence: 0,
-              isNewRole: true
-            }
-          },
-          taxonomy: {
-            taxonomyIds: [],
-            roleId: job.roleId || ''
-          },
-          embeddings: {
-            job: { vector: [], text: '' },
-            capabilities: [],
-            skills: []
-          },
-          metadata: {
-            processedAt: new Date().toISOString(),
-            version: '1.0.0',
-            status: 'completed'
-          }
-        }));
-        this.logger.info(`Prepared ${processedJobs.length} jobs for raw storage`);
-      } else {
-        // Process jobs normally
-        processedJobs = await this.processJobs(scrapedJobs, this.state.options);
-      }
+      // Scrape jobs (this now includes processing and storage per batch)
+      const { success: scrapedJobs, failed: failedJobs } = await this.scrapeJobs(options);
       
-      // Store jobs
-      await this.storeJobs(processedJobs, this.state.options);
-
-      // Complete pipeline
-      this.logger.info('Completing pipeline...');
-      await this.cleanup();
-
-      // Return final result
-      const pipelineResult: PipelineResult = {
-        status: this.stopRequested ? 'stopped' as const : 'completed' as const,
+      // Update final metrics
+      const endTime = new Date();
+      const totalDuration = endTime.getTime() - this.state.metrics.startTime.getTime();
+      
+      const result: PipelineResult = {
+        status: this.stopRequested ? 'stopped' : 'completed',
         metrics: {
           ...this.state.metrics,
-          endTime: new Date(),
-          totalDuration: Date.now() - this.state.metrics.startTime.getTime(),
+          endTime,
+          totalDuration,
           scraping: {
-            total: scrapedJobs.length + failedScrapes.length,
+            total: scrapedJobs.length + failedJobs.length,
             successful: scrapedJobs.length,
-            failed: failedScrapes.length
+            failed: failedJobs.length
           },
           processing: {
-            total: processedJobs.length,
-            successful: processedJobs.length,
+            total: scrapedJobs.length,
+            successful: scrapedJobs.length,
             failed: 0
           },
           storage: {
-            total: processedJobs.length,
-            successful: processedJobs.length,
+            total: scrapedJobs.length,
+            successful: scrapedJobs.length,
             failed: 0,
             migratedToLive: 0
           }
@@ -172,24 +110,72 @@ export class OrchestratorService implements IOrchestratorService {
             ...job,
             documents: []
           })),
-          processed: processedJobs.map(job => ({
-            ...job,
+          processed: scrapedJobs.map(job => ({
+            jobDetails: job,
+            capabilities: {
+              capabilities: [],
+              occupationalGroups: [],
+              focusAreas: [],
+              skills: [],
+              taxonomies: [],
+              generalRole: {
+                id: '',
+                name: '',
+                title: '',
+                description: '',
+                confidence: 0,
+                isNewRole: true
+              }
+            },
+            taxonomy: {
+              taxonomyIds: [],
+              roleId: job.roleId || ''
+            },
             embeddings: {
-              job: { ...job.embeddings?.job || { vector: [], text: '' }, vector: '[vector data hidden]' },
-              capabilities: (job.embeddings?.capabilities || []).map(e => ({ ...e, vector: '[vector data hidden]' })),
-              skills: (job.embeddings?.skills || []).map(e => ({ ...e, vector: '[vector data hidden]' }))
+              job: { vector: '[vector data hidden]', text: '' },
+              capabilities: [],
+              skills: []
+            },
+            metadata: {
+              processedAt: new Date().toISOString(),
+              version: '1.0.0',
+              status: 'completed'
             }
           })) as LoggedProcessedJob[],
-          stored: processedJobs.map(job => ({
-            ...job,
+          stored: scrapedJobs.map(job => ({
+            jobDetails: job,
+            capabilities: {
+              capabilities: [],
+              occupationalGroups: [],
+              focusAreas: [],
+              skills: [],
+              taxonomies: [],
+              generalRole: {
+                id: '',
+                name: '',
+                title: '',
+                description: '',
+                confidence: 0,
+                isNewRole: true
+              }
+            },
+            taxonomy: {
+              taxonomyIds: [],
+              roleId: job.roleId || ''
+            },
             embeddings: {
-              job: { ...job.embeddings?.job || { vector: [], text: '' }, vector: '[vector data hidden]' },
-              capabilities: (job.embeddings?.capabilities || []).map(e => ({ ...e, vector: '[vector data hidden]' })),
-              skills: (job.embeddings?.skills || []).map(e => ({ ...e, vector: '[vector data hidden]' }))
+              job: { vector: '[vector data hidden]', text: '' },
+              capabilities: [],
+              skills: []
+            },
+            metadata: {
+              processedAt: new Date().toISOString(),
+              version: '1.0.0',
+              status: 'completed'
             }
           })) as LoggedProcessedJob[],
           failed: {
-            scraping: failedScrapes.map(job => ({
+            scraping: failedJobs.map(job => ({
               ...job,
               documents: []
             })),
@@ -199,9 +185,12 @@ export class OrchestratorService implements IOrchestratorService {
         }
       };
 
-      return pipelineResult;
+      this.logger.info('Pipeline execution complete', result);
+      return result;
+
     } catch (error) {
-      this.logger.error('Pipeline execution failed:', error);
+      this.state.status = 'failed';
+      this.addError('scraping', error);
       throw error;
     }
   }
@@ -343,45 +332,116 @@ export class OrchestratorService implements IOrchestratorService {
       const failed: JobDetails[] = [];
       const batchSize = this.config.batchSize || 10;
       const batches = chunk(jobListings, batchSize);
+      this.state.totalBatches = batches.length;
 
-      for (const batch of batches) {
-      if (this.stopRequested) {
+      for (const [batchIndex, batch] of batches.entries()) {
+        if (this.stopRequested) {
           this.logger.info('Stop requested, halting job scraping');
-        break;
-      }
+          break;
+        }
 
         await this.waitForResume();
+        this.state.currentBatch = batchIndex + 1;
 
         try {
           // Process each batch sequentially
-      const batchResults = await Promise.allSettled(
+          const batchResults = await Promise.allSettled(
             batch.map(listing => this.spider.getJobDetails(listing))
-      );
+          );
 
-          // Handle results
+          // Handle results and create batch arrays
+          const batchSuccess: JobDetails[] = [];
+          const batchFailed: JobDetails[] = [];
+
           batchResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-              success.push(result.value);
-          this.state.metrics.jobsScraped++;
-        } else {
+            if (result.status === 'fulfilled') {
+              batchSuccess.push(result.value);
+              this.state.metrics.jobsScraped++;
+            } else {
               const failedJob = {
                 ...batch[index],
                 error: result.reason,
-            description: '',
-            responsibilities: [],
-            requirements: [],
-            notes: [],
-            aboutUs: '',
+                description: '',
+                responsibilities: [],
+                requirements: [],
+                notes: [],
+                aboutUs: '',
                 contactDetails: { name: '', phone: '', email: '' },
-            documents: []
+                documents: []
               } as JobDetails;
-              failed.push(failedJob);
-          this.state.metrics.failedScrapes++;
+              batchFailed.push(failedJob);
+              this.state.metrics.failedScrapes++;
               this.addError('scraping', result.reason, batch[index].id);
-        }
+            }
           });
 
-          this.logger.info(`Batch progress: ${success.length + failed.length}/${jobListings.length} jobs processed`);
+          // Process and store this batch immediately
+          if (batchSuccess.length > 0) {
+            try {
+              let processedJobs: ProcessedJob[];
+              
+              if (options?.scrapeOnly) {
+                // If scrapeOnly, just convert scraped jobs to ProcessedJob format without actual processing
+                this.logger.info(`Scrape only mode - preparing batch ${batchIndex + 1} for raw storage`);
+                processedJobs = batchSuccess.map(job => ({
+                  jobDetails: job,
+                  capabilities: {
+                    capabilities: [],
+                    occupationalGroups: [],
+                    focusAreas: [],
+                    skills: [],
+                    taxonomies: [],
+                    generalRole: {
+                      id: '',
+                      name: '',
+                      title: '',
+                      description: '',
+                      confidence: 0,
+                      isNewRole: true
+                    }
+                  },
+                  taxonomy: {
+                    taxonomyIds: [],
+                    roleId: job.roleId || ''
+                  },
+                  embeddings: {
+                    job: { vector: [], text: '' },
+                    capabilities: [],
+                    skills: []
+                  },
+                  metadata: {
+                    processedAt: new Date().toISOString(),
+                    version: '1.0.0',
+                    status: 'completed'
+                  }
+                }));
+                this.logger.info(`Prepared ${processedJobs.length} jobs in batch ${batchIndex + 1} for raw storage`);
+              } else {
+                // Process jobs normally
+                processedJobs = await this.processJobs(batchSuccess, options);
+              }
+              
+              // Store the processed jobs immediately
+              if (processedJobs.length > 0 && !options?.skipStorage) {
+                await this.storeJobs(processedJobs, options);
+              }
+              
+              // Add to overall success array
+              success.push(...batchSuccess);
+            } catch (error) {
+              this.logger.error(`Error processing/storing batch ${batchIndex + 1}:`, error);
+              batchFailed.push(...batchSuccess);
+              if (!options?.continueOnError) throw error;
+            }
+          }
+
+          // Add failed jobs to overall failed array
+          failed.push(...batchFailed);
+
+          this.logger.info(`Batch ${batchIndex + 1}/${batches.length} complete: ${success.length + failed.length}/${jobListings.length} jobs processed`);
+        } catch (error) {
+          this.logger.error(`Error processing batch ${batchIndex + 1}:`, error);
+          if (!options?.continueOnError) throw error;
         } finally {
           // Cleanup after each batch to prevent browser instance accumulation
           await this.spider.cleanup();
