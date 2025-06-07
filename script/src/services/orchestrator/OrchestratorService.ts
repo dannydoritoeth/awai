@@ -79,21 +79,62 @@ export class OrchestratorService implements IOrchestratorService {
         maxRecords: options?.maxRecords,
         skipProcessing: options?.skipProcessing,
         skipStorage: options?.skipStorage,
-        migrateToLive: options?.migrateToLive
+        migrateToLive: options?.migrateToLive,
+        scrapeOnly: options?.scrapeOnly
       });
       this.logger.info('State options:', {
         maxRecords: this.state.options?.maxRecords,
         skipProcessing: this.state.options?.skipProcessing,
         skipStorage: this.state.options?.skipStorage,
-        migrateToLive: this.state.options?.migrateToLive
+        migrateToLive: this.state.options?.migrateToLive,
+        scrapeOnly: this.state.options?.scrapeOnly
       });
       
       // Scrape jobs
       const { success: scrapedJobs, failed: failedScrapes } = await this.scrapeJobs(this.state.options);
       this.logger.info(`Storing ${scrapedJobs.length} jobs in staging database`);
 
-      // Process jobs
-      const processedJobs = await this.processJobs(scrapedJobs, this.state.options);
+      let processedJobs: ProcessedJob[];
+      if (this.state.options?.scrapeOnly) {
+        // If scrapeOnly, just convert scraped jobs to ProcessedJob format without actual processing
+        this.logger.info('Scrape only mode - skipping processing, preparing jobs for raw storage');
+        processedJobs = scrapedJobs.map(job => ({
+          jobDetails: job,
+          capabilities: {
+            capabilities: [],
+            occupationalGroups: [],
+            focusAreas: [],
+            skills: [],
+            taxonomies: [],
+            generalRole: {
+              id: '',
+              name: '',
+              title: '',
+              description: '',
+              confidence: 0,
+              isNewRole: true
+            }
+          },
+          taxonomy: {
+            taxonomyIds: [],
+            roleId: job.roleId || ''
+          },
+          embeddings: {
+            job: { vector: [], text: '' },
+            capabilities: [],
+            skills: []
+          },
+          metadata: {
+            processedAt: new Date().toISOString(),
+            version: '1.0.0',
+            status: 'completed'
+          }
+        }));
+        this.logger.info(`Prepared ${processedJobs.length} jobs for raw storage`);
+      } else {
+        // Process jobs normally
+        processedJobs = await this.processJobs(scrapedJobs, this.state.options);
+      }
       
       // Store jobs
       await this.storeJobs(processedJobs, this.state.options);
@@ -158,13 +199,9 @@ export class OrchestratorService implements IOrchestratorService {
         }
       };
 
-      this.logger.info('Pipeline execution complete:', pipelineResult);
       return pipelineResult;
-
     } catch (error) {
-      this.logger.error('Pipeline failed:', error);
-      this.addError('scraping', error);
-      await this.cleanup();
+      this.logger.error('Pipeline execution failed:', error);
       throw error;
     }
   }
