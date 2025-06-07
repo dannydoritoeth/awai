@@ -68,6 +68,10 @@ export class StorageService {
   public readonly storeRoleTaxonomies: typeof RoleStorage.prototype.storeRoleTaxonomies;
   public readonly storeSkillRecord: typeof SkillStorage.prototype.storeSkillRecord;
   public readonly storeSkillRecords: typeof SkillStorage.prototype.storeSkillRecords;
+  public readonly getSimilarGeneralRoles: typeof GeneralRoleStorage.prototype.getSimilarGeneralRoles;
+  public readonly storeGeneralRole: typeof GeneralRoleStorage.prototype.storeGeneralRole;
+  public readonly linkRoleToGeneralRole: typeof GeneralRoleStorage.prototype.linkRoleToGeneralRole;
+  public readonly getOrCreateGeneralRole: typeof GeneralRoleStorage.prototype.getOrCreateGeneralRole;
 
   constructor(configOrClient: StorageConfig | SupabaseClient, loggerOrLiveClient: Logger | SupabaseClient, logger?: Logger) {
     // Handle both constructor signatures
@@ -137,6 +141,10 @@ export class StorageService {
     this.storeRoleTaxonomies = this.roles.storeRoleTaxonomies.bind(this.roles);
     this.storeSkillRecord = this.skills.storeSkillRecord.bind(this.skills);
     this.storeSkillRecords = this.skills.storeSkillRecords.bind(this.skills);
+    this.getSimilarGeneralRoles = this.generalRoles.getSimilarGeneralRoles.bind(this.generalRoles);
+    this.storeGeneralRole = this.generalRoles.storeGeneralRole.bind(this.generalRoles);
+    this.linkRoleToGeneralRole = this.generalRoles.linkRoleToGeneralRole.bind(this.generalRoles);
+    this.getOrCreateGeneralRole = this.generalRoles.getOrCreateGeneralRole.bind(this.generalRoles);
 
     this.logger.info('Storage service initialized');
   }

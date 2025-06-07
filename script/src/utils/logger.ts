@@ -26,56 +26,17 @@ const __dirname = dirname(__filename);
 // Constants for file paths
 const OUT_DIR = path.join(process.cwd(), 'out');
 const LOG_FILE_PATH_STORE = path.join(OUT_DIR, '.current-log-file');
-const LOCK_FILE = path.join(OUT_DIR, '.log-lock');
-
-// Debug function that writes directly to a debug log file
-function debugToFile(message: string) {
-  const debugPath = path.join(OUT_DIR, 'logger-debug.log');
-  fs.appendFileSync(debugPath, `${new Date().toISOString()} - [PID:${process.pid}] ${message}\n`);
-}
 
 // Ensure the out directory exists
 if (!fs.existsSync(OUT_DIR)) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 }
 
-function acquireLock(): boolean {
-  try {
-    // Try to create lock file
-    fs.writeFileSync(LOCK_FILE, process.pid.toString(), { flag: 'wx' });
-    debugToFile('Lock acquired');
-    return true;
-  } catch (error) {
-    debugToFile(`Failed to acquire lock: ${error}`);
-    return false;
-  }
-}
-
-function releaseLock(): void {
-  try {
-    if (fs.existsSync(LOCK_FILE)) {
-      const lockPid = fs.readFileSync(LOCK_FILE, 'utf8');
-      if (lockPid === process.pid.toString()) {
-        fs.unlinkSync(LOCK_FILE);
-        debugToFile('Lock released');
-      }
-    }
-  } catch (error) {
-    debugToFile(`Error releasing lock: ${error}`);
-  }
-}
-
-function waitForLock(maxAttempts: number = 50): void {
-  let attempts = 0;
-  while (attempts < maxAttempts) {
-    if (!fs.existsSync(LOCK_FILE)) {
-      return;
-    }
-    // Wait 100ms between attempts
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    attempts++;
-  }
-  debugToFile(`Waited ${maxAttempts} times for lock`);
+// Clean up any existing .current-log-file at startup
+try {
+  fs.rmSync(LOG_FILE_PATH_STORE, { force: true });
+} catch (error) {
+  // Ignore any errors during cleanup
 }
 
 function createLogFile(): string | null {
@@ -86,14 +47,12 @@ function createLogFile(): string | null {
     // Try to atomically create the .current-log-file
     // This will fail if the file already exists
     fs.writeFileSync(LOG_FILE_PATH_STORE, logFile, { flag: 'wx' });
-    debugToFile(`Successfully created log file pointer: ${logFile}`);
     
     // Create the actual log file
     fs.writeFileSync(logFile, '');
     return logFile;
   } catch (error) {
     // If we couldn't create the pointer file, someone else probably did
-    debugToFile(`Failed to create log file pointer: ${error}`);
     return null;
   }
 }
@@ -104,10 +63,8 @@ function getCurrentLogFile(): string {
     if (fs.existsSync(LOG_FILE_PATH_STORE)) {
       const content = fs.readFileSync(LOG_FILE_PATH_STORE, 'utf8');
       if (content && fs.existsSync(content)) {
-        debugToFile(`Using existing log file: ${content}`);
         return content;
       }
-      debugToFile('Stored log file path is invalid or file does not exist');
     }
 
     // If we get here, we need to create a new log file
@@ -116,13 +73,11 @@ function getCurrentLogFile(): string {
     // If we couldn't create it, someone else might have just created it
     // Wait a bit and try reading again
     if (!logFile) {
-      debugToFile('Waiting for log file to be created by another process');
       // Wait up to 5 seconds for the file to be created
       for (let i = 0; i < 50; i++) {
         if (fs.existsSync(LOG_FILE_PATH_STORE)) {
           const content = fs.readFileSync(LOG_FILE_PATH_STORE, 'utf8');
           if (content && fs.existsSync(content)) {
-            debugToFile(`Found log file after waiting: ${content}`);
             return content;
           }
         }
@@ -131,7 +86,6 @@ function getCurrentLogFile(): string {
       }
       
       // If we still don't have a file, force create one
-      debugToFile('No log file found after waiting, forcing creation');
       fs.rmSync(LOG_FILE_PATH_STORE, { force: true });
       logFile = createLogFile();
       if (!logFile) {
@@ -141,7 +95,6 @@ function getCurrentLogFile(): string {
     
     return logFile;
   } catch (error) {
-    debugToFile(`Error in getCurrentLogFile: ${error}`);
     throw error;
   }
 }
@@ -151,6 +104,7 @@ export interface Logger {
   error(message: string, error?: any): void;
   warn(message: string, data?: any): void;
   debug(message: string, data?: any): void;
+  logStartupBanner(options: any): void;
 }
 
 export class ConsoleLogger implements Logger {
@@ -159,24 +113,16 @@ export class ConsoleLogger implements Logger {
   private static instance: ConsoleLogger;
 
   private constructor(private context: string = 'ETL') {
-    debugToFile('Constructor called');
-    
     // Get or create the log file
     this.logFile = getCurrentLogFile();
-    debugToFile(`Using log file: ${this.logFile}`);
 
     // Create or open the log file stream
     this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
-    debugToFile(`Log stream created for file: ${this.logFile}`);
   }
 
   public static getInstance(context: string = 'ETL'): ConsoleLogger {
-    debugToFile('getInstance called');
     if (!ConsoleLogger.instance) {
-      debugToFile('Creating new logger instance');
       ConsoleLogger.instance = new ConsoleLogger(context);
-    } else {
-      debugToFile('Reusing existing logger instance');
     }
     return ConsoleLogger.instance;
   }
@@ -211,6 +157,42 @@ export class ConsoleLogger implements Logger {
     if (this.logStream && this.logStream.writable) {
       this.logStream.write(message + '\n');
     }
+  }
+
+  logStartupBanner(options: any): void {
+    const banner = [
+      '='.repeat(80),
+      'ETL Pipeline Startup Configuration',
+      '='.repeat(80),
+      '',
+      `Project Root: ${process.cwd()}`,
+      `Environment File: ${path.join(process.cwd(), '.env.local')}`,
+      `Log File: ${this.logFile}`,
+      '',
+      'Environment Variables:',
+      Object.entries(process.env)
+        .filter(([key]) => [
+          'OPENAI_API_KEY',
+          'SUPABASE_STAGING_URL',
+          'SUPABASE_STAGING_KEY',
+          'SUPABASE_LIVE_URL',
+          'SUPABASE_LIVE_KEY',
+          'NSW_JOBS_URL',
+          'PG_STAGING_URL',
+          'SCRAPE_ONLY'
+        ].includes(key))
+        .map(([key, value]) => `  ${key}: ${value ? 'Set' : 'Not Set'}`)
+        .join('\n'),
+      '',
+      'Pipeline Options:',
+      JSON.stringify(options, null, 2),
+      '',
+      '='.repeat(80),
+      ''
+    ].join('\n');
+
+    this.writeToFile(banner);
+    console.log(banner);
   }
 
   info(message: string, data?: any): void {
@@ -269,9 +251,14 @@ export class ConsoleLogger implements Logger {
   }
 
   cleanup(): void {
-    debugToFile('Cleanup called');
     if (this.logStream) {
       this.logStream.end();
+    }
+    // Clean up the .current-log-file
+    try {
+      fs.rmSync(LOG_FILE_PATH_STORE, { force: true });
+    } catch (error) {
+      // Ignore any errors during cleanup
     }
   }
 }
@@ -281,21 +268,18 @@ const logger = ConsoleLogger.getInstance();
 
 // Cleanup handlers
 const cleanupHandler = () => {
-  debugToFile('Cleanup handler called');
   if (logger instanceof ConsoleLogger) {
     logger.cleanup();
   }
-  releaseLock(); // Ensure we release any held locks
 };
 
 process.on('exit', cleanupHandler);
 process.on('SIGINT', () => {
-  debugToFile('SIGINT received');
   cleanupHandler();
   process.exit();
 });
+
 process.on('SIGTERM', () => {
-  debugToFile('SIGTERM received');
   cleanupHandler();
   process.exit();
 });

@@ -15,7 +15,21 @@ import { Pool } from 'pg';
 async function main() {
   try {
     // Initialize Logger
-    const logger = new ConsoleLogger('cli');
+    const logger = ConsoleLogger.getInstance('cli');
+    
+    // Log startup banner with configuration details
+    logger.logStartupBanner({
+      projectRoot: process.cwd(),
+      envFile: process.env.ENV_FILE || '.env.local',
+      envVars: {
+        NODE_ENV: process.env.NODE_ENV,
+        MAX_RECORDS: process.env.MAX_RECORDS,
+        SCRAPE_ONLY: process.env.SCRAPE_ONLY,
+        BATCH_SIZE: process.env.BATCH_SIZE,
+        RETRY_ATTEMPTS: process.env.RETRY_ATTEMPTS,
+        RETRY_DELAY: process.env.RETRY_DELAY
+      }
+    });
 
     // Parse the pool if it was passed
     let pgStagingPool: Pool | undefined;
