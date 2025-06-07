@@ -7,3 +7,4 @@ script/.env.local
 /script/__tests__/resources/talentpathai-dev-staging _ Antion _ Supabase_files
 script/run.log
 script/dcceew.log
+/script/out

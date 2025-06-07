@@ -14,6 +14,138 @@
  * @since 2024-02-06
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get current file info in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Constants for file paths
+const OUT_DIR = path.join(process.cwd(), 'out');
+const LOG_FILE_PATH_STORE = path.join(OUT_DIR, '.current-log-file');
+const LOCK_FILE = path.join(OUT_DIR, '.log-lock');
+
+// Debug function that writes directly to a debug log file
+function debugToFile(message: string) {
+  const debugPath = path.join(OUT_DIR, 'logger-debug.log');
+  fs.appendFileSync(debugPath, `${new Date().toISOString()} - [PID:${process.pid}] ${message}\n`);
+}
+
+// Ensure the out directory exists
+if (!fs.existsSync(OUT_DIR)) {
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+}
+
+function acquireLock(): boolean {
+  try {
+    // Try to create lock file
+    fs.writeFileSync(LOCK_FILE, process.pid.toString(), { flag: 'wx' });
+    debugToFile('Lock acquired');
+    return true;
+  } catch (error) {
+    debugToFile(`Failed to acquire lock: ${error}`);
+    return false;
+  }
+}
+
+function releaseLock(): void {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const lockPid = fs.readFileSync(LOCK_FILE, 'utf8');
+      if (lockPid === process.pid.toString()) {
+        fs.unlinkSync(LOCK_FILE);
+        debugToFile('Lock released');
+      }
+    }
+  } catch (error) {
+    debugToFile(`Error releasing lock: ${error}`);
+  }
+}
+
+function waitForLock(maxAttempts: number = 50): void {
+  let attempts = 0;
+  while (attempts < maxAttempts) {
+    if (!fs.existsSync(LOCK_FILE)) {
+      return;
+    }
+    // Wait 100ms between attempts
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    attempts++;
+  }
+  debugToFile(`Waited ${maxAttempts} times for lock`);
+}
+
+function createLogFile(): string | null {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFile = path.join(OUT_DIR, `etl-${timestamp}.log`);
+  
+  try {
+    // Try to atomically create the .current-log-file
+    // This will fail if the file already exists
+    fs.writeFileSync(LOG_FILE_PATH_STORE, logFile, { flag: 'wx' });
+    debugToFile(`Successfully created log file pointer: ${logFile}`);
+    
+    // Create the actual log file
+    fs.writeFileSync(logFile, '');
+    return logFile;
+  } catch (error) {
+    // If we couldn't create the pointer file, someone else probably did
+    debugToFile(`Failed to create log file pointer: ${error}`);
+    return null;
+  }
+}
+
+function getCurrentLogFile(): string {
+  try {
+    // Try to read the current log file path
+    if (fs.existsSync(LOG_FILE_PATH_STORE)) {
+      const content = fs.readFileSync(LOG_FILE_PATH_STORE, 'utf8');
+      if (content && fs.existsSync(content)) {
+        debugToFile(`Using existing log file: ${content}`);
+        return content;
+      }
+      debugToFile('Stored log file path is invalid or file does not exist');
+    }
+
+    // If we get here, we need to create a new log file
+    let logFile = createLogFile();
+    
+    // If we couldn't create it, someone else might have just created it
+    // Wait a bit and try reading again
+    if (!logFile) {
+      debugToFile('Waiting for log file to be created by another process');
+      // Wait up to 5 seconds for the file to be created
+      for (let i = 0; i < 50; i++) {
+        if (fs.existsSync(LOG_FILE_PATH_STORE)) {
+          const content = fs.readFileSync(LOG_FILE_PATH_STORE, 'utf8');
+          if (content && fs.existsSync(content)) {
+            debugToFile(`Found log file after waiting: ${content}`);
+            return content;
+          }
+        }
+        // Wait 100ms between checks
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      }
+      
+      // If we still don't have a file, force create one
+      debugToFile('No log file found after waiting, forcing creation');
+      fs.rmSync(LOG_FILE_PATH_STORE, { force: true });
+      logFile = createLogFile();
+      if (!logFile) {
+        throw new Error('Failed to create log file after multiple attempts');
+      }
+    }
+    
+    return logFile;
+  } catch (error) {
+    debugToFile(`Error in getCurrentLogFile: ${error}`);
+    throw error;
+  }
+}
+
 export interface Logger {
   info(message: string, data?: any): void;
   error(message: string, error?: any): void;
@@ -22,23 +154,44 @@ export interface Logger {
 }
 
 export class ConsoleLogger implements Logger {
-  constructor(private context: string = 'ETL') {}
+  private logFile: string;
+  private logStream: fs.WriteStream;
+  private static instance: ConsoleLogger;
+
+  private constructor(private context: string = 'ETL') {
+    debugToFile('Constructor called');
+    
+    // Get or create the log file
+    this.logFile = getCurrentLogFile();
+    debugToFile(`Using log file: ${this.logFile}`);
+
+    // Create or open the log file stream
+    this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
+    debugToFile(`Log stream created for file: ${this.logFile}`);
+  }
+
+  public static getInstance(context: string = 'ETL'): ConsoleLogger {
+    debugToFile('getInstance called');
+    if (!ConsoleLogger.instance) {
+      debugToFile('Creating new logger instance');
+      ConsoleLogger.instance = new ConsoleLogger(context);
+    } else {
+      debugToFile('Reusing existing logger instance');
+    }
+    return ConsoleLogger.instance;
+  }
 
   private formatMessage(level: string, message: string): string {
     const timestamp = new Date().toISOString();
-    return `[${timestamp}] [${level}] [${this.context}] ${message}`;
+    return `[${timestamp}] [${level}] [${this.context}] [PID:${process.pid}] ${message}`;
   }
 
   private formatData(data: any): string {
     if (!data) return '';
     try {
-      // Clone the data to avoid modifying the original
       const sanitizedData = JSON.parse(JSON.stringify(data));
-      
-      // Remove embedding fields recursively
       const removeEmbeddings = (obj: any) => {
         if (!obj || typeof obj !== 'object') return;
-        
         for (const key in obj) {
           if (key === 'embedding' || key === 'embeddings' || key === 'vector') {
             obj[key] = '[vector data hidden]';
@@ -47,7 +200,6 @@ export class ConsoleLogger implements Logger {
           }
         }
       };
-      
       removeEmbeddings(sanitizedData);
       return typeof sanitizedData === 'string' ? sanitizedData : JSON.stringify(sanitizedData, null, 2);
     } catch (error) {
@@ -55,34 +207,97 @@ export class ConsoleLogger implements Logger {
     }
   }
 
+  private writeToFile(message: string): void {
+    if (this.logStream && this.logStream.writable) {
+      this.logStream.write(message + '\n');
+    }
+  }
+
   info(message: string, data?: any): void {
-    console.log(this.formatMessage('INFO', message));
-    if (data) console.log(this.formatData(data));
+    const formattedMessage = this.formatMessage('INFO', message);
+    console.log(formattedMessage);
+    this.writeToFile(formattedMessage);
+    
+    if (data) {
+      const formattedData = this.formatData(data);
+      console.log(formattedData);
+      this.writeToFile(formattedData);
+    }
   }
 
   error(message: string, error?: any): void {
-    console.error(this.formatMessage('ERROR', message));
+    const formattedMessage = this.formatMessage('ERROR', message);
+    console.error(formattedMessage);
+    this.writeToFile(formattedMessage);
+    
     if (error) {
       if (error instanceof Error) {
         console.error(error.stack);
+        this.writeToFile(error.stack || error.message);
       } else {
-        console.error(this.formatData(error));
+        const formattedError = this.formatData(error);
+        console.error(formattedError);
+        this.writeToFile(formattedError);
       }
     }
   }
 
   warn(message: string, data?: any): void {
-    console.warn(this.formatMessage('WARN', message));
-    if (data) console.warn(this.formatData(data));
+    const formattedMessage = this.formatMessage('WARN', message);
+    console.warn(formattedMessage);
+    this.writeToFile(formattedMessage);
+    
+    if (data) {
+      const formattedData = this.formatData(data);
+      console.warn(formattedData);
+      this.writeToFile(formattedData);
+    }
   }
 
   debug(message: string, data?: any): void {
     if (process.env.NODE_ENV === 'development') {
-      console.debug(this.formatMessage('DEBUG', message));
-      if (data) console.debug(this.formatData(data));
+      const formattedMessage = this.formatMessage('DEBUG', message);
+      console.debug(formattedMessage);
+      this.writeToFile(formattedMessage);
+      
+      if (data) {
+        const formattedData = this.formatData(data);
+        console.debug(formattedData);
+        this.writeToFile(formattedData);
+      }
+    }
+  }
+
+  cleanup(): void {
+    debugToFile('Cleanup called');
+    if (this.logStream) {
+      this.logStream.end();
     }
   }
 }
 
-// Export a default logger instance
-export const logger = new ConsoleLogger(); 
+// Create the logger instance
+const logger = ConsoleLogger.getInstance();
+
+// Cleanup handlers
+const cleanupHandler = () => {
+  debugToFile('Cleanup handler called');
+  if (logger instanceof ConsoleLogger) {
+    logger.cleanup();
+  }
+  releaseLock(); // Ensure we release any held locks
+};
+
+process.on('exit', cleanupHandler);
+process.on('SIGINT', () => {
+  debugToFile('SIGINT received');
+  cleanupHandler();
+  process.exit();
+});
+process.on('SIGTERM', () => {
+  debugToFile('SIGTERM received');
+  cleanupHandler();
+  process.exit();
+});
+
+export { logger }; 
